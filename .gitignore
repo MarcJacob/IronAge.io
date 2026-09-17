@@ -1,0 +1,16 @@
+# Ignore build products.
+
+/out/
+
+# Ignore AI Harness stuff.
+
+MEMORY.md
+
+/.claude/
+CLAUDE.md
+
+/.kiro/
+
+# Ignore VS stuff.
+
+/.vs/
