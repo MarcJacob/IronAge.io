@@ -1,6 +1,7 @@
 # Ignore build products.
 
 /out/
+/build/
 
 # Ignore AI Harness stuff.
 
@@ -11,6 +12,7 @@ CLAUDE.md
 
 /.kiro/
 
-# Ignore VS stuff.
+# Ignore VS & CMake stuff.
 
 /.vs/
+CMakePresets.json
