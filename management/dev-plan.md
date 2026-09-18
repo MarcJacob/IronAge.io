@@ -89,16 +89,22 @@ tasks are broken down further.
    - [DONE] Remaining initial project setup: CMake targets for the native win32 exe and
      the `wasm32-unknown-unknown` client (both including GameCommon), plus a minimal JS
      harness loading the `.wasm` and calling one trivial exported function.
-   - [WIP] GameCommon skeleton: host memory-request interface, init/tick entry points,
+   - [DONE] GameCommon skeleton: host memory-request interface, init/tick entry points,
      trivial fixed-timestep sim, snapshot function. Verified natively first.
-     - Public header `include/game_common/game_common.h`: host memory callback, init,
-       tick(input), snapshot.
-     - Internal arena allocator sub-allocating from host-requested memory, up to cap.
-     - Trivial sim state (tick counter + one moving value), fixed timestep, no float libm.
-     - Snapshot: fixed layout, no pointers/padding.
-     - Native test in win32 main: init, scripted ticks, print snapshot hash.
-   - Determinism self-check: same input -> native + wasm snapshots -> automated
+     - [DONE] Public header (`include/game_common/game_match.h`): match create, tick(input),
+       dump.
+     - [DONE] Internal arena allocator (`include/core/memory.h`), sub-arenas from a parent.
+     - [DONE] Trivial sim state (tick counter + one entity moving to a target), fixed
+       timestep, no float libm.
+     - [DONE] Snapshot: field-by-field dump stream, fixed layout, no pointers/padding.
+     - [DONE] Native test in win32 main: init, 200 empty ticks, dump.
+   - [WIP] Determinism self-check: same input -> native + wasm snapshots -> automated
      byte-diff.
+     - Shared scripted scenario in GameCommon (create, N scripted ticks, dump).
+     - Wasm export running the scenario in a static buffer, exposing snapshot ptr/size.
+     - Native run writing the snapshot to a file.
+     - Test page in `src/client_web/web/`: runs the wasm scenario; file picker loads the
+       native snapshot; byte-diffs, shows PASS/FAIL + first differing offset.
    - Server Platform, headless: up-front memory block servicing GameCommon's requests,
      tick loop driving one instance, no networking yet.
    - Client Platform, standalone: wasm memory growth on demand, local tick loop with

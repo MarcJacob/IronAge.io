@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-static const SIZE_T GAME_SERVER_MEM_SIZE = 4ULL * 1024 * 1024 * 1024; // 4GB
+static const SIZE_T GAME_SERVER_MEM_SIZE = GiB(4);
 
 struct win32_app_state
 {
@@ -62,10 +62,30 @@ void ASSERT_EXIT_FUNC()
 	abort();
 }
 
+void win32_shutdown(int code)
+{
+	APP_STATE.exitRequested = true;
+}
+
 void win32_log_stdout(const wchar_t* msg)
 {
 	fputws(msg, stdout);
 	fputwc('\n', stdout);
+}
+
+void win32_logf_stdout(const wchar_t* msg, ...)
+{
+	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
+
+	wchar_t log_msg_buff[LOG_FORMAT_BUFF_SIZE];
+	memset(log_msg_buff, 0, sizeof(log_msg_buff));
+
+	va_list va;
+	va_start(va, msg);
+	int charCount = vswprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
+	va_end(va);
+
+	win32_log_stdout(log_msg_buff);
 }
 
 void win32_log_stderr(const wchar_t* msg)
@@ -82,9 +102,15 @@ int main(int argc, char** argv)
 	// Get handle to console for the logging functions.
 	// TODO(Marc): Prepare for more complex, flexible logging to other outputs.
 
-	game_server_platform win32_platform = { 0 };
-	win32_platform.log_stdout = win32_log_stdout;
-	win32_platform.log_stderr = win32_log_stderr;
+	// Initialize platform.
+	game_server_platform win32_platform = game_server_platform{
+
+		.shutdown = exit,
+
+		.log_stdout = win32_log_stdout,
+		.logf_stdout = win32_logf_stdout,
+		.log_stderr = win32_log_stderr
+	};
 
 	// ... TODO(Marc) Many more platform functions / properties to add !
 	

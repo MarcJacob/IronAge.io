@@ -18,9 +18,22 @@
 // The platform for the game server specifically does not allow memory allocations. The memory the server has to work with is given on initialization.
 struct game_server_platform
 {
+	// PLATFORM CONTROL
+
+	typedef void (*shutdown_func)(int code);
+	// Platform function: Requests standard shutdown when the game server has stopped.
+	shutdown_func shutdown;
+
+	// PLATFORM LOGGING
+
 	typedef void (*log_stdout_func)(const wchar_t*);
 	// Platform function: Takes in a null-terminated string and transfers it to standard output.
 	log_stdout_func log_stdout;
+
+	typedef void (*logf_stdout_func)(const wchar_t*, ...);
+	// Platform function: Takes in a null-terminated format string and format parameters and transfers it to standard output.
+	logf_stdout_func logf_stdout;
+
 	// Platform function: Takes in a null-terminated string and transfers it to error output.
 	typedef void (*log_stderr_func)(const wchar_t*);
 	log_stderr_func log_stderr;

@@ -15,4 +15,10 @@ typedef int i32;
 typedef short i16;
 typedef char i8;
 
+#if _WIN64
+typedef ui64 iptr;
+#else
+typedef ui32 iptr;
+#endif
+
 #endif // STD_TYPES_INCLUDED
