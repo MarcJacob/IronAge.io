@@ -1,9 +1,9 @@
-﻿// win32_main.cpp : Defines the entry point for the application on the Win32 platform.
+﻿// win32_main.cpp : Defines the entry point for the Game Server application on the Win32 platform.
 
 #include "core.h"
 
 // Unity-compile with the server code.
-#include "../server/server_main.cpp"
+#include "../game_server/game_server_main.cpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include "Windows.h"

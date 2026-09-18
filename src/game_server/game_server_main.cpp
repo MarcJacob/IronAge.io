@@ -1,3 +1,6 @@
+// Main implementation file for the Game Server code.
+// Must be linked or compiled into whatever platform layer is used.
+
 #include "game_server/game_server_platform.h"
 #include "game_server/game_server.h"
 

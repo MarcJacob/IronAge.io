@@ -1,7 +1,14 @@
 ﻿cmake_minimum_required(VERSION 3.20)
-project (IronAgeIO_Server CXX)
 
-add_executable (IronAgeIO_Server 
-	src/win32/win32_main.cpp)
+# Define projects
+project (IronAgeIO_GameServer CXX)
 
-target_include_directories(IronAgeIO_Server PRIVATE ${CMAKE_SOURCE_DIR}/include/)
+# GAME SERVER
+add_executable (IronAgeIO_GameServer 
+	src/platform/win32_game_server_main.cpp)
+
+target_include_directories(IronAgeIO_GameServer PRIVATE ${CMAKE_SOURCE_DIR}/include/)
+
+# WEB CLIENT
+
+# TODO(MARC): MASTER SERVER
