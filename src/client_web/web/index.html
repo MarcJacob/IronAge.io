@@ -1,0 +1,15 @@
+<script>
+
+    // Load client backend .wasm module.
+    var CLIENT_MODULE = null;
+    var CLIENT_INSTANCE = null;
+    var CLIENT_FUNCTIONS = null;
+
+    WebAssembly.instantiateStreaming(fetch('IronAgeIO_WebClient.wasm'), {})
+        .then(r => {
+            CLIENT_MODULE = r.module;
+            CLIENT_INSTANCE = r.instance;
+            CLIENT_FUNCTIONS = CLIENT_INSTANCE.exports;
+        });
+
+</script>
