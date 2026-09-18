@@ -12,6 +12,8 @@
 struct game_match_create_params
 {
 	ui16 world_width, world_height; // Dimensions of the world map in number of tiles.
+
+	ui8 tick_rate; // Number of ticks per second. This, alongside the match start time, allows knowing how far behind or ahead in time the local match simulation is.
 };
 
 struct match_world_state

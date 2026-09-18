@@ -94,6 +94,21 @@ void win32_log_stderr(const wchar_t* msg)
 	fputwc('\n', stderr);
 }
 
+// The "server resources" folder is currently the working directory.
+bool win32_write_file(const char* filename, const ui8* data, ui64 size)
+{
+	FILE* file = nullptr;
+	if (fopen_s(&file, filename, "wb") != 0 || file == nullptr)
+	{
+		return false;
+	}
+
+	size_t written = fwrite(data, 1, size, file);
+	fclose(file);
+
+	return written == size;
+}
+
 // Main entry point.
 int main(int argc, char** argv)
 {
@@ -109,7 +124,9 @@ int main(int argc, char** argv)
 
 		.log_stdout = win32_log_stdout,
 		.logf_stdout = win32_logf_stdout,
-		.log_stderr = win32_log_stderr
+		.log_stderr = win32_log_stderr,
+
+		.write_file = win32_write_file
 	};
 
 	// ... TODO(Marc) Many more platform functions / properties to add !
@@ -125,9 +142,23 @@ int main(int argc, char** argv)
 	APP_STATE.gameServer = game_server_init(win32_platform, game_server_mem, GAME_SERVER_MEM_SIZE);
 	ASSERT_MSG(APP_STATE.gameServer != nullptr, L"Failed to initialize Game Server.");
 
+	// Main loop: measure the time elapsed since the previous iteration and hand it to the server.
+	LARGE_INTEGER counter_frequency;
+	QueryPerformanceFrequency(&counter_frequency);
+
+	LARGE_INTEGER last_counter;
+	QueryPerformanceCounter(&last_counter);
+
 	while (!APP_STATE.exitRequested)
 	{
-		game_server_tick(win32_platform, *APP_STATE.gameServer, 0.f); // TODO: Measure delta time.
+		LARGE_INTEGER current_counter;
+		QueryPerformanceCounter(&current_counter);
+
+		// Integer difference first, converted to seconds last, to limit precision loss.
+		float deltatime = (float)(current_counter.QuadPart - last_counter.QuadPart) / (float)counter_frequency.QuadPart;
+		last_counter = current_counter;
+
+		game_server_tick(win32_platform, *APP_STATE.gameServer, deltatime);
 	}
 
 	return 0;

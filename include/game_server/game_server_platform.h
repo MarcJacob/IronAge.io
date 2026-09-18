@@ -37,6 +37,13 @@ struct game_server_platform
 	// Platform function: Takes in a null-terminated string and transfers it to error output.
 	typedef void (*log_stderr_func)(const wchar_t*);
 	log_stderr_func log_stderr;
+
+	// PLATFORM FILES
+
+	typedef bool (*write_file_func)(const char* filename, const ui8* data, ui64 size);
+	// Platform function: Writes the buffer to a file with the given name, creating it or overwriting it. Returns true on success.
+	// The file is located in the "server resources" folder. For now this is simply the working directory.
+	write_file_func write_file;
 };
 
 

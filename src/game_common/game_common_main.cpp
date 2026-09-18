@@ -3,6 +3,8 @@
 
 #include "game_common/game_match.h"
 
+#define TICKS_PER_SECOND (20) // TEMP: Matches tick rate is for now a constant universal value.
+
 game_match* match_create(mem_arena& match_mem, game_match_create_params & params)
 { 
 	if (params.world_width < MIN_WORLD_DIM_SIZE
@@ -10,6 +12,8 @@ game_match* match_create(mem_arena& match_mem, game_match_create_params & params
 	{
 		return nullptr;
 	}
+
+	params.tick_rate = TICKS_PER_SECOND;
 
 	game_match* newMatch = match_mem.alloc<game_match>();
 	*newMatch = {};

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>IronAge.io - Determinism test</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; max-width: 60em; }
+        pre { background: #eee; padding: 0.5em; overflow-x: auto; }
+        #dropzone { border: 2px dashed #888; padding: 1em; margin: 1em 0; }
+        .pass { color: #080; font-weight: bold; }
+        .fail { color: #c00; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Determinism test</h1>
+    <p>Compares the snapshot simulated by the wasm client with the one simulated by the native game server.</p>
+
+    <h2>Wasm snapshot</h2>
+    <p id="wasm-status">Loading wasm...</p>
+    <pre id="wasm-hex"></pre>
+
+    <h2>Native snapshot</h2>
+    <div id="dropzone">
+        Choose <code>snapshot_native.bin</code> (written by the game server in its working directory) or drop it here:
+        <input type="file" id="native-file">
+    </div>
+
+    <h2>Result</h2>
+    <p id="result">Waiting for native snapshot.</p>
+    <pre id="native-hex"></pre>
+
+<script>
+    var wasmSnapshot = null; // Uint8Array, null until the wasm scenario has run.
+    var nativeSnapshot = null; // Uint8Array, null until a native file is chosen.
+
+    function toHex(bytes)
+    {
+        var lines = [];
+        for (var i = 0; i < bytes.length; i += 16)
+        {
+            var row = [];
+            for (var j = i; j < Math.min(i + 16, bytes.length); j++)
+            {
+                row.push(bytes[j].toString(16).padStart(2, '0'));
+            }
+            lines.push(i.toString(16).padStart(4, '0') + ': ' + row.join(' '));
+        }
+        return lines.join('\n');
+    }
+
+    function setResult(text, cssClass)
+    {
+        var result = document.getElementById('result');
+        result.textContent = text;
+        result.className = cssClass || '';
+    }
+
+    function compare()
+    {
+        if (wasmSnapshot === null || nativeSnapshot === null)
+        {
+            return;
+        }
+
+        document.getElementById('native-hex').textContent = toHex(nativeSnapshot);
+
+        var commonLength = Math.min(wasmSnapshot.length, nativeSnapshot.length);
+        for (var i = 0; i < commonLength; i++)
+        {
+            if (wasmSnapshot[i] !== nativeSnapshot[i])
+            {
+                setResult('FAIL: first difference at byte offset ' + i
+                    + ' (wasm = 0x' + wasmSnapshot[i].toString(16).padStart(2, '0')
+                    + ', native = 0x' + nativeSnapshot[i].toString(16).padStart(2, '0') + ').', 'fail');
+                return;
+            }
+        }
+
+        if (wasmSnapshot.length !== nativeSnapshot.length)
+        {
+            setResult('FAIL: sizes differ (wasm = ' + wasmSnapshot.length + ' bytes, native = ' + nativeSnapshot.length
+                + ' bytes), first ' + commonLength + ' bytes are identical.', 'fail');
+            return;
+        }
+
+        setResult('PASS: snapshots are identical (' + wasmSnapshot.length + ' bytes).', 'pass');
+    }
+
+    async function loadNativeFile(file)
+    {
+        nativeSnapshot = new Uint8Array(await file.arrayBuffer());
+        compare();
+    }
+
+    document.getElementById('native-file').addEventListener('change', function (e)
+    {
+        if (e.target.files.length > 0) loadNativeFile(e.target.files[0]);
+    });
+
+    var dropzone = document.getElementById('dropzone');
+    dropzone.addEventListener('dragover', function (e) { e.preventDefault(); });
+    dropzone.addEventListener('drop', function (e)
+    {
+        e.preventDefault();
+        if (e.dataTransfer.files.length > 0) loadNativeFile(e.dataTransfer.files[0]);
+    });
+
+    WebAssembly.instantiateStreaming(fetch('IronAgeIO_WebClient.wasm'), {})
+        .then(function (r)
+        {
+            var exports = r.instance.exports;
+
+            var size = exports.gameclient_run_determinism_scenario();
+            if (size === 0)
+            {
+                document.getElementById('wasm-status').textContent = 'The wasm scenario failed (returned 0 bytes).';
+                return;
+            }
+
+            var ptr = exports.gameclient_get_determinism_snapshot();
+            wasmSnapshot = new Uint8Array(exports.memory.buffer, ptr, size).slice();
+
+            document.getElementById('wasm-status').textContent = 'Wasm scenario ran, snapshot is ' + size + ' bytes.';
+            document.getElementById('wasm-hex').textContent = toHex(wasmSnapshot);
+            compare();
+        })
+        .catch(function (err)
+        {
+            document.getElementById('wasm-status').textContent = 'Failed to run the wasm module: ' + err;
+        });
+</script>
+</body>
+</html>

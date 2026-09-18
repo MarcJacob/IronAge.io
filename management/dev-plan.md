@@ -98,15 +98,20 @@ tasks are broken down further.
        timestep, no float libm.
      - [DONE] Snapshot: field-by-field dump stream, fixed layout, no pointers/padding.
      - [DONE] Native test in win32 main: init, 200 empty ticks, dump.
-   - [WIP] Determinism self-check: same input -> native + wasm snapshots -> automated
+   - [DONE] Determinism self-check: same input -> native + wasm snapshots -> automated
      byte-diff.
-     - Shared scripted scenario in GameCommon (create, N scripted ticks, dump).
-     - Wasm export running the scenario in a static buffer, exposing snapshot ptr/size.
-     - Native run writing the snapshot to a file.
-     - Test page in `src/client_web/web/`: runs the wasm scenario; file picker loads the
-       native snapshot; byte-diffs, shows PASS/FAIL + first differing offset.
-   - Server Platform, headless: up-front memory block servicing GameCommon's requests,
+     - [DONE] Shared scripted scenario in GameCommon (create, N scripted ticks, dump).
+     - [DONE] Wasm export running the scenario in a static buffer, exposing snapshot ptr/size.
+     - [DONE] Native run writing the snapshot to a file (working directory).
+     - [DONE] Test page (`src/client_web/web/determinism_test.html`): runs the wasm scenario;
+       file picker loads the native snapshot; byte-diffs, shows PASS/FAIL + first
+       differing offset.
+   - [WIP] Server Platform, headless: up-front memory block servicing GameCommon's requests,
      tick loop driving one instance, no networking yet.
+     - [DONE] Up-front memory block (4 GiB), arenas sub-allocated per match.
+     - [DONE] Platform loop measuring delta time (QPC) and passing it to server tick.
+     - Server tick: fixed-rate accumulator driving a live match (replace test scenario +
+       shutdown).
    - Client Platform, standalone: wasm memory growth on demand, local tick loop with
      dummy input, two-canvas renderer showing GameCommon-driven state - no networking
      yet.

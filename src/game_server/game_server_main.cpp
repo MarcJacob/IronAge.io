@@ -55,6 +55,13 @@ void game_server_tick(game_server_platform& platform, game_server& server, float
 			dump_stream.dump_func = dump_func;
 			dump_stream.state = &dump_state;
 			match_dump_gamestate(*scenario_match, dump_stream);
+
+			// Write the snapshot so it can be compared with the one simulated by the web client.
+			if (!platform.write_file("snapshot_native.bin", dump_state.dump_mem, dump_state.dump_size))
+			{
+				platform.log_stderr(L"Failed to write native snapshot file.");
+				platform.shutdown(1);
+			}
 		}
 
 		platform.shutdown(0);
