@@ -2,6 +2,7 @@
 
 #include "core.h"
 #include "game_client_web.h"
+#include "game_client_web_exports.h"
 
 // Unity-compile the Game Common code into the web client.
 #include "../game_common/game_common_main.cpp"
@@ -25,7 +26,7 @@ struct
 
 	struct
 	{
-		int target_loc_x, target_loc_y;
+		i32 target_loc_x, target_loc_y;
 	} input;
 
 } CLIENT_BACKEND_STATE;
@@ -36,6 +37,13 @@ struct web_client_render_state
 {
 	struct match_world_state local_match_world_state; // Latest copy of the local match world state.
 } CLIENT_RENDER_STATE;
+
+// Structure built from a live match, exposing relevant static / parameter data about the match in a way that is easy to read from the frontend.
+struct web_client_match_info
+{
+	ui32 match_tick_rate;
+	ui32 match_world_width, match_world_height;
+} LOCAL_MATCH_INFO;
 
 static inline game_match& get_local_match()
 {
@@ -65,7 +73,13 @@ WASM_EXPORT bool client_begin_match()
 	match_start(*localMatch, 0);
 	CLIENT_BACKEND_STATE.local_match = localMatch;
 
+	// Initialize render and local match info structures.
 	CLIENT_RENDER_STATE.local_match_world_state = *get_local_match().world_state;
+
+	LOCAL_MATCH_INFO.match_tick_rate = get_local_match().start_params.tick_rate;
+	LOCAL_MATCH_INFO.match_world_width = get_local_match().start_params.world_width;
+	LOCAL_MATCH_INFO.match_world_height = get_local_match().start_params.world_height;
+
 	return true;
 }
 
@@ -94,4 +108,9 @@ WASM_EXPORT void client_tick_match()
 WASM_EXPORT web_client_render_state* client_get_render_state()
 {
 	return &CLIENT_RENDER_STATE;
+}
+
+WASM_EXPORT web_client_match_info* client_get_local_match_info()
+{
+	return &LOCAL_MATCH_INFO;
 }

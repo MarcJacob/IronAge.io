@@ -21,8 +21,8 @@ struct game_match_create_params
 // Temporary arbitrary structure for the state of the various entities / objects inside the match world.
 struct match_world_state
 {
-	int entity_loc_x, entity_loc_y;
-	int entity_target_x, entity_target_y;
+	i32 entity_loc_x, entity_loc_y;
+	i32 entity_target_x, entity_target_y;
 };
 
 // Main memory ownership and definition structure for a single ongoing match.

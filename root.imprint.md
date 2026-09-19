@@ -57,10 +57,21 @@ Comments that are not more than a few lines long just use // for each line. Beyo
 Symbols:
 	functions, structures / unions, typedefs: use snake_case.
 	enums & enum values: use CAPITAL_CASE.
-
+	Avoid using the _t suffix with types.
+	
 Function parameters and structure members use snake_case.
 Local variables use camelCase.
 
 Global variables use CAPITAL_CASE or snake_case, usually according to their importance / scope.
 
+Hungarian notation (type-based prefix) is NOT used.
+
 This is arbitrary more than anything. I (Marc) usually just use Pascal Case for everything in my other projects, I felt like changing.
+
+### Types & external symbols
+
+No standard library of any kind is available for the game_common and wasm code, and you are encouraged to make use of it as little as possible outside that.
+
+Integer types should use explicitly-defined types in */include/core/std_types.h*.
+
+

@@ -115,8 +115,8 @@ tasks are broken down further.
    - [WIP] Client Platform, standalone: local tick loop with dummy input, two-canvas
      renderer showing GameCommon-driven state - no networking yet.
      - [DONE] Wasm exports: begin match, set input target, tick, render-state readout.
-     - JS fixed-rate loop (rAF + accumulator, capped catch-up).
-     - JS canvas: draw entity, mouse click sets target.
+     - [DONE] JS fixed-rate loop (rAF + accumulator, capped catch-up).
+     - [DONE] JS canvas: draw entity, mouse click sets target.
      - Blit canvas.
    - Networking end-to-end: server serves the client bundle over HTTP and relays input
      via WebSocket on a fixed schedule; client connects and replaces its dummy input
@@ -129,3 +129,9 @@ tasks are broken down further.
    persistence & master server, ops & hardening) still look like roughly the right
    sequence, but haven't been re-specified against the architecture above yet. Revisit
    phase by phase in a future pass.
+
+## Backlog
+
+Tasks not currently part of the plan that need to be added to it at some point.
+
+- Client render interpolation between ticks (smooth movement).
