@@ -26,17 +26,21 @@ struct game_server_platform
 
 	// PLATFORM LOGGING
 
-	typedef void (*log_stdout_func)(const wchar_t*);
+	typedef void (*log_stdout_func)(const char*);
 	// Platform function: Takes in a null-terminated string and transfers it to standard output.
 	log_stdout_func log_stdout;
 
-	typedef void (*logf_stdout_func)(const wchar_t*, ...);
+	typedef void (*logf_stdout_func)(const char*, ...);
 	// Platform function: Takes in a null-terminated format string and format parameters and transfers it to standard output.
 	logf_stdout_func logf_stdout;
 
+	typedef void (*log_stderr_func)(const char*);
 	// Platform function: Takes in a null-terminated string and transfers it to error output.
-	typedef void (*log_stderr_func)(const wchar_t*);
 	log_stderr_func log_stderr;
+
+	typedef void(*logf_stderr_func)(const char*, ...);
+	// Platform function: Takes in a null-terminated format string and format parameters and transfers it to error output.
+	logf_stderr_func logf_stderr;
 
 	// PLATFORM FILES
 
@@ -48,17 +52,20 @@ struct game_server_platform
 
 
 struct game_server;
+struct game_server_init_params;
 
 /**
  * Initializes a new game server from the provided platform functions, giving it its memory footprint.
  * If successful, returns pointer to the initialized server structure. 
  * Update over time using game_server_tick.
  */
-game_server* game_server_init(game_server_platform& platform, ui8* memory, ui64 memory_size);
+game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size);
 
 /**
- * Integrates the passage of time into the game server simulation.
+ * Integrates the passage of time into the game server simulation, triggering the ticking of ongoing matches as needed.
+ * TODO(Marc): Pass an epoch or other precise, integer time stamp instead of deltatime. The server may make use of delta time / float-based time tracking,
+ * but it needs to be as precise as possible to have the correct cadence of match ticks.
  */
-void game_server_tick(game_server_platform& platform, game_server& server, float deltatime);
+void game_server_tick(game_server& server, float deltatime);
 
 

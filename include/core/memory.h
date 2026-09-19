@@ -68,13 +68,26 @@ static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 {
 	ASSERT(owned_mem != nullptr && owned_mem_size > 0);
 
-	mem_arena new_arena = { 0 };
-	new_arena.mem_start = owned_mem;
-	new_arena.mem_size = owned_mem_size;
+	mem_arena newArena = { 0 };
+	newArena.mem_start = owned_mem;
+	newArena.mem_size = owned_mem_size;
 	
-	new_arena._alloc_func = mem_arena_alloc_default;
+	newArena._alloc_func = mem_arena_alloc_default;
 
-	return new_arena;
+	// Zero out all owned memory.
+	// TODO(Marc): Implement memzero / memset. This is piggy code.
+	for (ui64 i = 0; i < owned_mem_size; i++)
+	{
+		if (owned_mem_size - i > 8)
+		{
+			*(ui64*)(owned_mem + i) = 0;
+			i += 7; // advance i by 7 + the increment post loop, advancing writing by 8 bytes in one loop.
+			continue;
+		}
+		owned_mem[i] = 0;
+	}
+
+	return newArena;
 }
 
 // Creates a new mem arena, assigning it memory allocated from a "parent" arena.
@@ -83,14 +96,10 @@ static inline mem_arena mem_arena_create_sub(mem_arena& parent, ui64 owned_mem_s
 {
 	ASSERT(parent.mem_start != nullptr && parent.mem_size > 0);
 
-	mem_arena new_arena = { 0 };
-	new_arena.mem_start = (ui8*)parent.alloc(owned_mem_size);
-	ASSERT_MSG(new_arena.mem_start != nullptr, L"Child arena of size %llu could not fit in parent arena of size %llu with %lld remaining bytes.", owned_mem_size, parent.mem_size, parent.mem_size - parent.allocated_count);
+	ui8* memStart = (ui8*)parent.alloc(owned_mem_size);
+	ASSERT_MSG(memStart != nullptr, "Child arena of size %llu could not fit in parent arena of size %llu with %lld remaining bytes.", owned_mem_size, parent.mem_size, parent.mem_size - parent.allocated_count);
 
-	new_arena.mem_size = owned_mem_size;
-	new_arena._alloc_func = mem_arena_alloc_default;
-
-	return new_arena;
+	return mem_arena_create(memStart, owned_mem_size);
 }
 
 // TODO(Marc): Optimize this.

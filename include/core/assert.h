@@ -9,14 +9,12 @@
 // Exit function used by ASSERT macro.
 void ASSERT_EXIT_FUNC();
 // Message & Exit function used by ASSERT_MSG macro.
-void ASSERT_MSG_FUNC(const wchar_t* assertMsg, const wchar_t* filename, ui32 line, ...);
+void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...);
 
 #define ASSERT(exp) if (!(exp)) ASSERT_EXIT_FUNC();
 
-#define TO_WCHAR__(x) L##x
-#define TO_WCHAR(x) TO_WCHAR__(x)
 #define ASSERT_MSG(exp, fail_msg, ...) if (!(exp)) {			\
-	ASSERT_MSG_FUNC((fail_msg), TO_WCHAR(__FILE__), __LINE__, __VA_ARGS__);	\
+	ASSERT_MSG_FUNC((fail_msg), __FILE__, __LINE__, __VA_ARGS__);	\
 }
 
 #endif // ASSERT_INCLUDED

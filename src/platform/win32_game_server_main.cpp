@@ -28,28 +28,28 @@ struct win32_app_state
 } APP_STATE;
 
 // Game Server platform functions.
-void win32_log_stdout(const wchar_t* msg);
-void win32_log_stderr(const wchar_t* msg);
+void win32_log_stdout(const char* msg);
+void win32_log_stderr(const char* msg);
 
 // Assertion functions.
 
-// Format the assertion message in a fixed stack buffer and go through the Win32 _wassert function. 
-void ASSERT_MSG_FUNC(const wchar_t* msg, const wchar_t* filename, ui32 line, ...)
+// Format the assertion message in a fixed stack buffer and go through the Win32 assert function. 
+void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 {
 	static const ui32 ASSERT_MSG_BUFF_COUNT = 1024;
 
-	wchar_t assert_msg_buff[ASSERT_MSG_BUFF_COUNT];
+	char assert_msg_buff[ASSERT_MSG_BUFF_COUNT];
 	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 
 	va_list va;
 	va_start(va, line);
-	int charCount = vswprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
+	int charCount = vsprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
 	va_end(va);
 
 	win32_log_stderr(assert_msg_buff);
 
 	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
-	swprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, L"FILE: %s, LINE %d", filename, line);
+	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
 
 	win32_log_stderr(assert_msg_buff);
 
@@ -67,31 +67,31 @@ void win32_shutdown(int code)
 	APP_STATE.exitRequested = true;
 }
 
-void win32_log_stdout(const wchar_t* msg)
+void win32_log_stdout(const char* msg)
 {
-	fputws(msg, stdout);
-	fputwc('\n', stdout);
+	fputs(msg, stdout);
+	fputc('\n', stdout);
 }
 
-void win32_logf_stdout(const wchar_t* msg, ...)
+void win32_logf_stdout(const char* msg, ...)
 {
 	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
 
-	wchar_t log_msg_buff[LOG_FORMAT_BUFF_SIZE];
+	char log_msg_buff[LOG_FORMAT_BUFF_SIZE];
 	memset(log_msg_buff, 0, sizeof(log_msg_buff));
 
 	va_list va;
 	va_start(va, msg);
-	int charCount = vswprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
+	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
 	va_end(va);
 
 	win32_log_stdout(log_msg_buff);
 }
 
-void win32_log_stderr(const wchar_t* msg)
+void win32_log_stderr(const char* msg)
 {
-	fputws(msg, stderr);
-	fputwc('\n', stderr);
+	fputs(msg, stderr);
+	fputc('\n', stderr);
 }
 
 // The "server resources" folder is currently the working directory.
@@ -112,13 +112,13 @@ bool win32_write_file(const char* filename, const ui8* data, ui64 size)
 // Main entry point.
 int main(int argc, char** argv)
 {
-	win32_log_stdout(L"Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n\n");
+	win32_log_stdout("Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n\n");
 
 	// Get handle to console for the logging functions.
 	// TODO(Marc): Prepare for more complex, flexible logging to other outputs.
 
 	// Initialize platform.
-	game_server_platform win32_platform = game_server_platform{
+	game_server_platform win32_platform = {
 
 		.shutdown = exit,
 
@@ -136,11 +136,19 @@ int main(int argc, char** argv)
 	if (game_server_mem == nullptr)
 	{
 		DWORD errCode = GetLastError();
-		ASSERT_MSG(0, L"Failed to allocate Game Server memory. Error code = %d", errCode);
+		ASSERT_MSG(0, "Failed to allocate Game Server memory. Error code = %d", errCode);
 	}
 
-	APP_STATE.gameServer = game_server_init(win32_platform, game_server_mem, GAME_SERVER_MEM_SIZE);
-	ASSERT_MSG(APP_STATE.gameServer != nullptr, L"Failed to initialize Game Server.");
+	// TODO(Marc): Read command line / config file for those !
+	game_server_init_params server_init_params = {
+
+		.match_slot_count = 4,
+		.run_test_scenario = true,
+		.test_scenario_dump_filename = "snapshot_native.bin"
+	};
+
+	APP_STATE.gameServer = game_server_init(win32_platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
+	ASSERT_MSG(APP_STATE.gameServer != nullptr, "Failed to initialize Game Server.");
 
 	// Main loop: measure the time elapsed since the previous iteration and hand it to the server.
 	LARGE_INTEGER counter_frequency;
@@ -158,7 +166,7 @@ int main(int argc, char** argv)
 		float deltatime = (float)(current_counter.QuadPart - last_counter.QuadPart) / (float)counter_frequency.QuadPart;
 		last_counter = current_counter;
 
-		game_server_tick(win32_platform, *APP_STATE.gameServer, deltatime);
+		game_server_tick(*APP_STATE.gameServer, deltatime);
 	}
 
 	return 0;

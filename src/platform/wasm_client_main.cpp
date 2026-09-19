@@ -6,4 +6,4 @@
 
 // Platform implementation of the core assertion functions: no way to report a message here, so just trap.
 void ASSERT_EXIT_FUNC() { __builtin_trap(); }
-void ASSERT_MSG_FUNC(const wchar_t* assertMsg, const wchar_t* filename, ui32 line, ...) { __builtin_trap(); }
+void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...) { __builtin_trap(); }

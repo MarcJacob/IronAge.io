@@ -39,3 +39,28 @@ This is the IronAge.io project, an idea I just had that can be summarized as a v
 Early design document can be found in design_doc.md
 
 Work management resources are available in the management folder, while code exists in src/ and include/.
+
+## Code conventions
+
+/include/ is visible by the entire codebase and is used to have subsystems talk to one another across hierarchical boundaries.
+Apply strict symbol exposure discipline, anything that goes in /include/ has to have a good reason for it. By default, stick to "internal" header files (/src/).
+
+/src/ contains the main source code built as a tree of self-contained, hierarchical subsystems (with possible direct links for unity builds).
+It is hierarchical in the sense that every subfolder has a clear relationship with its parent folder:
+- *Component*, meaning the subfolder knows nothing / as little as possible about its parent, and is used for its own functionality by the parent.
+- *Extension*, meaning the subfolder knows a lot about its parent and is effectively just a modular extension for it, while the parent has an abstract view of it.
+
+Comments that are not more than a few lines long just use // for each line. Beyond that, use /* */ at your convenience.
+
+### Naming
+
+Symbols:
+	functions, structures / unions, typedefs: use snake_case.
+	enums & enum values: use CAPITAL_CASE.
+
+Function parameters and structure members use snake_case.
+Local variables use camelCase.
+
+Global variables use CAPITAL_CASE or snake_case, usually according to their importance / scope.
+
+This is arbitrary more than anything. I (Marc) usually just use Pascal Case for everything in my other projects, I felt like changing.

@@ -112,9 +112,12 @@ tasks are broken down further.
      - [DONE] Platform loop measuring delta time (QPC) and passing it to server tick.
      - Server tick: fixed-rate accumulator driving a live match (replace test scenario +
        shutdown).
-   - Client Platform, standalone: wasm memory growth on demand, local tick loop with
-     dummy input, two-canvas renderer showing GameCommon-driven state - no networking
-     yet.
+   - [WIP] Client Platform, standalone: local tick loop with dummy input, two-canvas
+     renderer showing GameCommon-driven state - no networking yet.
+     - [DONE] Wasm exports: begin match, set input target, tick, render-state readout.
+     - JS fixed-rate loop (rAF + accumulator, capped catch-up).
+     - JS canvas: draw entity, mouse click sets target.
+     - Blit canvas.
    - Networking end-to-end: server serves the client bundle over HTTP and relays input
      via WebSocket on a fixed schedule; client connects and replaces its dummy input
      with the relayed stream.

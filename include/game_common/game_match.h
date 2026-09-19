@@ -6,7 +6,9 @@
 #include "core.h"
 
 // TODO(Marc): Temp defines that should really be parameters.
-#define MIN_WORLD_DIM_SIZE (100) // Minimum width and height of a match's world.
+static constexpr ui16 MIN_WORLD_DIM_SIZE = 100; // Minimum width and height of a match's world.
+static constexpr ui8 MATCH_TICK_RATE = 20;		// Ticks per second. Used by game mechanics so time-relative elements can be defined using time units,
+												// and by host app to know how many ticks it should have simulated for the match by now.
 
 // Params structure for the creation of a match. Contains all necessary components to determine the match's starting state, parameters, and resource requirements.
 struct game_match_create_params
@@ -16,6 +18,7 @@ struct game_match_create_params
 	ui8 tick_rate; // Number of ticks per second. This, alongside the match start time, allows knowing how far behind or ahead in time the local match simulation is.
 };
 
+// Temporary arbitrary structure for the state of the various entities / objects inside the match world.
 struct match_world_state
 {
 	int entity_loc_x, entity_loc_y;
@@ -26,20 +29,22 @@ struct match_world_state
 struct game_match
 {
 	ui64 start_time; // Epoch time at which this match started its first simulation tick.
-
 	game_match_create_params start_params; // Parameters used to start the match.
 
-	mem_arena* memory; // Memory arena assigned to this match. Usually the match structure itself will be placed within it.
+	mem_arena* memory; // Memory arena this match will use to allocate memory as needed.
 
 	ui32 tick; // Next tick to be computed.
-
 	match_world_state* world_state;
 };
 
+// Returns the estimated maximum required memory for a match started with the given parameters.
+constexpr ui64 match_get_required_mem(game_match_create_params& params);
+
 // Creates a new game match instance from the provided creation parameters.
-// The match places itself at the start of the provided memory.
-// TODO(Marc): Move this out of the header !!
-game_match* match_create(mem_arena& match_mem, game_match_create_params& params);
+// Returns false if the creation parameters are invalid or the provided memory isn't large enough.
+// The match uses but DOES NOT OWN the passed memory !
+// TODO(Marc): Error code ?
+bool match_create(mem_arena& match_mem, game_match_create_params& params, game_match& out_match);
 
 // Initializes the match world state and registers its start time for the purpose of linking tick to time through the tick rate (TODO).
 void match_start(game_match& match, ui64 start_time_epoch);
