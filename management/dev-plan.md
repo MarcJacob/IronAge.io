@@ -106,12 +106,13 @@ tasks are broken down further.
      - [DONE] Test page (`src/client_web/web/determinism_test.html`): runs the wasm scenario;
        file picker loads the native snapshot; byte-diffs, shows PASS/FAIL + first
        differing offset.
-   - [WIP] Server Platform, headless: up-front memory block servicing GameCommon's requests,
+   - [DONE] Server Platform, headless: up-front memory block servicing GameCommon's requests,
      tick loop driving one instance, no networking yet.
      - [DONE] Up-front memory block (4 GiB), arenas sub-allocated per match.
-     - [DONE] Platform loop measuring delta time (QPC) and passing it to server tick.
-     - Server tick: fixed-rate accumulator driving a live match (replace test scenario +
-       shutdown).
+     - [DONE] Match slots: fixed-size slots with lifecycle state, arena per slot.
+     - [DONE] Start a match in a slot (create, start, state -> MATCH_ONGOING).
+     - [DONE] Platform passes an integer monotonic timestamp (ms) to server tick.
+     - [DONE] Server tick: per ongoing slot, tick on a fixed schedule, stubbed input.
    - [WIP] Client Platform, standalone: local tick loop with dummy input, two-canvas
      renderer showing GameCommon-driven state - no networking yet.
      - [DONE] Wasm exports: begin match, set input target, tick, render-state readout.

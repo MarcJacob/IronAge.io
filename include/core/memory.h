@@ -36,6 +36,9 @@ struct mem_arena
 	inline Type* alloc(ui64 item_count = 1) { ASSERT(_alloc_func != nullptr && item_count > 0); return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type)); }
 };
 
+void ia_memcpy(void* dest, void* src, ui64 size);
+void ia_memzero(void* dest, ui64 size);
+void ia_memset(void* dest, ui8 val, ui64 size);
 
 // Default allocation strategy given to a new arena. Assumes owned memory is contiguous, pre-allocated and non-extendable.
 // Can be replaced by any valid function within a specific arena, allowing varying allocation strategies (for example, the ability to grow).
@@ -75,17 +78,7 @@ static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 	newArena._alloc_func = mem_arena_alloc_default;
 
 	// Zero out all owned memory.
-	// TODO(Marc): Implement memzero / memset. This is piggy code.
-	for (ui64 i = 0; i < owned_mem_size; i++)
-	{
-		if (owned_mem_size - i > 8)
-		{
-			*(ui64*)(owned_mem + i) = 0;
-			i += 7; // advance i by 7 + the increment post loop, advancing writing by 8 bytes in one loop.
-			continue;
-		}
-		owned_mem[i] = 0;
-	}
+	ia_memzero(owned_mem, owned_mem_size);
 
 	return newArena;
 }
@@ -103,7 +96,7 @@ static inline mem_arena mem_arena_create_sub(mem_arena& parent, ui64 owned_mem_s
 }
 
 // TODO(Marc): Optimize this.
-void gcommon_memcpy(void* dest, void* src, ui64 size)
+void ia_memcpy(void* dest, void* src, ui64 size)
 {
 	if (size == 0) return;
 
@@ -115,6 +108,48 @@ void gcommon_memcpy(void* dest, void* src, ui64 size)
 	for (ui64 i = 0; i < size; i++)
 	{
 		destMem[i] = srcMem[i];
+	}
+}
+
+// TODO(Marc): optimize this.
+void ia_memzero(void* dest,  ui64 size)
+{
+	if (size == 0) return;
+
+	ASSERT(dest != nullptr);
+
+	ui8* destMem = (ui8*)dest;
+
+	for (ui64 i = 0; i < size; i++)
+	{
+		if (size - i > 8)
+		{
+			*(ui64*)(destMem + i) = 0;
+			i += 7; // advance i by 7 + the increment post loop, advancing writing by 8 bytes in one loop.
+			continue;
+		}
+		destMem[i] = 0;
+	}
+}
+
+// TODO(Marc): optimize this.
+void ia_memset(void* dest, ui8 val, ui64 size)
+{
+	if (size == 0) return;
+
+	ASSERT(dest != nullptr);
+
+	if (val == 0)
+	{
+		ia_memzero(dest, size);
+		return;
+	}
+
+	ui8* destMem = (ui8*)dest;
+
+	for (ui64 i = 0; i < size; i++)
+	{
+		destMem[i] = val;
 	}
 }
 

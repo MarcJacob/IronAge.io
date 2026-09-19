@@ -3,20 +3,18 @@
 
 #include "game_common/game_match.h"
 
-constexpr ui64 match_get_required_mem(game_match_create_params& params)
+constexpr ui64 match_get_required_mem(game_match_start_params& params)
 {
 	return MiB(1); // For now let's just keep it static at one mibibyte.
 }
 
-bool match_create(mem_arena& match_mem, game_match_create_params& params, game_match& out_match)
-{ 
+bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_params& params, game_match& out_match)
+{
 	if (params.world_width < MIN_WORLD_DIM_SIZE
 		|| params.world_height < MIN_WORLD_DIM_SIZE)
 	{
 		return false; // Invalid params.
 	}
-
-	params.tick_rate = MATCH_TICK_RATE;
 
 	// TODO: Instead of checking total memory size of the arena, we should instead check how much it has *left* in case it already contains stuff (not recommended).
 	if (match_mem.mem_size < match_get_required_mem(params))
@@ -28,15 +26,16 @@ bool match_create(mem_arena& match_mem, game_match_create_params& params, game_m
 	out_match.start_params = params;
 	out_match.memory = &match_mem;
 
+	out_match.start_time = start_time;
+
+	// Initialize match world state.
+
+	out_match.world_state = out_match.memory->alloc<match_world_state>();
+	ASSERT(out_match.world_state != nullptr);
+
+	*out_match.world_state = {};
+
 	return true;
-}
-
-void match_start(game_match& match, ui64 start_time_epoch)
-{
-	match.start_time = start_time_epoch;
-
-	match.world_state = match.memory->alloc<match_world_state>();
-	*match.world_state = {};
 }
 
 // Advances time in a match's world simulation. Requires the aggregated inputs / commands to apply into the tick.
@@ -60,9 +59,10 @@ void match_tick(game_match& match, const match_tick_commands& input)
 
 #define MATCH_TEST_SCENARIO_TICKS (200)
 
-game_match_create_params match_test_scenario_get_params()
+game_match_start_params match_test_scenario_get_params()
 {
-	game_match_create_params params = {
+	game_match_start_params params = {
+		.tick_rate = 20,
 		.world_width = 1024,
 		.world_height = 1024
 	};
@@ -72,17 +72,16 @@ game_match_create_params match_test_scenario_get_params()
 
 game_match* match_run_test_scenario(mem_arena& match_mem)
 {
-	game_match_create_params params = match_test_scenario_get_params();
+	game_match_start_params params = match_test_scenario_get_params();
 	game_match* match = match_mem.alloc<game_match>();
 	ASSERT(match != nullptr);
 
-	if (!match_create(match_mem, params, *match))
+	// Start and run the required number of ticks over the match.
+	if (!match_start(match_mem, 0, params, *match))
 	{
 		return nullptr;
 	}
 
-	// Start and run the required number of ticks over the match.
-	match_start(*match, 0);
 	while (match->tick < MATCH_TEST_SCENARIO_TICKS)
 	{
 		match_tick_commands commands = {};

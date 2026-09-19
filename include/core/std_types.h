@@ -21,4 +21,6 @@ typedef ui64 iptr;
 typedef ui32 iptr;
 #endif
 
+typedef ui64 time_ms; // Used on some apps as a way to measure time precisely.
+
 #endif // STD_TYPES_INCLUDED

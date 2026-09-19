@@ -63,9 +63,8 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 
 /**
  * Integrates the passage of time into the game server simulation, triggering the ticking of ongoing matches as needed.
- * TODO(Marc): Pass an epoch or other precise, integer time stamp instead of deltatime. The server may make use of delta time / float-based time tracking,
- * but it needs to be as precise as possible to have the correct cadence of match ticks.
+ * The time parameter should be the total platform uptime since the server was started.
  */
-void game_server_tick(game_server& server, float deltatime);
+void game_server_tick(game_server& server, time_ms time_ms);
 
 

@@ -25,9 +25,8 @@ enum class MATCH_SLOT_STATE : ui8
 // changes to the match parameters before it is started.
 struct match_slot_lobby
 {
-	game_match_create_params match_params;
-
 	// ... hold player identifiers, associated to a connected client.
+	ui8 to_implement;
 };
 
 // Wraps memory and a match structure that can be in multiple states.
@@ -37,10 +36,19 @@ struct match_slot
 	MATCH_SLOT_STATE state;
 
 	mem_arena slot_memory; // Memory assigned to this slot.
+
+	game_match_start_params match_params; // Parameters for the current or next match (valid when in lobby or in a match).
+
 	union
 	{
 		match_slot_lobby* lobby;	// Valid when the slot state is non MATCH_*
-		game_match* match;			// Valid when the slot state is MATCH_*
+
+		struct
+		{
+			game_match* match_ptr;
+			ui64 last_tick_time;
+
+		} match;					// Valid when the slot state is MATCH_*
 	};
 };
 
@@ -60,6 +68,9 @@ struct game_server
 	game_server_init_params init_params;
 
 	bool shutdown_triggered; // Should the server shutdown as soon as possible ?
+	ui64 tick_count; // How many ticks this server has gone through in total.
+
+	time_ms time_ms; // Last recorded time from tick.
 
 	mem_arena main_memory; // Main memory allocator for the server.
 	match_slot* match_slots; // Match slots management structures.

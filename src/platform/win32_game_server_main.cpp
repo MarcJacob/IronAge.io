@@ -143,7 +143,7 @@ int main(int argc, char** argv)
 	game_server_init_params server_init_params = {
 
 		.match_slot_count = 4,
-		.run_test_scenario = true,
+		.run_test_scenario = false,
 		.test_scenario_dump_filename = "snapshot_native.bin"
 	};
 
@@ -154,19 +154,19 @@ int main(int argc, char** argv)
 	LARGE_INTEGER counter_frequency;
 	QueryPerformanceFrequency(&counter_frequency);
 
-	LARGE_INTEGER last_counter;
-	QueryPerformanceCounter(&last_counter);
+	LARGE_INTEGER current_counter;
+	QueryPerformanceCounter(&current_counter);
+
+	ui64 start_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart);
 
 	while (!APP_STATE.exitRequested)
 	{
-		LARGE_INTEGER current_counter;
 		QueryPerformanceCounter(&current_counter);
 
-		// Integer difference first, converted to seconds last, to limit precision loss.
-		float deltatime = (float)(current_counter.QuadPart - last_counter.QuadPart) / (float)counter_frequency.QuadPart;
-		last_counter = current_counter;
+		// Measure time since game server initialization in milliseconds.
+		ui64 uptime_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
 
-		game_server_tick(*APP_STATE.gameServer, deltatime);
+		game_server_tick(*APP_STATE.gameServer, uptime_ms);
 	}
 
 	return 0;

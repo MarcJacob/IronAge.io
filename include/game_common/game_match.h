@@ -11,11 +11,10 @@ static constexpr ui8 MATCH_TICK_RATE = 20;		// Ticks per second. Used by game me
 												// and by host app to know how many ticks it should have simulated for the match by now.
 
 // Params structure for the creation of a match. Contains all necessary components to determine the match's starting state, parameters, and resource requirements.
-struct game_match_create_params
+struct game_match_start_params
 {
+	ui8 tick_rate; // Number of ticks per second.
 	ui16 world_width, world_height; // Dimensions of the world map in number of tiles.
-
-	ui8 tick_rate; // Number of ticks per second. This, alongside the match start time, allows knowing how far behind or ahead in time the local match simulation is.
 };
 
 // Temporary arbitrary structure for the state of the various entities / objects inside the match world.
@@ -29,7 +28,7 @@ struct match_world_state
 struct game_match
 {
 	ui64 start_time; // Epoch time at which this match started its first simulation tick.
-	game_match_create_params start_params; // Parameters used to start the match.
+	game_match_start_params start_params; // Parameters used to start the match.
 
 	mem_arena* memory; // Memory arena this match will use to allocate memory as needed.
 
@@ -38,16 +37,11 @@ struct game_match
 };
 
 // Returns the estimated maximum required memory for a match started with the given parameters.
-constexpr ui64 match_get_required_mem(game_match_create_params& params);
+constexpr ui64 match_get_required_mem(game_match_start_params& params);
 
-// Creates a new game match instance from the provided creation parameters.
-// Returns false if the creation parameters are invalid or the provided memory isn't large enough.
-// The match uses but DOES NOT OWN the passed memory !
-// TODO(Marc): Error code ?
-bool match_create(mem_arena& match_mem, game_match_create_params& params, game_match& out_match);
-
-// Initializes the match world state and registers its start time for the purpose of linking tick to time through the tick rate (TODO).
-void match_start(game_match& match, ui64 start_time_epoch);
+// Create a new match from the memory it should use, a start time and start parameters.
+// Returns false if any of the parameters were invalid / not enough memory was available.
+bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_params& params, game_match& out_match);
 
 // Contains the aggregates Commands to be applied to a match over its next tick.
 struct match_tick_commands
