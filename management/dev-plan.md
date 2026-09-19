@@ -65,7 +65,10 @@ GameCommon), logging/file/network/thread callbacks, tick loop, all presentation.
 
 ### Networking
 
-uWebSockets, server-side only. Early dev phase: Game Server also serves the client
+Hand-rolled, no third-party libraries. The Server Platform only provides non-blocking
+byte-stream connections (Winsock on win32) through a pull-based interface. HTTP and
+WebSocket handling live in Game Server code over that interface (portable, testable
+natively). TLS (wss) via reverse proxy at deployment time. Early dev phase: Game Server also serves the client
 bundle over plain HTTP, and relays input between connected clients on a fixed tick
 schedule for lockstep. Master server (matchmaking, persistent cross-match scoring)
 deferred; direct frontend-to-server connection stays available as a dev/self-host mode
@@ -122,6 +125,23 @@ tasks are broken down further.
    - Networking end-to-end: server serves the client bundle over HTTP and relays input
      via WebSocket on a fixed schedule; client connects and replaces its dummy input
      with the relayed stream.
+     - [DONE] Platform net interface (`game_server_platform.h`): pull-based byte streams
+       (new / closed connection queries, send, receive, close).
+     - Win32 implementation: non-blocking Winsock listener, fixed connection table with
+       per-connection buffers, the net_ functions.
+     - Platform `read_file` (+ file size) in "server resources storage".
+     - Server: connection table + per-connection buffers in server memory (fixed max
+       connections).
+     - Server: static HTTP serving of the client bundle (MIME types, no path traversal,
+       size limits).
+     - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
+       ping / pong / close, partial frames.
+     - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
+       input, per-tick command list.
+     - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.
+     - Client: JS WebSocket moves bytes only; wasm parses, queues tick commands, ticks
+       only when a tick's commands have arrived.
+     - Two-tab proof: identical state in sync (incl. second tab joining late).
    - End-to-end proof: two browser tabs against the same server show identical
      GameCommon-driven state changing in sync.
 

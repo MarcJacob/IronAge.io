@@ -42,11 +42,57 @@ struct game_server_platform
 	// Platform function: Takes in a null-terminated format string and format parameters and transfers it to error output.
 	logf_stderr_func logf_stderr;
 
+	// PLATFORM NET
+
+	typedef i32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same handle, 
+										// meaning that the server should always check for closed connections first to ensure the handle
+										// is available on its end. Connections should stay alive on the platform at least so long as data is waiting to be read.
+
+	// Structured information about a new inbound connection.
+	struct in_connection
+	{
+		net_connection_handle platform_handle;
+		// ...
+	};
+
+	typedef ui16 (*net_query_new_connections_func)(in_connection* new_connections_buff, ui16 buff_size);
+	// Platform function: Takes in a target connections buffer and max size and fills in any new incoming connections.
+	// Returns the number of new connections. If the buffer size is reached, call the function again to get the rest.
+	net_query_new_connections_func net_query_new_connections;
+
+	typedef ui16 (*net_query_closed_connections_func)(net_connection_handle* closed_handles_buff, ui16 buff_size);
+	// Platform function: Takes in a target handles buffer and max size and fills in any closed connections.
+	// Returns the number of closed connections. If the buffer size is reached, call the function again to get the rest.
+	net_query_closed_connections_func net_query_closed_connections;
+
+	typedef bool (*net_send_bytes_func)(net_connection_handle handle, const ui8* bytes, ui32 bytes_count);
+	// Platform function: buffers bytes for sending towards an existing connection identified by a handle.
+	// Returns whether the data was successfully buffered / sent on the platform. Failure usually means the connection was closed,
+	// or that there's too much data already buffered for sending.
+	net_send_bytes_func net_send_bytes;
+
+	typedef ui32 (*net_receive_bytes_func)(net_connection_handle handle, ui8* buff, ui32 buff_size);
+	// Platform function: receives bytes from a connection based on its handle. If max buffer size is reached,
+	// call the function again to get the rest. If buff is null, returns the number of bytes waiting for reception.
+	// Returns the number of bytes received, with 0 meaning that no data has been received (NOT that the connection has closed).
+	net_receive_bytes_func net_receive_bytes;
+
+	typedef void (*net_close_connection_func)(net_connection_handle handle);
+	// Platform function: requests the platform close the connection related to the handle, if any.
+	// Forces the connection to be dropped from the platform, and erases any data that may have been waiting to be read.
+	net_close_connection_func net_close_connection;
+
 	// PLATFORM FILES
+
+	typedef ui64 (*read_file_func)(const char* filename, ui8* read_buff, ui64 buff_size);
+	// Platform function: Reads / loads in an entire file's contents into the target buffer, if it is large enough.
+	// If read_buff is null, performs a "dry run" and returns the file size.
+	// Returns the number of bytes read, 0 if the file does not exist / is inaccessible.
+	read_file_func read_file;
 
 	typedef bool (*write_file_func)(const char* filename, const ui8* data, ui64 size);
 	// Platform function: Writes the buffer to a file with the given name, creating it or overwriting it. Returns true on success.
-	// The file is located in the "server resources" folder. For now this is simply the working directory.
+	// The file is located in the "server resources storage", whatever that means for the host platform.
 	write_file_func write_file;
 };
 

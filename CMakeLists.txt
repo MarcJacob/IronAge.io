@@ -25,13 +25,17 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 	    --target=wasm32-unknown-unknown 
 		-nostdlib -fuse-ld=lld -Wl,--no-entry -Wl,--export-dynamic) 
 else()
-	# GAME SERVER
+	# Win32 GAME SERVER
 	add_executable (IronAgeIO_GameServer 
-		src/platform/win32_game_server_main.cpp)
+		src/platform/win32_game_server/win32_game_server_main.cpp)
 	target_include_directories(IronAgeIO_GameServer PRIVATE ${CMAKE_SOURCE_DIR}/include/)
 	target_compile_options(IronAgeIO_GameServer PRIVATE
 		$<$<CXX_COMPILER_ID:Clang>:-ffp-contract=off>
 		$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>)
+
+	# Add WinSock2 library.
+	target_link_libraries(IronAgeIO_GameServer PRIVATE ws2_32)
+
 	# TODO(MARC): MASTER SERVER
 endif()
 
