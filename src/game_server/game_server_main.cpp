@@ -240,11 +240,25 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		return;
 	}
 
-	// TEST(Marc): On first tick, immediately start the first slot's match.
+	// Set the first slot match to lobby on tick 0.
 	if (server.tick_count == 0)
 	{
 		game_server_open_lobby(server, 0);
+	}
 
+	// TEST(Marc): Read new connections from the platform and throw them a party.
+	game_server_platform::in_connection newConnections[32];
+	ui16 newConnectionsCount = platform.net_query_new_connections(newConnections, 32);
+	for (ui16 i = 0; i < newConnectionsCount; i++)
+	{
+		platform.logf_stdout("New connection acknowledged by Game Server. Handle = %d, Address = %d",
+			newConnections[i].platform_handle, newConnections[i].address);
+
+		platform.log_stdout("Enjoy your stay !");
+	}
+
+	if (newConnectionsCount > 0 && server.match_slots[0].state == MATCH_SLOT_STATE::IN_LOBBY)
+	{
 		// For now just use the same params as the test scenario.
 		server.match_slots[0].match_params = match_test_scenario_get_params();
 

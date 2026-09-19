@@ -5,6 +5,8 @@
 // Unity-compile the rest of the platform code.
 #include "win32_game_server_net.cpp"
 
+#include "win32_game_server_platform.h"
+
 // Include standard library stuff.
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,6 +90,21 @@ void win32_log_stderr(const char* msg)
 {
 	fputs(msg, stderr);
 	fputc('\n', stderr);
+}
+
+void win32_logf_stderr(const char* msg, ...)
+{
+	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
+
+	char log_msg_buff[LOG_FORMAT_BUFF_SIZE];
+	memset(log_msg_buff, 0, sizeof(log_msg_buff));
+
+	va_list va;
+	va_start(va, msg);
+	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
+	va_end(va);
+
+	win32_log_stderr(log_msg_buff);
 }
 
 // The "server ressources" folder is currently just the working directory.

@@ -44,7 +44,7 @@ struct game_server_platform
 
 	// PLATFORM NET
 
-	typedef i32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same handle, 
+	typedef ui32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same handle, 
 										// meaning that the server should always check for closed connections first to ensure the handle
 										// is available on its end. Connections should stay alive on the platform at least so long as data is waiting to be read.
 
@@ -52,7 +52,7 @@ struct game_server_platform
 	struct in_connection
 	{
 		net_connection_handle platform_handle;
-		// ...
+		ui32 address; // Used to recognize the same peer over multiple connections.
 	};
 
 	typedef ui16 (*net_query_new_connections_func)(in_connection* new_connections_buff, ui16 buff_size);

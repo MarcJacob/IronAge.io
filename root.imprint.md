@@ -66,6 +66,8 @@ Global variables use CAPITAL_CASE or snake_case, usually according to their impo
 
 Hungarian notation (type-based prefix) is NOT used.
 
+Structure members can get a _ underscore to signify that they are not to be accessed outside very specific places in the code (structure internals, basically).
+
 This is arbitrary more than anything. I (Marc) usually just use Pascal Case for everything in my other projects, I felt like changing.
 
 ### Types & external symbols

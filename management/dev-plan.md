@@ -127,9 +127,19 @@ tasks are broken down further.
      with the relayed stream.
      - [DONE] Platform net interface (`game_server_platform.h`): pull-based byte streams
        (new / closed connection queries, send, receive, close).
-     - Win32 implementation: non-blocking Winsock listener, fixed connection table with
-       per-connection buffers, the net_ functions.
-     - Platform `read_file` (+ file size) in "server resources storage".
+     - [WIP] Win32 implementation: network I/O off the tick thread; the net_ functions
+       only touch buffers.
+       - [DONE] SPSC ring buffer (item count, Interlocked). Needs a two-thread order test.
+       - [DONE] Listen thread: bind / listen / accept -> new-connections ring.
+       - Connection table (fixed size): states OPEN / PEER_CLOSED / FREE, increasing
+         handles never reused, per-connection recv / send byte rings (bulk copy).
+       - I/O thread (WSAPoll): recv / send for all connections, marks peer closures.
+         Decide: fold accept into it.
+       - net_ functions over the table: closed connections reported only once announced
+         as new and recv buffer drained.
+       - Clean shutdown: close sockets, join threads, then WSACleanup.
+     - [DONE] Platform `read_file` (+ file size) in "server resources storage". Not yet
+       reviewed / tested.
      - Server: connection table + per-connection buffers in server memory (fixed max
        connections).
      - Server: static HTTP serving of the client bundle (MIME types, no path traversal,

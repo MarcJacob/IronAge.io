@@ -32,6 +32,13 @@ bool win32_write_file(const char* filename, const ui8* data, ui64 size);
 
 typedef game_server_platform::net_connection_handle win32_connection_handle;
 
+struct win32_in_connection
+{
+	game_server_platform::in_connection in_connection_data;
+
+	SOCKET socket;
+};
+
 // Starts the net component which takes care of setting up the app as a server with a listening thread as well as the ability to receive and send data.
 // Creates background threads, non-blocking beyond setup.
 void win32_start_net();
@@ -52,5 +59,56 @@ ui32 win32_net_receive_bytes(win32_connection_handle connection, ui8* buffer, ui
 
 // Forces a connection to be closed, dropping any data that may have still been waiting for reception.
 void win32_net_close_connection(win32_connection_handle connection);
+
+// Simple thread-safe single-consumer single-producer ring-buffer.
+// Reading from the buffer consumes the item and returns a copy.
+template<typename val_type>
+struct win32_single_ring_buffer
+{
+	val_type* _mem;
+	ui32 capacity; // Maximum number of values this buffer can hold.
+
+	alignas(64) ui32 _write_cursor;
+	alignas(64) ui32 _read_cursor;
+
+	alignas(64) volatile ui32 _item_count; // Number of items available for reading.
+
+	bool read(val_type& out_val)
+	{
+		if (_item_count == 0) return false;
+
+		out_val = *(_mem + _read_cursor);
+		_read_cursor = (_read_cursor + 1) % capacity;
+
+		InterlockedDecrementRelease(&_item_count);
+
+		return true;
+	}
+
+	bool write(const val_type& in_val)
+	{
+		if (_item_count == capacity) return false;
+
+		*(_mem + _write_cursor) = in_val;
+		_write_cursor = (_write_cursor + 1) % capacity;
+
+		InterlockedIncrementRelease(&_item_count);
+
+		return true;
+	}
+};
+
+// Creates a new single ring buffer for the given item type, with the given capacity (expressed as a number of items).
+// In case of failure, the returned buffer has no assigned memory or capacity.
+template<typename val_type>
+win32_single_ring_buffer<val_type> win32_create_single_ring_buffer(mem_arena& mem, ui32 capacity)
+{
+	win32_single_ring_buffer<val_type> buff = {};
+	buff._mem = mem.alloc<val_type>(capacity);
+	if (buff._mem == nullptr) return buff;
+
+	buff.capacity = capacity;
+	return buff;
+}
 
 #endif // WIN32_GAME_SERVER_PLATFORM_INCLUDED
