@@ -107,11 +107,23 @@ void win32_logf_stderr(const char* msg, ...)
 	win32_log_stderr(log_msg_buff);
 }
 
-// The "server ressources" folder is currently just the working directory.
+// The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
+// Builds <resources dir>/<filename> in out_path. Returns false if it doesn't fit.
+static bool win32_resource_path(const char* filename, char* out_path, size_t out_size)
+{
+	return sprintf_s(out_path, out_size, "%s/%s", GAME_SERVER_RESOURCES_DIR, filename) > 0;
+}
+
 ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size)
 {
+	char path[MAX_PATH];
+	if (!win32_resource_path(filename, path, sizeof(path)))
+	{
+		return 0;
+	}
+
 	FILE* file = nullptr;
-	if (fopen_s(&file, filename, "rb") != 0 || file == nullptr)
+	if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
 	{
 		return 0;
 	}
@@ -133,11 +145,16 @@ ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size)
 	return readCount == (size_t)fileSize ? (ui64)fileSize : 0;
 }
 
-// The "server resources" folder is currently the working directory.
 bool win32_write_file(const char* filename, const ui8* data, ui64 size)
 {
+	char path[MAX_PATH];
+	if (!win32_resource_path(filename, path, sizeof(path)))
+	{
+		return false;
+	}
+
 	FILE* file = nullptr;
-	if (fopen_s(&file, filename, "wb") != 0 || file == nullptr)
+	if (fopen_s(&file, path, "wb") != 0 || file == nullptr)
 	{
 		return false;
 	}

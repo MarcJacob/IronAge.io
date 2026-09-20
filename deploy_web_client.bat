@@ -1,10 +1,10 @@
 @echo off
-rem Assembles build\web_client\dist from src\client_web\web and the built wasm.
+rem Assembles web client files into /game_server_resources/ from src\client_web\web and the built wasm.
 rem Optional arg 1: path to the .wasm (CMake passes it). Without args, uses build\wasm and pauses.
 setlocal
 set "ROOT=%~dp0"
 set "WEB_SRC=%ROOT%src\client_web\web"
-set "OUT=%ROOT%build\web_client\dist"
+set "OUT=%ROOT%game_server_resources\web_root\"
 
 if "%~1"=="" (
     set "WASM=%ROOT%build\web_client\IronAgeIO_WebClient.wasm"

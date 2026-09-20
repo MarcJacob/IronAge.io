@@ -33,6 +33,10 @@ else()
 		$<$<CXX_COMPILER_ID:Clang>:-ffp-contract=off>
 		$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>)
 
+	# Server resources folder, absolute. Override at configure time (-DGAME_SERVER_RESOURCES_DIR=...) for deployments.
+	set(GAME_SERVER_RESOURCES_DIR "${CMAKE_SOURCE_DIR}/game_server_resources" CACHE PATH "Folder the Game Server reads / writes its resources from.")
+	target_compile_definitions(IronAgeIO_GameServer PRIVATE GAME_SERVER_RESOURCES_DIR="${GAME_SERVER_RESOURCES_DIR}")
+
 	# Add WinSock2 library.
 	target_link_libraries(IronAgeIO_GameServer PRIVATE ws2_32)
 

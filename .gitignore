@@ -2,6 +2,7 @@
 
 /out/
 /build/
+/game_server_resources/
 
 # Ignore AI Harness stuff.
 

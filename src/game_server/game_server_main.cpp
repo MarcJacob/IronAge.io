@@ -189,7 +189,6 @@ void game_server_test_mode_tick(game_server& server)
 	// TEST: Run the shared test scenario in its own arena allocated from main memory,
 	// dump the resulting match state to specified file and shut down.
 
-	// ... for convenience.
 	ASSERT(server.platform != nullptr);
 	game_server_platform& platform = *server.platform;
 

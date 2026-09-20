@@ -162,20 +162,17 @@ tasks are broken down further.
          WSACleanup.
        - Ring buffer: fixed straight-read / straight-write ignoring the cursors; added
          `peek` / `discard`. Needs the two-thread order test.
-     - [DONE] Platform `read_file` (+ file size) in "server resources storage" (working
-       directory = exe folder for now).
+     - [DONE] Platform `read_file` (+ file size) in "server resources storage" (win32:
+       `GAME_SERVER_RESOURCES_DIR`, set by CMake, default `<repo>/game_server_resources`).
      - [DONE] Server: HTTP connection table (fixed max) + per-connection request buffer,
        chunked response sending (`game_server_http.cpp`).
      - [DONE] Server: static HTTP serving of the client bundle (GET only, keep-alive, MIME
-       types). Bundle is copied by hand into `<exe dir>/web_root`. `start_game_server.bat`
-       (python placeholder) can go.
-       - [DONE] First version: any file under `web_root`, read on request. Verified in a
+       types). `deploy_web_client.bat` copies the bundle into `game_server_resources/web_root`.       - [DONE] First version: any file under `web_root`, read on request. Verified in a
          browser.
-       - [WIP] Redesign: files listed in `init_params.web_files` are preloaded into named
+       - [DONE] Redesign: files listed in `init_params.web_files` are preloaded into named
          buffers at init (fatal if any fails, total size budget); requests only match
          those names, `/` -> `index.html`, else 404. No file system access at request
-         time. Step 1 (preloading) written, step 2 (lookup, old code removed) written,
-         neither built / tested yet.
+         time. Tested in a browser.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
