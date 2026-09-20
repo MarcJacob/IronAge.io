@@ -74,6 +74,11 @@ struct game_server
 
 	mem_arena main_memory; // Main memory allocator for the server.
 	match_slot* match_slots; // Match slots management structures.
+
+	// TEST: Buffer new connections in there.
+	static constexpr ui16 MAX_CONNECTION_COUNT = 32;
+	ui16 connectionCount;
+	game_server_platform::net_connection_handle connections[MAX_CONNECTION_COUNT];
 };
 
 #endif // GAME_SERVER_INCLUDED

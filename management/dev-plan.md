@@ -131,13 +131,28 @@ tasks are broken down further.
        only touch buffers.
        - [DONE] SPSC ring buffer (item count, Interlocked). Needs a two-thread order test.
        - [DONE] Listen thread: bind / listen / accept -> new-connections ring.
-       - Connection table (fixed size): states OPEN / PEER_CLOSED / FREE, increasing
-         handles never reused, per-connection recv / send byte rings (bulk copy).
-       - I/O thread (WSAPoll): recv / send for all connections, marks peer closures.
-         Decide: fold accept into it.
-       - net_ functions over the table: closed connections reported only once announced
-         as new and recv buffer drained.
-       - Clean shutdown: close sockets, join threads, then WSACleanup.
+       - [DONE] Connection table (fixed size), handle = table index (reused). State field is
+         the ownership handoff; no connection event rings, no CAS. Per-connection recv /
+         send byte rings.
+         - States EMPTY / CONNECTED / OPEN / PEER_CLOSED / SERVER_CLOSED / CLOSED /
+           ENDED; listen thread EMPTY -> CONNECTED; game server acknowledgement
+           CONNECTED -> OPEN (unconditional) and CLOSED -> ENDED; main thread ENDED ->
+           EMPTY cleanup.
+         - CONNECTED connections are not polled: the OS buffers incoming data until
+           acknowledged.
+         - Full lifecycle verified with test code + repeated browser connections.
+       - [DONE] Reception thread: WSAPoll (5 ms) over OPEN connections with free ring space,
+         recv -> ring. Exclusive owner of closing sockets and of OPEN -> PEER_CLOSED,
+         PEER_CLOSED -> CLOSED (once ring drained), SERVER_CLOSED -> CLOSED.
+         Listen thread stays separate from it (decided).
+       - [DONE] `net_` query new / closed connections, `net_receive_bytes`.
+       - [DONE] `net_close_connection`: writes SERVER_CLOSED unconditionally, reception thread
+         closes the socket -> CLOSED. Assumes the game server only passes live handles.
+       - Send thread: same pattern over send rings; only sends on OPEN. `net_send_bytes`
+         is a stub.
+       - [DONE] Clean shutdown: listen socket created in start and closed in stop to unblock
+         accept; reception thread closes all open sockets on exit; threads joined, then
+         WSACleanup. Send thread must join the same way once it exists.
      - [DONE] Platform `read_file` (+ file size) in "server resources storage". Not yet
        reviewed / tested.
      - Server: connection table + per-connection buffers in server memory (fixed max

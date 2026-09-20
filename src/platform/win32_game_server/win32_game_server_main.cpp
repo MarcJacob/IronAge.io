@@ -139,7 +139,7 @@ int main(int argc, char** argv)
 
 	// Initialize win32 platform & platform interface structure.
 
-	win32_start_net(); // Start networking capabilities.
+	win32_net_start(); // Start networking capabilities.
 
 	game_server_platform win32_platform = {
 
@@ -155,8 +155,8 @@ int main(int argc, char** argv)
 		.net_receive_bytes = win32_net_receive_bytes,
 		.net_close_connection = win32_net_close_connection,
 
-		.read_file = win32_read_file,
-		.write_file = win32_write_file
+		.read_resource_file = win32_read_file,
+		.write_resource_file = win32_write_file
 	};
 
 	// ... TODO(Marc) Many more platform functions / properties to add !
@@ -198,6 +198,8 @@ int main(int argc, char** argv)
 
 	while (!WIN32_APP_STATE.exitRequested)
 	{
+		win32_net_update_connections(); // TEMP(Marc): For now we just do this on the main thread. Later we may want a "net master thread" that does this on its own.
+
 		QueryPerformanceCounter(&current_counter);
 
 		// Measure time since game server initialization in milliseconds.
@@ -208,7 +210,7 @@ int main(int argc, char** argv)
 
 	win32_logf_stdout("Win32 platform shutting down...");
 
-	win32_stop_net();
+	win32_net_stop();
 
 	return 0;
 }

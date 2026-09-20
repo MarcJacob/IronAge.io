@@ -36,7 +36,7 @@ struct mem_arena
 	inline Type* alloc(ui64 item_count = 1) { ASSERT(_alloc_func != nullptr && item_count > 0); return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type)); }
 };
 
-void ia_memcpy(void* dest, void* src, ui64 size);
+void ia_memcpy(void* dest, const void* src, ui64 size);
 void ia_memzero(void* dest, ui64 size);
 void ia_memset(void* dest, ui8 val, ui64 size);
 
@@ -96,7 +96,7 @@ static inline mem_arena mem_arena_create_sub(mem_arena& parent, ui64 owned_mem_s
 }
 
 // TODO(Marc): Optimize this.
-void ia_memcpy(void* dest, void* src, ui64 size)
+void ia_memcpy(void* dest, const void* src, ui64 size)
 {
 	if (size == 0) return;
 

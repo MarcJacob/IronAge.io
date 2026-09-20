@@ -156,6 +156,14 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
+	// TEST(Marc): Initialize connection IDs to ~0.
+	for (ui16 connectionIndex = 0; connectionIndex < sizeof(newServer->connections) / sizeof(game_server_platform::net_connection_handle);
+		connectionIndex++)
+	{
+		newServer->connections[connectionIndex] = ~0;
+	}
+
+
 	return newServer;
 }
 
@@ -211,7 +219,7 @@ void game_server_test_mode_tick(game_server& server)
 		match_dump_gamestate(*scenario_match, dump_stream);
 
 		// Write the snapshot so it can be compared with the one simulated by the web client.
-		if (!platform.write_file(server.init_params.test_scenario_dump_filename, dump_state.dump_mem, dump_state.dump_size))
+		if (!platform.write_resource_file(server.init_params.test_scenario_dump_filename, dump_state.dump_mem, dump_state.dump_size))
 		{
 			platform.log_stderr("Failed to write native snapshot file.");
 		}
@@ -246,17 +254,59 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		game_server_open_lobby(server, 0);
 	}
 
-	// TEST(Marc): Read new connections from the platform and throw them a party.
+	// TEST(Marc): Primitive Read of new connections on the platform here.
 	game_server_platform::in_connection newConnections[32];
 	ui16 newConnectionsCount = platform.net_query_new_connections(newConnections, 32);
 	for (ui16 i = 0; i < newConnectionsCount; i++)
 	{
-		platform.logf_stdout("New connection acknowledged by Game Server. Handle = %d, Address = %d",
-			newConnections[i].platform_handle, newConnections[i].address);
+		platform.logf_stdout("Game Server: New connection. Handle = %d, Address = %d, Port = %d",
+			newConnections[i].platform_handle, newConnections[i].address, newConnections[i].port);
 
 		platform.log_stdout("Enjoy your stay !");
+
+		for (ui16 conIndex = 0; conIndex < game_server::MAX_CONNECTION_COUNT; conIndex++)
+		{
+			if (server.connections[conIndex] == ~0)
+			{
+				server.connections[conIndex] = newConnections[i].platform_handle;
+			}
+		}
 	}
 
+	// TEST(Marc): Primitive Read of closed connections on the platform here. 
+	game_server_platform::net_connection_handle closedConnections[32];
+	ui16 closedConnectionsCount = platform.net_query_closed_connections(closedConnections, 32);
+	for (ui16 i = 0; i < closedConnectionsCount; i++)
+	{
+		platform.logf_stdout("Game Server: Connection closure. Handle = %d", closedConnections[i]);
+
+		platform.log_stdout("Goodbye !");
+
+		for (ui16 conIndex = 0; conIndex < server.connectionCount; conIndex++)
+		{
+			if (server.connections[conIndex] == closedConnections[i])
+			{
+				server.connections[conIndex] = ~0;
+			}
+		}
+	}	
+	
+	// TEST: Receive bytes on all known connections, and print them.
+	for (ui16 connectionIndex = 0; connectionIndex < game_server::MAX_CONNECTION_COUNT; connectionIndex++)
+	{
+		if (server.connections[connectionIndex] == ~0) continue;
+
+		ui8 reception_buffer[1024] = {0};
+		ui32 receivedBytes = platform.net_receive_bytes(server.connections[connectionIndex], reception_buffer, sizeof(reception_buffer));
+
+		if (receivedBytes > 0)
+		{
+			reception_buffer[1023] = '\0';
+			platform.logf_stdout("Server received bytes on platform connection handle %d:\n%s\n", server.connections[connectionIndex], reception_buffer);
+		}
+	}
+
+	// TEST: Start match slot 0 when receiving any new connection.
 	if (newConnectionsCount > 0 && server.match_slots[0].state == MATCH_SLOT_STATE::IN_LOBBY)
 	{
 		// For now just use the same params as the test scenario.
