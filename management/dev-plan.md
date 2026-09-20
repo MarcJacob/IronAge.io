@@ -129,7 +129,7 @@ tasks are broken down further.
        (new / closed connection queries, send, receive, close).
      - [WIP] Win32 implementation: network I/O off the tick thread; the net_ functions
        only touch buffers.
-       - [DONE] SPSC ring buffer (item count, Interlocked). Needs a two-thread order test.
+       - [DONE] SPSC ring buffer (item count, Interlocked).
        - [DONE] Listen thread: bind / listen / accept -> new-connections ring.
        - [DONE] Connection table (fixed size), handle = table index (reused). State field is
          the ownership handoff; no connection event rings, no CAS. Per-connection recv /
@@ -160,8 +160,8 @@ tasks are broken down further.
        - [DONE] Clean shutdown: listen socket created in start and closed in stop to unblock
          accept; reception thread closes all open sockets on exit; all threads joined, then
          WSACleanup.
-       - Ring buffer: fixed straight-read / straight-write ignoring the cursors; added
-         `peek` / `discard`. Needs the two-thread order test.
+       - [DONE] Ring buffer: fixed straight-read / straight-write ignoring the cursors; added
+         `peek` / `discard`.
      - [DONE] Platform `read_file` (+ file size) in "server resources storage" (win32:
        `GAME_SERVER_RESOURCES_DIR`, set by CMake, default `<repo>/game_server_resources`).
      - [DONE] Server: HTTP connection table (fixed max) + per-connection request buffer,
@@ -173,8 +173,24 @@ tasks are broken down further.
          buffers at init (fatal if any fails, total size budget); requests only match
          those names, `/` -> `index.html`, else 404. No file system access at request
          time. Tested in a browser.
+     - Server: connection ownership moves from the HTTP server to the game server.
+       - Clients table on the game server: fixed size, one entry per platform connection,
+         discriminated union (client type + type-specific data).
+       - New connections start UNIDENTIFIED. On first bytes, detect HTTP; anything else is
+         rejected (closed) for now.
+       - HTTP client type: current HTTP connection state moves into the union; HTTP server
+         works on a client entry instead of owning connections.
+       - Client type changes on upgrade: HTTP -> WEBSOCKET (game client). Bytes received
+         after the request head carry over to the new type.
+       - Leaves room for other types later (master server, administration, non-browser
+         clients).
+     - Server: HTTP request handling refactor.
+       - Structured request parse (request line + headers, case-insensitive header lookup).
+       - Routing into branches: static file GET (as now), WebSocket upgrade.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
+       - SHA-1 + base64 encode (check against the RFC 6455 example).
+       - Upgrade branch: validate headers, 101 response, switch client type.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.
      - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.
@@ -195,6 +211,8 @@ tasks are broken down further.
 Tasks not currently part of the plan that need to be added to it at some point.
 
 - Client render interpolation between ticks (smooth movement).
+- Win32 net: timeout to close a connection whose peer stays alive but stops reading (it is
+  never closed once in SERVER_CLOSED).
 - Platform call to list the files in a folder relative to resources, so the server discovers
   the files under `web_root` instead of taking a list in the init params.
 - HTTP server: optional automatic reload of a preloaded file when it changed on disk since

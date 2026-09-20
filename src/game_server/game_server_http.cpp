@@ -1,5 +1,6 @@
 // Main implementation file for the http server functionality of the game server.
-// Little more than a file serving functionality for the game server to distribute the game client over http.
+// Little more than a file serving functionality for the game server to distribute the game client over http, and upgrade to websocket
+// to enter the main game client <-> game server communication protocol.
 
 static constexpr ui16 HTTP_MAX_CONNECTIONS = 64;
 static constexpr ui16 HTTP_MAX_FILES = 32; // Files that can be preloaded for serving.
@@ -11,7 +12,7 @@ static constexpr ui32 HTTP_PATH_BUFFER_SIZE = 256;
 static constexpr time_ms HTTP_SEND_STALL_TIMEOUT_MS = 10000; // Response making no progress for this long gets its httpConnection closed.
 static constexpr time_ms HTTP_IDLE_TIMEOUT_MS = 30000; // Connection with no request coming in for this long gets closed.
 
-// Holds the state of an active http httpConnection.
+// Holds the state of an active http connection.
 struct http_connection
 {
 	bool in_use; // If false, the structure can be used to register a new httpConnection.
@@ -57,6 +58,20 @@ struct http_server
 
 	http_file files[HTTP_MAX_FILES];
 	ui32 file_count;
+};
+
+struct http_request
+{
+	struct header_val_pair
+	{
+		const char* name;
+		const char* val_str;
+	};
+
+	const char* method;
+	const char* target_name;
+
+	header_val_pair* header_values;
 };
 
 static http_server* http_server_init(game_server& server)
@@ -209,35 +224,70 @@ static void http_server_send_response_status(game_server& server, http_connectio
 }
 
 // Handles a complete request head sitting at the start of the httpConnection's request buffer.
-static void http_server_handle_request(game_server& server, http_connection& connection, ui32 head_size)
+// Returns the total amount of bytes consumed from the httpClient's request buffer.
+static ui32 http_server_handle_next_request(game_server& server, http_connection& connection)
 {
 	game_server_platform& platform = *server.platform;
+
+	// Preliminary pass to find the size of the request head.
+	ui32 headSize = 0;
+	for (ui32 i = 0; i + 3 < connection.request_size; i++)
+	{
+		if (ia_str_expect((const char*)&connection.request_buffer[i], "\r\n\r\n"))
+		{
+			headSize = i + 4;
+			break;
+		}
+	}
+
+	if (headSize == 0)
+	{
+		if (connection.request_size == HTTP_REQUEST_BUFFER_SIZE)
+		{
+			platform.logf_stderr("Game Server HTTP: Request head too large on httpConnection handle %d, closing.", connection.handle);
+			platform.net_close_connection(connection.handle);
+			connection.closing = true;
+		}
+		else if (server.time_ms - connection.last_activity_ms > HTTP_IDLE_TIMEOUT_MS)
+		{
+			platform.logf_stdout("Game Server HTTP: Connection handle %d idle, closing.", connection.handle);
+			platform.net_close_connection(connection.handle);
+			connection.closing = true;
+		}
+		return 0;
+	}
+
+	// TODO: Proper parsing algorithm for a HTTP request.
 
 	// Request line: METHOD SP TARGET SP HTTP/1.x
 	const char* request = (const char*)connection.request_buffer;
 
 	ui32 methodNameEndPos = 0;
-	while (methodNameEndPos < head_size && request[methodNameEndPos] != ' ' && request[methodNameEndPos] != '\r') methodNameEndPos++;
+	while (methodNameEndPos < headSize && request[methodNameEndPos] != ' ' && request[methodNameEndPos] != '\r') methodNameEndPos++;
 
 	ui32 targetNameStartPos = methodNameEndPos + 1;
 	ui32 targetNameEndPos = targetNameStartPos;
-	while (targetNameEndPos < head_size && request[targetNameEndPos] != ' ' && request[targetNameEndPos] != '\r') targetNameEndPos++;
+	while (targetNameEndPos < headSize && request[targetNameEndPos] != ' ' && request[targetNameEndPos] != '\r') targetNameEndPos++;
 
 	ui32 targetNameLen = targetNameEndPos - targetNameStartPos;
 
-	bool wellFormed = request[methodNameEndPos] == ' '									// Check that method target_name is correctly delimited.
-		&& targetNameEndPos > targetNameStartPos && request[targetNameEndPos] == ' '	// Check that target target_name is correctly delimited.
-		&& targetNameLen < HTTP_PATH_BUFFER_SIZE										// Check that target target_name fits our path buffer.
-		&& targetNameEndPos + 8 < head_size												// 
-		&& ia_str_expect(request + targetNameEndPos + 1, "HTTP/");
+	// We have the name of the method, the target and total head size.
+	// Check that the head is correctly formed for the kind of requests we can handle.
 
-	if (!wellFormed)
+	bool headWellFormed = request[methodNameEndPos] == ' '									// Check that method name is correctly delimited.
+		&& targetNameEndPos > targetNameStartPos && request[targetNameEndPos] == ' '	// Check that target name is correctly delimited.
+		&& targetNameLen < HTTP_PATH_BUFFER_SIZE										// Check that target name fits our path buffer.
+		&& ia_str_expect(request + targetNameEndPos + 1, "HTTP/");						// Check that method & target names are followed by HTTP/
+
+	if (!headWellFormed)
 	{
 		platform.logf_stderr("Game Server HTTP: Malformed request on httpConnection handle %d, closing.", connection.handle);
 		platform.net_close_connection(connection.handle);
 		connection.closing = true;
-		return;
+		return 0;
 	}
+
+	// Parse the request head and determine which handler to use.
 
 	char targetNameBuff[HTTP_PATH_BUFFER_SIZE];
 
@@ -249,7 +299,7 @@ static void http_server_handle_request(game_server& server, http_connection& con
 	{
 		platform.logf_stdout("Game Server HTTP: Unsupported method on httpConnection handle %d -> 405.", connection.handle);
 		http_server_send_response_status(server, connection,"405 Method Not Allowed");
-		return;
+		return 0;
 	}
 
 	// Find the file from the pre-loaded collection on the server.
@@ -258,11 +308,13 @@ static void http_server_handle_request(game_server& server, http_connection& con
 	{
 		platform.logf_stdout("Game Server HTTP: GET %s -> 404.", targetNameBuff);
 		http_server_send_response_status(server, connection, "404 Not Found");
-		return;
+		return 0;
 	}
 
 	platform.logf_stdout("Game Server HTTP: GET %s -> 200 (%d bytes).", targetNameBuff, file->size);
 	http_server_send_response(server, connection, "200 OK", file->content_type, file->data, file->size);
+
+	return headSize;
 }
 
 // Pushes as much of the response as the platform will take. Whatever is left goes on the next tick.
@@ -343,40 +395,19 @@ static void http_server_receive(game_server& server, http_connection& connection
 	// If we're already responding to a request on that httpConnection, don't go further.
 	if (connection.responding) return;
 
-	// Otherwise we can handle the request. Do a preliminary scan to find the end of the head segment.
+	ui32 requestConsumedBytes = http_server_handle_next_request(server, connection);
 
-	ui32 headSize = 0;
-	for (ui32 i = 0; i + 3 < connection.request_size; i++)
+
+	if (requestConsumedBytes > 0)
 	{
-		if (ia_str_expect((const char*)&connection.request_buffer[i], "\r\n\r\n"))
-		{
-			headSize = i + 4;
-			break;
-		}
+		// "Left shift" the remaining request bytes onto the beginning of the buffer.
+		ia_memcpy(connection.request_buffer, connection.request_buffer + requestConsumedBytes, connection.request_size - requestConsumedBytes);
+		connection.request_size -= requestConsumedBytes;
 	}
-
-	if (headSize == 0)
+	else
 	{
-		if (connection.request_size == HTTP_REQUEST_BUFFER_SIZE)
-		{
-			platform.logf_stderr("Game Server HTTP: Request head too large on httpConnection handle %d, closing.", connection.handle);
-			platform.net_close_connection(connection.handle);
-			connection.closing = true;
-		}
-		else if (server.time_ms - connection.last_activity_ms > HTTP_IDLE_TIMEOUT_MS)
-		{
-			platform.logf_stdout("Game Server HTTP: Connection handle %d idle, closing.", connection.handle);
-			platform.net_close_connection(connection.handle);
-			connection.closing = true;
-		}
-		return;
+		// TODO(Marc): What to do in case of error ?
 	}
-
-	http_server_handle_request(server, connection, headSize);
-
-	// Drop the handled request from the buffer, keeping any bytes that came after it.
-	ia_memcpy(connection.request_buffer, connection.request_buffer + headSize, connection.request_size - headSize);
-	connection.request_size -= headSize;
 }
 
 // Runs all HTTP serving for this tick, for any new connections.
