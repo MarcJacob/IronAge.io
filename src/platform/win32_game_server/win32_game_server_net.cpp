@@ -27,6 +27,10 @@ struct win32_active_connection
 
 	SOCKET socket; // Win32 TCP socket. Set to INVALID_SOCKET when peer or server closes connection.
 
+	// Set by the send thread while it is using the socket. The reception thread (which owns closing sockets) waits for it to clear
+	// after moving the connection out of the OPEN state and before closing the socket.
+	volatile i8 sending_data;
+
 	ui32 address; // Address this connection is identified to, allowing multiple subsequent connections to be tied to the same peer.
 	ui16 port; // Platform port used by this connection.
 
@@ -59,6 +63,12 @@ struct win32_net_component
 		HANDLE handle;
 	} reception_thread;
 
+	struct
+	{
+		DWORD id;
+		HANDLE handle;
+	} send_thread;
+
 	// All threads access this in a specific pattern based on active connection state, avoiding race conditions until we decide to have more than one thread for each role.
 	win32_active_connection* active_connections_table;
 
@@ -79,6 +89,7 @@ static constexpr ui16 ACTIVE_CONNECTION_SEND_BUFFERS_SIZE = KiB(16);
 bool create_listen_socket();
 unsigned long listen_thread_func(LPVOID context);
 unsigned long reception_thread_func(LPVOID context);
+unsigned long send_thread_func(LPVOID context);
 
 // ....
 
@@ -153,6 +164,15 @@ void win32_net_start()
 		win32_net_stop();
 		return;
 	}
+
+	// Create send thread.
+	WIN32_NET.send_thread.handle = CreateThread(NULL, NULL, send_thread_func, nullptr, NULL, &WIN32_NET.send_thread.id);
+	if (WIN32_NET.send_thread.handle == NULL)
+	{
+		win32_logf_stderr("Win32 Net: Failed to start send thread. Error code = %d", GetLastError());
+		win32_net_stop();
+		return;
+	}
 }
 
 void win32_net_update_connections()
@@ -189,6 +209,7 @@ void win32_net_stop()
 	// Join secondary threads as they go through their shutdown routine.
 	WaitForSingleObject(WIN32_NET.listen_server.thread_handle, INFINITE);
 	WaitForSingleObject(WIN32_NET.reception_thread.handle, INFINITE);
+	WaitForSingleObject(WIN32_NET.send_thread.handle, INFINITE);
 
 	WSACleanup();
 }
@@ -259,7 +280,14 @@ ui16 win32_net_query_closed_connections(win32_connection_handle* closed_connecti
 
 bool win32_net_send_bytes(win32_connection_handle connectionHandle, const ui8* bytes, ui32 byte_count)
 {
-	return false;
+	win32_active_connection& activeConnection = win32_get_active_connection(connectionHandle);
+	if (activeConnection.state != win32_active_connection::STATE::OPEN) return false;
+
+	// All or nothing, a partial write would corrupt the byte stream. We're the only producer so free capacity can only grow under us.
+	if (activeConnection.send_buffer.get_free_capacity() < byte_count) return false;
+
+	activeConnection.send_buffer.write(bytes, byte_count);
+	return true;
 }
 
 ui32 win32_net_receive_bytes(win32_connection_handle connectionHandle, ui8* buffer, ui32 buff_size)
@@ -277,6 +305,15 @@ void win32_net_close_connection(win32_connection_handle connectionHandle)
 void win32_register_new_connection(win32_in_connection& new_connection)
 {
 	auto& connectionsTable = WIN32_NET.active_connections_table;
+
+	// Connection sockets are non-blocking so a full send buffer can never stall the send thread (both threads poll before recv / send).
+	u_long nonBlocking = 1;
+	if (ioctlsocket(new_connection.socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)
+	{
+		win32_logf_stderr("Win32 Net: Failed to set connection socket to non-blocking (Socket = %llu). Dropping connection.", new_connection.socket);
+		closesocket(new_connection.socket);
+		return;
+	}
 
 	// Find a free spot in the table. Log an error and close connection immediately if there's no room.
 	for (win32_connection_handle newConnectionHandle = 0; newConnectionHandle < MAX_ACTIVE_CONNECTIONS; newConnectionHandle++)
@@ -386,7 +423,20 @@ unsigned long listen_thread_func(LPVOID context)
 	}
 }
 
-// Runs reception on all active connections with their socket still open, 
+// Closes the socket of an active connection, if it still has one.
+// Reception thread only, and only once the connection's state has left OPEN so the send thread stops starting new sends on it.
+void close_connection_socket(win32_active_connection& connection)
+{
+	while (connection.sending_data) YieldProcessor();
+
+	if (connection.socket != INVALID_SOCKET)
+	{
+		closesocket(connection.socket);
+		connection.socket = INVALID_SOCKET;
+	}
+}
+
+// Runs reception on all active connections with their socket still open,
 // and performs OPEN->PEER_CLOSED, SERVER_CLOSED->CLOSED and PEER_CLOSED->CLOSED transitions.
 unsigned long reception_thread_func(LPVOID context)
 {
@@ -409,8 +459,7 @@ RECEPTION_THREAD_START:
 			// Close the socket, and perform the transition to CLOSED.
 			win32_logf_stdout("Win32 NET: Connection handle %d closed by request of server.", connectionHandle);
 
-			closesocket(activeConnection.socket);
-			activeConnection.socket = INVALID_SOCKET;
+			close_connection_socket(activeConnection);
 
 			InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::CLOSED);
 			continue;
@@ -453,11 +502,9 @@ RECEPTION_THREAD_START:
 				win32_logf_stderr("Win32 Net: Error polling socket state on connection handle %d (SOCKET = %llu), closing connection.",
 					recvConnectionHandle, recvConnection.socket);
 
-				// Close socket and set connection to SERVER CLOSED.
-				closesocket(recvConnection.socket);
-				recvConnection.socket = INVALID_SOCKET;
-
+				// Set connection to SERVER CLOSED and close socket.
 				InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::SERVER_CLOSED);
+				close_connection_socket(recvConnection);
 				continue;
 			}
 
@@ -466,10 +513,8 @@ RECEPTION_THREAD_START:
 				// Connection aborted. Consider it as "closed by peer".
 				win32_logf_stdout("Win32 NET: Connection handle %d closed by peer.", recvConnectionHandle);
 
-				closesocket(recvConnection.socket);
-				recvConnection.socket = INVALID_SOCKET;
-
 				InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
+				close_connection_socket(recvConnection);
 				continue;
 			}
 
@@ -482,26 +527,25 @@ RECEPTION_THREAD_START:
 				i32 res = recv(recvConnection.socket, RECEPTION_BUFFER, receptionMaxSize, NULL);
 				if (res == SOCKET_ERROR)
 				{
+					// Non-blocking socket with nothing to read after all, not an error.
+					if (WSAGetLastError() == WSAEWOULDBLOCK) continue;
+
 					win32_logf_stderr("Win32 Net: Error code %d receiving data socket state on connection handle %d (SOCKET = %llu), closing connection.",
 						WSAGetLastError(), recvConnectionHandle, recvConnection.socket);
 
-					// Close socket immediately and set connection to SERVER CLOSED.
-					closesocket(recvConnection.socket);
-					recvConnection.socket = INVALID_SOCKET;
-
+					// Set connection to SERVER CLOSED and close socket immediately.
 					InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::SERVER_CLOSED);
+					close_connection_socket(recvConnection);
 					continue;
 				}
 
 				if (res == 0)
 				{
-					// Socket closed connection gracefully. Set INVALID_SOCKET and transition state to PEER_CLOSED.
+					// Socket closed connection gracefully. Transition state to PEER_CLOSED and close the socket.
 					win32_logf_stdout("Win32 NET: Connection handle %d closed by peer.", recvConnectionHandle);
 
-					closesocket(recvConnection.socket);
-					recvConnection.socket = INVALID_SOCKET;
-
 					InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
+					close_connection_socket(recvConnection);
 					continue;
 				}
 
@@ -530,15 +574,94 @@ RECEPTION_THREAD_START:
 		for (win32_connection_handle connectionHandle = 0; connectionHandle < MAX_ACTIVE_CONNECTIONS; connectionHandle++)
 		{
 			win32_active_connection& connection = win32_get_active_connection(connectionHandle);
+			if (connection.socket == INVALID_SOCKET) continue;
 
-			if (connection.socket != INVALID_SOCKET)
-			{
-				closesocket(connection.socket);
-				connection.socket = INVALID_SOCKET;
-			}
+			// Leave the OPEN state first so the send thread stops using the socket.
+			InterlockedExchange8((i8*)&connection.state, (i8)win32_active_connection::STATE::CLOSED);
+			close_connection_socket(connection);
 		}
 
 		return 0;
 	}
 	goto RECEPTION_THREAD_START;
+}
+
+// Sends buffered data on all OPEN connections that have some, and are ready to accept it.
+// Only ever consumes from the connections' send buffers, and never closes sockets (that is the reception thread's job).
+unsigned long send_thread_func(LPVOID context)
+{
+	constexpr ui16 SEND_CHUNK_SIZE = 4096;
+
+	WSAPOLLFD pollBuff[MAX_ACTIVE_CONNECTIONS] = {0};
+	win32_connection_handle pollToActiveConnectionHandle[MAX_ACTIVE_CONNECTIONS];
+	ui8 sendChunk[SEND_CHUNK_SIZE];
+
+	auto& connectionsTable = WIN32_NET.active_connections_table;
+
+	while (!WIN32_NET._shutdown_requested)
+	{
+		// First pass: build poll buffer.
+		ui16 pollCount = 0;
+		for (win32_connection_handle connectionHandle = 0; connectionHandle < MAX_ACTIVE_CONNECTIONS; connectionHandle++)
+		{
+			win32_active_connection& activeConnection = connectionsTable[connectionHandle];
+
+			if (activeConnection.state != win32_active_connection::STATE::OPEN) continue;
+			if (activeConnection.send_buffer.item_count == 0) continue;
+
+			SOCKET connectionSocket = activeConnection.socket;
+			if (connectionSocket == INVALID_SOCKET) continue;
+
+			pollBuff[pollCount].fd = connectionSocket;
+			pollBuff[pollCount].events = POLLWRNORM;
+			pollToActiveConnectionHandle[pollCount] = connectionHandle;
+
+			pollCount++;
+		}
+
+		if (pollCount == 0)
+		{
+			Sleep(1);
+			continue;
+		}
+
+		i32 readyCount = WSAPoll(pollBuff, pollCount, 5);
+
+		// Second pass: send on writable sockets.
+		for (i32 pollIndex = 0; readyCount > 0 && pollIndex < pollCount; pollIndex++)
+		{
+			WSAPOLLFD& pollFD = pollBuff[pollIndex];
+
+			// Errors / hangups are left for the reception thread to detect and handle. The socket may also have been closed since the poll buffer was built.
+			if ((pollFD.revents & POLLWRNORM) == 0) continue;
+
+			win32_connection_handle sendConnectionHandle = pollToActiveConnectionHandle[pollIndex];
+			win32_active_connection& sendConnection = connectionsTable[sendConnectionHandle];
+
+			// Tell the reception thread we're about to use the socket.
+			InterlockedExchange8(&sendConnection.sending_data, 1);
+			if (sendConnection.state == win32_active_connection::STATE::OPEN)
+			{
+				ui64 chunkSize = sendConnection.send_buffer.peek(sendChunk, SEND_CHUNK_SIZE);
+				if (chunkSize > 0)
+				{
+					i32 sentCount = send(sendConnection.socket, (i8*)sendChunk, (i32)chunkSize, NULL);
+					if (sentCount != SOCKET_ERROR)
+					{
+						// Only consume what actually went out. The rest stays buffered for the next pass.
+						sendConnection.send_buffer.discard(sentCount);
+					}
+					else if (WSAGetLastError() != WSAEWOULDBLOCK)
+					{
+						// Leave the connection alone, the reception thread will detect the failure and close it.
+						win32_logf_stderr("Win32 Net: Error code %d sending data on connection handle %d (SOCKET = %llu).",
+							WSAGetLastError(), sendConnectionHandle, sendConnection.socket);
+					}
+				}
+			}
+			InterlockedExchange8(&sendConnection.sending_data, 0);
+		}
+	}
+
+	return 0;
 }

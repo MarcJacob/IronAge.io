@@ -271,6 +271,15 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 				server.connections[conIndex] = newConnections[i].platform_handle;
 			}
 		}
+
+		// Send a message back. Browsers expect a valid HTTP response, not bare text.
+		char msg[] =
+			"HTTP/1.1 200 OK\r\n"
+			"Content-Type: text/plain; charset=utf-8\r\n"
+			"Content-Length: 15\r\n"
+			"\r\n"
+			"Hello, world !\n"; // Body is 15 bytes, keep Content-Length in sync.
+		platform.net_send_bytes(newConnections[i].platform_handle, (ui8*)msg, sizeof(msg) - 1); // - 1: no null terminator on the wire.
 	}
 
 	// TEST(Marc): Primitive Read of closed connections on the platform here. 

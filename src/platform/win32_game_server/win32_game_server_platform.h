@@ -106,10 +106,10 @@ struct win32_single_ring_buffer
 		return true;
 	}
 	
-	// Reads up to count items from the ring buffer in one go.
+	// Copies up to count items from the ring buffer without consuming them.
 	// Assumes the buffer is large enough to hold the requested item count contiguously.
-	// Returns number of items read.
-	inline ui64 read(val_type* read_buff, ui64 count)
+	// Returns number of items copied.
+	inline ui64 peek(val_type* read_buff, ui64 count)
 	{
 		ui64 readCount = item_count > count ? count : item_count;
 		if (readCount == 0) return 0;
@@ -126,12 +126,31 @@ struct win32_single_ring_buffer
 		else
 		{
 			// Straight read.
-			ia_memcpy(read_buff, _mem, readCount * sizeof(val_type));
+			ia_memcpy(read_buff, _mem + _read_cursor, readCount * sizeof(val_type));
 		}
 
-		_read_cursor = (_read_cursor + readCount) % capacity;
-		InterlockedExchangeSubtract(&item_count, readCount);
+		return readCount;
+	}
 
+	// Consumes up to count items without copying them. Returns number of items discarded.
+	inline ui64 discard(ui64 count)
+	{
+		ui64 discardCount = item_count > count ? count : item_count;
+		if (discardCount == 0) return 0;
+
+		_read_cursor = (_read_cursor + discardCount) % capacity;
+		InterlockedExchangeSubtract(&item_count, discardCount);
+
+		return discardCount;
+	}
+
+	// Reads up to count items from the ring buffer in one go.
+	// Assumes the buffer is large enough to hold the requested item count contiguously.
+	// Returns number of items read.
+	inline ui64 read(val_type* read_buff, ui64 count)
+	{
+		ui64 readCount = peek(read_buff, count);
+		discard(readCount);
 		return readCount;
 	}
 
@@ -168,7 +187,7 @@ struct win32_single_ring_buffer
 		else
 		{
 			// Straight write.
-			ia_memcpy(_mem, write_buff, writeCount * sizeof(val_type));
+			ia_memcpy(_mem + _write_cursor, write_buff, writeCount * sizeof(val_type));
 		}
 
 		_write_cursor = (_write_cursor + writeCount) % capacity;

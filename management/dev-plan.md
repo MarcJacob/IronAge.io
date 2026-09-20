@@ -148,11 +148,17 @@ tasks are broken down further.
        - [DONE] `net_` query new / closed connections, `net_receive_bytes`.
        - [DONE] `net_close_connection`: writes SERVER_CLOSED unconditionally, reception thread
          closes the socket -> CLOSED. Assumes the game server only passes live handles.
-       - Send thread: same pattern over send rings; only sends on OPEN. `net_send_bytes`
-         is a stub.
+       - [DONE] Send thread: WSAPoll (POLLWRNORM) over OPEN connections with buffered data,
+         peek -> send -> discard what went out. Never closes sockets; `send_busy` handshake
+         with the reception thread (state leaves OPEN, then close waits for `send_busy`
+         to clear). Connection sockets are non-blocking. `net_send_bytes` is
+         all-or-nothing into the send ring. Verified with a hardcoded HTTP response to a
+         browser.
        - [DONE] Clean shutdown: listen socket created in start and closed in stop to unblock
-         accept; reception thread closes all open sockets on exit; threads joined, then
-         WSACleanup. Send thread must join the same way once it exists.
+         accept; reception thread closes all open sockets on exit; all threads joined, then
+         WSACleanup.
+       - Ring buffer: fixed straight-read / straight-write ignoring the cursors; added
+         `peek` / `discard`. Needs the two-thread order test.
      - [DONE] Platform `read_file` (+ file size) in "server resources storage". Not yet
        reviewed / tested.
      - Server: connection table + per-connection buffers in server memory (fixed max
