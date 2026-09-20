@@ -189,7 +189,10 @@ tasks are broken down further.
        - Routing into branches: static file GET (as now), WebSocket upgrade.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
-       - SHA-1 + base64 encode (check against the RFC 6455 example).
+       - [WIP] SHA-1 + base64 encode, in `include/core/` (check against the RFC 6455
+         example). Done first, out of order.
+         - [DONE] SHA-1 (`ia_sha1`, `include/core/math.h`). Verified against test vectors.
+         - Base64 encode.
        - Upgrade branch: validate headers, 101 response, switch client type.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.

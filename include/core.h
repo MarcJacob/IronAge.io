@@ -7,5 +7,6 @@
 #include "core/assert.h"
 #include "core/memory.h"
 #include "core/string.h"
+#include "core/math.h"
 
 #endif // CORE_INCLUDED
