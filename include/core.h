@@ -6,5 +6,6 @@
 #include "core/std_types.h"
 #include "core/assert.h"
 #include "core/memory.h"
+#include "core/string.h"
 
 #endif // CORE_INCLUDED

@@ -8,6 +8,7 @@
 // Defines the actual game server structure and internals.
 
 struct game_match;
+struct http_server;
 
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]
@@ -59,6 +60,10 @@ struct game_server_init_params
 	// Test mode parameters.
 	bool run_test_scenario; // If set to true, the server will start, run a match scenario on its first tick, dump it to a specific file then shutdown.
 	const char* test_scenario_dump_filename; // If set to run test scenario, this indicates what file to dump the match data into once done.
+
+	const char* web_root; // Folder holding the web client bundle to serve over HTTP, relative to the platform resources folder.
+	const char* const* web_files; // Names of the files to serve over HTTP, relative to web_root.
+	ui32 web_file_count;
 };
 
 struct game_server
@@ -75,10 +80,7 @@ struct game_server
 	mem_arena main_memory; // Main memory allocator for the server.
 	match_slot* match_slots; // Match slots management structures.
 
-	// TEST: Buffer new connections in there.
-	static constexpr ui16 MAX_CONNECTION_COUNT = 32;
-	ui16 connectionCount;
-	game_server_platform::net_connection_handle connections[MAX_CONNECTION_COUNT];
+	http_server* http; // Serves the web client bundle to connections.
 };
 
 #endif // GAME_SERVER_INCLUDED

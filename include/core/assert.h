@@ -1,8 +1,8 @@
 // Platform-independent simple assertion system.
 // The platform program must implement the ASSERT_EXIT() and ASSERT_MSG functions.
 
-#ifndef ASSERT_INCLUDED
-#define ASSERT_INCLUDED
+#ifndef CORE_ASSERT_INCLUDED
+#define CORE_ASSERT_INCLUDED
 
 #include "std_types.h"
 
@@ -17,4 +17,4 @@ void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...
 	ASSERT_MSG_FUNC((fail_msg), __FILE__, __LINE__, __VA_ARGS__);	\
 }
 
-#endif // ASSERT_INCLUDED
+#endif // CORE_ASSERT_INCLUDED

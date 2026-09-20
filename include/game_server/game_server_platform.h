@@ -85,6 +85,7 @@ struct game_server_platform
 	typedef void (*net_close_connection_func)(net_connection_handle handle);
 	// Platform function: requests the platform close the connection related to the handle, if any.
 	// Forces the connection to be dropped from the platform, and erases any data that may have been waiting to be read.
+	// Data already queued with net_send_bytes is flushed first (dropped if the peer can't take it).
 	// Thread safety is not guaranteed beyond a single requesting thread.
 	net_close_connection_func net_close_connection;
 

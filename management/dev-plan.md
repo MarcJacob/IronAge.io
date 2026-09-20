@@ -147,7 +147,10 @@ tasks are broken down further.
          Listen thread stays separate from it (decided).
        - [DONE] `net_` query new / closed connections, `net_receive_bytes`.
        - [DONE] `net_close_connection`: writes SERVER_CLOSED unconditionally, reception thread
-         closes the socket -> CLOSED. Assumes the game server only passes live handles.
+         closes the socket -> CLOSED once the send thread has flushed the send ring (send
+         thread keeps sending in SERVER_CLOSED; a hard send error drops the data). Assumes
+         the game server only passes live handles. Peer that stays alive but stops reading
+         is never closed: needs a timeout.
        - [DONE] Send thread: WSAPoll (POLLWRNORM) over OPEN connections with buffered data,
          peek -> send -> discard what went out. Never closes sockets; `send_busy` handshake
          with the reception thread (state leaves OPEN, then close waits for `send_busy`
@@ -159,12 +162,20 @@ tasks are broken down further.
          WSACleanup.
        - Ring buffer: fixed straight-read / straight-write ignoring the cursors; added
          `peek` / `discard`. Needs the two-thread order test.
-     - [DONE] Platform `read_file` (+ file size) in "server resources storage". Not yet
-       reviewed / tested.
-     - Server: connection table + per-connection buffers in server memory (fixed max
-       connections).
-     - Server: static HTTP serving of the client bundle (MIME types, no path traversal,
-       size limits).
+     - [DONE] Platform `read_file` (+ file size) in "server resources storage" (working
+       directory = exe folder for now).
+     - [DONE] Server: HTTP connection table (fixed max) + per-connection request buffer,
+       chunked response sending (`game_server_http.cpp`).
+     - [DONE] Server: static HTTP serving of the client bundle (GET only, keep-alive, MIME
+       types). Bundle is copied by hand into `<exe dir>/web_root`. `start_game_server.bat`
+       (python placeholder) can go.
+       - [DONE] First version: any file under `web_root`, read on request. Verified in a
+         browser.
+       - [WIP] Redesign: files listed in `init_params.web_files` are preloaded into named
+         buffers at init (fatal if any fails, total size budget); requests only match
+         those names, `/` -> `index.html`, else 404. No file system access at request
+         time. Step 1 (preloading) written, step 2 (lookup, old code removed) written,
+         neither built / tested yet.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
@@ -187,3 +198,9 @@ tasks are broken down further.
 Tasks not currently part of the plan that need to be added to it at some point.
 
 - Client render interpolation between ticks (smooth movement).
+- Platform call to list the files in a folder relative to resources, so the server discovers
+  the files under `web_root` instead of taking a list in the init params.
+- HTTP server: optional automatic reload of a preloaded file when it changed on disk since
+  it was loaded.
+- HTTP server: keep frequently-used files always loaded ("cached"), load rarely-requested or
+  large ones on demand.

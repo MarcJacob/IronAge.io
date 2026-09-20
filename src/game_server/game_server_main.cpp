@@ -7,6 +7,9 @@
 // Unity-compile the Game Common code into the server.
 #include "../game_common/game_common_main.cpp"
 
+// Unity-compile the HTTP file serving code.
+#include "game_server_http.cpp"
+
 // Initializes a new match slot in the server from a piece of memory to use and the slot index to initialize.
 // The slot must currently be uninitialized.
 // If successful, the passed memory arena is now owned by the slot itself. The one passed as param should be discarded.
@@ -136,6 +139,23 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 {
 	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
 
+	// Check init params.
+	if (init_params.web_root == nullptr || ia_str_len(init_params.web_root) == 0)
+	{
+		platform.log_stderr("HTTP Server requires a valid web root folder, relative to the platform resources path. Aborting.");
+		return nullptr;
+	}
+	if (init_params.web_files == nullptr || init_params.web_file_count == 0)
+	{
+		platform.log_stderr("HTTP Server requires at least one file to serve. Aborting.");
+		return nullptr;
+	}
+	if (init_params.match_slot_count == 0)
+	{
+		platform.log_stderr("Game Server requires at least one match slot to function. Aborting.");
+		return nullptr;
+	}
+
 	// Allocate and initialize new game server at the start of memory.
 	game_server* newServer = (game_server*)memory;
 	newServer->platform = &platform;
@@ -156,13 +176,10 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
-	// TEST(Marc): Initialize connection IDs to ~0.
-	for (ui16 connectionIndex = 0; connectionIndex < sizeof(newServer->connections) / sizeof(game_server_platform::net_connection_handle);
-		connectionIndex++)
-	{
-		newServer->connections[connectionIndex] = ~0;
-	}
+	// Initialize HTTP Server.
 
+	newServer->http = http_server_init(*newServer);
+	http_server_load_files(*newServer);
 
 	return newServer;
 }
@@ -248,82 +265,8 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		return;
 	}
 
-	// Set the first slot match to lobby on tick 0.
-	if (server.tick_count == 0)
-	{
-		game_server_open_lobby(server, 0);
-	}
-
-	// TEST(Marc): Primitive Read of new connections on the platform here.
-	game_server_platform::in_connection newConnections[32];
-	ui16 newConnectionsCount = platform.net_query_new_connections(newConnections, 32);
-	for (ui16 i = 0; i < newConnectionsCount; i++)
-	{
-		platform.logf_stdout("Game Server: New connection. Handle = %d, Address = %d, Port = %d",
-			newConnections[i].platform_handle, newConnections[i].address, newConnections[i].port);
-
-		platform.log_stdout("Enjoy your stay !");
-
-		for (ui16 conIndex = 0; conIndex < game_server::MAX_CONNECTION_COUNT; conIndex++)
-		{
-			if (server.connections[conIndex] == ~0)
-			{
-				server.connections[conIndex] = newConnections[i].platform_handle;
-			}
-		}
-
-		// Send a message back. Browsers expect a valid HTTP response, not bare text.
-		char msg[] =
-			"HTTP/1.1 200 OK\r\n"
-			"Content-Type: text/plain; charset=utf-8\r\n"
-			"Content-Length: 15\r\n"
-			"\r\n"
-			"Hello, world !\n"; // Body is 15 bytes, keep Content-Length in sync.
-		platform.net_send_bytes(newConnections[i].platform_handle, (ui8*)msg, sizeof(msg) - 1); // - 1: no null terminator on the wire.
-	}
-
-	// TEST(Marc): Primitive Read of closed connections on the platform here. 
-	game_server_platform::net_connection_handle closedConnections[32];
-	ui16 closedConnectionsCount = platform.net_query_closed_connections(closedConnections, 32);
-	for (ui16 i = 0; i < closedConnectionsCount; i++)
-	{
-		platform.logf_stdout("Game Server: Connection closure. Handle = %d", closedConnections[i]);
-
-		platform.log_stdout("Goodbye !");
-
-		for (ui16 conIndex = 0; conIndex < server.connectionCount; conIndex++)
-		{
-			if (server.connections[conIndex] == closedConnections[i])
-			{
-				server.connections[conIndex] = ~0;
-			}
-		}
-	}	
-	
-	// TEST: Receive bytes on all known connections, and print them.
-	for (ui16 connectionIndex = 0; connectionIndex < game_server::MAX_CONNECTION_COUNT; connectionIndex++)
-	{
-		if (server.connections[connectionIndex] == ~0) continue;
-
-		ui8 reception_buffer[1024] = {0};
-		ui32 receivedBytes = platform.net_receive_bytes(server.connections[connectionIndex], reception_buffer, sizeof(reception_buffer));
-
-		if (receivedBytes > 0)
-		{
-			reception_buffer[1023] = '\0';
-			platform.logf_stdout("Server received bytes on platform connection handle %d:\n%s\n", server.connections[connectionIndex], reception_buffer);
-		}
-	}
-
-	// TEST: Start match slot 0 when receiving any new connection.
-	if (newConnectionsCount > 0 && server.match_slots[0].state == MATCH_SLOT_STATE::IN_LOBBY)
-	{
-		// For now just use the same params as the test scenario.
-		server.match_slots[0].match_params = match_test_scenario_get_params();
-
-		// Immediately start the match.
-		game_server_start_match_slot(server, 0);
-	}
+	// Serve the web client bundle over HTTP on all platform connections.
+	http_server_tick(server);
 
 	// Manage match slots.
 	for (ui8 slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)

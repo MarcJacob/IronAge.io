@@ -1,7 +1,7 @@
 // Contains useful memory management symbols.
 
-#ifndef MEMORY_INCLUDED
-#define MEMORY_INCLUDED
+#ifndef CORE_MEMORY_INCLUDED
+#define CORE_MEMORY_INCLUDED
 
 #include "core.h"
 
@@ -153,4 +153,4 @@ void ia_memset(void* dest, ui8 val, ui64 size)
 	}
 }
 
-#endif // MEMORY_INCLUDED
+#endif // CORE_MEMORY_INCLUDED

@@ -78,11 +78,11 @@ struct win32_net_component
 
 static win32_net_component WIN32_NET;
 
-static constexpr ui64 NET_COMPONENT_MEMORY_SIZE = MiB(512); // Needs to be large enough to hold all the component buffers.
+static constexpr ui64 NET_COMPONENT_MEMORY_SIZE = GiB(1); // Needs to be large enough to hold all the component buffers.
 
 static constexpr ui16 MAX_ACTIVE_CONNECTIONS = 1024;
-static constexpr ui16 ACTIVE_CONNECTION_RECEPTION_BUFFERS_SIZE = KiB(16);
-static constexpr ui16 ACTIVE_CONNECTION_SEND_BUFFERS_SIZE = KiB(16);
+static constexpr ui16 ACTIVE_CONNECTION_RECEPTION_BUFFERS_SIZE = KiB(32);
+static constexpr ui16 ACTIVE_CONNECTION_SEND_BUFFERS_SIZE = KiB(32);
 
 // Thread functions declarations
 
@@ -456,6 +456,9 @@ RECEPTION_THREAD_START:
 		// If server requested this connection to be closed, do so here.
 		if (activeConnection.state == win32_active_connection::STATE::SERVER_CLOSED)
 		{
+			// Let the send thread flush what the server queued before the close request. Nothing to flush if the socket is already gone.
+			if (activeConnection.socket != INVALID_SOCKET && activeConnection.send_buffer.item_count > 0) continue;
+
 			// Close the socket, and perform the transition to CLOSED.
 			win32_logf_stdout("Win32 NET: Connection handle %d closed by request of server.", connectionHandle);
 
@@ -586,7 +589,7 @@ RECEPTION_THREAD_START:
 	goto RECEPTION_THREAD_START;
 }
 
-// Sends buffered data on all OPEN connections that have some, and are ready to accept it.
+// Sends buffered data on all OPEN (or SERVER_CLOSED, flushing before the close) connections that have some, and are ready to accept it.
 // Only ever consumes from the connections' send buffers, and never closes sockets (that is the reception thread's job).
 unsigned long send_thread_func(LPVOID context)
 {
@@ -606,7 +609,8 @@ unsigned long send_thread_func(LPVOID context)
 		{
 			win32_active_connection& activeConnection = connectionsTable[connectionHandle];
 
-			if (activeConnection.state != win32_active_connection::STATE::OPEN) continue;
+			if (activeConnection.state != win32_active_connection::STATE::OPEN
+				&& activeConnection.state != win32_active_connection::STATE::SERVER_CLOSED) continue;
 			if (activeConnection.send_buffer.item_count == 0) continue;
 
 			SOCKET connectionSocket = activeConnection.socket;
@@ -640,7 +644,8 @@ unsigned long send_thread_func(LPVOID context)
 
 			// Tell the reception thread we're about to use the socket.
 			InterlockedExchange8(&sendConnection.sending_data, 1);
-			if (sendConnection.state == win32_active_connection::STATE::OPEN)
+			if (sendConnection.state == win32_active_connection::STATE::OPEN
+				|| sendConnection.state == win32_active_connection::STATE::SERVER_CLOSED)
 			{
 				ui64 chunkSize = sendConnection.send_buffer.peek(sendChunk, SEND_CHUNK_SIZE);
 				if (chunkSize > 0)
@@ -656,6 +661,12 @@ unsigned long send_thread_func(LPVOID context)
 						// Leave the connection alone, the reception thread will detect the failure and close it.
 						win32_logf_stderr("Win32 Net: Error code %d sending data on connection handle %d (SOCKET = %llu).",
 							WSAGetLastError(), sendConnectionHandle, sendConnection.socket);
+
+						// A connection waiting to be closed will never manage to flush, drop the data so it can close.
+						if (sendConnection.state == win32_active_connection::STATE::SERVER_CLOSED)
+						{
+							sendConnection.send_buffer.discard(sendConnection.send_buffer.item_count);
+						}
 					}
 				}
 			}

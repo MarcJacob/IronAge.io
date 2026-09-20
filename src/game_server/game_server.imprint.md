@@ -22,12 +22,19 @@ From there on the game server will never request more memory than was initially 
 
 The platform must then track the passage of time, tick the server as much as possible so it may integrate it, and respond to the server's requests for platform resources and capabilities.
 
+### Http Server
+
+The server has a secondary http component which is used to server browser clients with the game client files.
+
+The serveable files are preloaded in memory, and client browser can ask for them by name. It is not a general-purpose serving algorithm, it limits itself to what
+is pre-configured for speed, simplicity and security (since it's not possible to ever get served a file that wasn't intended to be served).
+
 ## Intention
 
-Most of the code should end up existing within this folder. The Game Server will handle the bulk of the work on a platform-independent level, such as:
+Most of the game server code should end up existing within this folder. The Game Server will handle the bulk of the work on a platform-independent level, such as:
 - Creating and running background threads.
-- Manage connection sockets.
+- Manage connection sockets (both for matches and http / websocket).
 - Manage its own memory from what the platform gave it on initialization (policy will always be to spawn more game servers if more matches must be simulated).
 - The vast majority of logging.
 
-Currently the network architecture is envisioned to be a web frontend connected to a Game Server backend written in C++ using the uWebSocket library.
+Currently the network architecture is envisioned to be a web frontend connected to a Game Server backend written in C++ for both the main match simulation and the http file serving.

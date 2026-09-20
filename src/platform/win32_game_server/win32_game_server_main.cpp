@@ -110,8 +110,27 @@ void win32_logf_stderr(const char* msg, ...)
 // The "server ressources" folder is currently just the working directory.
 ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size)
 {
-	// TO BE IMPLEMENTED.
-	return 0;
+	FILE* file = nullptr;
+	if (fopen_s(&file, filename, "rb") != 0 || file == nullptr)
+	{
+		return 0;
+	}
+
+	_fseeki64(file, 0, SEEK_END);
+	i64 fileSize = _ftelli64(file);
+	_fseeki64(file, 0, SEEK_SET);
+
+	// Empty / unreadable file, or a "dry run" asking only for the size, or a buffer that's too small.
+	if (fileSize <= 0 || read_buff == nullptr || buff_size < (ui64)fileSize)
+	{
+		fclose(file);
+		return read_buff == nullptr && fileSize > 0 ? (ui64)fileSize : 0;
+	}
+
+	size_t readCount = fread(read_buff, 1, (size_t)fileSize, file);
+	fclose(file);
+
+	return readCount == (size_t)fileSize ? (ui64)fileSize : 0;
 }
 
 // The "server resources" folder is currently the working directory.
@@ -148,6 +167,7 @@ int main(int argc, char** argv)
 		.log_stdout = win32_log_stdout,
 		.logf_stdout = win32_logf_stdout,
 		.log_stderr = win32_log_stderr,
+		.logf_stderr = win32_logf_stderr,
 
 		.net_query_new_connections = win32_net_query_new_connections,
 		.net_query_closed_connections = win32_net_query_closed_connections,
@@ -170,12 +190,29 @@ int main(int argc, char** argv)
 		ASSERT_MSG(0, "Failed to allocate Game Server memory. Error code = %d", errCode);
 	}
 
+	// Files of the web client bundle the game server will preload and serve over HTTP, relative to the web root.
+	// TODO(Marc): Add a platform call to list available files in resources folder, so the server can just discover all available files.
+	static const char* const WEB_FILES[] = {
+		"index.html",
+		"style.css",
+		"src/main.js",
+		"src/backend.js",
+		"src/render.js",
+		"src/input.js",
+		"IronAgeIO_WebClient.wasm",
+	};
+	static constexpr ui8 WEB_FILE_COUNT = sizeof(WEB_FILES) / sizeof(WEB_FILES[0]);
+
 	// TODO(Marc): Read command line / config file for those !
 	game_server_init_params server_init_params = {
 
 		.match_slot_count = 4,
 		.run_test_scenario = false,
-		.test_scenario_dump_filename = "snapshot_native.bin"
+		.test_scenario_dump_filename = "snapshot_native.bin",
+
+		.web_root = "web_root",
+		.web_files = WEB_FILES,
+		.web_file_count = WEB_FILE_COUNT,
 	};
 
 	win32_logf_stdout("Initializing Game Server...\n");

@@ -1,7 +1,7 @@
 // Standard type definitions used across the project.
 
-#ifndef STD_TYPES_INCLUDED
-#define STD_TYPES_INCLUDED
+#ifndef CORE_STD_TYPES_INCLUDED
+#define CORE_STD_TYPES_INCLUDED
 
 // Integers
 
@@ -23,4 +23,4 @@ typedef ui32 iptr;
 
 typedef ui64 time_ms; // Used on some apps as a way to measure time precisely.
 
-#endif // STD_TYPES_INCLUDED
+#endif // CORE_STD_TYPES_INCLUDED
