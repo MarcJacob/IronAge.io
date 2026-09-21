@@ -20,11 +20,11 @@ bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 s
 	match_slot& slot = server.match_slots[slot_index];
 	if (slot.state != MATCH_SLOT_STATE::UNINITIALIZED)
 	{
-		server.platform->logf_stderr("Match slot index %d is already initialized (current state = %d).", slot_index, slot.state);
+		server.platform->logf(LOG_ERROR, "Match slot index %d is already initialized (current state = %d).", slot_index, slot.state);
 		return false;
 	}
 
-	server.platform->logf_stdout("Initializing server match slot index %d.", slot_index);
+	server.platform->logf("Initializing server match slot index %d.", slot_index);
 
 	slot = {};
 	slot.state = MATCH_SLOT_STATE::WAITING;
@@ -42,11 +42,11 @@ bool game_server_open_lobby(game_server& server, ui8 slot_index)
 	
 	if (slot.state != MATCH_SLOT_STATE::WAITING)
 	{
-		server.platform->logf_stderr("Attempted to open lobby in slot %d which wasn't properly (re)initialized.", slot_index);
+		server.platform->logf(LOG_ERROR, "Attempted to open lobby in slot %d which wasn't properly (re)initialized.", slot_index);
 		return false;
 	}
 
-	server.platform->logf_stdout("Opening lobby in match slot %d.", slot_index);
+	server.platform->logf("Opening lobby in match slot %d.", slot_index);
 
 	slot.state = MATCH_SLOT_STATE::IN_LOBBY;
 
@@ -63,11 +63,11 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	
 	if (slot.state != MATCH_SLOT_STATE::IN_LOBBY)
 	{
-		server.platform->logf_stderr("Attempted to start match in slot %d which wasn't in lobby.", slot_index);
+		server.platform->logf(LOG_ERROR, "Attempted to start match in slot %d which wasn't in lobby.", slot_index);
 		return false;
 	}
 
-	server.platform->logf_stdout("Starting match in match slot %d.", slot_index);
+	server.platform->logf("Starting match in match slot %d.", slot_index);
 
 	// Create match.
 
@@ -92,11 +92,11 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index)
 	
 	if (slot.state != MATCH_SLOT_STATE::MATCH_ONGOING)
 	{
-		server.platform->logf_stderr("Attempted to end match in slot %d which wasn't ongoing.", slot_index);
+		server.platform->logf(LOG_ERROR, "Attempted to end match in slot %d which wasn't ongoing.", slot_index);
 		return false;
 	}
 
-	server.platform->logf_stdout("Ending match in match slot %d.", slot_index);
+	server.platform->logf("Ending match in match slot %d.", slot_index);
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ENDED;
 
@@ -112,11 +112,11 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 	match_slot& slot = server.match_slots[slot_index];
 	if (slot.state != MATCH_SLOT_STATE::MATCH_ENDED)
 	{
-		server.platform->logf_stderr("Attempted to reset match slot %d which wasn't and ended match.", slot_index);
+		server.platform->logf(LOG_ERROR, "Attempted to reset match slot %d which wasn't and ended match.", slot_index);
 		return false;
 	}
 
-	server.platform->logf_stdout("Resetting server match slot index %d.", slot_index);
+	server.platform->logf("Resetting server match slot index %d.", slot_index);
 
 	// Zero out the slot and set it back to waiting. Conserve only its memory.
 
@@ -142,17 +142,17 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Check init params.
 	if (init_params.web_root == nullptr || ia_str_len(init_params.web_root) == 0)
 	{
-		platform.log_stderr("HTTP Server requires a valid web root folder, relative to the platform resources path. Aborting.");
+		platform.log(LOG_ERROR, "HTTP Server requires a valid web root folder, relative to the platform resources path. Aborting.");
 		return nullptr;
 	}
 	if (init_params.web_files == nullptr || init_params.web_file_count == 0)
 	{
-		platform.log_stderr("HTTP Server requires at least one file to serve. Aborting.");
+		platform.log(LOG_ERROR, "HTTP Server requires at least one file to serve. Aborting.");
 		return nullptr;
 	}
 	if (init_params.match_slot_count == 0)
 	{
-		platform.log_stderr("Game Server requires at least one match slot to function. Aborting.");
+		platform.log(LOG_ERROR, "Game Server requires at least one match slot to function. Aborting.");
 		return nullptr;
 	}
 
@@ -192,7 +192,7 @@ void game_server_test_mode_tick(game_server& server)
 	ASSERT(server.platform != nullptr);
 	game_server_platform& platform = *server.platform;
 
-	platform.log_stdout("Game Server running in test scenario mode.\nRunning test scenario match...");
+	platform.log("Game Server running in test scenario mode.\nRunning test scenario match...");
 
 	game_match_start_params scenario_params = match_test_scenario_get_params();
 
@@ -202,11 +202,11 @@ void game_server_test_mode_tick(game_server& server)
 
 	if (server.init_params.test_scenario_dump_filename == nullptr)
 	{
-		platform.log_stdout("No dump file specified. Going straight to shutdown.");
+		platform.log("No dump file specified. Going straight to shutdown.");
 		platform.shutdown(0);
 	}
 
-	platform.logf_stdout("Dumping scenario match end state to file \"%s\".", server.init_params.test_scenario_dump_filename);
+	platform.logf("Dumping scenario match end state to file \"%s\".", server.init_params.test_scenario_dump_filename);
 
 	match_dump_stream dump_stream = { };
 	ui64 dumpSize = match_dump_gamestate(*scenario_match, dump_stream);
@@ -237,15 +237,15 @@ void game_server_test_mode_tick(game_server& server)
 		// Write the snapshot so it can be compared with the one simulated by the web client.
 		if (!platform.write_resource_file(server.init_params.test_scenario_dump_filename, dump_state.dump_mem, dump_state.dump_size))
 		{
-			platform.log_stderr("Failed to write native snapshot file.");
+			platform.log(LOG_ERROR, "Failed to write native snapshot file.");
 		}
 		else
 		{
-			platform.logf_stdout("Match ending state dumped successfully.");
+			platform.log(LOG_SUCCESS, "Match ending state dumped successfully.");
 		}
 	}
 
-	platform.logf_stdout("Shutting down...");
+	platform.log("Shutting down...");
 	platform.shutdown(0);
 }
 
@@ -311,9 +311,15 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 
 	if (server.shutdown_triggered)
 	{
-	SERVER_SHUTDOWN:
-		platform.log_stdout("Game Server shutting down...");
-		// TODO(Marc): Shut down work / checks to be done here (gracefully end connections / matches).
 		platform.shutdown(0);
 	}
+}
+
+void game_server_stop(game_server& server)
+{
+	server.platform->log(LOG_WARNING, "Game Server shutting down...");
+	// TODO(Marc): Shut down work / checks to be done here (gracefully end connections / matches).
+	// ...
+
+	server.platform->log(LOG_SUCCESS, "Game Server shutdown complete."); // Log the fact the server did everything it wanted to do before shutting down.
 }

@@ -11,23 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <signal.h>
 
-static const SIZE_T GAME_SERVER_MEM_SIZE = GiB(4);
-
-// Shared global application state available in WIN32_APP_STATE.
-struct win32_app_state
-{
-	// Handle to output console.
-	HANDLE consoleHandle;
-
-	// (Forward-declared) Pointer to game server structure.
-	game_server* gameServer;
-
-	// Set to true when the application wants to cleanly exit.
-	bool exitRequested;
-};
-
-win32_app_state WIN32_APP_STATE = {};
+static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
 
 // Assertion functions.
 
@@ -44,34 +30,69 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 	int charCount = vsprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
 	va_end(va);
 
-	win32_log_stderr(assert_msg_buff);
+	win32_log(LOG_ERROR, assert_msg_buff);
 
 	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
 
-	win32_log_stderr(assert_msg_buff);
+	win32_log(LOG_ERROR, assert_msg_buff);
 
-	abort();
+	__debugbreak();
+	raise(SIGABRT);
 }
 
-// Immediately call the standard abort() function so debuggers can break here.
+// Break into the debugger right here if one is attached, then raise SIGABRT.
 void ASSERT_EXIT_FUNC()
 {
-	abort();
+	__debugbreak();
+	raise(SIGABRT);
 }
 
-void win32_shutdown(int code)
+void win32_shutdown(game_server_platform& platform, int code)
 {
-	WIN32_APP_STATE.exitRequested = true;
+	auto& win32Platform = (win32_platform&)platform;
+	win32Platform.app.exitRequested = true;
 }
 
-void win32_log_stdout(const char* msg)
+void win32_log(LOG_TYPE type, const char* msg)
 {
-	fputs(msg, stdout);
-	fputc('\n', stdout);
+	bool isError = type == LOG_ERROR;
+	FILE* output = isError ? stderr : stdout;
+	HANDLE outHandle = GetStdHandle(isError ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+
+	WORD color = 0; // 0 = leave the console's current color.
+	switch (type)
+	{
+	case LOG_SUCCESS:
+		color = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+		break;
+	case LOG_WARNING:
+		color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+		break;
+	case LOG_ERROR:
+		color = FOREGROUND_RED | FOREGROUND_INTENSITY;
+		break;
+	default:
+		break;
+	}
+
+	// Print in the type's color, then restore whatever the console attributes were. Both calls fail harmlessly if the output is redirected.
+	CONSOLE_SCREEN_BUFFER_INFO consoleInfo = {};
+	bool colored = color != 0
+		&& GetConsoleScreenBufferInfo(outHandle, &consoleInfo)
+		&& SetConsoleTextAttribute(outHandle, color);
+
+	fputs(msg, output);
+	fputc('\n', output);
+	fflush(output);
+
+	if (colored)
+	{
+		SetConsoleTextAttribute(outHandle, consoleInfo.wAttributes);
+	}
 }
 
-void win32_logf_stdout(const char* msg, ...)
+void win32_logf(LOG_TYPE type, const char* msg, ...)
 {
 	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
 
@@ -83,16 +104,10 @@ void win32_logf_stdout(const char* msg, ...)
 	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
 	va_end(va);
 
-	win32_log_stdout(log_msg_buff);
+	win32_log(type, log_msg_buff);
 }
 
-void win32_log_stderr(const char* msg)
-{
-	fputs(msg, stderr);
-	fputc('\n', stderr);
-}
-
-void win32_logf_stderr(const char* msg, ...)
+void win32_logf(const char* msg, ...)
 {
 	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
 
@@ -104,7 +119,25 @@ void win32_logf_stderr(const char* msg, ...)
 	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
 	va_end(va);
 
-	win32_log_stderr(log_msg_buff);
+	win32_log(LOG_NORMAL, log_msg_buff);
+}
+
+void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg)
+{
+	win32_log(type, msg);
+}
+
+void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...)
+{
+	char logMsgBuff[1024];
+	memset(logMsgBuff, 0, sizeof(logMsgBuff));
+
+	va_list va;
+	va_start(va, msg);
+	vsprintf_s(logMsgBuff, sizeof(logMsgBuff), msg, va);
+	va_end(va);
+
+	win32_log(type, logMsgBuff);
 }
 
 // The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
@@ -114,7 +147,7 @@ static bool win32_resource_path(const char* filename, char* out_path, size_t out
 	return sprintf_s(out_path, out_size, "%s/%s", GAME_SERVER_RESOURCES_DIR, filename) > 0;
 }
 
-ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size)
+ui64 win32_read_file(game_server_platform& platform, const char* filename, ui8* read_buff, ui64 buff_size)
 {
 	char path[MAX_PATH];
 	if (!win32_resource_path(filename, path, sizeof(path)))
@@ -145,7 +178,7 @@ ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size)
 	return readCount == (size_t)fileSize ? (ui64)fileSize : 0;
 }
 
-bool win32_write_file(const char* filename, const ui8* data, ui64 size)
+bool win32_write_file(game_server_platform& platform, const char* filename, const ui8* data, ui64 size)
 {
 	char path[MAX_PATH];
 	if (!win32_resource_path(filename, path, sizeof(path)))
@@ -165,47 +198,73 @@ bool win32_write_file(const char* filename, const ui8* data, ui64 size)
 	return written == size;
 }
 
+// BEGIN PROGRAM ENTRY
+
+static win32_platform* WIN32_PLATFORM;  // Static memory access to the main platform object, used only by signal handlers.
+										// Note(Marc): As you can tell I'm no huge fan of using static memory but sometimes there's just no choice.
+
+// Program / Console signal handler.
+static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
+{
+      switch (ctrl_type)
+      {
+      case CTRL_C_EVENT:        // Ctrl+C
+      case CTRL_BREAK_EVENT:    // Ctrl+Break
+      case CTRL_CLOSE_EVENT:    // Console window closed
+      case CTRL_LOGOFF_EVENT:   // User logging off (services only, mostly)
+      case CTRL_SHUTDOWN_EVENT: // System shutting down
+		  
+		  if (WIN32_PLATFORM != nullptr)
+		  {
+			  WIN32_PLATFORM->log(LOG_WARNING, "WIN32: !! SHUTDOWN SIGNAL RECEIVED !!");
+			  Sleep(1000);
+			  WIN32_PLATFORM->shutdown(1);
+			return TRUE;
+		  }
+      }
+      return FALSE;
+}
+
 // Main entry point.
 int main(int argc, char** argv)
 {
-	win32_log_stdout("Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
+	// Register console signal handling.
+	if (!SetConsoleCtrlHandler(win32_console_ctrl_handler, TRUE))
+	{
+		win32_logf(LOG_WARNING, "Win32: Failed to register console control handler. Error code = %d", GetLastError());
+	}
 
-	// Get handle to console for the logging functions.
-	// TODO(Marc): Prepare for more complex, flexible logging to other outputs.
+	win32_log("Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
 
-	// Initialize win32 platform & platform interface structure.
+	// Initialize win32 platform structure.
 
-	win32_net_start(); // Start networking capabilities.
+	win32_platform win32Platform = {};
 
-	game_server_platform win32_platform = {
+	win32Platform.shutdown_func = win32_shutdown,
 
-		.shutdown = exit,
+	win32Platform.log_func = win32_platform_log;
+	win32Platform.logf_func = win32_platform_logf;
 
-		.log_stdout = win32_log_stdout,
-		.logf_stdout = win32_logf_stdout,
-		.log_stderr = win32_log_stderr,
-		.logf_stderr = win32_logf_stderr,
+	win32Platform.net_query_new_connections_func = win32_net_query_new_connections;
+	win32Platform.net_query_closed_connections_func = win32_net_query_closed_connections;
+	win32Platform.net_send_bytes_func = win32_net_send_bytes;
+	win32Platform.net_receive_bytes_func = win32_net_receive_bytes;
+	win32Platform.net_close_connection_func = win32_net_close_connection;
 
-		.net_query_new_connections = win32_net_query_new_connections,
-		.net_query_closed_connections = win32_net_query_closed_connections,
-		.net_send_bytes = win32_net_send_bytes,
-		.net_receive_bytes = win32_net_receive_bytes,
-		.net_close_connection = win32_net_close_connection,
+	win32Platform.read_resource_file_func = win32_read_file;
+	win32Platform.write_resource_file_func = win32_write_file;
 
-		.read_resource_file = win32_read_file,
-		.write_resource_file = win32_write_file
-	};
+	win32Platform.net_component = win32_net_start(); // Start networking capabilities.
+	ASSERT_MSG(win32Platform.net_component != nullptr, "Win32: Failed to start Net Component.");
 
 	// ... TODO(Marc) Many more platform functions / properties to add !
 	
-	win32_logf_stdout("Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
-	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	WIN32_PLATFORM = &win32Platform;
 
-	if (game_server_mem == nullptr)
-	{
-		DWORD errCode = GetLastError();
-		ASSERT_MSG(0, "Failed to allocate Game Server memory. Error code = %d", errCode);
-	}
+	win32_logf("Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
+
+	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	ASSERT_MSG(game_server_mem != nullptr, "Failed to allocate Game Server memory. Error code = %d", GetLastError());
 
 	// Files of the web client bundle the game server will preload and serve over HTTP, relative to the web root.
 	// TODO(Marc): Add a platform call to list available files in resources folder, so the server can just discover all available files.
@@ -232,14 +291,14 @@ int main(int argc, char** argv)
 		.web_file_count = WEB_FILE_COUNT,
 	};
 
-	win32_logf_stdout("Initializing Game Server...\n");
+	win32_logf("Initializing Game Server...\n");
 
-	WIN32_APP_STATE.gameServer = game_server_init(win32_platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
-	ASSERT_MSG(WIN32_APP_STATE.gameServer != nullptr, "Failed to initialize Game Server.");
+	win32Platform.app.gameServer = game_server_init(win32Platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
+	ASSERT_MSG(win32Platform.app.gameServer != nullptr, "Failed to initialize Game Server.");
 
-	win32_logf_stdout("\nGame Server initialized.");
+	win32_log(LOG_SUCCESS, "\nGame Server initialized.");
 
-	win32_logf_stdout("Starting main tick loop.\n");
+	win32_log("Starting main tick loop.\n");
 
 	// Main loop: measure the time elapsed since the previous iteration and hand it to the server.
 	LARGE_INTEGER counter_frequency;
@@ -250,21 +309,42 @@ int main(int argc, char** argv)
 
 	ui64 start_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart);
 
-	while (!WIN32_APP_STATE.exitRequested)
+	while (!win32Platform.app.exitRequested)
 	{
-		win32_net_update_connections(); // TEMP(Marc): For now we just do this on the main thread. Later we may want a "net master thread" that does this on its own.
+		// Run main update of Net component.
+		if (win32Platform.net_component->active)
+		{
+			win32_net_update_connections(*win32Platform.net_component); // TEMP(Marc): For now we just do this on the main thread. Later we may want a "net master thread" that does this on its own.
+		}
+		else
+		{
+			win32_log(LOG_ERROR, "Win32: Net Component has stopped unexpectedly. Shutting down.");
+			goto WIN32_SHUTDOWN;
+		}
 
+		// Query uptime and run game server main tick function.
 		QueryPerformanceCounter(&current_counter);
 
 		// Measure time since game server initialization in milliseconds.
 		ui64 uptime_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
 
-		game_server_tick(*WIN32_APP_STATE.gameServer, uptime_ms);
+		game_server_tick(*win32Platform.app.gameServer, uptime_ms);
 	}
 
-	win32_logf_stdout("Win32 platform shutting down...");
+WIN32_SHUTDOWN:
 
-	win32_net_stop();
+	if (win32Platform.app.gameServer != nullptr)
+	{
+		game_server_stop(*win32Platform.app.gameServer);
+	}
 
+	win32_log("Win32 platform shutting down...");
+
+	win32_net_stop(*win32Platform.net_component);
+	win32_net_free(*win32Platform.net_component);
+
+	win32_log(LOG_SUCCESS, "Win32 platform shutdown complete.");
+
+	WIN32_PLATFORM = nullptr;
 	return 0;
 }

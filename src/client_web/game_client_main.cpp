@@ -56,7 +56,7 @@ WASM_EXPORT bool client_begin_match()
 {
 	CLIENT_BACKEND_STATE.local_match_mem = mem_arena_create(CLIENT_MEMORY, CLIENT_MEMORY_SIZE); // Will override any previously-created arena over the same memory which is intended.
 	
-	game_match_create_params matchParams = {
+	game_match_start_params matchParams = {
 		.world_width = 1024,
 		.world_height = 1024,
 		.tick_rate = 20,
@@ -64,13 +64,12 @@ WASM_EXPORT bool client_begin_match()
 
 	// Alloc and place the match inside its own memory, as the first allocation.
 	game_match* localMatch = CLIENT_BACKEND_STATE.local_match_mem.alloc<game_match>();
-	if (!match_create(CLIENT_BACKEND_STATE.local_match_mem, matchParams, *localMatch))
+	if (!match_start(CLIENT_BACKEND_STATE.local_match_mem, 0, matchParams, *localMatch))
 	{
 		CLIENT_BACKEND_STATE.local_match = nullptr;
 		return false; // TODO(Marc): Error / logging system for web. I'm still not sure if WASM can call front-facing JS functions.
 	}
 
-	match_start(*localMatch, 0);
 	CLIENT_BACKEND_STATE.local_match = localMatch;
 
 	// Initialize render and local match info structures.

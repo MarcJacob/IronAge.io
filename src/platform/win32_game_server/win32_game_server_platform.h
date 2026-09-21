@@ -8,25 +8,50 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
+// Platform & components structures
+
+// Components are forward-declared here and implemented in their relevant file.
+struct win32_net_component;
+
+// Win32-specific extension of the game server platform. Anything available in there is available to all platform functions handed to the server.
+struct win32_platform : public game_server_platform
+{
+	// Shared global application state.
+	struct app_state
+	{
+		// (Forward-declared) Pointer to game server structure.
+		game_server* gameServer;
+
+		// Set to true when the application wants to cleanly exit.
+		volatile bool exitRequested;
+	} app;
+
+	win32_net_component* net_component; // Component in charge of managing & routing all network activity.
+};
+
 // Control
 
-void win32_shutdown(int code);
+void win32_shutdown(game_server_platform& platform, int code);
 
 // Logging
 
-// Logs message to stdout.
-void win32_log_stdout(const char* msg);
-// Logs formatted message to stdout.
-void win32_logf_stdout(const char* msg, ...);
-// Logs message to stderr.
-void win32_log_stderr(const char* msg);
-// Logs formatted message to stderr.
-void win32_logf_stderr(const char* msg, ...);
+// Logs message according to its type: LOG_ERROR goes to stderr in red, LOG_WARNING to stdout in yellow, LOG_SUCCESS to stdout in green, LOG_NORMAL to stdout uncolored.
+void win32_log(LOG_TYPE type, const char* msg);
+// Logs formatted message according to its type.
+void win32_logf(LOG_TYPE type, const char* msg, ...);
+// Overloads defaulting to LOG_NORMAL.
+inline void win32_log(const char* msg) { win32_log(LOG_NORMAL, msg); }
+void win32_logf(const char* msg, ...);
+
+// Platform-interface versions of the above, for the game server platform structure.
+// The plain versions stay available to platform code that has no platform structure at hand.
+void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg);
+void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...);
 
 // Reads in an entire file, or gets its size of read_buff is null.
-ui64 win32_read_file(const char* filename, ui8* read_buff, ui64 buff_size);
+ui64 win32_read_file(game_server_platform& platform, const char* filename, ui8* read_buff, ui64 buff_size);
 // Write a file, overwriting whatever was there if anything.
-bool win32_write_file(const char* filename, const ui8* data, ui64 size);
+bool win32_write_file(game_server_platform& platform, const char* filename, const ui8* data, ui64 size);
 
 // Networking
 
@@ -39,29 +64,33 @@ struct win32_in_connection
 	SOCKET socket;
 };
 
-// Starts the net component which takes care of setting up the app as a server with a listening thread as well as the ability to receive and send data.
+// Creates, starts and returns a net component which takes care of setting up the app as a server with a listening thread as well as the ability to receive and send data.
 // Creates background threads, non-blocking beyond setup.
-void win32_net_start();
-// Stops the net component. Blocks until all related threads have stopped.
-void win32_net_stop();
+win32_net_component* win32_net_start();
 
-// Updates the state of active connections.
-void win32_net_update_connections();
+// Main loop update of the net component.
+void win32_net_update_connections(win32_net_component& net_component);
+
+// Stops the net component. Blocks until all related threads have stopped.
+void win32_net_stop(win32_net_component& net_component);
+
+// Clears the resources taken by the component.
+void win32_net_free(win32_net_component& net_component);
 
 // Returns all new net connections since the last time this was called.
-ui16 win32_net_query_new_connections(game_server_platform::in_connection* new_connections, ui16 buff_size);
+ui16 win32_net_query_new_connections(game_server_platform& platform, game_server_platform::in_connection* new_connections, ui16 buff_size);
 
 // Returns all closed net connections since the last time this was called.
-ui16 win32_net_query_closed_connections(win32_connection_handle* closed_connections, ui16 buff_size);
+ui16 win32_net_query_closed_connections(game_server_platform& platform, win32_connection_handle* closed_connections, ui16 buff_size);
 
-// Attempts to send the bytes on the connection related to the handle. Returns success.
-bool win32_net_send_bytes(win32_connection_handle connection, const ui8* bytes, ui32 byte_count);
+// Attempts to send the bytes on the connection related to the thread_handle. Returns success.
+bool win32_net_send_bytes(game_server_platform& platform, win32_connection_handle connection, const ui8* bytes, ui32 byte_count);
 
 // Reads any data that may be waiting on the connection into the buffer, or how many bytes are waitig if buffer == null.
-ui32 win32_net_receive_bytes(win32_connection_handle connection, ui8* buffer, ui32 buff_size);
+ui32 win32_net_receive_bytes(game_server_platform& platform, win32_connection_handle connection, ui8* buffer, ui32 buff_size);
 
 // Forces a connection to be closed, dropping any data that may have still been waiting for reception.
-void win32_net_close_connection(win32_connection_handle connection);
+void win32_net_close_connection(game_server_platform& platform, win32_connection_handle connection);
 
 // Simple thread-safe single-consumer single-producer ring-buffer (meaning it's NOT safe to have multiple threads read from or write into the same buffer).
 // TODO(Marc): Add a multi-consumer / multi-producer ring-buffer, in case this would make sense for higher net or file system throughput.

@@ -158,7 +158,7 @@ static void http_server_load_files(game_server& server)
 		file.size = (ui32)fileSize;
 		file.content_type = http_get_content_type(file.name);
 
-		platform.logf_stdout("Game Server HTTP: Loaded \"%s\" (%llu bytes).", file.name, fileSize);
+		platform.logf("Game Server HTTP: Loaded \"%s\" (%llu bytes).", file.name, fileSize);
 	}
 
 	http.file_count = params.web_file_count;
@@ -244,13 +244,13 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 	{
 		if (connection.request_size == HTTP_REQUEST_BUFFER_SIZE)
 		{
-			platform.logf_stderr("Game Server HTTP: Request head too large on httpConnection handle %d, closing.", connection.handle);
+			platform.logf(LOG_ERROR, "Game Server HTTP: Request head too large on httpConnection handle %d, closing.", connection.handle);
 			platform.net_close_connection(connection.handle);
 			connection.closing = true;
 		}
 		else if (server.time_ms - connection.last_activity_ms > HTTP_IDLE_TIMEOUT_MS)
 		{
-			platform.logf_stdout("Game Server HTTP: Connection handle %d idle, closing.", connection.handle);
+			platform.logf("Game Server HTTP: Connection handle %d idle, closing.", connection.handle);
 			platform.net_close_connection(connection.handle);
 			connection.closing = true;
 		}
@@ -281,7 +281,7 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 
 	if (!headWellFormed)
 	{
-		platform.logf_stderr("Game Server HTTP: Malformed request on httpConnection handle %d, closing.", connection.handle);
+		platform.logf(LOG_ERROR, "Game Server HTTP: Malformed request on httpConnection handle %d, closing.", connection.handle);
 		platform.net_close_connection(connection.handle);
 		connection.closing = true;
 		return 0;
@@ -297,7 +297,7 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 	bool isGet = methodNameEndPos == 3 && ia_str_expect(request, "GET");
 	if (!isGet)
 	{
-		platform.logf_stdout("Game Server HTTP: Unsupported method on httpConnection handle %d -> 405.", connection.handle);
+		platform.logf(LOG_WARNING, "Game Server HTTP: Unsupported method on httpConnection handle %d -> 405.", connection.handle);
 		http_server_send_response_status(server, connection,"405 Method Not Allowed");
 		return 0;
 	}
@@ -306,12 +306,12 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 	const http_file* file = http_server_find_file(*server.http, targetNameBuff);
 	if (file == nullptr)
 	{
-		platform.logf_stdout("Game Server HTTP: GET %s -> 404.", targetNameBuff);
+		platform.logf(LOG_WARNING, "Game Server HTTP: GET %s -> 404.", targetNameBuff);
 		http_server_send_response_status(server, connection, "404 Not Found");
 		return 0;
 	}
 
-	platform.logf_stdout("Game Server HTTP: GET %s -> 200 (%d bytes).", targetNameBuff, file->size);
+	platform.logf(LOG_SUCCESS, "Game Server HTTP: GET %s -> 200 (%d bytes).", targetNameBuff, file->size);
 	http_server_send_response(server, connection, "200 OK", file->content_type, file->data, file->size);
 
 	return headSize;
@@ -360,7 +360,7 @@ static void http_server_progress_response(game_server& server, http_connection& 
 	{
 		if (server.time_ms - connection.last_send_progress_ms > HTTP_SEND_STALL_TIMEOUT_MS)
 		{
-			platform.logf_stderr("Game Server HTTP: Response on httpConnection handle %d stalled, closing.", connection.handle);
+			platform.logf(LOG_ERROR, "Game Server HTTP: Response on httpConnection handle %d stalled, closing.", connection.handle);
 			platform.net_close_connection(connection.handle);
 			connection.closing = true;
 		}
@@ -456,7 +456,7 @@ static void http_server_tick(game_server& server)
 
 		if (freeConnection == nullptr)
 		{
-			platform.logf_stderr("Game Server HTTP: No room for httpConnection handle %d, closing.", newConnections[newIndex].platform_handle);
+			platform.logf(LOG_ERROR, "Game Server HTTP: No room for httpConnection handle %d, closing.", newConnections[newIndex].platform_handle);
 			platform.net_close_connection(newConnections[newIndex].platform_handle);
 			continue;
 		}

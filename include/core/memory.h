@@ -28,12 +28,20 @@ struct mem_arena
 
 	// Shortand for calling the internal allocation function.
 	// Returns nullptr if allocation failed.
-	inline void* alloc(ui64 size, ui32 align = RAW_ALLOC_DEFAULT_ALIGN) { ASSERT(_alloc_func != nullptr); return _alloc_func(*this, size, align); }
+	inline void* alloc(ui64 size, ui32 align = RAW_ALLOC_DEFAULT_ALIGN) 
+	{ 
+		ASSERT(_alloc_func != nullptr); 
+		return _alloc_func(*this, size, align);
+	}
 
 	// Shorthand for calling the internal allocation function, with size computed from size of item type * item count, and correct alignment.
 	// Returns nullptr if allocation failed.
 	template<typename Type>
-	inline Type* alloc(ui64 item_count = 1) { ASSERT(_alloc_func != nullptr && item_count > 0); return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type)); }
+	inline Type* alloc(ui64 item_count = 1) 
+	{ 
+		ASSERT(_alloc_func != nullptr && item_count > 0); 
+		return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type));
+	}
 };
 
 void ia_memcpy(void* dest, const void* src, ui64 size);

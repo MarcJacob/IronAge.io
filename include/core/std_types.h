@@ -23,4 +23,13 @@ typedef ui32 iptr;
 
 typedef ui64 time_ms; // Used on some apps as a way to measure time precisely.
 
+// Severity / category of a log message.
+enum LOG_TYPE
+{
+	LOG_SUCCESS,
+	LOG_NORMAL,
+	LOG_WARNING,
+	LOG_ERROR,
+};
+
 #endif // CORE_STD_TYPES_INCLUDED
