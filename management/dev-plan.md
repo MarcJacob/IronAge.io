@@ -167,12 +167,18 @@ tasks are broken down further.
      - [DONE] Server: HTTP connection table (fixed max) + per-connection request buffer,
        chunked response sending (`game_server_http.cpp`).
      - [DONE] Server: static HTTP serving of the client bundle (GET only, keep-alive, MIME
-       types). `deploy_web_client.bat` copies the bundle into `game_server_resources/web_root`.       - [DONE] First version: any file under `web_root`, read on request. Verified in a
+       types). `deploy_web_client.bat` copies the bundle into `game_server_resources/web_root`.
+       - [DONE] First version: any file under `web_root`, read on request. Verified in a
          browser.
        - [DONE] Redesign: files listed in `init_params.web_files` are preloaded into named
          buffers at init (fatal if any fails, total size budget); requests only match
          those names, `/` -> `index.html`, else 404. No file system access at request
          time. Tested in a browser.
+     - [DONE] Improvement to the logging system on win32 platform and game server.
+       - Single platform `log` / `logf` taking a `LOG_TYPE` (`include/core/std_types.h`).
+       - Win32: `win32_stdout` / `win32_stderr` end points (color by type), component-
+         prefixed `WIN32 (<component>)` logging, net component logs as `NET`.
+       - Game server: `server.log` / `server.logf`, `GAME SERVER (<component>)` prefix.
      - Server: connection ownership moves from the HTTP server to the game server.
        - Clients table on the game server: fixed size, one entry per platform connection,
          discriminated union (client type + type-specific data).
@@ -222,3 +228,5 @@ Tasks not currently part of the plan that need to be added to it at some point.
   it was loaded.
 - HTTP server: keep frequently-used files always loaded ("cached"), load rarely-requested or
   large ones on demand.
+- WASM client backend: log messages (typed, like the server's `LOG_TYPE`) straight to the JS
+  frontend.
