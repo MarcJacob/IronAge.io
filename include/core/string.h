@@ -49,6 +49,21 @@ static bool ia_str_append(char* buff, ui32 buff_size, ui32& append_count, const 
 	return true;
 }
 
+// Appends a "<name> (<tag>): " style prefix to a fixed character buffer, or just "<name>: " if tag is null or empty.
+// Returns false if it didn't fit. append_count is incremented by how many characters were appended.
+// NOTE(Marc): Yes, this is getting janky. Yes I need to stop being lazy and make a proper string library already.
+static bool ia_str_prefix(char* buff, ui32 buff_size, ui32& append_count, const char* name, const char* tag)
+{
+	bool fit = ia_str_append(buff, buff_size, append_count, name);
+	if (tag != nullptr && tag[0] != '\0')
+	{
+		fit = ia_str_append(buff, buff_size, append_count, " (") && fit;
+		fit = ia_str_append(buff, buff_size, append_count, tag) && fit;
+		fit = ia_str_append(buff, buff_size, append_count, ")") && fit;
+	}
+	return ia_str_append(buff, buff_size, append_count, ": ") && fit;
+}
+
 // Appends a ui64 integer to a fixed character buffer. Returns false if it didn't fit.
 // Supports up to 20 digits. append_count is incremented with however many characters were added.
 static bool ia_str_append_ui64(char* buff, ui32 buff_size, ui32& append_count, ui64 value)

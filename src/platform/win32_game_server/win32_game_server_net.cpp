@@ -5,6 +5,14 @@
 
 #include "win32_game_server_platform.h"
 
+// Net component logging: goes through the Win32 platform logging under the "NET" component.
+static inline void net_log(LOG_TYPE type, const char* msg) { win32_log("NET", type, msg); }
+static inline void net_log(const char* msg) { win32_log("NET", msg); }
+template<typename... args_types>
+static void net_logf(LOG_TYPE type, const char* format, args_types... args) { win32_logf("NET", type, format, args...); }
+template<typename... args_types>
+static void net_logf(const char* format, args_types... args) { win32_logf("NET", format, args...); }
+
 // Defines an active connection from the platform's perspective.
 // A connection is considered "active" when:
 // - Peer is still connected
@@ -140,7 +148,7 @@ SOCKET create_listen_socket()
 	SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET)
 	{
-		win32_log(LOG_ERROR, "Win32 Net: Failed to create listen server socket.");
+		net_log(LOG_ERROR, "Failed to create listen server socket.");
 		return INVALID_SOCKET;
 	}
 
@@ -151,14 +159,14 @@ SOCKET create_listen_socket()
 
 	if (bind(listenSocket, (sockaddr*)&bind_addr, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to bind listen server socket. WSA error = %d", WSAGetLastError());
+		net_logf(LOG_ERROR, "Failed to bind listen server socket. WSA error = %d", WSAGetLastError());
 		closesocket(listenSocket);
 		return INVALID_SOCKET;
 	}
 
 	if (listen(listenSocket, 256) == SOCKET_ERROR)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to start listening on listen server socket. WSA error = %d", WSAGetLastError());
+		net_logf(LOG_ERROR, "Failed to start listening on listen server socket. WSA error = %d", WSAGetLastError());
 		closesocket(listenSocket);
 		return INVALID_SOCKET;
 	}
@@ -168,7 +176,7 @@ SOCKET create_listen_socket()
 
 win32_net_component* win32_net_start()
 {
-	win32_log("Win32 Net: Starting Win32 Net component...");
+	net_log("Starting net component...");
 
 	// Allocate component memory directly from the OS.
 	ui8* component_mem = (ui8*)VirtualAlloc(NULL, NET_COMPONENT_MEMORY_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -183,7 +191,7 @@ win32_net_component* win32_net_start()
 
 	if (WSAStartup(MAKEWORD(2, 2), &netComponent->wsa_data) != 0)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to start WSA. Error code = %d", WSAGetLastError());
+		net_logf(LOG_ERROR, "Failed to start WSA. Error code = %d", WSAGetLastError());
 		win32_net_stop(*netComponent);
 		return nullptr;
 	}
@@ -195,7 +203,7 @@ win32_net_component* win32_net_start()
 	SOCKET listenSocket = create_listen_socket();
 	if (listenSocket == INVALID_SOCKET)
 	{
-		win32_log(LOG_ERROR, "Win32 Net: Failed to create listen socket.");
+		net_log(LOG_ERROR, "Failed to create listen socket.");
 		win32_net_stop(*netComponent);
 		return nullptr;
 	}
@@ -211,7 +219,7 @@ win32_net_component* win32_net_start()
 
 	if (netComponent->listen_thread.thread_handle == NULL)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to start listen server thread. Error code = %d", GetLastError());
+		net_logf(LOG_ERROR, "Failed to start listen server thread. Error code = %d", GetLastError());
 		win32_net_stop(*netComponent);
 		return nullptr;
 	}
@@ -226,7 +234,7 @@ win32_net_component* win32_net_start()
 
 	if (netComponent->reception_thread.thread_handle == NULL)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to start reception thread. Error code = %d", GetLastError());
+		net_logf(LOG_ERROR, "Failed to start reception thread. Error code = %d", GetLastError());
 		win32_net_stop(*netComponent);
 		return nullptr;
 	}
@@ -241,7 +249,7 @@ win32_net_component* win32_net_start()
 
 	if (netComponent->send_thread.thread_handle == NULL)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to start send thread. Error code = %d", GetLastError());
+		net_logf(LOG_ERROR, "Failed to start send thread. Error code = %d", GetLastError());
 		win32_net_stop(*netComponent);
 		return nullptr;
 	}
@@ -280,13 +288,13 @@ void win32_net_update_connections(win32_net_component& net_component)
 		// Set the socket back to empty.
 		InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::EMPTY);
 
-		win32_logf("Win32 Net: Active connection thread_handle %d is cleared and ready for re-use.", connectionHandle);
+		net_logf("Active connection thread_handle %d is cleared and ready for re-use.", connectionHandle);
 	}
 }
 
 void win32_net_stop(win32_net_component& net_component)
 {
-	win32_log("Win32 Net: Shutting down Win32 net component...");
+	net_log("Shutting down net component...");
 
 	net_component.active = false;
 
@@ -335,7 +343,7 @@ ui16 win32_net_query_new_connections(game_server_platform& platform, game_server
 		// State transition due to acknowledgement (CONNECTED -> OPEN).
 		InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::OPEN);
 
-		win32_logf("Connection thread_handle %d acknowledged by game server.", connectionHandle);
+		net_logf("Connection thread_handle %d acknowledged by game server.", connectionHandle);
 
 		// Write to buffer.
 		new_connections[writeCount++] = {
@@ -423,7 +431,7 @@ void win32_register_new_connection(win32_active_connections_table& connections_t
 	u_long nonBlocking = 1;
 	if (ioctlsocket(new_connection.socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)
 	{
-		win32_logf(LOG_ERROR, "Win32 Net: Failed to set connection socket to non-blocking (Socket = %llu). Dropping connection.", new_connection.socket);
+		net_logf(LOG_ERROR, "Failed to set connection socket to non-blocking (Socket = %llu). Dropping connection.", new_connection.socket);
 		closesocket(new_connection.socket);
 		return;
 	}
@@ -437,7 +445,7 @@ void win32_register_new_connection(win32_active_connections_table& connections_t
 		char addrBuff[128];
 		inet_ntop(AF_INET, &new_connection.address, addrBuff, sizeof(addrBuff));
 
-		win32_logf("Win32 Net: Registering new connection. Handle = %d\n\tAddress = %s\n\tPort = %d", 
+		net_logf("Registering new connection. Handle = %d\n\tAddress = %s\n\tPort = %d", 
 			newConnectionHandle, addrBuff, new_connection.port);
 
 		activeConnectionEntry.socket = new_connection.socket;
@@ -450,7 +458,7 @@ void win32_register_new_connection(win32_active_connections_table& connections_t
 	}
 
 	// No room in the table.
-	win32_logf(LOG_ERROR, "Win32 Net: Max active connections capacity reached ! Dropping connection (Socket = %llu).", new_connection.socket);
+	net_logf(LOG_ERROR, "Max active connections capacity reached ! Dropping connection (Socket = %llu).", new_connection.socket);
 	closesocket(new_connection.socket);
 }
 
@@ -480,12 +488,12 @@ unsigned long listen_thread_func(LPVOID context)
 			}
 
 			i32 err = WSAGetLastError();
-			win32_logf(LOG_ERROR, "Win32 Net: Error accepting new connection on listen server. Error code = %d", err);
+			net_logf(LOG_ERROR, "Error accepting new connection on listen server. Error code = %d", err);
 
 			// Check if error is fatal.
 			if (err == WSAEINTR || err == WSAENOTSOCK)
 			{
-				win32_log(LOG_ERROR, "Win32 Net: Error is fatal ! Shutting down listen thread.");
+				net_log(LOG_ERROR, "Error is fatal ! Shutting down listen thread.");
 				listenThread.err_signal = true;
 				return 1;
 			}
@@ -545,7 +553,7 @@ RECEPTION_THREAD_START:
 			if (activeConnection.socket != INVALID_SOCKET && activeConnection.send_buffer.item_count > 0) continue;
 
 			// Close the socket, and perform the transition to CLOSED.
-			win32_logf("Win32 NET: Connection thread_handle %d closed by request of server.", connectionHandle);
+			net_logf("Connection thread_handle %d closed by request of server.", connectionHandle);
 
 			close_connection_socket(activeConnection);
 
@@ -587,7 +595,7 @@ RECEPTION_THREAD_START:
 
 			if (pollFD.revents & POLLERR)
 			{
-				win32_logf(LOG_ERROR, "Win32 Net: Error polling socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
+				net_logf(LOG_ERROR, "Error polling socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
 					recvConnectionHandle, recvConnection.socket);
 
 				// Set connection to SERVER CLOSED and close socket.
@@ -599,7 +607,7 @@ RECEPTION_THREAD_START:
 			if (pollFD.revents & POLLHUP)
 			{
 				// Connection aborted. Consider it as "closed by peer".
-				win32_logf("Win32 NET: Connection thread_handle %d closed by peer.", recvConnectionHandle);
+				net_logf("Connection thread_handle %d closed by peer.", recvConnectionHandle);
 
 				InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
 				close_connection_socket(recvConnection);
@@ -618,7 +626,7 @@ RECEPTION_THREAD_START:
 					// Non-blocking socket with nothing to read after all, not an error.
 					if (WSAGetLastError() == WSAEWOULDBLOCK) continue;
 
-					win32_logf(LOG_ERROR, "Win32 Net: Error code %d receiving data socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
+					net_logf(LOG_ERROR, "Error code %d receiving data socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
 						WSAGetLastError(), recvConnectionHandle, recvConnection.socket);
 
 					// Set connection to SERVER CLOSED and close socket immediately.
@@ -630,7 +638,7 @@ RECEPTION_THREAD_START:
 				if (res == 0)
 				{
 					// Socket closed connection gracefully. Transition state to PEER_CLOSED and close the socket.
-					win32_logf("Win32 NET: Connection thread_handle %d closed by peer.", recvConnectionHandle);
+					net_logf("Connection thread_handle %d closed by peer.", recvConnectionHandle);
 
 					InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
 					close_connection_socket(recvConnection);
@@ -651,7 +659,7 @@ RECEPTION_THREAD_START:
 		if (activeConnection.state == win32_active_connection::STATE::PEER_CLOSED
 			&& activeConnection.reception_buffer.item_count == 0) // We're the producer for it so there's no race condition to worry about.
 		{
-			win32_logf("Win32 Net: Closed-by-peer connection thread_handle %d has no more data to read. Closing...", connectionHandle);
+			net_logf("Closed-by-peer connection thread_handle %d has no more data to read. Closing...", connectionHandle);
 			InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::CLOSED);
 		}
 	}
@@ -750,7 +758,7 @@ unsigned long send_thread_func(LPVOID context)
 					else if (WSAGetLastError() != WSAEWOULDBLOCK)
 					{
 						// Leave the connection alone, the reception thread will detect the failure and close it.
-						win32_logf(LOG_ERROR, "Win32 Net: Error code %d sending data on connection thread_handle %d (SOCKET = %llu).",
+						net_logf(LOG_ERROR, "Error code %d sending data on connection thread_handle %d (SOCKET = %llu).",
 							WSAGetLastError(), sendConnectionHandle, sendConnection.socket);
 
 						// A connection waiting to be closed will never manage to flush, drop the data so it can close.

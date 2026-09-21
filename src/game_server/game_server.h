@@ -81,6 +81,50 @@ struct game_server
 	match_slot* match_slots; // Match slots management structures.
 
 	http_server* http; // Serves the web client bundle to connections.
+
+	// LOGGING
+	// Redirects to the platform, prepending "GAME SERVER (<component>): " to the message, or just "GAME SERVER: " if component is empty.
+	// The component name must not contain '%' as it becomes part of the format string for logf. Messages beyond LOG_BUFF_SIZE are truncated.
+	// NOTE(Marc): This is a little beefier than what I envisionned originally. I don't want the server structure to become more monolithic than it needs to be...
+	// but typing "server.log" is just so convenient. Maaaaaaaaybe I'll replace it with an external game_server_log function or something.
+
+	static constexpr ui32 LOG_BUFF_SIZE = 1024;
+
+	inline void log(const char* component, LOG_TYPE type, const char* msg)
+	{
+		char buff[LOG_BUFF_SIZE];
+		ui32 count = 0;
+		ia_str_prefix(buff, LOG_BUFF_SIZE - 1, count, "GAME SERVER", component);
+		ia_str_append(buff, LOG_BUFF_SIZE - 1, count, msg);
+		buff[count] = '\0';
+
+		platform->log(type, buff);
+	}
+	inline void log(const char* component, const char* msg) { log(component, LOG_NORMAL, msg); }
+	// No component name.
+	inline void log(LOG_TYPE type, const char* msg) { log("", type, msg); }
+	inline void log(const char* msg) { log("", LOG_NORMAL, msg); }
+
+	template<typename... args_types>
+	inline void logf(const char* component, LOG_TYPE type, const char* format, args_types... args)
+	{
+		char buff[LOG_BUFF_SIZE];
+		ui32 count = 0;
+		ia_str_prefix(buff, LOG_BUFF_SIZE - 1, count, "GAME SERVER", component);
+		ia_str_append(buff, LOG_BUFF_SIZE - 1, count, format);
+		buff[count] = '\0';
+
+		platform->logf(type, buff, args...);
+	}
+	template<typename... args_types>
+	inline void logf(const char* component, const char* format, args_types... args) { logf(component, LOG_NORMAL, format, args...); }
+	// No component name.
+	// NOTE: logf("format", "string arg") is indistinguishable from logf("component", "format"), and the component overload wins.
+	// If the first format argument is a string, use the explicit "" component (or a type) instead.
+	template<typename... args_types>
+	inline void logf(LOG_TYPE type, const char* format, args_types... args) { logf("", type, format, args...); }
+	template<typename... args_types>
+	inline void logf(const char* format, args_types... args) { logf("", LOG_NORMAL, format, args...); }
 };
 
 #endif // GAME_SERVER_INCLUDED

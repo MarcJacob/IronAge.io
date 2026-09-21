@@ -30,12 +30,12 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 	int charCount = vsprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
 	va_end(va);
 
-	win32_log(LOG_ERROR, assert_msg_buff);
+	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
 
 	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
 
-	win32_log(LOG_ERROR, assert_msg_buff);
+	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
 
 	__debugbreak();
 	raise(SIGABRT);
@@ -54,35 +54,36 @@ void win32_shutdown(game_server_platform& platform, int code)
 	win32Platform.app.exitRequested = true;
 }
 
-void win32_log(LOG_TYPE type, const char* msg)
-{
-	bool isError = type == LOG_ERROR;
-	FILE* output = isError ? stderr : stdout;
-	HANDLE outHandle = GetStdHandle(isError ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+static constexpr ui32 WIN32_LOG_BUFF_SIZE = 1024;
 
-	WORD color = 0; // 0 = leave the console's current color.
+// Console color for a log type. 0 = leave the console's current color.
+static WORD win32_log_color(LOG_TYPE type)
+{
 	switch (type)
 	{
 	case LOG_SUCCESS:
-		color = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
+		return FOREGROUND_GREEN | FOREGROUND_INTENSITY;
 	case LOG_WARNING:
-		color = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
-		break;
+		return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
 	case LOG_ERROR:
-		color = FOREGROUND_RED | FOREGROUND_INTENSITY;
-		break;
+		return FOREGROUND_RED | FOREGROUND_INTENSITY;
 	default:
-		break;
+		return 0;
 	}
+}
 
-	// Print in the type's color, then restore whatever the console attributes were. Both calls fail harmlessly if the output is redirected.
+// Prints the buffer and a newline to the output in the type's color, then restores whatever the console attributes were.
+// The color calls fail harmlessly if the output is redirected.
+static void win32_print_colored(FILE* output, HANDLE outHandle, LOG_TYPE type, const char* buffer)
+{
+	WORD color = win32_log_color(type);
+
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo = {};
 	bool colored = color != 0
 		&& GetConsoleScreenBufferInfo(outHandle, &consoleInfo)
 		&& SetConsoleTextAttribute(outHandle, color);
 
-	fputs(msg, output);
+	fputs(buffer, output);
 	fputc('\n', output);
 	fflush(output);
 
@@ -92,52 +93,84 @@ void win32_log(LOG_TYPE type, const char* msg)
 	}
 }
 
-void win32_logf(LOG_TYPE type, const char* msg, ...)
+void win32_stdout(LOG_TYPE type, const char* buffer)
 {
-	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
-
-	char log_msg_buff[LOG_FORMAT_BUFF_SIZE];
-	memset(log_msg_buff, 0, sizeof(log_msg_buff));
-
-	va_list va;
-	va_start(va, msg);
-	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
-	va_end(va);
-
-	win32_log(type, log_msg_buff);
+	win32_print_colored(stdout, GetStdHandle(STD_OUTPUT_HANDLE), type, buffer);
 }
 
-void win32_logf(const char* msg, ...)
+void win32_stderr(LOG_TYPE type, const char* buffer)
 {
-	static const ui32 LOG_FORMAT_BUFF_SIZE = 1024;
+	win32_print_colored(stderr, GetStdHandle(STD_ERROR_HANDLE), type, buffer);
+}
 
-	char log_msg_buff[LOG_FORMAT_BUFF_SIZE];
-	memset(log_msg_buff, 0, sizeof(log_msg_buff));
+// Sends a finished buffer to the end point matching its type.
+static void win32_route_log(LOG_TYPE type, const char* buffer)
+{
+	if (type == LOG_ERROR)
+	{
+		win32_stderr(type, buffer);
+	}
+	else
+	{
+		win32_stdout(type, buffer);
+	}
+}
+
+void win32_log(const char* component, LOG_TYPE type, const char* msg)
+{
+	char logBuff[WIN32_LOG_BUFF_SIZE + 64];
+
+	if (component != nullptr && component[0] != '\0')
+	{
+		_snprintf_s(logBuff, sizeof(logBuff), _TRUNCATE, "WIN32 (%s): %s", component, msg);
+	}
+	else
+	{
+		_snprintf_s(logBuff, sizeof(logBuff), _TRUNCATE, "WIN32: %s", msg);
+	}
+
+	win32_route_log(type, logBuff);
+}
+
+void win32_logf(const char* component, LOG_TYPE type, const char* format, ...)
+{
+	char msgBuff[WIN32_LOG_BUFF_SIZE];
 
 	va_list va;
-	va_start(va, msg);
-	int charCount = vsprintf_s(log_msg_buff, LOG_FORMAT_BUFF_SIZE, msg, va);
+	va_start(va, format);
+	_vsnprintf_s(msgBuff, sizeof(msgBuff), _TRUNCATE, format, va);
 	va_end(va);
 
-	win32_log(LOG_NORMAL, log_msg_buff);
+	win32_log(component, type, msgBuff);
+}
+
+void win32_logf(const char* component, const char* format, ...)
+{
+	char msgBuff[WIN32_LOG_BUFF_SIZE];
+
+	va_list va;
+	va_start(va, format);
+	_vsnprintf_s(msgBuff, sizeof(msgBuff), _TRUNCATE, format, va);
+	va_end(va);
+
+	win32_log(component, LOG_NORMAL, msgBuff);
 }
 
 void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg)
 {
-	win32_log(type, msg);
+	win32_route_log(type, msg);
 }
 
 void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...)
 {
-	char logMsgBuff[1024];
-	memset(logMsgBuff, 0, sizeof(logMsgBuff));
+	char msgBuff[WIN32_LOG_BUFF_SIZE];
 
 	va_list va;
 	va_start(va, msg);
-	vsprintf_s(logMsgBuff, sizeof(logMsgBuff), msg, va);
+	_vsnprintf_s(msgBuff, sizeof(msgBuff), _TRUNCATE, msg, va);
 	va_end(va);
 
-	win32_log(type, logMsgBuff);
+	win32_route_log(type, msgBuff);
 }
 
 // The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
@@ -216,7 +249,7 @@ static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
 		  
 		  if (WIN32_PLATFORM != nullptr)
 		  {
-			  WIN32_PLATFORM->log(LOG_WARNING, "WIN32: !! SHUTDOWN SIGNAL RECEIVED !!");
+			  win32_log("SIGNAL", LOG_WARNING, "!! SHUTDOWN SIGNAL RECEIVED !!");
 			  Sleep(1000);
 			  WIN32_PLATFORM->shutdown(1);
 			return TRUE;
@@ -231,10 +264,10 @@ int main(int argc, char** argv)
 	// Register console signal handling.
 	if (!SetConsoleCtrlHandler(win32_console_ctrl_handler, TRUE))
 	{
-		win32_logf(LOG_WARNING, "Win32: Failed to register console control handler. Error code = %d", GetLastError());
+		win32_logf("", LOG_WARNING, "Failed to register console control handler. Error code = %d", GetLastError());
 	}
 
-	win32_log("Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
+	win32_log("", "Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
 
 	// Initialize win32 platform structure.
 
@@ -261,7 +294,7 @@ int main(int argc, char** argv)
 	
 	WIN32_PLATFORM = &win32Platform;
 
-	win32_logf("Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
+	win32_logf("", "Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
 
 	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	ASSERT_MSG(game_server_mem != nullptr, "Failed to allocate Game Server memory. Error code = %d", GetLastError());
@@ -291,14 +324,14 @@ int main(int argc, char** argv)
 		.web_file_count = WEB_FILE_COUNT,
 	};
 
-	win32_logf("Initializing Game Server...\n");
+	win32_logf("", "Initializing Game Server...\n");
 
 	win32Platform.app.gameServer = game_server_init(win32Platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
 	ASSERT_MSG(win32Platform.app.gameServer != nullptr, "Failed to initialize Game Server.");
 
-	win32_log(LOG_SUCCESS, "\nGame Server initialized.");
+	win32_log("", LOG_SUCCESS, "Game Server initialized.");
 
-	win32_log("Starting main tick loop.\n");
+	win32_log("", "Starting main tick loop.\n");
 
 	// Main loop: measure the time elapsed since the previous iteration and hand it to the server.
 	LARGE_INTEGER counter_frequency;
@@ -318,7 +351,7 @@ int main(int argc, char** argv)
 		}
 		else
 		{
-			win32_log(LOG_ERROR, "Win32: Net Component has stopped unexpectedly. Shutting down.");
+			win32_log("", LOG_ERROR, "Net Component has stopped unexpectedly. Shutting down.");
 			goto WIN32_SHUTDOWN;
 		}
 
@@ -335,15 +368,16 @@ WIN32_SHUTDOWN:
 
 	if (win32Platform.app.gameServer != nullptr)
 	{
+		win32_log("", "Shutting down Game Server.");
 		game_server_stop(*win32Platform.app.gameServer);
 	}
 
-	win32_log("Win32 platform shutting down...");
+	win32_log("", "Platform shutting down...");
 
 	win32_net_stop(*win32Platform.net_component);
 	win32_net_free(*win32Platform.net_component);
 
-	win32_log(LOG_SUCCESS, "Win32 platform shutdown complete.");
+	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
 
 	WIN32_PLATFORM = nullptr;
 	return 0;

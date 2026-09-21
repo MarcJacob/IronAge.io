@@ -35,16 +35,19 @@ void win32_shutdown(game_server_platform& platform, int code);
 
 // Logging
 
-// Logs message according to its type: LOG_ERROR goes to stderr in red, LOG_WARNING to stdout in yellow, LOG_SUCCESS to stdout in green, LOG_NORMAL to stdout uncolored.
-void win32_log(LOG_TYPE type, const char* msg);
-// Logs formatted message according to its type.
-void win32_logf(LOG_TYPE type, const char* msg, ...);
-// Overloads defaulting to LOG_NORMAL.
-inline void win32_log(const char* msg) { win32_log(LOG_NORMAL, msg); }
-void win32_logf(const char* msg, ...);
+// Log end points: take a finished, null-terminated buffer and write it out. The type only selects the color.
+void win32_stdout(LOG_TYPE type, const char* buffer);
+void win32_stderr(LOG_TYPE type, const char* buffer);
 
-// Platform-interface versions of the above, for the game server platform structure.
-// The plain versions stay available to platform code that has no platform structure at hand.
+// Logging for the Win32 platform code itself. Prepends "WIN32 (<component>): " to the message, or just "WIN32: " if component is empty.
+// LOG_ERROR goes to stderr, everything else to stdout. Defaults to LOG_NORMAL if no type is passed.
+void win32_log(const char* component, LOG_TYPE type, const char* msg);
+inline void win32_log(const char* component, const char* msg) { win32_log(component, LOG_NORMAL, msg); }
+void win32_logf(const char* component, LOG_TYPE type, const char* format, ...);
+void win32_logf(const char* component, const char* format, ...);
+
+// Platform-interface versions of logging, for the game server platform structure.
+// These only reroute the message (unprefixed) to the end points.
 void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg);
 void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...);
 
