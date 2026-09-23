@@ -138,6 +138,34 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 
 // END MATCH SLOT SYSTEM IMPLEMENTATION
 
+// Unknown client handling.
+
+static constexpr ui32 UNKNOWN_CLIENT_READ_BUFFER_SIZE = 16; // Enough to recognize a request line's method. Anything beyond stays on the platform.
+static constexpr time_ms UNKNOWN_CLIENT_TIMEOUT_MS = 1000; // Unknown clients still unrecognized after this long get dropped.
+
+void game_server_process_unknown_client(game_server& server, game_server_client& client)
+{
+	// Receive some data from the client connection in a small local buffer.
+	ui8 readBuffer[UNKNOWN_CLIENT_READ_BUFFER_SIZE];
+	ui32 receivedBytes = game_server_client_receive_message(server, client.handle, readBuffer, sizeof(readBuffer));
+
+	if (receivedBytes > 0)
+	{
+		client.unknown.traffic_size += receivedBytes;
+
+		// Ask HTTP server if it recognized the bytes to connect as a http request. If it does, register the client with http server and set its type.
+		if (http_server_try_accept_client(server, client, readBuffer, receivedBytes)) return;
+	}
+
+	// If the connection is still unrecognized and has lasted more than a second, drop it.
+	if (server.time_ms - client.connected_at_ms > UNKNOWN_CLIENT_TIMEOUT_MS)
+	{
+		server.logf("Clients", LOG_WARNING, "Dropping unrecognized client %d after %llu ms (received %llu bytes).",
+			client.handle.value, server.time_ms - client.connected_at_ms, client.unknown.traffic_size);
+		game_server_client_drop(server, client.handle);
+	}
+}
+
 // BEGIN GAME SERVER MAIN FUNCTIONS
 
 game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
@@ -176,7 +204,7 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		newServer->logf(LOG_TYPE::LOG_ERROR, "Game server set to start with 0 supported client connections. This is currently not supported. Aborting.");
 		return nullptr;
 	}
-	game_server_init_clients_table(*newServer, init_params.max_client_count);
+	clients_table_init(*newServer, init_params.max_client_count);
 
 	// Initialize all match slots.
 	newServer->match_slots = newServer->main_memory.alloc<match_slot>(newServer->init_params.match_slot_count);
@@ -289,7 +317,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		for (ui16 closedConnectionCount = 0; closedConnectionCount < closedConnectionsCount; closedConnectionCount++)
 		{
 			game_server_platform::net_connection_handle& closedConnectionHandle = closedConnectionsBuffer[closedConnectionCount];
-			game_server_clients_connection_lost(server, closedConnectionHandle);
+			clients_table_on_connection_lost(server, closedConnectionHandle);
 		}
 	}
 
@@ -303,7 +331,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		{
 			// Register new connection with clients table.
 			game_server_platform::in_connection& newConnection = newConnectionsBuffer[newConnectionIndex];
-			if (game_server_clients_register_connection(server, newConnection) == nullptr)
+			if (clients_table_register_new_connection(server, newConnection) == nullptr)
 			{
 				server.logf(LOG_TYPE::LOG_ERROR, "Out of room in the clients table (capacity = %d), dropping platform connection handle %d.",
 					server.init_params.max_client_count, newConnection.platform_handle);
@@ -311,6 +339,9 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 			}
 		}
 	}
+
+	// Process UNKNOWN type client connections.
+	game_server_client_for_each_of_type(server, game_server_client::TYPE::UNKNOWN, game_server_process_unknown_client);
 
 	// Serve the web client bundle over HTTP on all platform connections.
 	http_server_tick(server);

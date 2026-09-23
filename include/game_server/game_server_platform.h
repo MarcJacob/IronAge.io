@@ -46,9 +46,10 @@ struct game_server_platform
 
 	// PLATFORM NET
 
-	typedef ui32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same thread_handle, 
-										// meaning that the server should always check for closed connections first to ensure the thread_handle
+	typedef ui32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same handle, 
+										// meaning that the server should always check for closed connections first to ensure the handle
 										// is available on its end. Connections should stay alive on the platform at least so long as data is waiting to be read.
+	static constexpr net_connection_handle INVALID_NET_CONNECTION_HANDLE = ~0;
 
 	// Structured information about a new inbound connection.
 	struct in_connection
@@ -76,34 +77,34 @@ struct game_server_platform
 		return net_query_closed_connections_func(*this, closed_handles_buff, buff_size);
 	}
 
-	typedef bool (*net_send_bytes_fn)(game_server_platform& platform, net_connection_handle thread_handle, const ui8* bytes, ui32 bytes_count);
-	// Platform function: buffers bytes for sending towards an existing connection identified by a thread_handle.
+	typedef bool (*net_send_bytes_fn)(game_server_platform& platform, net_connection_handle handle, const ui8* bytes, ui32 bytes_count);
+	// Platform function: buffers bytes for sending towards an existing connection identified by a handle.
 	// Returns whether the data was successfully buffered / sent on the platform. Failure usually means the connection was closed,
 	// or that there's too much data already buffered for sending.
 	// Thread safety is not guaranteed on the same connection beyond a single sending thread.
 	net_send_bytes_fn net_send_bytes_func;
-	bool net_send_bytes(net_connection_handle thread_handle, const ui8* bytes, ui32 bytes_count) {
-		return net_send_bytes_func(*this, thread_handle, bytes, bytes_count);
+	bool net_send_bytes(net_connection_handle handle, const ui8* bytes, ui32 bytes_count) {
+		return net_send_bytes_func(*this, handle, bytes, bytes_count);
 	}
 
-	typedef ui32 (*net_receive_bytes_fn)(game_server_platform& platform, net_connection_handle thread_handle, ui8* buff, ui32 buff_size);
-	// Platform function: receives bytes from a connection based on its thread_handle. If max buffer size is reached,
+	typedef ui32 (*net_receive_bytes_fn)(game_server_platform& platform, net_connection_handle handle, ui8* buff, ui32 buff_size);
+	// Platform function: receives bytes from a connection based on its handle. If max buffer size is reached,
 	// call the function again to get the rest. If buff is null, returns the number of bytes waiting for reception.
 	// Returns the number of bytes received, with 0 meaning that no data has been received (NOT that the connection has closed).
 	// Thread safety is not guaranteed on the same connection beyond a single reception thread.
 	net_receive_bytes_fn net_receive_bytes_func;
-	ui32 net_receive_bytes(net_connection_handle thread_handle, ui8* buff, ui32 buff_size) {
-		return net_receive_bytes_func(*this, thread_handle, buff, buff_size);
+	ui32 net_receive_bytes(net_connection_handle handle, ui8* buff, ui32 buff_size) {
+		return net_receive_bytes_func(*this, handle, buff, buff_size);
 	}
 
-	typedef void (*net_close_connection_fn)(game_server_platform& platform, net_connection_handle thread_handle);
-	// Platform function: requests the platform close the connection related to the thread_handle, if any.
+	typedef void (*net_close_connection_fn)(game_server_platform& platform, net_connection_handle handle);
+	// Platform function: requests the platform close the connection related to the handle, if any.
 	// Forces the connection to be dropped from the platform, and erases any data that may have been waiting to be read.
 	// Data already queued with net_send_bytes is flushed first (dropped if the peer can't take it).
 	// Thread safety is not guaranteed beyond a single requesting thread.
 	net_close_connection_fn net_close_connection_func;
-	void net_close_connection(net_connection_handle thread_handle) {
-		net_close_connection_func(*this, thread_handle);
+	void net_close_connection(net_connection_handle handle) {
+		net_close_connection_func(*this, handle);
 	}
 
 	// PLATFORM FILES

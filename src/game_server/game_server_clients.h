@@ -17,7 +17,7 @@ struct game_server_client
 	{
 		struct
 		{
-			ui16 _create_time_ms; // Allows differentiating between a handle created for a previous client on the same index and the client currently at that index.
+			ui16 _fudge; // Meaningless number, only there to tell apart a handle created for a previous client on the same index from the client currently at that index.
 			ui16 _table_index; // Index into the clients table storage.
 		};
 		ui32 value;
@@ -29,6 +29,8 @@ struct game_server_client
 		// ... TODO(Marc): Intermediate states to support re-connection.
 		ONLINE,				// Client is online and has an active connection with platform networking.
 	} state;
+
+	time_ms connected_at_ms; // Server uptime at which this client's connection was registered.
 
 	struct
 	{
@@ -69,17 +71,27 @@ using on_client_disconnected_fn = void(*)(game_server& server, game_server_clien
 
 // Initializes the clients table associated with the server.
 // max_client_count specifies the maximum amount of concurrent client connections supported by the server.
-void game_server_init_clients_table(game_server& server, ui16 max_client_count);
+void clients_table_init(game_server& server, ui16 max_client_count);
 
 // Registers a new connection with the clients table, associating it with an existing client or creating a new one for it.
 // If successful, returns a pointer to the client structure now associated with this connection.
-game_server_client* game_server_clients_register_connection(game_server& server, game_server_platform::in_connection& connection_info);
+game_server_client* clients_table_register_new_connection(game_server& server, game_server_platform::in_connection& connection_info);
 
-// Signals the table that a connection was lost so an associated client can be updated.
-void game_server_clients_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle);
+// Signals the table that a connection was lost or dropped.
+void clients_table_on_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle);
 
-// Added server functionality
+void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler);
+
+// Extensions to server functionality
 
 game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
+
+bool game_server_client_send_message(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size);
+
+ui32 game_server_client_receive_message(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size);
+
+void game_server_client_drop(game_server& server, game_server_client::client_handle handle);
+
+void game_server_client_for_each_of_type(game_server& server, game_server_client::TYPE type, void(*for_each_func)(game_server&, game_server_client& client));
 
 #endif // GAME_SERVER_CLIENTS_INCLUDED

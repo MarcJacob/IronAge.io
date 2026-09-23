@@ -179,13 +179,20 @@ tasks are broken down further.
        - Win32: `win32_stdout` / `win32_stderr` end points (color by type), component-
          prefixed `WIN32 (<component>)` logging, net component logs as `NET`.
        - Game server: `server.log` / `server.logf`, `GAME SERVER (<component>)` prefix.
-     - Server: connection ownership moves from the HTTP server to the game server.
-       - Clients table on the game server: fixed size, one entry per platform connection,
-         discriminated union (client type + type-specific data).
-       - New connections start UNIDENTIFIED. On first bytes, detect HTTP; anything else is
-         rejected (closed) for now.
-       - HTTP client type: current HTTP connection state moves into the union; HTTP server
-         works on a client entry instead of owning connections.
+     - [WIP] Server: connection ownership moves from the HTTP server to the game server.
+       - [DONE] Clients table on the game server: fixed size, one entry per platform
+         connection, discriminated union (client type + type-specific data). Register / lost /
+         lookup by client handle, per-type disconnect handlers, wired in `game_server_tick`
+         (closed connections first, then new).
+       - [DONE] New connections start UNKNOWN. On first bytes, detect HTTP; anything else
+         is rejected (closed) for now.
+         - [DONE] Per-tick function reads a small local buffer per unknown client and asks
+           each subsystem whether it understands the bytes; the HTTP server claims the client
+           (sets type, allocates its HTTP client state, takes the bytes).
+         - [DONE] Unknown clients still unrecognized after 1 s are dropped (`connected_at_ms`).
+         - [DONE] HTTP disconnect handler releases the HTTP client state.
+       - [DONE] HTTP client type: HTTP connection state is the HTTP variant of the union; HTTP
+         server works on a client entry instead of owning connections. Verified in a browser.
        - Client type changes on upgrade: HTTP -> WEBSOCKET (game client). Bytes received
          after the request head carry over to the new type.
        - Leaves room for other types later (master server, administration, non-browser

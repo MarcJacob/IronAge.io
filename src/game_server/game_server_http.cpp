@@ -2,6 +2,11 @@
 // Little more than a file serving functionality for the game server to distribute the game client over http, and upgrade to websocket
 // to enter the main game client <-> game server communication protocol.
 
+#include "core.h"
+
+#include "game_server.h"
+#include "game_server_clients.h"
+
 static constexpr ui16 HTTP_MAX_CONNECTIONS = 64;
 static constexpr ui16 HTTP_MAX_FILES = 32; // Files that can be preloaded for serving.
 static constexpr ui64 HTTP_MAX_FILES_TOTAL_SIZE = MiB(32); // Budget for all preloaded files together.
@@ -12,14 +17,14 @@ static constexpr ui32 HTTP_PATH_BUFFER_SIZE = 256;
 static constexpr time_ms HTTP_SEND_STALL_TIMEOUT_MS = 10000; // Response making no progress for this long gets its httpConnection closed.
 static constexpr time_ms HTTP_IDLE_TIMEOUT_MS = 30000; // Connection with no request coming in for this long gets closed.
 
-// Holds the state of an active http connection.
-struct http_connection
+// Holds the state of an active http client.
+struct http_client
 {
 	bool in_use; // If false, the structure can be used to register a new httpConnection.
 
 	bool closing; // If true, the server has requested this httpConnection be closed.
 
-	game_server_platform::net_connection_handle handle;
+	game_server_client::client_handle client_handle;
 
 	ui32 request_size; // Bytes currently held in request_buffer.
 	ui8 request_buffer[HTTP_REQUEST_BUFFER_SIZE];
@@ -54,7 +59,7 @@ struct http_file
 // Holds a set of files preloaded in memory, to serve to prospective browser-based game clients.
 struct http_server
 {
-	http_connection connections[HTTP_MAX_CONNECTIONS];
+	http_client connections[HTTP_MAX_CONNECTIONS];
 
 	http_file files[HTTP_MAX_FILES];
 	ui32 file_count;
@@ -84,7 +89,66 @@ static http_server* http_server_init(game_server& server)
 
 void http_server_on_client_disconnected(game_server& server, game_server_client& client)
 {
-	server.log("HTTP SERVER", LOG_WARNING, "HTTP Client lost connection (TEST).");
+	server.logf("HTTP SERVER", LOG_WARNING, "HTTP Client %d lost connection.", client.handle.value);
+
+	// Give the HTTP client structure back to the pool.
+	if (client.http != nullptr) *client.http = {};
+}
+
+// Checks whether the bytes just received from an unknown client look like the start of an HTTP request (a known method followed by a space).
+// If they do, gives the client an HTTP client structure holding those bytes and sets its type to HTTP.
+// Returns whether the client was accepted. Bytes must fit the HTTP request buffer.
+static bool http_server_try_accept_client(game_server& server, game_server_client& client, const ui8* bytes, ui32 byte_count)
+{
+	static const char* const METHODS[] = { "GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH" };
+	static constexpr ui8 METHOD_COUNT = sizeof(METHODS) / sizeof(METHODS[0]);
+
+	ASSERT(byte_count <= HTTP_REQUEST_BUFFER_SIZE);
+
+	bool recognized = false;
+	for (ui8 methodIndex = 0; methodIndex < METHOD_COUNT && !recognized; methodIndex++)
+	{
+		const char* method = METHODS[methodIndex];
+		ui32 methodLen = (ui32)ia_str_len(method);
+		if (byte_count <= methodLen || bytes[methodLen] != ' ') continue;
+
+		recognized = true;
+		for (ui32 charIndex = 0; charIndex < methodLen; charIndex++)
+		{
+			if (bytes[charIndex] != (ui8)method[charIndex])
+			{
+				recognized = false;
+				break;
+			}
+		}
+	}
+
+	if (!recognized) return false;
+
+	http_server& http = *server.http;
+	for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)
+	{
+		http_client& httpClient = http.connections[connectionIndex];
+		if (httpClient.in_use) continue;
+
+		httpClient = {};
+		httpClient.in_use = true;
+		httpClient.client_handle = client.handle;
+		httpClient.last_activity_ms = server.time_ms;
+
+		// The bytes were already taken from the platform connection, so they become the start of the request.
+		ia_memcpy(httpClient.request_buffer, bytes, byte_count);
+		httpClient.request_size = byte_count;
+
+		client.type = game_server_client::TYPE::HTTP;
+		client.http = &httpClient;
+
+		server.logf("HTTP SERVER", "Accepted client %d as an HTTP client.", client.handle.value);
+		return true;
+	}
+
+	server.log("HTTP SERVER", LOG_ERROR, "Out of HTTP client slots, can't accept new HTTP client.");
+	return false;
 }
 
 static const char* http_get_content_type(const char* path)
@@ -196,7 +260,7 @@ static const http_file* http_server_find_file(http_server& http, const char* tar
 }
 
 // Starts sending a response on the httpConnection. The body, if any, is sent straight from the given memory, which must stay valid until the response is done.
-static void http_server_send_response(game_server& server, http_connection& connection,
+static void http_server_send_response(game_server& server, http_client& connection,
 	const char* status, const char* content_type, const ui8* body, ui32 body_size)
 {
 	ui32 head_write_pos = 0;
@@ -223,14 +287,14 @@ static void http_server_send_response(game_server& server, http_connection& conn
 }
 
 // Answers with an empty-bodied status response.
-static void http_server_send_response_status(game_server& server, http_connection& connection, const char* status)
+static void http_server_send_response_status(game_server& server, http_client& connection, const char* status)
 {
 	http_server_send_response(server, connection, status, "text/plain; charset=utf-8", nullptr, 0);
 }
 
 // Handles a complete request head sitting at the start of the httpConnection's request buffer.
 // Returns the total amount of bytes consumed from the httpClient's request buffer.
-static ui32 http_server_handle_next_request(game_server& server, http_connection& connection)
+static ui32 http_server_handle_next_request(game_server& server, http_client& connection)
 {
 	game_server_platform& platform = *server.platform;
 
@@ -249,14 +313,14 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 	{
 		if (connection.request_size == HTTP_REQUEST_BUFFER_SIZE)
 		{
-			server.logf("HTTP", LOG_ERROR, "Request head too large on httpConnection handle %d, closing.", connection.handle);
-			platform.net_close_connection(connection.handle);
+			server.logf("HTTP", LOG_ERROR, "Request head too large on client handle %d, closing.", connection.client_handle.value);
+			game_server_client_drop(server, connection.client_handle);
 			connection.closing = true;
 		}
 		else if (server.time_ms - connection.last_activity_ms > HTTP_IDLE_TIMEOUT_MS)
 		{
-			server.logf("HTTP", "Connection handle %d idle, closing.", connection.handle);
-			platform.net_close_connection(connection.handle);
+			server.logf("HTTP", "Client handle %d idle, closing.", connection.client_handle.value);
+			game_server_client_drop(server, connection.client_handle);
 			connection.closing = true;
 		}
 		return 0;
@@ -286,8 +350,8 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 
 	if (!headWellFormed)
 	{
-		server.logf("HTTP", LOG_ERROR, "Malformed request on httpConnection handle %d, closing.", connection.handle);
-		platform.net_close_connection(connection.handle);
+		server.logf("HTTP", LOG_ERROR, "Malformed request on client handle %d, closing.", connection.client_handle.value);
+		platform.net_close_connection(connection.client_handle.value);
 		connection.closing = true;
 		return 0;
 	}
@@ -302,7 +366,7 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 	bool isGet = methodNameEndPos == 3 && ia_str_expect(request, "GET");
 	if (!isGet)
 	{
-		server.logf("HTTP", LOG_WARNING, "Unsupported method on httpConnection handle %d -> 405.", connection.handle);
+		server.logf("HTTP", LOG_WARNING, "Unsupported method on client handle %d -> 405.", connection.client_handle.value);
 		http_server_send_response_status(server, connection,"405 Method Not Allowed");
 		return 0;
 	}
@@ -323,7 +387,7 @@ static ui32 http_server_handle_next_request(game_server& server, http_connection
 }
 
 // Pushes as much of the response as the platform will take. Whatever is left goes on the next tick.
-static void http_server_progress_response(game_server& server, http_connection& connection)
+static void http_server_progress_response(game_server& server, http_client& connection)
 {
 	game_server_platform& platform = *server.platform;
 
@@ -336,7 +400,7 @@ static void http_server_progress_response(game_server& server, http_connection& 
 		ui32 chunk = connection.head_size - connection.head_sent;
 		if (chunk > HTTP_SEND_CHUNK_SIZE) chunk = HTTP_SEND_CHUNK_SIZE;
 
-		if (platform.net_send_bytes(connection.handle, (const ui8*)connection.head + connection.head_sent, chunk))
+		if (game_server_client_send_message(server, connection.client_handle, (const ui8*)connection.head + connection.head_sent, chunk))
 		{
 			connection.head_sent += chunk;
 			connection.last_send_progress_ms = server.time_ms;
@@ -351,7 +415,7 @@ static void http_server_progress_response(game_server& server, http_connection& 
 		ui32 chunk = connection.body_size - connection.body_sent;
 		if (chunk > HTTP_SEND_CHUNK_SIZE) chunk = HTTP_SEND_CHUNK_SIZE;
 
-		if (platform.net_send_bytes(connection.handle, connection.body + connection.body_sent, chunk))
+		if (game_server_client_send_message(server, connection.client_handle, connection.body + connection.body_sent, chunk))
 		{
 			connection.body_sent += chunk;
 			connection.last_send_progress_ms = server.time_ms;
@@ -365,8 +429,8 @@ static void http_server_progress_response(game_server& server, http_connection& 
 	{
 		if (server.time_ms - connection.last_send_progress_ms > HTTP_SEND_STALL_TIMEOUT_MS)
 		{
-			server.logf("HTTP", LOG_ERROR, "Response on httpConnection handle %d stalled, closing.", connection.handle);
-			platform.net_close_connection(connection.handle);
+			server.logf("HTTP", LOG_ERROR, "Response on client handle %d stalled, closing.", connection.client_handle);
+			game_server_client_drop(server, connection.client_handle);
 			connection.closing = true;
 		}
 		return;
@@ -379,7 +443,7 @@ static void http_server_progress_response(game_server& server, http_connection& 
 
 // Receives and handles requests on the httpConnection. One request at a time, later pipelined ones wait for their turn in the request buffer.
 // Always receives, even mid-response, so the platform can see the httpConnection as drained once the peer is gone.
-static void http_server_receive(game_server& server, http_connection& connection)
+static void http_server_receive(game_server& server, http_client& connection)
 {
 	game_server_platform& platform = *server.platform;
 
@@ -387,7 +451,7 @@ static void http_server_receive(game_server& server, http_connection& connection
 	if (connection.request_size < HTTP_REQUEST_BUFFER_SIZE)
 	{
 		// Receive bytes on the httpConnection and place them in the request buffer.
-		ui32 receivedBytes = platform.net_receive_bytes(connection.handle,
+		ui32 receivedBytes = game_server_client_receive_message(server, connection.client_handle,
 			connection.request_buffer + connection.request_size, HTTP_REQUEST_BUFFER_SIZE - connection.request_size);
 
 		if (receivedBytes > 0)
@@ -426,7 +490,7 @@ static void http_server_tick(game_server& server)
 	// Handle send / receive on applicable connections.
 	for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)
 	{
-		http_connection& connection = http.connections[connectionIndex];
+		http_client& connection = http.connections[connectionIndex];
 		if (!connection.in_use || connection.closing) continue;
 
 		if (connection.responding) 

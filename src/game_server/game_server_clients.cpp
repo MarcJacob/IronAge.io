@@ -24,7 +24,7 @@ struct game_server_clients_table
 
 // Initializes the clients table associated with the server.
 // max_client_count specifies the maximum amount of concurrent client connections supported by the server.
-void game_server_init_clients_table(game_server& server, ui16 max_client_count)
+void clients_table_init(game_server& server, ui16 max_client_count)
 {
 	server.log(CLIENTS_COMPONENT_NAME, "Initializing client connections table...");
 
@@ -40,7 +40,7 @@ void game_server_init_clients_table(game_server& server, ui16 max_client_count)
 	server.logf(CLIENTS_COMPONENT_NAME, LOG_SUCCESS, "Client connections table initialized. Capacity = %d", server.client_table->_client_capacity);
 }
 
-game_server_client* game_server_clients_register_connection(game_server& server, game_server_platform::in_connection& connection_info)
+game_server_client* clients_table_register_new_connection(game_server& server, game_server_platform::in_connection& connection_info)
 {
 	// Look for a FREE client slot in the table and create a new client there from the provided platform connection info.
 	// TODO(Marc): Intermediate disconnection state, reconnection system.
@@ -54,6 +54,7 @@ game_server_client* game_server_clients_register_connection(game_server& server,
 		if (client.state == game_server_client::STATE::FREE)
 		{
 			client.state = game_server_client::STATE::ONLINE;
+			client.connected_at_ms = server.time_ms;
 			client.connection_info = {
 				.last_known_address = connection_info.address,
 				.last_known_port = connection_info.port,
@@ -62,7 +63,7 @@ game_server_client* game_server_clients_register_connection(game_server& server,
 			client.type = game_server_client::TYPE::UNKNOWN;
 
 			client.handle._table_index = clientIndex;
-			client.handle._create_time_ms = server.time_ms;
+			client.handle._fudge = (ui16)server.time_ms;
 
 			server.logf(CLIENTS_COMPONENT_NAME, LOG_TYPE::LOG_SUCCESS, 
 				"Registered new client connection from platform connection handle %d. Index = %hu, Handle = %d.",
@@ -77,7 +78,7 @@ game_server_client* game_server_clients_register_connection(game_server& server,
 	return nullptr; // Failed to find room. Let the caller handle the consequences.
 }
 
-void game_server_clients_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle)
+void clients_table_on_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle)
 {
 	ASSERT(server.client_table != nullptr);
 	game_server_clients_table& clientsTable = *server.client_table;	
@@ -101,10 +102,17 @@ void game_server_clients_connection_lost(game_server& server, game_server_platfo
 
 			// Completely reset client data.
 			client = {};
+			client.connection_info.connection_handle = game_server_platform::INVALID_NET_CONNECTION_HANDLE;
 
 			clientsTable._client_count--;
 		}
 	}
+}
+
+void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler)
+{
+	ASSERT(table.on_client_disconnected_handlers[(i32)client_type] == nullptr);
+	table.on_client_disconnected_handlers[(i32)client_type] = handler;
 }
 
 game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
@@ -121,10 +129,74 @@ game_server_client* game_server_get_client_data(game_server& server, game_server
 	return nullptr; // Handle was stale.
 }
 
-void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler)
+bool game_server_client_send_message(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)
 {
-	ASSERT(table.on_client_disconnected_handlers[(i32)client_type] == nullptr);
-	table.on_client_disconnected_handlers[(i32)client_type] = handler;
+	ASSERT(server.client_table != nullptr);
+	ASSERT(handle._table_index < server.client_table->_client_capacity);
+	ASSERT(msg != nullptr && msg_size > 0);
+
+	game_server_clients_table& clientsTable = *server.client_table;	
+
+	game_server_client* client = game_server_get_client_data(server, handle);
+	if (client == nullptr) return false;
+
+	return server.platform->net_send_bytes((game_server_platform::net_connection_handle)client->connection_info.connection_handle,
+		msg, msg_size);
+}
+
+ui32 game_server_client_receive_message(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size)
+{
+	ASSERT(server.client_table != nullptr);
+	ASSERT(handle._table_index < server.client_table->_client_capacity);
+	ASSERT(buff != nullptr && buff_size > 0);
+
+	game_server_clients_table& clientsTable = *server.client_table;	
+
+	game_server_client* client = game_server_get_client_data(server, handle);
+	if (client == nullptr) return 0;
+
+	return server.platform->net_receive_bytes(client->connection_info.connection_handle, buff, buff_size);
+}
+
+void game_server_client_drop(game_server& server, game_server_client::client_handle handle)
+{
+	ASSERT(server.client_table != nullptr);
+	ASSERT(handle._table_index < server.client_table->_client_capacity);
+
+	game_server_clients_table& clientsTable = *server.client_table;	
+
+	game_server_client* client = game_server_get_client_data(server, handle);
+	if (client == nullptr) return;
+
+	if (client->connection_info.connection_handle != game_server_platform::INVALID_NET_CONNECTION_HANDLE)
+	{
+		server.platform->net_close_connection((game_server_platform::net_connection_handle)client->connection_info.connection_handle);
+		clients_table_on_connection_lost(server, client->connection_info.connection_handle);
+	}
+	else
+	{
+		*client = {};
+		client->connection_info.connection_handle = game_server_platform::INVALID_NET_CONNECTION_HANDLE;
+	}
+
+}
+
+void game_server_client_for_each_of_type(game_server& server, game_server_client::TYPE type, void(*for_each_func)(game_server&, game_server_client&))
+{
+	ASSERT(server.client_table != nullptr);
+	ASSERT(for_each_func != nullptr);
+
+	game_server_clients_table& clientsTable = *server.client_table;	
+
+	for (ui16 clientIndex = 0; clientIndex < clientsTable._client_capacity; clientIndex++)
+	{
+		game_server_client& client = clientsTable._client_buff[clientIndex];
+		if (client.state != game_server_client::STATE::FREE 
+			&& client.type == type)
+		{
+			for_each_func(server, client);
+		}
+	}
 }
 
 /// END CLIENT TABLE SYSTEM IMPLEMENTATION
