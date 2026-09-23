@@ -3,11 +3,8 @@
 
 #include "core.h"
 
-#ifdef GAME_SERVER_MAIN_INCLUDED
-	static_assert(0, "Game server main already included... do you have two platforms linking at the same time ?");
-#else
-#define GAME_SERVER_MAIN_INCLUDED
-#endif
+#ifndef GAME_SERVER_PLATFORM_INCLUDED
+#define GAME_SERVER_PLATFORM_INCLUDED
 
 // Platform capabilities handed to the server code so it can, non-exhaustively:
 // - Log messages
@@ -153,3 +150,5 @@ void game_server_tick(game_server& server, time_ms time_ms);
  * Used to allow the server time to perform cleanup operations before the platform shuts down its own functionality.
  */
 void game_server_stop(game_server& server);
+
+#endif // GAME_SERVER_PLATFORM_INCLUDED

@@ -33,7 +33,7 @@ WASM_EXPORT ui32 gameclient_run_determinism_scenario()
 	dump_stream.dump_func = [](void* state, ui8* bytes, ui64 byte_count)
 		{
 			determinism_dump_state& dump_state = *(determinism_dump_state*)state;
-			gcommon_memcpy(dump_state.dump_mem + dump_state.dump_size, bytes, byte_count);
+			ia_memcpy(dump_state.dump_mem + dump_state.dump_size, bytes, byte_count);
 			dump_state.dump_size += byte_count;
 		};
 	dump_stream.state = &dump_state;

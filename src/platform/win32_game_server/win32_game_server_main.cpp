@@ -1,11 +1,11 @@
 ﻿// win32_main.cpp : Defines the entry point for the Game Server application on the Win32 platform.
+#include "win32_game_server_platform.h"
+
 // Unity-compile with the server code.
 #include "../../game_server/game_server_main.cpp"
 
 // Unity-compile the rest of the platform code.
 #include "win32_game_server_net.cpp"
-
-#include "win32_game_server_platform.h"
 
 // Include standard library stuff.
 #include <stdio.h>

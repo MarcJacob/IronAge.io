@@ -36,11 +36,10 @@ static inline void endian_reverse_ui64(ui64* val)
 	return;
 }
 
+
 static sha1_result ia_sha1(const ui8* data, ui64 data_size);
-
-// Define HASH_PLATFORM_IMPLEM in platform code to implement your own optimized platform-specific version of the hashing functions.
-#ifndef HASH_PLATFORM_IMPLEM
-
+// Define HASH_FUNC_DEFAULT_IMPLEMENTATION to get the default implementation of hash functions, or write your own.
+#ifdef HASH_FUNC_DEFAULT_IMPLEMENTATION
 static sha1_result ia_sha1(const ui8* data, ui64 data_size)
 {
 	ASSERT(data != nullptr);
@@ -172,7 +171,6 @@ static sha1_result ia_sha1(const ui8* data, ui64 data_size)
 
 	return res;
 }
-
 #endif
 
 #endif // CORE_MATH_INCLUDED

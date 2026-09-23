@@ -3,10 +3,16 @@
 #ifndef WIN32_GAME_SERVER_PLATFORM_INCLUDED
 #define WIN32_GAME_SERVER_PLATFORM_INCLUDED
 
+// Use default implementation of hash functions.
+#define HASH_FUNC_DEFAULT_IMPLEMENTATION
 #include "core.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <WinSock2.h>
+#include <ws2tcpip.h>
+
+#include "game_server/game_server_platform.h"
 
 // Platform & components structures
 

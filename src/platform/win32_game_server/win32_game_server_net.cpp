@@ -1,8 +1,5 @@
 // Implementation file for the net communications component of the Win32 Game Server platform.
 
-#include <WinSock2.h>
-#include <ws2tcpip.h>
-
 #include "win32_game_server_platform.h"
 
 // Net component logging: goes through the Win32 platform logging under the "NET" component.
