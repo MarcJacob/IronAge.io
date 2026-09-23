@@ -285,7 +285,7 @@ void win32_net_update_connections(win32_net_component& net_component)
 		// Set the socket back to empty.
 		InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::EMPTY);
 
-		net_logf("Active connection thread_handle %d is cleared and ready for re-use.", connectionHandle);
+		net_logf("Active connection handle %d is cleared and ready for re-use.", connectionHandle);
 	}
 }
 
@@ -326,7 +326,7 @@ ui16 win32_net_query_new_connections(game_server_platform& platform, game_server
 	ui16 writeCount = 0;
 
 	// NOTE(Marc): Going over the entire active connections table is simple but it may be too slow if we ever want this platform code to
-	// thread_handle connections in the tens of thousands or more. But since this is for a game server which is supposed to be *relatively* granular,
+	// handle connections in the tens of thousands or more. But since this is for a game server which is supposed to be *relatively* granular,
 	// I'm not too concerned.
 	// Still, leaving a static assert in here to start worrying about this if someone starts increasing the max active connections to something too high :)
 	static_assert(MAX_ACTIVE_CONNECTIONS < 2048, "Win32 Net: Query New Connections function may be too slow to work for a large number of concurrent connections.");
@@ -340,7 +340,7 @@ ui16 win32_net_query_new_connections(game_server_platform& platform, game_server
 		// State transition due to acknowledgement (CONNECTED -> OPEN).
 		InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::OPEN);
 
-		net_logf("Connection thread_handle %d acknowledged by game server.", connectionHandle);
+		net_logf("Connection handle %d acknowledged by game server.", connectionHandle);
 
 		// Write to buffer.
 		new_connections[writeCount++] = {
@@ -363,7 +363,7 @@ ui16 win32_net_query_closed_connections(game_server_platform& platform, win32_co
 	ui16 writeCount = 0;
 
 	// NOTE(Marc): Going over the entire active connections table is simple but it may be too slow if we ever want this platform code to
-	// thread_handle connections in the tens of thousands or more. But since this is for a game server which is supposed to be *relatively* granular,
+	// handle connections in the tens of thousands or more. But since this is for a game server which is supposed to be *relatively* granular,
 	// I'm not too concerned.
 	// Still, leaving a static assert in here to start worrying about this if someone starts increasing the max active connections to something too high :)
 	static_assert(MAX_ACTIVE_CONNECTIONS < 2048, "Win32 Net: Query Closed Connections function may be too slow to work for a large number of concurrent connections.");
@@ -550,7 +550,7 @@ RECEPTION_THREAD_START:
 			if (activeConnection.socket != INVALID_SOCKET && activeConnection.send_buffer.item_count > 0) continue;
 
 			// Close the socket, and perform the transition to CLOSED.
-			net_logf("Connection thread_handle %d closed by request of server.", connectionHandle);
+			net_logf("Connection handle %d closed by request of server.", connectionHandle);
 
 			close_connection_socket(activeConnection);
 
@@ -592,7 +592,7 @@ RECEPTION_THREAD_START:
 
 			if (pollFD.revents & POLLERR)
 			{
-				net_logf(LOG_ERROR, "Error polling socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
+				net_logf(LOG_ERROR, "Error polling socket state on connection handle %d (SOCKET = %llu), closing connection.",
 					recvConnectionHandle, recvConnection.socket);
 
 				// Set connection to SERVER CLOSED and close socket.
@@ -604,7 +604,7 @@ RECEPTION_THREAD_START:
 			if (pollFD.revents & POLLHUP)
 			{
 				// Connection aborted. Consider it as "closed by peer".
-				net_logf("Connection thread_handle %d closed by peer.", recvConnectionHandle);
+				net_logf("Connection handle %d closed by peer.", recvConnectionHandle);
 
 				InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
 				close_connection_socket(recvConnection);
@@ -623,7 +623,7 @@ RECEPTION_THREAD_START:
 					// Non-blocking socket with nothing to read after all, not an error.
 					if (WSAGetLastError() == WSAEWOULDBLOCK) continue;
 
-					net_logf(LOG_ERROR, "Error code %d receiving data socket state on connection thread_handle %d (SOCKET = %llu), closing connection.",
+					net_logf(LOG_ERROR, "Error code %d receiving data socket state on connection handle %d (SOCKET = %llu), closing connection.",
 						WSAGetLastError(), recvConnectionHandle, recvConnection.socket);
 
 					// Set connection to SERVER CLOSED and close socket immediately.
@@ -635,7 +635,7 @@ RECEPTION_THREAD_START:
 				if (res == 0)
 				{
 					// Socket closed connection gracefully. Transition state to PEER_CLOSED and close the socket.
-					net_logf("Connection thread_handle %d closed by peer.", recvConnectionHandle);
+					net_logf("Connection handle %d closed by peer.", recvConnectionHandle);
 
 					InterlockedExchange8((i8*)&recvConnection.state, (i8)win32_active_connection::STATE::PEER_CLOSED);
 					close_connection_socket(recvConnection);
@@ -656,7 +656,7 @@ RECEPTION_THREAD_START:
 		if (activeConnection.state == win32_active_connection::STATE::PEER_CLOSED
 			&& activeConnection.reception_buffer.item_count == 0) // We're the producer for it so there's no race condition to worry about.
 		{
-			net_logf("Closed-by-peer connection thread_handle %d has no more data to read. Closing...", connectionHandle);
+			net_logf("Closed-by-peer connection handle %d has no more data to read. Closing...", connectionHandle);
 			InterlockedExchange8((i8*)&activeConnection.state, (i8)win32_active_connection::STATE::CLOSED);
 		}
 	}
@@ -732,7 +732,7 @@ unsigned long send_thread_func(LPVOID context)
 		{
 			WSAPOLLFD& pollFD = pollBuff[pollIndex];
 
-			// Errors / hangups are left for the reception thread to detect and thread_handle. The socket may also have been closed since the poll buffer was built.
+			// Errors / hangups are left for the reception thread to detect and handle. The socket may also have been closed since the poll buffer was built.
 			if ((pollFD.revents & POLLWRNORM) == 0) continue;
 
 			win32_connection_handle sendConnectionHandle = pollToActiveConnectionHandle[pollIndex];
@@ -755,7 +755,7 @@ unsigned long send_thread_func(LPVOID context)
 					else if (WSAGetLastError() != WSAEWOULDBLOCK)
 					{
 						// Leave the connection alone, the reception thread will detect the failure and close it.
-						net_logf(LOG_ERROR, "Error code %d sending data on connection thread_handle %d (SOCKET = %llu).",
+						net_logf(LOG_ERROR, "Error code %d sending data on connection handle %d (SOCKET = %llu).",
 							WSAGetLastError(), sendConnectionHandle, sendConnection.socket);
 
 						// A connection waiting to be closed will never manage to flush, drop the data so it can close.

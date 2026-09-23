@@ -82,6 +82,11 @@ static http_server* http_server_init(game_server& server)
 	return http;
 }
 
+void http_server_on_client_disconnected(game_server& server, game_server_client& client)
+{
+	server.log("HTTP SERVER", LOG_WARNING, "HTTP Client lost connection (TEST).");
+}
+
 static const char* http_get_content_type(const char* path)
 {
 	struct content_type { const char* extension; const char* type; };
@@ -417,56 +422,6 @@ static void http_server_tick(game_server& server)
 	http_server& http = *server.http;
 
 	constexpr ui16 CONNECTIONS_QUERY_BUFFER_SIZE = 32;
-
-	// TEMP(Marc): Do the main connections handling here. At some point we'll move it back to "pure server code" and html connections will just be one kind
-	// of service provided by the server.
-
-	// Closed connections first, so a handle the platform re-uses is free on our end before its new httpConnection shows up.
-	game_server_platform::net_connection_handle closedHandles[CONNECTIONS_QUERY_BUFFER_SIZE];
-
-	ui32 closedConnectionsCount = platform.net_query_closed_connections(closedHandles, CONNECTIONS_QUERY_BUFFER_SIZE);
-	for (ui16 closedIndex = 0; closedIndex < closedConnectionsCount; closedIndex++)
-	{
-		for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)
-		{
-			http_connection& httpConnection = http.connections[connectionIndex];
-			if (httpConnection.in_use && httpConnection.handle == closedHandles[closedIndex])
-			{
-				httpConnection = {}; // Reset HTTP httpConnection.
-				break;
-			}
-		}
-	}
-
-	// Handle new connections.
-	game_server_platform::in_connection newConnections[CONNECTIONS_QUERY_BUFFER_SIZE];
-
-	ui32 newConnectionsCount = platform.net_query_new_connections(newConnections, CONNECTIONS_QUERY_BUFFER_SIZE);
-	for (ui16 newIndex = 0; newIndex < newConnectionsCount; newIndex++)
-	{
-		http_connection* freeConnection = nullptr;
-		for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)
-		{
-			if (!http.connections[connectionIndex].in_use)
-			{
-				freeConnection = &http.connections[connectionIndex];
-				break;
-			}
-		}
-
-		if (freeConnection == nullptr)
-		{
-			server.logf("HTTP", LOG_ERROR, "No room for httpConnection handle %d, closing.", newConnections[newIndex].platform_handle);
-			platform.net_close_connection(newConnections[newIndex].platform_handle);
-			continue;
-		}
-
-		// Reset httpConnection slot and mark it in use by the platform httpConnection.
-		*freeConnection = {};
-		freeConnection->in_use = true;
-		freeConnection->handle = newConnections[newIndex].platform_handle;
-		freeConnection->last_activity_ms = server.time_ms;
-	}
 
 	// Handle send / receive on applicable connections.
 	for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)

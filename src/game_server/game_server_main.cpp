@@ -1,18 +1,22 @@
 // Main implementation file for the Game Server code.
 // Must be linked or compiled into whatever platform layer is used.
 
+// Main "chaining" of game server platform and game server internals.
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
+
+// Match slots system.
+#include "match_slots.h"
 
 // Unity-compile the Game Common code into the server.
 #include "../game_common/game_common_main.cpp"
 
-// Unity-compile the HTTP file serving code.
+// Unity-compile sub-components.
+#include "game_server_clients.cpp"
 #include "game_server_http.cpp"
 
-// Initializes a new match slot in the server from a piece of memory to use and the slot index to initialize.
-// The slot must currently be uninitialized.
-// If successful, the passed memory arena is now owned by the slot itself. The one passed as param should be discarded.
+// BEGIN MATCH SLOT SYSTEM IMPLEMENTATION
+
 bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 slot_index)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
@@ -32,7 +36,6 @@ bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 s
 
 	return true;
 }
-
 
 bool game_server_open_lobby(game_server& server, ui8 slot_index)
 {
@@ -82,8 +85,6 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	return true;
 }
 
-// Sets a match slot as having ended. During that time the match is no longer ticking but its state is still available
-// for score-keeping and reporting.
 bool game_server_end_match_slot(game_server& server, ui8 slot_index)
 {	
 	ASSERT(slot_index < server.init_params.match_slot_count);
@@ -135,6 +136,10 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 	return true;
 }
 
+// END MATCH SLOT SYSTEM IMPLEMENTATION
+
+// BEGIN GAME SERVER MAIN FUNCTIONS
+
 game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
 {
 	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
@@ -165,12 +170,19 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// It will be split into various static "Sections" that each hold the data needed by a feature of the server.
 	newServer->main_memory = mem_arena_create(memory + sizeof(game_server), memory_size - sizeof(game_server));
 
-	// Initialize all match slots.
+	// Initialize clients table subsystem.
+	if (init_params.max_client_count == 0)
+	{
+		newServer->logf(LOG_TYPE::LOG_ERROR, "Game server set to start with 0 supported client connections. This is currently not supported. Aborting.");
+		return nullptr;
+	}
+	game_server_init_clients_table(*newServer, init_params.max_client_count);
 
+	// Initialize all match slots.
 	newServer->match_slots = newServer->main_memory.alloc<match_slot>(newServer->init_params.match_slot_count);
 
 	constexpr ui64 MEM_PER_SLOT = MiB(2); // TEMP(Marc): Just keep this number above the required memory for a match or a lobby, whichever is larger.
-	for (ui8 matchSlotIndex = 0; matchSlotIndex < newServer->init_params.match_slot_count; matchSlotIndex++)
+	for (ui8 matchSlotIndex = 0; matchSlotIndex < init_params.match_slot_count; matchSlotIndex++)
 	{
 		mem_arena slot_mem = mem_arena_create_sub(newServer->main_memory, MEM_PER_SLOT);	
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
@@ -180,6 +192,9 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 
 	newServer->http = http_server_init(*newServer);
 	http_server_load_files(*newServer);
+
+	// Setup event handler for HTTP server to clean resources tied to HTTP clients losing connection.
+	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, game_server_client::TYPE::HTTP, http_server_on_client_disconnected);
 
 	return newServer;
 }
@@ -258,10 +273,43 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	server.time_ms = platform_time_ms;
 
 	// Run in test mode if configured to do so.
+	// NOTE(Marc): Having this here is ugly. Need to design a proper "test mode" alternative server implementation.
 	if (server.init_params.run_test_scenario)
 	{
 		game_server_test_mode_tick(server);
 		return;
+	}
+
+	// Query platform for closed connections, and signal the clients subsystem about them.
+	{
+		static constexpr ui16 CLOSED_CONNECTIONS_BUFF_SIZE = 32;
+		game_server_platform::net_connection_handle closedConnectionsBuffer[CLOSED_CONNECTIONS_BUFF_SIZE];
+		ui16 closedConnectionsCount = server.platform->net_query_closed_connections(closedConnectionsBuffer, CLOSED_CONNECTIONS_BUFF_SIZE);
+
+		for (ui16 closedConnectionCount = 0; closedConnectionCount < closedConnectionsCount; closedConnectionCount++)
+		{
+			game_server_platform::net_connection_handle& closedConnectionHandle = closedConnectionsBuffer[closedConnectionCount];
+			game_server_clients_connection_lost(server, closedConnectionHandle);
+		}
+	}
+
+	// Query platform for new connections, and register them into the clients subsystem.
+	{
+		static constexpr ui16 NEW_CONNECTIONS_BUFF_SIZE = 32;
+		game_server_platform::in_connection newConnectionsBuffer[NEW_CONNECTIONS_BUFF_SIZE];
+		ui16 newConnectionsCount = server.platform->net_query_new_connections(newConnectionsBuffer, NEW_CONNECTIONS_BUFF_SIZE);
+
+		for (ui16 newConnectionIndex = 0; newConnectionIndex < newConnectionsCount; newConnectionIndex++)
+		{
+			// Register new connection with clients table.
+			game_server_platform::in_connection& newConnection = newConnectionsBuffer[newConnectionIndex];
+			if (game_server_clients_register_connection(server, newConnection) == nullptr)
+			{
+				server.logf(LOG_TYPE::LOG_ERROR, "Out of room in the clients table (capacity = %d), dropping platform connection handle %d.",
+					server.init_params.max_client_count, newConnection.platform_handle);
+				platform.net_close_connection(newConnection.platform_handle);
+			}
+		}
 	}
 
 	// Serve the web client bundle over HTTP on all platform connections.
@@ -324,3 +372,5 @@ void game_server_stop(game_server& server)
 
 	server.log(LOG_SUCCESS, "Shutdown complete."); // Log the fact the server did everything it wanted to do before shutting down.
 }
+
+// END GAME SERVER MAIN FUNCTIONS

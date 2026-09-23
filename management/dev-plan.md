@@ -218,6 +218,8 @@ tasks are broken down further.
 Tasks not currently part of the plan that need to be added to it at some point.
 
 - Client render interpolation between ticks (smooth movement).
+- Persistent client identity / reconnection: a client outlives its connection (OFFLINE and
+  CONNECTION_LOST states, reconnection grace time).
 - Win32 net: timeout to close a connection whose peer stays alive but stops reading (it is
   never closed once in SERVER_CLOSED).
 - Platform call to list the files in a folder relative to resources, so the server discovers

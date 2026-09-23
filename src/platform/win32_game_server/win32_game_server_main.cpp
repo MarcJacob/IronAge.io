@@ -316,6 +316,7 @@ int main(int argc, char** argv)
 	game_server_init_params server_init_params = {
 
 		.match_slot_count = 4,
+		.max_client_count = 1024,
 		.run_test_scenario = false,
 		.test_scenario_dump_filename = "snapshot_native.bin",
 
@@ -327,7 +328,11 @@ int main(int argc, char** argv)
 	win32_logf("", "Initializing Game Server...\n");
 
 	win32Platform.app.gameServer = game_server_init(win32Platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
-	ASSERT_MSG(win32Platform.app.gameServer != nullptr, "Failed to initialize Game Server.");
+	if (win32Platform.app.gameServer == nullptr)
+	{
+		win32_log("", LOG_TYPE::LOG_ERROR, "Failed to initialize Game Server. Aborting...");
+		goto WIN32_SHUTDOWN;
+	}
 
 	win32_log("", LOG_SUCCESS, "Game Server initialized.");
 

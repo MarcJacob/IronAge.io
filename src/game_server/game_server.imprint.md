@@ -22,9 +22,16 @@ From there on the game server will never request more memory than was initially 
 
 The platform must then track the passage of time, tick the server as much as possible so it may integrate it, and respond to the server's requests for platform resources and capabilities.
 
+### Clients
+
+The Game Server Client system, implemented mostly in game_server_clients, with specific client types managed in their respective associated server components.
+
+Any new connection detected by the game server will first be matched to any known client by address, allowing them to potentially bypass some authentication steps,
+or they will be associated to a brand new Game Server Client entry.
+
 ### Http Server
 
-The server has a secondary http component which is used to server browser clients with the game client files.
+Server component for handling HTTP Clients. Can serve files and upgrade HTTP Clients to Game Clients through the use of the WebSocket protocol.
 
 The serveable files are preloaded in memory, and client browser can ask for them by name. It is not a general-purpose serving algorithm, it limits itself to what
 is pre-configured for speed, simplicity and security (since it's not possible to ever get served a file that wasn't intended to be served).
