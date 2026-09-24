@@ -54,7 +54,7 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 		if (client.state == game_server_client::STATE::FREE)
 		{
 			client.state = game_server_client::STATE::ONLINE;
-			client.connected_at_ms = server.time_ms;
+			client.connected_at_ms = server.uptime_ms;
 			client.connection_info = {
 				.last_known_address = connection_info.address,
 				.last_known_port = connection_info.port,
@@ -63,7 +63,7 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 			client.type = game_server_client::TYPE::UNKNOWN;
 
 			client.handle._table_index = clientIndex;
-			client.handle._fudge = (ui16)server.time_ms;
+			client.handle._fudge = (ui16)server.uptime_ms;
 
 			server.logf(CLIENTS_COMPONENT_NAME, LOG_TYPE::LOG_SUCCESS, 
 				"Registered new client connection from platform connection handle %d. Index = %hu, Handle = %d.",

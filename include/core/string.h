@@ -99,4 +99,21 @@ static bool ia_str_expect(const char* str, const char* expected)
 	return *expected == '\0';
 }
 
+// Reads a null-terminated string until the end or a whitespace is encountered, or the target buffer is full. The read characters are placed in buff.
+// Returns number of characters read.
+static ui16 ia_str_get_word(const char* str, char* buff, ui16 buff_size)
+{
+	ASSERT(str != nullptr && buff != nullptr && buff_size > 0);
+
+	ui16 readCount = 0;
+	while (str[readCount] != '\0' && str[readCount] != ' '
+		&& readCount < buff_size)
+	{
+		buff[readCount] = str[readCount];
+		readCount++;
+	}
+
+	return readCount;
+}
+
 #endif // CORE_STRING_INCLUDED

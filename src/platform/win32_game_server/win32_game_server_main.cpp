@@ -93,14 +93,20 @@ static void win32_print_colored(FILE* output, HANDLE outHandle, LOG_TYPE type, c
 	}
 }
 
+CRITICAL_SECTION CS_WIN32_STDOUT;
 void win32_stdout(LOG_TYPE type, const char* buffer)
 {
+	EnterCriticalSection(&CS_WIN32_STDOUT);
 	win32_print_colored(stdout, GetStdHandle(STD_OUTPUT_HANDLE), type, buffer);
+	LeaveCriticalSection(&CS_WIN32_STDOUT);
 }
 
+CRITICAL_SECTION CS_WIN32_STDERR;
 void win32_stderr(LOG_TYPE type, const char* buffer)
 {
+	EnterCriticalSection(&CS_WIN32_STDERR);
 	win32_print_colored(stderr, GetStdHandle(STD_ERROR_HANDLE), type, buffer);
+	LeaveCriticalSection(&CS_WIN32_STDERR);
 }
 
 // Sends a finished buffer to the end point matching its type.
@@ -267,6 +273,10 @@ int main(int argc, char** argv)
 		win32_logf("", LOG_WARNING, "Failed to register console control handler. Error code = %d", GetLastError());
 	}
 
+	// Init logging critical sections.
+	InitializeCriticalSection(&CS_WIN32_STDOUT);
+	InitializeCriticalSection(&CS_WIN32_STDERR);
+
 	win32_log("", "Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
 
 	// Initialize win32 platform structure.
@@ -364,9 +374,9 @@ int main(int argc, char** argv)
 		QueryPerformanceCounter(&current_counter);
 
 		// Measure time since game server initialization in milliseconds.
-		ui64 uptime_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
+		ui64 time_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
 
-		game_server_tick(*win32Platform.app.gameServer, uptime_ms);
+		game_server_tick(*win32Platform.app.gameServer, time_ms);
 	}
 
 WIN32_SHUTDOWN:
@@ -381,6 +391,10 @@ WIN32_SHUTDOWN:
 
 	win32_net_stop(*win32Platform.net_component);
 	win32_net_free(*win32Platform.net_component);
+
+	// Delete logging critical sections.
+	DeleteCriticalSection(&CS_WIN32_STDOUT);
+	DeleteCriticalSection(&CS_WIN32_STDERR);
 
 	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
 

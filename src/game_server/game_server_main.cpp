@@ -75,10 +75,10 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	// Create match.
 
 	slot.match.match_ptr = slot.slot_memory.alloc<game_match>();
-	slot.match.last_tick_time = server.time_ms;
+	slot.match.last_tick_time = server.uptime_ms;
 
 	game_match& match = *slot.match.match_ptr;
-	match_start(slot.slot_memory, server.time_ms, slot.match_params, match);
+	match_start(slot.slot_memory, server.uptime_ms, slot.match_params, match);
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
 
@@ -146,8 +146,8 @@ static constexpr time_ms UNKNOWN_CLIENT_TIMEOUT_MS = 1000; // Unknown clients st
 void game_server_process_unknown_client(game_server& server, game_server_client& client)
 {
 	// Receive some data from the client connection in a small local buffer.
-	ui8 readBuffer[UNKNOWN_CLIENT_READ_BUFFER_SIZE];
-	ui32 receivedBytes = game_server_client_receive_message(server, client.handle, readBuffer, sizeof(readBuffer));
+	ui8 readBuffer[UNKNOWN_CLIENT_READ_BUFFER_SIZE] = {0};
+	ui32 receivedBytes = game_server_client_receive_message(server, client.handle, readBuffer, sizeof(readBuffer) - 1);
 
 	if (receivedBytes > 0)
 	{
@@ -158,10 +158,10 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 	}
 
 	// If the connection is still unrecognized and has lasted more than a second, drop it.
-	if (server.time_ms - client.connected_at_ms > UNKNOWN_CLIENT_TIMEOUT_MS)
+	if (server.uptime_ms - client.connected_at_ms > UNKNOWN_CLIENT_TIMEOUT_MS)
 	{
 		server.logf("Clients", LOG_WARNING, "Dropping unrecognized client %d after %llu ms (received %llu bytes).",
-			client.handle.value, server.time_ms - client.connected_at_ms, client.unknown.traffic_size);
+			client.handle.value, server.uptime_ms - client.connected_at_ms, client.unknown.traffic_size);
 		game_server_client_drop(server, client.handle);
 	}
 }
@@ -298,7 +298,8 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	ASSERT(server.platform != nullptr);
 	game_server_platform& platform = *server.platform;
 
-	server.time_ms = platform_time_ms;
+	server.delta_ms = platform_time_ms - server.uptime_ms;
+	server.uptime_ms = platform_time_ms;
 
 	// Run in test mode if configured to do so.
 	// NOTE(Marc): Having this here is ugly. Need to design a proper "test mode" alternative server implementation.
@@ -362,7 +363,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 
 			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
 			nextTickTimeMs = slot.match.last_tick_time + msPerTick;
-			while (nextTickTimeMs < server.time_ms)
+			while (nextTickTimeMs < server.uptime_ms)
 			{
 				// TODO: Input system based on received network messages.
 				match_tick_commands tickCommands = {};

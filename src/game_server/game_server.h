@@ -38,7 +38,8 @@ struct game_server
 	bool shutdown_triggered; // Should the server shutdown as soon as possible ?
 	ui64 tick_count; // How many ticks this server has gone through in total.
 
-	time_ms time_ms; // Last recorded time from tick.
+	time_ms uptime_ms; // Last recorded time from tick.
+	time_ms delta_ms; // Delta between current and previous uptime.
 
 	game_server_clients_table* client_table;
 

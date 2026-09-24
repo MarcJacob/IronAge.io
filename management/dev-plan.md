@@ -197,8 +197,11 @@ tasks are broken down further.
          after the request head carry over to the new type.
        - Leaves room for other types later (master server, administration, non-browser
          clients).
-     - Server: HTTP request handling refactor.
-       - Structured request parse (request line + headers, case-insensitive header lookup).
+     - [WIP] Server: HTTP request handling refactor.
+       - [DONE] Request line parse (method, target without query, version 1.1), complete-head
+         detection, one request consumed at a time, GET / HEAD file serving, 501 / 405 / 400 /
+         505 / 431 responses sent before closing, idle timeout.
+       - Header parse (case-insensitive header lookup).
        - Routing into branches: static file GET (as now), WebSocket upgrade.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
