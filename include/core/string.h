@@ -6,6 +6,8 @@
 
 #include "assert.h"
 
+// BEGIN NULL-TERMINATED STRING FUNCTIONS
+
 // Returns true if the two strings are strictly equal.
 static bool ia_str_equal(const char* a, const char* b)
 {
@@ -23,6 +25,7 @@ static bool ia_str_equal(const char* a, const char* b)
 	return *a == *b;
 }
 
+// Returns the length of the given string without its null-terminator.
 static ui32 ia_str_len(const char* str)
 {
 	ASSERT(str != nullptr);
@@ -99,21 +102,196 @@ static bool ia_str_expect(const char* str, const char* expected)
 	return *expected == '\0';
 }
 
-// Reads a null-terminated string until the end or a whitespace is encountered, or the target buffer is full. The read characters are placed in buff.
-// Returns number of characters read.
-static ui16 ia_str_get_word(const char* str, char* buff, ui16 buff_size)
+// END NULL-TERMINATED STRING FUNCTIONS
+
+// BEGIN SIZED-STRING FUNCTIONS
+
+#include "memory.h"
+#include "math.h"
+
+// N-length view of a non-owned character string.
+struct ia_string_view
 {
-	ASSERT(str != nullptr && buff != nullptr && buff_size > 0);
+	const char* view_str;
+	ui32 length;
+
+	// Simple inlined implicit constructor so views can handily be created from program const strings.
+	inline ia_string_view(const char* c_str) : view_str(c_str), length(ia_str_len(c_str)) {}
+	inline ia_string_view(const char* str, ui32 len) : view_str(str), length(len) {}
+	inline ia_string_view() : view_str(nullptr), length(0) {}
+};
+
+// N-length string structure that manages a length of char-interpreted memory.
+// Since they are not null-terminated by nature, they must be manually null-terminated (or copied into a buffer >1 trailing zero) before use in C string functions.
+struct ia_string
+{
+	ui32 length;
+
+	ui32 _capacity;
+	char* _str;
+
+	operator ia_string_view()
+	{
+		return ia_string_view(_str, length);
+	}
+};
+
+// Variant of the N-length string in static format, useful for structures and such.
+// Can be implicitly interpreted as a ia_string.
+template<ui32 Capacity>
+struct ia_static_string
+{
+	char _str[Capacity];
+	ui32 length; 
+
+	operator ia_string()
+	{
+		return ia_string{
+			.length = length,
+			._capacity = Capacity,
+			._str = _str
+		};
+	}
+
+	operator ia_string_view()
+	{
+		return ia_string_view(_str, length);
+	}
+};
+
+// Initializes a new string into a memory arena from an existing C string.
+// If min_capacity is specified, will allocate enough memory regardless of how long the source string is.
+// Returns whether string was successfully allocated and initialized.
+static bool ia_string_new(mem_arena& memory, const char* src_str, ia_string& out_string, ui32 min_capacity = 0)
+{
+	ASSERT(src_str != nullptr);
+
+	out_string = {};
+
+	ui32 srcLen = ia_str_len(src_str);
+
+	// Ensure capacity is at least equal to min_capacity (with 4 being the absolute minimum no matter what).
+	ui32 capacity = ia_max(min_capacity, srcLen);
+	capacity = ia_max(4, capacity);
+
+	char* char_mem = memory.alloc<char>(capacity);
+	if (char_mem == nullptr)
+	{
+		return false;
+	}
+
+	out_string._str = char_mem;
+	out_string.length = srcLen;
+	out_string._capacity = capacity;
+
+	return true;
+}
+
+// Adds new characters to an existing string. The string must have the required capacity.
+// Returns number of characters pushed. If must_full_push is true, either none or all the characters get pushed.
+// NOTE(Marc): For now I am deciding on a string policy where you only get one chance to specify their capacity.
+// A new type of string can be created later with the ability to dynamically request more memory / be reallocated through a function pointer or something.
+// This also has the nice effect of making this function work seamlessly with static strings.
+static ui32 ia_string_push(ia_string& string, const char* new_chars, bool must_full_push = false)
+{
+	ASSERT(new_chars != nullptr);
+
+	ui32 pushLen = ia_str_len(new_chars);
+	if (pushLen == 0) return 0;
+
+	ui32 newLen = string.length + pushLen;
+
+	if (string._capacity < newLen)
+	{
+		if (must_full_push)
+			return 0;
+
+		pushLen = string._capacity - string.length;
+		newLen = string._capacity;
+	}
+
+	ia_memcpy(string._str + string.length, new_chars, pushLen);
+	string.length = newLen;
+
+	return pushLen;
+}
+
+template<ui32 StaticStringCapacity>
+static ui32 ia_string_push(ia_static_string<StaticStringCapacity>& string, const char* new_chars, bool must_full_push = false)
+{
+	ia_string pushable = string;
+	ui32 pushed = ia_string_push(pushable, new_chars, must_full_push);
+	string.length += pushed;
+	return pushed;
+}
+
+// Comparator with null-terminated C string.
+static bool operator==(ia_string_view& str_a, const char* str_b)
+{
+	ASSERT(str_b != nullptr);
+
+	for (int i = 0; i < str_a.length; i++)
+	{
+		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
+		// although I assume the compiler is probably already doing it for us.
+
+		if ((str_a.view_str[i] != str_b[i]) || (str_b[i] == '\0' && i != (str_a.length - 1))) return false;
+	}
+
+	return str_b[str_a.length] == '\0';
+}
+
+static inline bool operator==(const char* str_a, ia_string_view& str_b)
+{
+	return str_b == str_a;
+}
+
+static bool operator==(ia_string_view& str_a, ia_string_view& str_b)
+{
+	if (str_a.length != str_b.length) return false;
+
+	for (int i = 0; i < str_a.length; i++)
+	{
+		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
+		// although I assume the compiler is probably already doing it for us.
+
+		if (str_a.view_str[i] != str_b.view_str[i]) return false;
+	}
+
+	return true;
+}
+
+// Returns a string view over the next "word" in the specified string view, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_str_get_word(const ia_string_view& str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	ASSERT(str.view_str != nullptr);
+	if (str.length == 0) return str;
+
+	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
 
 	ui16 readCount = 0;
-	while (str[readCount] != '\0' && str[readCount] != ' '
-		&& readCount < buff_size)
+	bool nextCharValid = true;
+	while(max_len == 0 || readCount < max_len)
 	{
-		buff[readCount] = str[readCount];
+		char nextChar = str.view_str[readCount];
+
+		nextCharValid = (nextChar >= 'a' && nextChar <= 'z')
+			||	(nextChar >= 'A' && nextChar <= 'Z')
+			|| (nextChar >= '0' && nextChar <= '9');
+
+		for (int i = 0; !nextCharValid && i < specialCharCount; i++)
+		{
+			nextCharValid = (nextChar == allowed_special_chars[i]);
+		}
+
+		if (!nextCharValid) break;
 		readCount++;
 	}
 
-	return readCount;
+	return ia_string_view(str.view_str, readCount);
 }
+
+// END SIZED-STRING FUNCTIONS
 
 #endif // CORE_STRING_INCLUDED

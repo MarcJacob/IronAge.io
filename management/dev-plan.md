@@ -201,7 +201,10 @@ tasks are broken down further.
        - [DONE] Request line parse (method, target without query, version 1.1), complete-head
          detection, one request consumed at a time, GET / HEAD file serving, 501 / 405 / 400 /
          505 / 431 responses sent before closing, idle timeout.
-       - Header parse (case-insensitive header lookup).
+       - [DONE] Sized string helpers (`include/core/string.h`: view, static string) used by the
+         request parse and the response head.
+       - Header parse: each header field parsed individually, pointers into the request buffer;
+         request disposed after it has been handled. Case-insensitive lookup by name.
        - Routing into branches: static file GET (as now), WebSocket upgrade.
      - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.

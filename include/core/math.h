@@ -8,6 +8,9 @@
 #include "std_types.h"
 #include "memory.h"
 
+#define ia_min(a, b) (a <= b ? a : b)
+#define ia_max(a, b) (a >= b ? a : b)
+
 static inline void endian_reverse_ui16(ui16* val)
 {
 	ui8* bytes = (ui8*)val;

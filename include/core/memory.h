@@ -20,11 +20,9 @@ struct mem_arena
 	ui64 mem_size; // Size of managed memory.
 	ui64 allocated_count; // Number of allocated bytes in total.
 
-	// Defines an allocation strategy function for a memory arena allocator. The arena itself is passed so the function may check its state and cast
-	// it to a specialized type if needed.
-	// Do not call directly ! Use alloc() so the proper assertions can run. And it's more convenient anyway :)
-	typedef void*(*alloc_func_ptr)(mem_arena& arena, ui64 size, ui32 align);
-	alloc_func_ptr _alloc_func;
+	using alloc_func_fn = void* (*)(mem_arena& arena, ui64 size, ui32 align);
+	// Defines an allocation strategy function for a memory arena allocator.
+	alloc_func_fn _alloc_func;
 
 	// Shortand for calling the internal allocation function.
 	// Returns nullptr if allocation failed.
@@ -42,6 +40,17 @@ struct mem_arena
 		ASSERT(_alloc_func != nullptr && item_count > 0); 
 		return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type));
 	}
+
+	using clear_fn = void(*)(mem_arena& arena);
+	// Defines how the arena clears itself back to an empty state.
+	clear_fn _clear_func;
+
+	inline void clear() 
+	{
+		ASSERT(_clear_func != nullptr);
+		_clear_func(*this);
+	}
+
 };
 
 void ia_memcpy(void* dest, const void* src, ui64 size);
@@ -53,6 +62,8 @@ void ia_memset(void* dest, ui8 val, ui64 size);
 // TODO(Marc): Create alternative strategies. 
 static void* mem_arena_alloc_default(mem_arena& arena, ui64 size, ui32 align)
 {
+	ASSERT(arena.mem_start != nullptr && arena.mem_size > 0);
+
 	// Simple stack allocation base on allocated_count.
 	ui8* alloc_start = arena.mem_start + arena.allocated_count;
 
@@ -75,6 +86,17 @@ static void* mem_arena_alloc_default(mem_arena& arena, ui64 size, ui32 align)
 	return alloc_start;
 }
 
+// Default clear function given to a new arena. Assumes owned memory is contiguous, pre-allocated and non-extendable / shrinkable.
+// Can be replaced by any valid function within a specific arena, and should obviously be consistent with allocation strategy.
+static void mem_arena_clear_default(mem_arena& arena)
+{
+	ASSERT(arena.mem_start != nullptr && arena.mem_size > 0);
+
+	// Reset number of allocated bytes and clear allocated memory to 0.
+	ia_memzero(arena.mem_start, arena.allocated_count);
+	arena.allocated_count = 0;
+}
+
 static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 {
 	ASSERT(owned_mem != nullptr && owned_mem_size > 0);
@@ -84,6 +106,7 @@ static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 	newArena.mem_size = owned_mem_size;
 	
 	newArena._alloc_func = mem_arena_alloc_default;
+	newArena._clear_func = mem_arena_clear_default;
 
 	// Zero out all owned memory.
 	ia_memzero(owned_mem, owned_mem_size);
