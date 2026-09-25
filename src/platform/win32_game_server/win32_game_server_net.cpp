@@ -442,7 +442,7 @@ void win32_register_new_connection(win32_active_connections_table& connections_t
 		char addrBuff[128];
 		inet_ntop(AF_INET, &new_connection.address, addrBuff, sizeof(addrBuff));
 
-		net_logf("Registering new connection. Handle = %d\n\tAddress = %s\n\tPort = %d", 
+		net_logf("Registering new connection. Handle = %d (%s:%d)", 
 			newConnectionHandle, addrBuff, new_connection.port);
 
 		activeConnectionEntry.socket = new_connection.socket;

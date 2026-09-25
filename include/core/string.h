@@ -155,48 +155,9 @@ struct ia_static_string
 
 	operator ia_string_view()
 	{
-		return ia_string_view(_str, .length);
+		return ia_string_view(_str, length);
 	}
 };
-
-// Returns a string view over the next "word" in the specified string, up to specified maximum length (ignored if 0)
-// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_str_get_word(const char* str, ui32 str_len, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
-{
-	ASSERT(str != nullptr);
-	if (str_len == 0) return str;
-
-	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
-
-	ui16 readCount = 0;
-	bool nextCharValid = true;
-	while(max_len == 0 || readCount < max_len)
-	{
-		char nextChar = str[readCount];
-
-		nextCharValid = (nextChar >= 'a' && nextChar <= 'z')
-			||	(nextChar >= 'A' && nextChar <= 'Z')
-			|| (nextChar >= '0' && nextChar <= '9');
-
-		for (int i = 0; !nextCharValid && i < specialCharCount; i++)
-		{
-			nextCharValid = (nextChar == allowed_special_chars[i]);
-		}
-
-		if (!nextCharValid) break;
-		readCount++;
-	}
-
-	return ia_string_view(str, readCount);
-
-}
-
-// Returns a string view over the next "word" in the specified null-terminated string, up to specified maximum length (ignored if 0)
-// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_str_get_word(const char* str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
-{
-	return ia_str_get_word(str, ia_str_len(str), max_len, allowed_special_chars);
-}
 
 // Initializes a new string into a memory arena from an existing C string.
 // If min_capacity is specified, will allocate enough memory regardless of how long the source string is.
@@ -265,7 +226,7 @@ static ui32 ia_string_push(ia_static_string<StaticStringCapacity>& string, const
 }
 
 // Comparator with null-terminated C string.
-static bool operator==(ia_string_view& str_a, const char* str_b)
+static bool operator==(const ia_string_view& str_a, const char* str_b)
 {
 	ASSERT(str_b != nullptr);
 
@@ -280,12 +241,12 @@ static bool operator==(ia_string_view& str_a, const char* str_b)
 	return str_b[str_a.length] == '\0';
 }
 
-static inline bool operator==(const char* str_a, ia_string_view& str_b)
+static inline bool operator==(const char* str_a, const ia_string_view& str_b)
 {
 	return str_b == str_a;
 }
 
-static bool operator==(ia_string_view& str_a, ia_string_view& str_b)
+static bool operator==(const ia_string_view& str_a, const ia_string_view& str_b)
 {
 	if (str_a.length != str_b.length) return false;
 
@@ -301,25 +262,27 @@ static bool operator==(ia_string_view& str_a, ia_string_view& str_b)
 }
 
 // Check equality between a string and a null-terminated string, with optinal case-sensitivity.
-static bool ia_string_equal(ia_string_view& str, const char* comp_str, bool case_sensitive = true)
+static bool ia_string_equal(const ia_string_view& str, const ia_string_view& comp_str, bool case_sensitive = true)
 {
-	ASSERT(comp_str != nullptr);
+	if (str.length != comp_str.length) return false;
 	if (case_sensitive) return str == comp_str;
-
 
 	for (int i = 0; i < str.length; i++)
 	{
 		char str_char = str.view_str[i];
-		char comp_char = comp_str[i];
+		char comp_char = comp_str.view_str[i];
 
-		constexpr char TO_UPPER_OFFSET = ('A' - 'a');
-		if (str_char >= 'a' && str_char <= 'z') str_char += TO_UPPER_OFFSET;
-		if (comp_char >= 'a' && comp_char <= 'z') comp_char += TO_UPPER_OFFSET;
+		if (!case_sensitive)
+		{
+			constexpr char TO_UPPER_OFFSET = ('A' - 'a');
+			if (str_char >= 'a' && str_char <= 'z') str_char += TO_UPPER_OFFSET;
+			if (comp_char >= 'a' && comp_char <= 'z') comp_char += TO_UPPER_OFFSET;
+		}
 
 		if ((str_char != comp_char) || (comp_char == '\0' && i != (str.length - 1))) return false;
 	}
 
-	return comp_str[str.length] == '\0';
+	return true;
 
 }
 
@@ -328,13 +291,13 @@ static bool ia_string_equal(ia_string_view& str, const char* comp_str, bool case
 static ia_string_view ia_string_get_word_n(const char* str, ui32 str_len, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
 {
 	ASSERT(str != nullptr);
-	if (str_len == 0) return str;
+	if (str_len == 0) return ia_string_view(str, 0);
 
 	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
 
 	ui16 readCount = 0;
 	bool nextCharValid = true;
-	while(max_len == 0 || readCount < max_len)
+	while((max_len == 0 || readCount < max_len) && readCount < str_len)
 	{
 		char nextChar = str[readCount];
 
@@ -375,7 +338,7 @@ static ia_string_view ia_string_get_until(const char* str, char end_char, ui32 m
 	ASSERT(str != nullptr);
 
 	ui32 len = 0;
-	while (str[len] != '\0' && str[len] != end_char)
+	while (str[len] != '\0' && str[len] != end_char && (max_len == 0 || len < max_len))
 	{
 		len++;
 	}

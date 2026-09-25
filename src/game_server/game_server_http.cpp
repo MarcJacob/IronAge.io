@@ -119,6 +119,22 @@ struct http_request
 	ui32 total_size; // Total request size.
 };
 
+// Looks for a header field with the provided name and places it in out_field. Returns whether it was found.
+static bool http_request_find_header_field(const http_request& request, const ia_string_view& field_name, http_request::header_field& out_field)
+{
+	for (ui8 fieldIndex = 0; fieldIndex < request.header.field_count; fieldIndex++)
+	{
+		if (ia_string_equal(request.header.fields[fieldIndex].name, field_name, false))
+		{
+			out_field = request.header.fields[fieldIndex];
+			return true;
+		}
+	}
+
+	out_field = {};
+	return false;
+}
+
 struct http_supported_method
 {
 	const char* method_name;
@@ -587,9 +603,9 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	// Parse header fields.
 	while(readBytes < head_end_index - 3)
 	{
-		if (out_request.header.field_count == 64)
+		if (out_request.header.field_count == http_request::MAX_HEADER_FIELD_COUNT)
 		{
-			http_server_send_response_status(server, client, "414 URL Too Long");
+			http_server_send_response_status(server, client, "431 Too Many Headers");
 			client.being_dropped = true;
 			return false;
 		}
@@ -598,8 +614,9 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		http_request::header_field& field = out_request.header.fields[out_request.header.field_count++];
 
 		// Name
-		field.name = ia_string_get_word_n(requestBytes + readBytes, head_end_index - readBytes, 0, "-");
-		if (readBytes + field.name.length == head_end_index
+		field.name = ia_string_get_word_n(requestBytes + readBytes, head_end_index - readBytes, 0, "-_.");
+		if (field.name.length == 0 
+			|| readBytes + field.name.length == head_end_index
 			|| requestBytes[readBytes + field.name.length] != ':')
 		{
 			http_server_send_response_status(server, client, "400 Bad Request");
@@ -610,13 +627,29 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 
 		// Value
 		field.value = ia_string_get_until(requestBytes + readBytes, '\r');	
-		if (readBytes + field.value.length == head_end_index)
+		if (readBytes + field.value.length == head_end_index
+			|| requestBytes[readBytes + field.value.length + 1] != '\n')
 		{
 			http_server_send_response_status(server, client, "400 Bad Request");
 			client.being_dropped = true;
 			return false;
 		}
 		readBytes += field.value.length + 2; // Name + '\r\n'.
+
+		// Trim field value's leading and trailing whitespaces & tabs.
+		while (field.value.length > 0 
+			&& (field.value.view_str[0] == ' ' 
+				|| field.value.view_str[0] == '\t'))
+		{
+			field.value.view_str++;
+			field.value.length--;
+		}
+		while (field.value.length > 0 
+			&& (field.value.view_str[field.value.length - 1] == ' ' 
+				|| field.value.view_str[field.value.length - 1] == '\t'))
+		{
+			field.value.length--;
+		}
 	}
 
 	readBytes += 2; // Include closing "\r\n".
