@@ -27,7 +27,7 @@ static constexpr time_ms HTTP_SEND_STALL_TIMEOUT_MS = 10000; // Response making 
 struct http_client
 {
 	bool is_active; // If false, the structure can be used to register a new http client.
-	bool is_closing; // If true, the server has requested this client be closed. This is used so outbound data can be sent fully before actually dropping.
+	bool being_dropped; // If true, the server has requested this client be closed. This is used so outbound data can be sent fully before actually dropping.
 
 	game_server_client::client_handle client_handle; // Handle to related game server client.
 
@@ -402,7 +402,7 @@ static void http_server_progress_response(game_server& server, http_client& clie
 		{
 			server.logf("HTTP SERVER", LOG_ERROR, "Response on client handle %d stalled, closing.", client.client_handle.value);
 			game_server_client_drop(server, client.client_handle);
-			client.is_closing = true;
+			client.being_dropped = true;
 		}
 		return;
 	}
@@ -412,7 +412,7 @@ static void http_server_progress_response(game_server& server, http_client& clie
 	client.last_activity_ms = server.uptime_ms;
 
 	// Drop the client if flagged for closing.
-	if (client.is_closing)
+	if (client.being_dropped)
 	{
 		game_server_client_drop(server, client.client_handle);
 	}
@@ -444,14 +444,14 @@ static void http_server_handle_request(game_server& server, http_client& client,
 		break;
 	case http_request::METHOD::UNKNOWN:
 		http_server_send_response_status(server, client, "501 Not Implemented");
-		client.is_closing = true;
+		client.being_dropped = true;
 
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unknown method. Closing client.", client.client_handle.value);
 		break;
 	case http_request::METHOD::UNSUPPORTED:
 	default:
 		http_server_send_response_status(server, client, "405 Method Not Allowed\r\nAllow: GET, HEAD");
-		client.is_closing = true;
+		client.being_dropped = true;
 
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unsupported method. Closing client.", client.client_handle.value);
 		break;
@@ -505,7 +505,7 @@ static bool http_server_receive(game_server& server, http_client& client, mem_ar
 		if (client.request.size >= HTTP_CLIENT_MAX_REQUEST_SIZE - 1)
 		{
 			http_server_send_response_status(server, client, "431 Request Header Fields Too Large");
-			client.is_closing = true;
+			client.being_dropped = true;
 
 			server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d sent a request head larger than %d bytes. Closing client.",
 				client.client_handle.value, HTTP_CLIENT_MAX_REQUEST_SIZE);
@@ -544,7 +544,7 @@ static bool http_server_receive(game_server& server, http_client& client, mem_ar
 	if (readBytes >= head_end_index)
 	{
 		http_server_send_response_status(server, client, "400 Bad Request");
-		client.is_closing = true;
+		client.being_dropped = true;
 		return false;
 	}
 
@@ -553,7 +553,16 @@ static bool http_server_receive(game_server& server, http_client& client, mem_ar
 		// We only support simple origin-form names as target (starting with '/'), with query or fragment segments being completely discarded.
 		// No special characters are present in the available file names, so special character encodings are not yet decoded.
 		char target_str_buff[HTTP_PATH_BUFFER_SIZE] = { 0 };
-		ui16 targetLen = ia_str_get_word(requestBytes + readBytes, target_str_buff, sizeof(target_str_buff) - 1);
+		ui16 targetLen = ia_str_get_word(requestBytes + readBytes, target_str_buff, sizeof(target_str_buff));
+
+		// Protect against target names exceeding max length.
+		if (targetLen == sizeof(target_str_buff))
+		{
+			http_server_send_response_status(server, client, "414 URL Too Long");
+			client.being_dropped = true;
+			return false;
+		}
+
 		readBytes += targetLen;
 		readBytes++; // Included expected space.
 
@@ -577,7 +586,7 @@ static bool http_server_receive(game_server& server, http_client& client, mem_ar
 		|| !ia_str_expect(requestBytes + readBytes, "HTTP/1.1\r\n"))
 	{
 		http_server_send_response_status(server, client, "505 HTTP Version Not Supported.");
-		client.is_closing = true;
+		client.being_dropped = true;
 
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d used wrong HTTP version. Closing client.", client.client_handle.value);
 		return false;
@@ -614,7 +623,7 @@ static void http_server_tick(game_server& server)
 		{
 			http_server_progress_response(server, client);
 		}
-		else if (!client.is_closing)
+		else if (!client.being_dropped)
 		{
 			http_request nextRequest;
 			if (http_server_receive(server, client, httpServer.request_mem, nextRequest)
@@ -628,7 +637,7 @@ static void http_server_tick(game_server& server)
 
 			// Drop the client if it has been idle for too long (no bytes received, no response finished).
 			// Not applied while a response is in flight: that has its own stall timeout.
-			if (!client.response.in_flight && !client.is_closing
+			if (!client.response.in_flight && !client.being_dropped
 				&& server.uptime_ms - client.last_activity_ms > HTTP_CLIENT_IDLE_TIMEOUT_MS)
 			{
 				server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Closing client.",
