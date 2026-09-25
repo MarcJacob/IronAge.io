@@ -169,7 +169,7 @@ static bool http_server_try_accept_client(game_server& server, game_server_clien
 	{
 		const http_supported_method& method = HTTP_SUPPORTED_METHODS[methodIndex];
 
-		ia_string_view methodName = ia_str_get_word((char*)bytes, byte_count);
+		ia_string_view methodName = ia_string_get_word_n((char*)bytes, byte_count);
 
 		if (methodName == method.method_name)
 		{
@@ -527,7 +527,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 
 	// Method
 	{
-		ia_string_view methodName = ia_str_get_word(requestBytes + readBytes);
+		ia_string_view methodName = ia_string_get_word(requestBytes + readBytes);
 		readBytes += methodName.length;
 		readBytes++; // Include (expected) space.
 
@@ -558,7 +558,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		// We only support simple origin-form names as target (starting with '/'), with query or fragment segments being completely discarded.
 		// No special characters are present in the available file names, so special character encodings are not yet decoded and will simply cut name off.
 		// TODO(Marc): Accept special characters in get_word and add decoding routine.
-		out_request.target_name = ia_str_get_word(requestBytes + readBytes, HTTP_CLIENT_MAX_REQUEST_TARGET_LEN, "/_.");
+		out_request.target_name = ia_string_get_word(requestBytes + readBytes, HTTP_CLIENT_MAX_REQUEST_TARGET_LEN, "/_.");
 
 		// Protect against target names exceeding max length.
 		if (out_request.target_name.length == HTTP_CLIENT_MAX_REQUEST_TARGET_LEN)
@@ -584,9 +584,43 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	}
 	readBytes += sizeof("HTTP/1.1\r\n") - 1;
 
-	// Jump read to head end.
-	// NOTE(Marc): This is in place to effectively ignore header field values, temporarily.
-	readBytes = head_end_index;
+	// Parse header fields.
+	while(readBytes < head_end_index - 3)
+	{
+		if (out_request.header.field_count == 64)
+		{
+			http_server_send_response_status(server, client, "414 URL Too Long");
+			client.being_dropped = true;
+			return false;
+		}
+
+		// Read a word as field name, expect a semicolon, then read all characters until end of line as value.
+		http_request::header_field& field = out_request.header.fields[out_request.header.field_count++];
+
+		// Name
+		field.name = ia_string_get_word_n(requestBytes + readBytes, head_end_index - readBytes, 0, "-");
+		if (readBytes + field.name.length == head_end_index
+			|| requestBytes[readBytes + field.name.length] != ':')
+		{
+			http_server_send_response_status(server, client, "400 Bad Request");
+			client.being_dropped = true;
+			return false;
+		}
+		readBytes += field.name.length + 1; // Name + ':'.
+
+		// Value
+		field.value = ia_string_get_until(requestBytes + readBytes, '\r');	
+		if (readBytes + field.value.length == head_end_index)
+		{
+			http_server_send_response_status(server, client, "400 Bad Request");
+			client.being_dropped = true;
+			return false;
+		}
+		readBytes += field.value.length + 2; // Name + '\r\n'.
+	}
+
+	readBytes += 2; // Include closing "\r\n".
+
 	out_request.total_size = readBytes;
 	return true;
 }

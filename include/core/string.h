@@ -142,7 +142,7 @@ template<ui32 Capacity>
 struct ia_static_string
 {
 	char _str[Capacity];
-	ui32 length; 
+	ui32 length;
 
 	operator ia_string()
 	{
@@ -155,9 +155,48 @@ struct ia_static_string
 
 	operator ia_string_view()
 	{
-		return ia_string_view(_str, length);
+		return ia_string_view(_str, .length);
 	}
 };
+
+// Returns a string view over the next "word" in the specified string, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_str_get_word(const char* str, ui32 str_len, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	ASSERT(str != nullptr);
+	if (str_len == 0) return str;
+
+	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
+
+	ui16 readCount = 0;
+	bool nextCharValid = true;
+	while(max_len == 0 || readCount < max_len)
+	{
+		char nextChar = str[readCount];
+
+		nextCharValid = (nextChar >= 'a' && nextChar <= 'z')
+			||	(nextChar >= 'A' && nextChar <= 'Z')
+			|| (nextChar >= '0' && nextChar <= '9');
+
+		for (int i = 0; !nextCharValid && i < specialCharCount; i++)
+		{
+			nextCharValid = (nextChar == allowed_special_chars[i]);
+		}
+
+		if (!nextCharValid) break;
+		readCount++;
+	}
+
+	return ia_string_view(str, readCount);
+
+}
+
+// Returns a string view over the next "word" in the specified null-terminated string, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_str_get_word(const char* str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	return ia_str_get_word(str, ia_str_len(str), max_len, allowed_special_chars);
+}
 
 // Initializes a new string into a memory arena from an existing C string.
 // If min_capacity is specified, will allocate enough memory regardless of how long the source string is.
@@ -261,12 +300,35 @@ static bool operator==(ia_string_view& str_a, ia_string_view& str_b)
 	return true;
 }
 
-// Returns a string view over the next "word" in the specified string view, up to specified maximum length (ignored if 0)
-// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_str_get_word(const ia_string_view& str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+// Check equality between a string and a null-terminated string, with optinal case-sensitivity.
+static bool ia_string_equal(ia_string_view& str, const char* comp_str, bool case_sensitive = true)
 {
-	ASSERT(str.view_str != nullptr);
-	if (str.length == 0) return str;
+	ASSERT(comp_str != nullptr);
+	if (case_sensitive) return str == comp_str;
+
+
+	for (int i = 0; i < str.length; i++)
+	{
+		char str_char = str.view_str[i];
+		char comp_char = comp_str[i];
+
+		constexpr char TO_UPPER_OFFSET = ('A' - 'a');
+		if (str_char >= 'a' && str_char <= 'z') str_char += TO_UPPER_OFFSET;
+		if (comp_char >= 'a' && comp_char <= 'z') comp_char += TO_UPPER_OFFSET;
+
+		if ((str_char != comp_char) || (comp_char == '\0' && i != (str.length - 1))) return false;
+	}
+
+	return comp_str[str.length] == '\0';
+
+}
+
+// Returns a string view over the next "word" in the specified string, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_string_get_word_n(const char* str, ui32 str_len, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	ASSERT(str != nullptr);
+	if (str_len == 0) return str;
 
 	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
 
@@ -274,7 +336,7 @@ static ia_string_view ia_str_get_word(const ia_string_view& str, ui32 max_len = 
 	bool nextCharValid = true;
 	while(max_len == 0 || readCount < max_len)
 	{
-		char nextChar = str.view_str[readCount];
+		char nextChar = str[readCount];
 
 		nextCharValid = (nextChar >= 'a' && nextChar <= 'z')
 			||	(nextChar >= 'A' && nextChar <= 'Z')
@@ -289,7 +351,36 @@ static ia_string_view ia_str_get_word(const ia_string_view& str, ui32 max_len = 
 		readCount++;
 	}
 
-	return ia_string_view(str.view_str, readCount);
+	return ia_string_view(str, readCount);
+
+}
+
+// Returns a string view over the next "word" in the specified null-terminated string, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_string_get_word(const char* str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	return ia_string_get_word_n(str, ia_str_len(str), max_len, allowed_special_chars);
+}
+
+// Returns a string view over the next "word" in the specified string view, up to specified maximum length (ignored if 0)
+// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
+static ia_string_view ia_string_get_word(const ia_string_view& str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+{
+	return ia_string_get_word_n(str.view_str, str.length, max_len, allowed_special_chars);
+}
+
+// Returns a string view over every next character until string terminator or end_char is reached.
+static ia_string_view ia_string_get_until(const char* str, char end_char, ui32 max_len = 0)
+{
+	ASSERT(str != nullptr);
+
+	ui32 len = 0;
+	while (str[len] != '\0' && str[len] != end_char)
+	{
+		len++;
+	}
+
+	return ia_string_view(str, len);
 }
 
 // END SIZED-STRING FUNCTIONS
