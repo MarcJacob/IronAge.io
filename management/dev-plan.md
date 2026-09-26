@@ -197,20 +197,23 @@ tasks are broken down further.
          after the request head carry over to the new type.
        - Leaves room for other types later (master server, administration, non-browser
          clients).
-     - [WIP] Server: HTTP request handling refactor.
+     - [DONE] Server: HTTP request handling refactor.
        - [DONE] Request line parse (method, target without query, version 1.1), complete-head
          detection, one request consumed at a time, GET / HEAD file serving, 501 / 405 / 400 /
          505 / 431 responses sent before closing, idle timeout.
        - [DONE] Sized string helpers (`include/core/string.h`: view, static string) used by the
          request parse and the response head.
-       - Header parse: each header field parsed individually, pointers into the request buffer;
-         request disposed after it has been handled. Case-insensitive lookup by name.
-       - Routing into branches: static file GET (as now), WebSocket upgrade.
-     - Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
+       - [DONE] Header parse: each header field parsed individually, pointers into the request
+         buffer; request disposed after it has been handled. Case-insensitive lookup by name.
+       - [DONE] Routing into branches: static file GET, WebSocket upgrade on `/ws`.
+     - [WIP] Server: WebSocket handshake (SHA-1 + base64), frame codec (masked client frames),
        ping / pong / close, partial frames.
        - [DONE] SHA-1 + base64 encode, in `include/core/math.h` (`ia_sha1`,
          `ia_base64_encode`). Done first, out of order. Verified against test vectors.
-       - Upgrade branch: validate headers, 101 response, switch client type.
+       - [WIP] Upgrade branch: validate headers, 101 response (sent, tested client-side),
+         switch client type (HTTP -> WEBSOCKET, leftover bytes carried over, client not dropped
+         once the response is sent).
+       - Validate `Origin` on the upgrade.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.
      - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.

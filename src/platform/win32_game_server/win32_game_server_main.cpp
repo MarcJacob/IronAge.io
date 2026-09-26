@@ -239,8 +239,7 @@ bool win32_write_file(game_server_platform& platform, const char* filename, cons
 
 // BEGIN PROGRAM ENTRY
 
-static win32_platform* WIN32_PLATFORM;  // Static memory access to the main platform object, used only by signal handlers.
-										// Note(Marc): As you can tell I'm no huge fan of using static memory but sometimes there's just no choice.
+static win32_platform WIN32_PLATFORM;  // Static memory storage of the main platform object.
 
 // Program / Console signal handler.
 static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
@@ -253,15 +252,64 @@ static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
       case CTRL_LOGOFF_EVENT:   // User logging off (services only, mostly)
       case CTRL_SHUTDOWN_EVENT: // System shutting down
 		  
-		  if (WIN32_PLATFORM != nullptr)
+		  if (WIN32_PLATFORM.initialized)
 		  {
 			  win32_log("SIGNAL", LOG_WARNING, "!! SHUTDOWN SIGNAL RECEIVED !!");
-			  Sleep(1000);
-			  WIN32_PLATFORM->shutdown(1);
+			  WIN32_PLATFORM.shutdown(1);
 			return TRUE;
 		  }
       }
       return FALSE;
+}
+
+void win32_platform_init()
+{
+	ASSERT(WIN32_PLATFORM.initialized == false);
+
+	WIN32_PLATFORM.shutdown_func = win32_shutdown,
+
+	WIN32_PLATFORM.log_func = win32_platform_log;
+	WIN32_PLATFORM.logf_func = win32_platform_logf;
+
+	WIN32_PLATFORM.net_query_new_connections_func = win32_net_query_new_connections;
+	WIN32_PLATFORM.net_query_closed_connections_func = win32_net_query_closed_connections;
+	WIN32_PLATFORM.net_send_bytes_func = win32_net_send_bytes;
+	WIN32_PLATFORM.net_receive_bytes_func = win32_net_receive_bytes;
+	WIN32_PLATFORM.net_close_connection_func = win32_net_close_connection;
+
+	WIN32_PLATFORM.read_resource_file_func = win32_read_file;
+	WIN32_PLATFORM.write_resource_file_func = win32_write_file;
+
+	WIN32_PLATFORM.net_component = win32_net_start(); // Start networking capabilities.
+	ASSERT_MSG(WIN32_PLATFORM.net_component != nullptr, "Win32: Failed to start Net Component.");
+
+	// ... TODO(Marc) Many more platform functions / properties to add !
+
+	WIN32_PLATFORM.initialized = true;
+}
+
+void win32_platform_shutdown()
+{
+	ASSERT(WIN32_PLATFORM.initialized);
+
+	if (WIN32_PLATFORM.app.gameServer != nullptr)
+	{
+		win32_log("", "Shutting down Game Server.");
+		game_server_stop(*WIN32_PLATFORM.app.gameServer);
+	}
+
+	win32_log("", "Platform shutting down...");
+
+	win32_net_stop(*WIN32_PLATFORM.net_component);
+	win32_net_free(*WIN32_PLATFORM.net_component);
+
+	// Delete logging critical sections.
+	DeleteCriticalSection(&CS_WIN32_STDOUT);
+	DeleteCriticalSection(&CS_WIN32_STDERR);
+
+	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
+
+	WIN32_PLATFORM = {};
 }
 
 // Main entry point.
@@ -281,30 +329,10 @@ int main(int argc, char** argv)
 
 	// Initialize win32 platform structure.
 
-	win32_platform win32Platform = {};
-
-	win32Platform.shutdown_func = win32_shutdown,
-
-	win32Platform.log_func = win32_platform_log;
-	win32Platform.logf_func = win32_platform_logf;
-
-	win32Platform.net_query_new_connections_func = win32_net_query_new_connections;
-	win32Platform.net_query_closed_connections_func = win32_net_query_closed_connections;
-	win32Platform.net_send_bytes_func = win32_net_send_bytes;
-	win32Platform.net_receive_bytes_func = win32_net_receive_bytes;
-	win32Platform.net_close_connection_func = win32_net_close_connection;
-
-	win32Platform.read_resource_file_func = win32_read_file;
-	win32Platform.write_resource_file_func = win32_write_file;
-
-	win32Platform.net_component = win32_net_start(); // Start networking capabilities.
-	ASSERT_MSG(win32Platform.net_component != nullptr, "Win32: Failed to start Net Component.");
-
-	// ... TODO(Marc) Many more platform functions / properties to add !
-	
-	WIN32_PLATFORM = &win32Platform;
-
 	win32_logf("", "Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
+
+	win32_platform_init();
+	ASSERT(WIN32_PLATFORM.initialized);
 
 	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	ASSERT_MSG(game_server_mem != nullptr, "Failed to allocate Game Server memory. Error code = %d", GetLastError());
@@ -337,11 +365,12 @@ int main(int argc, char** argv)
 
 	win32_logf("", "Initializing Game Server...\n");
 
-	win32Platform.app.gameServer = game_server_init(win32Platform, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
-	if (win32Platform.app.gameServer == nullptr)
+	WIN32_PLATFORM.app.gameServer = game_server_init(WIN32_PLATFORM, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
+	if (WIN32_PLATFORM.app.gameServer == nullptr)
 	{
 		win32_log("", LOG_TYPE::LOG_ERROR, "Failed to initialize Game Server. Aborting...");
-		goto WIN32_SHUTDOWN;
+		win32_platform_shutdown();
+		return 1;
 	}
 
 	win32_log("", LOG_SUCCESS, "Game Server initialized.");
@@ -357,17 +386,18 @@ int main(int argc, char** argv)
 
 	ui64 start_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart);
 
-	while (!win32Platform.app.exitRequested)
+	while (!WIN32_PLATFORM.app.exitRequested)
 	{
 		// Run main update of Net component.
-		if (win32Platform.net_component->active)
+		if (WIN32_PLATFORM.net_component->active)
 		{
-			win32_net_update_connections(*win32Platform.net_component); // TEMP(Marc): For now we just do this on the main thread. Later we may want a "net master thread" that does this on its own.
+			win32_net_update_connections(*WIN32_PLATFORM.net_component); // TEMP(Marc): For now we just do this on the main thread. Later we may want a "net master thread" that does this on its own.
 		}
 		else
 		{
 			win32_log("", LOG_ERROR, "Net Component has stopped unexpectedly. Shutting down.");
-			goto WIN32_SHUTDOWN;
+			win32_platform_shutdown();
+			return 1;
 		}
 
 		// Query uptime and run game server main tick function.
@@ -376,28 +406,9 @@ int main(int argc, char** argv)
 		// Measure time since game server initialization in milliseconds.
 		ui64 time_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
 
-		game_server_tick(*win32Platform.app.gameServer, time_ms);
+		game_server_tick(*WIN32_PLATFORM.app.gameServer, time_ms);
 	}
 
-WIN32_SHUTDOWN:
-
-	if (win32Platform.app.gameServer != nullptr)
-	{
-		win32_log("", "Shutting down Game Server.");
-		game_server_stop(*win32Platform.app.gameServer);
-	}
-
-	win32_log("", "Platform shutting down...");
-
-	win32_net_stop(*win32Platform.net_component);
-	win32_net_free(*win32Platform.net_component);
-
-	// Delete logging critical sections.
-	DeleteCriticalSection(&CS_WIN32_STDOUT);
-	DeleteCriticalSection(&CS_WIN32_STDERR);
-
-	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
-
-	WIN32_PLATFORM = nullptr;
+	win32_platform_shutdown();
 	return 0;
 }
