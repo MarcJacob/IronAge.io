@@ -221,8 +221,9 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	newServer->http = http_server_init(*newServer);
 	http_server_load_files(*newServer);
 
-	// Setup event handler for HTTP server to clean resources tied to HTTP clients losing connection.
-	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, game_server_client::TYPE::HTTP, http_server_on_client_disconnected);
+	// Setup event handler for HTTP server to clean resources tied to non-game-clients losing connection.
+	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, game_server_client::TYPE::NON_GAME_CLIENT,
+		http_server_on_client_disconnected);
 
 	return newServer;
 }

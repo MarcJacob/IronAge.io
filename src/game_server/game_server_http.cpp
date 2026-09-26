@@ -10,7 +10,8 @@
 // Static configuration of HTTP Server.
 // TODO(Marc): Add to runtime configuration system. Substructure of game server initialization ?
 
-static constexpr ui16 HTTP_MAX_CONNECTIONS = 64;
+static constexpr ui16 HTTP_SERVER_MAX_CLIENTS = 64;
+
 static constexpr ui16 HTTP_MAX_FILES = 32; // Files that can be preloaded for serving.
 static constexpr ui64 HTTP_MAX_FILES_TOTAL_SIZE = MiB(32); // Budget for all preloaded files together.
 
@@ -23,18 +24,17 @@ static constexpr ui32 HTTP_SEND_CHUNK_SIZE = 4096;
 static constexpr ui32 HTTP_PATH_BUFFER_SIZE = 256;
 static constexpr time_ms HTTP_SEND_STALL_TIMEOUT_MS = 10000; // Response making no progress for this long gets its httpConnection closed.
 
+// Upgraded client, recognized as a Game Client by the Game Server.
+// Holds the necessary data to appropriately encode / decode Websocket frames for reading by the general server network protocol code.
+// Passed as Game Client Connection Context in relevant functions.
+struct websocket_client
+{
+	bool is_active; // If false, the structure can be used to register a new http client.
+};
 
 // Holds the state of an active http client.
 struct http_client
 {
-	bool is_active; // If false, the structure can be used to register a new http client.
-	bool being_dropped; // If true, the server has requested this client be closed. This is used so outbound data can be sent fully before actually dropping.
-
-	game_server_client::client_handle client_handle; // Handle to related game server client.
-
-	time_ms last_activity_ms; // Last time the http client was opened, received bytes, or finished a response. Used to drop idle connections.
-	time_ms last_send_progress_ms; // Last time the response started or made progress. Used to drop connections that stop accepting data.
-
 	// Request reception buffer. The data is buffered and interpreted as characters.
 	struct
 	{
@@ -64,6 +64,40 @@ struct http_client
 	} response;
 };
 
+// Discriminated union wrapper of possible client types for the http server.
+struct web_server_client
+{	
+	enum class STATE : ui8
+	{
+		INACTIVE, // This is a free slot for a new connection to use.
+
+		ACTIVE, // Not directly used, indicates the beginning of state values that flags the client as active.
+		ACTIVE_HTTP, // Active client in HTTP dialogue with the server.
+		ACTIVE_WEBSOCKET, // Active client in Websocket dialogue with the server. Registered as a Game Client connection with the Game Server.
+
+		IN_UPGRADE_WEBSOCKET, // Active client we've stopped listening to and will upgrade to Websocket once we're done sending them data.
+
+		STATE_COUNT,
+	} state;
+	
+	// Is this an active client connection or one that can be used to hold a new connection ?
+	inline bool is_active() const { return (ui8)state >= (ui8)STATE::ACTIVE && (ui8)state < (ui8)STATE::STATE_COUNT; }
+
+	bool in_drop; // Clients flagged as in drop will be dropped / disconnected once any remaining outbound data has been sent.
+
+	game_server_client::client_handle client_handle; // Handle to related game server client.
+	time_ms last_activity_ms; // Last time the client was opened, received bytes, or finished a response. Used to drop idle connections.
+	time_ms last_send_progress_ms; // Last time the response started or made progress. Used to drop connections that stop accepting data.
+
+	inline bool is_websocket() const { return state == STATE::ACTIVE_WEBSOCKET; }
+	inline bool is_http() const { return !is_websocket() && state != STATE::INACTIVE; }
+	union
+	{
+		http_client http;
+		websocket_client websocket;
+	};
+};
+
 // A file preloaded in server memory at init, served as-is to requests for its target_name.
 struct http_file
 {
@@ -75,9 +109,14 @@ struct http_file
 
 // State of the http server sub-system of the game server.
 // Holds a set of files preloaded in memory, to serve to prospective browser-based game clients.
+// TODO(Marc): Slated for renaming. With the introduction of Websocket clients, I have realized that this would be better named "Web server".
 struct http_server
 {
-	http_client clients[HTTP_MAX_CONNECTIONS];
+	// Client collections, by type.
+	// Later we may want to have a shared memory pool for the two somehow. Unioning them might work.
+	web_server_client clients[HTTP_SERVER_MAX_CLIENTS];
+
+	// Resources this server can serve.
 
 	http_file files[HTTP_MAX_FILES];
 	ui32 file_count;
@@ -156,7 +195,6 @@ static const http_supported_method HTTP_SUPPORTED_METHODS[] =
 };
 const ui8 SUPPORTED_METHOD_COUNT = sizeof(HTTP_SUPPORTED_METHODS) / sizeof(http_supported_method);
 
-
 static http_server* http_server_init(game_server& server)
 {
 	http_server* http = server.main_memory.alloc<http_server>();
@@ -167,10 +205,16 @@ static http_server* http_server_init(game_server& server)
 
 void http_server_on_client_disconnected(game_server& server, game_server_client& client)
 {
-	server.logf("HTTP SERVER", LOG_WARNING, "HTTP Client %d lost client.", client.handle.value);
+	ASSERT(client.connection_context != nullptr);
 
-	// Give the HTTP client structure back to the pool.
-	if (client.http != nullptr) *client.http = {};
+	// Give the Web Server Client structure back to the pool.
+	// We can check that the client's non-game client connection context points to an element of the web server's own clients table to establish ownership. 
+	if ((iptr)client.connection_context >= (iptr)server.http->clients
+		&& (iptr)client.connection_context < (iptr)&server.http->clients[HTTP_SERVER_MAX_CLIENTS])
+	{
+		server.logf("HTTP SERVER", LOG_WARNING, "HTTP Client %d dropped due to Game Server Client disconnection.", client.handle.value);
+		*(web_server_client*)client.connection_context = {};
+	}
 }
 
 // Checks whether the bytes just received from an unknown client look like the start of an HTTP request (a known method followed by a space).
@@ -196,29 +240,32 @@ static bool http_server_try_accept_client(game_server& server, game_server_clien
 	if (methodIndex == SUPPORTED_METHOD_COUNT) return false;
 
 	http_server& http = *server.http;
-	for (ui16 connectionIndex = 0; connectionIndex < HTTP_MAX_CONNECTIONS; connectionIndex++)
+	for (ui16 connectionIndex = 0; connectionIndex < HTTP_SERVER_MAX_CLIENTS; connectionIndex++)
 	{
-		http_client& httpClient = http.clients[connectionIndex];
-		if (httpClient.is_active) continue;
+		web_server_client& newClient = http.clients[connectionIndex];
+		if (newClient.is_active()) continue;
 
-		httpClient = {};
-		httpClient.is_active = true;
-		httpClient.client_handle = client.handle;
-		httpClient.last_activity_ms = server.uptime_ms;
+		// Allocate new client. Start it out as HTTP.
+		newClient.state = web_server_client::STATE::ACTIVE_HTTP;
+		newClient.client_handle = client.handle;
+		newClient.last_activity_ms = server.uptime_ms;
 
-		// The bytes were already taken from the platform client, so they become the start of the request.
+		http_client& httpClient = newClient.http;
+
+		// Take the bytes from the Unknown client reception buffer and use them as the first received Request bytes in the new HTTP client.
 		ia_memcpy(httpClient.request.buff, bytes, byte_count);
 		httpClient.request.size = byte_count;
 
-		client.type = game_server_client::TYPE::HTTP;
-		client.http = &httpClient;
+		// Promote client connection to NON GAME CLIENT and set the Web Server Client structure as its context.
+		client.type = game_server_client::TYPE::NON_GAME_CLIENT;
+		client.connection_context = &newClient;
 
 		server.logf("HTTP SERVER", "Accepted client %d as an HTTP client.", client.handle.value);
 
 		return true;
 	}
 
-	server.log("HTTP SERVER", LOG_ERROR, "Out of HTTP client slots, can't accept new HTTP client.");
+	server.log("HTTP SERVER", LOG_ERROR, "Out of Web client slots, can't accept new Web client.");
 	return false;
 }
 
@@ -233,6 +280,7 @@ static const char* http_get_content_type(const char* path)
 		{ "css", "text/css; charset=utf-8" },
 		{ "wasm", "application/wasm" },
 		{ "txt", "text/plain; charset=utf-8" },
+		{ "ico", "image/x-icon"},
 	};
 	static constexpr ui8 SUPPORTED_CONTENT_TYPE_COUNT = sizeof(SUPPORTED_CONTENT_TYPES) / sizeof(content_type);
 
@@ -336,9 +384,12 @@ static const http_file* http_server_find_file(http_server& http, const ia_string
 }
 
 // Starts sending a response on the httpConnection. The body, if any, is sent straight from the given memory, which must stay valid until the response is done.
-static void http_server_serve_content(game_server& server, http_client& client,
+static void http_server_serve_content(game_server& server, web_server_client& web_client,
 	const char* status, const char* content_type, const ui8* content, ui32 content_size)
 {
+	ASSERT(web_client.is_websocket() == false);
+	http_client& client = web_client.http;
+
 	ui32 head_write_pos = 0;
 
 	// Build response head section.
@@ -359,7 +410,8 @@ static void http_server_serve_content(game_server& server, http_client& client,
 
 	// Flag the http client as being responded to with the appropriate head & body sizes.
 	// TODO(Marc): A lot of the time, we won't be sending anything to the client. It may be worth having staging memory for response buffers that is not linked to specific clients.
-	client.last_send_progress_ms = server.uptime_ms;
+	web_client.last_send_progress_ms = server.uptime_ms;
+
 	client.response.in_flight = true;
 
 	client.response.head.sent = 0;
@@ -380,9 +432,12 @@ static void http_server_serve_content(game_server& server, http_client& client,
 }
 
 // Answers with an empty-bodied status response, optionally dropping the client afterward.
-static void http_server_send_response_status(game_server& server, http_client& client, 
+static void http_server_send_response_status(game_server& server, web_server_client& web_client, 
 	const char* status_msg, bool drop_client)
-{
+{	
+	ASSERT(web_client.is_websocket() == false);
+	http_client& client = web_client.http;
+
 	ASSERT_MSG(client.response.in_flight == false, "Attempted to re-send response data to HTTP client while a response was already in flight.");
 
 	// Build response head section.
@@ -395,7 +450,7 @@ static void http_server_send_response_status(game_server& server, http_client& c
 
 	if (drop_client)
 	{
-		client.being_dropped = true;
+		web_client.in_drop = true;
 		head_write_pos += ia_string_push(client.response.head.str, "Connection: Close\r\n");
 	}
 	else
@@ -406,7 +461,7 @@ static void http_server_send_response_status(game_server& server, http_client& c
 
 	head_write_pos += ia_string_push(client.response.head.str, "\r\n");
 
-	client.last_activity_ms = server.uptime_ms;
+	web_client.last_activity_ms = server.uptime_ms;
 
 	client.response.head.sent = 0;
 	client.response.head.size = head_write_pos;
@@ -422,9 +477,12 @@ static void http_server_send_response_status(game_server& server, http_client& c
 // This means the previous http_client structure will be reset.
 // Furthermore, the game server will be told to upgrade the status of the associated game server client
 // to being a full Game Client, allowing it to participate in standard game server client functions.
-static bool http_server_handle_request_upgrade_websocket(game_server& server, http_client& client, http_request& request)
+static bool http_server_handle_request_upgrade_websocket(game_server& server, web_server_client& web_client, http_request& request)
 {
 	ASSERT(request.method == http_request::METHOD::GET);
+
+	ASSERT(web_client.is_websocket() == false);
+	http_client& client = web_client.http;
 
 	// Handle websocket upgrade handshake. Check that all the necessary headers are in place,
 	// determine response key and send back the upgrade handshake approval as a status line.
@@ -434,27 +492,26 @@ static bool http_server_handle_request_upgrade_websocket(game_server& server, ht
 	
 	header_field connectionField;
 	if (!http_request_find_header_field(request, "connection", connectionField)
-		|| !ia_string_contains(connectionField.value, "Upgrade"))
+		|| !ia_string_contains(connectionField.value, "Upgrade", false))
 	{
-		http_server_send_response_status(server, client, "400 Bad Request", true);
+		http_server_send_response_status(server, web_client, "400 Bad Request", true);
 		return false;
 	}
 
 	header_field upgradeField;
 	if (!http_request_find_header_field(request, "upgrade", upgradeField)
-		|| upgradeField.value != "websocket")
+		|| !ia_string_equal(upgradeField.value, "websocket", false))
 	{
-		http_server_send_response_status(server, client, "400 Bad Request", true);
+		http_server_send_response_status(server, web_client, "400 Bad Request", true);
 		return false;
 	}
 
 	header_field secWebsocketKeyField;
 	header_field secWebsocketVersionField;
 	if (!http_request_find_header_field(request, "sec-websocket-key", secWebsocketKeyField)
-		|| !http_request_find_header_field(request, "sec-websocket-version", secWebsocketVersionField)
-		|| secWebsocketVersionField.value != "13")
+		|| !http_request_find_header_field(request, "sec-websocket-version", secWebsocketVersionField))
 	{
-		http_server_send_response_status(server, client, "400 Bad Request", true);
+		http_server_send_response_status(server, web_client, "400 Bad Request", true);
 		return false;
 	}
 
@@ -468,10 +525,21 @@ static bool http_server_handle_request_upgrade_websocket(game_server& server, ht
 	// Take the received key, add it together with a specific GUID and have it go through a SHA-1 hash.
 
 	static constexpr ui16 WEBSOCKET_IN_KEY_MAX_LEN = 128;
-	if (secWebsocketKeyField.value.length > WEBSOCKET_IN_KEY_MAX_LEN
-		|| secWebsocketKeyField.value.length == 0)
+
+	// Check key length and version value.
+	if (secWebsocketKeyField.value.length > WEBSOCKET_IN_KEY_MAX_LEN)
 	{
-		http_server_send_response_status(server, client, "414 URL Too Long", true);
+		http_server_send_response_status(server, web_client, "414 URL Too Long", true);
+		return false;
+	}
+	else if (secWebsocketKeyField.value.length == 0)
+	{
+		http_server_send_response_status(server, web_client, "400 Bad Request", true);
+		return false;
+	}
+	if (secWebsocketVersionField.value != "13")
+	{
+		http_server_send_response_status(server, web_client, "426 Upgrade Required", true);
 		return false;
 	}
 
@@ -493,22 +561,44 @@ static bool http_server_handle_request_upgrade_websocket(game_server& server, ht
 
 	// Send response.
 	
-	ia_static_string<256> response_str;
-	ia_string_push(response_str, "101 Switching Protocols\r\n");
+	ia_static_string<256> response_str = {};
+	ia_string_push(response_str, "HTTP/1.1 101 Switching Protocols\r\n");
 	ia_string_push(response_str, "Upgrade: websocket\r\n");
 	ia_string_push(response_str, "Connection: Upgrade\r\n");
 	ia_string_push(response_str, "Sec-Websocket-Accept: ");
 	ia_string_push(response_str, response_key_buff);
 	ia_string_push(response_str, "\r\n\r\n");
+	// Let's just assume that the response_str has trailing zeroes so it can be used as a C string directly.
 
-	http_server_send_response_status(server, client, response_str._str, false);
+	// Build & send custom response head section.
+	{
+		ASSERT(client.response.in_flight == false);
 
-	// TODO(Marc): Flag the client for upgrade to Websocket once response is sent. It must NOT be dropped.
+		client.response.head.str.length = 0; // TODO(Marc): String reset function.
 
+		ui32 response_size = 0;
+		response_size += ia_string_push(client.response.head.str, response_str._str);
+
+		web_client.last_activity_ms = server.uptime_ms;
+
+		client.response.head.sent = 0;
+		client.response.head.size = response_size;
+		client.response.body.buff = nullptr;
+		client.response.body.sent = 0;
+		client.response.body.size = 0;
+
+		client.response.in_flight = true;
+	}
+
+	server.logf("HTTP", LOG_SUCCESS, "Successful Websocket upgrade handshake with HTTP Client %d.", web_client.client_handle.value);
+	server.log("HTTP", "\tFlagging Client for type upgrade to Websocket...");
+
+	ASSERT(web_client.state == web_server_client::STATE::ACTIVE_HTTP);
+	web_client.state = web_server_client::STATE::IN_UPGRADE_WEBSOCKET;
 	return true;
 }
 
-static void http_server_handle_request_get_file(game_server& server, http_client& client, http_request& request)
+static void http_server_handle_request_get_file(game_server& server, web_server_client& web_client, http_request& request)
 {
 	const http_file* targetFile = nullptr;
 
@@ -516,19 +606,21 @@ static void http_server_handle_request_get_file(game_server& server, http_client
 	targetFile = http_server_find_file(*server.http, request.target_name);
 	if (targetFile == nullptr)
 	{
-		http_server_send_response_status(server, client, "404 Not Found", false);
+		http_server_send_response_status(server, web_client, "404 Not Found", false);
 		return;
 	}
 
 	if (request.method == http_request::METHOD::GET)
-		http_server_serve_content(server, client, "200 Ok", targetFile->content_type, targetFile->data, targetFile->size);
+		http_server_serve_content(server, web_client, "200 Ok", targetFile->content_type, targetFile->data, targetFile->size);
 	if (request.method == http_request::METHOD::HEAD)
-		http_server_serve_content(server, client, "200 Ok", targetFile->content_type, nullptr, targetFile->size);
+		http_server_serve_content(server, web_client, "200 Ok", targetFile->content_type, nullptr, targetFile->size);
 }
 
 // Handles a complete request for a client.
-static void http_server_handle_request(game_server& server, http_client& client, http_request& request)
+static void http_server_handle_request(game_server& server, web_server_client& web_client, http_request& request)
 {
+	ASSERT(web_client.is_websocket() == false);
+
 	// NOTE(Marc): Currently only GET and HEAD method requests are handled.
 	// TODO(Marc): Per request type function ?
 
@@ -539,38 +631,42 @@ static void http_server_handle_request(game_server& server, http_client& client,
 	case http_request::METHOD::GET:
 		if (request.target_name == "/ws")
 		{
-			http_server_handle_request_upgrade_websocket(server, client, request);
+			http_server_handle_request_upgrade_websocket(server, web_client, request);
 			break;
 		}
 		// Fallthrough
 	case http_request::METHOD::HEAD:
-		http_server_handle_request_get_file(server, client, request);
+		http_server_handle_request_get_file(server, web_client, request);
 		break;
 	case http_request::METHOD::UNKNOWN:
-		http_server_send_response_status(server, client, "501 Not Implemented", true);
-		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unknown method. Closing client.", client.client_handle.value);
+		http_server_send_response_status(server, web_client, "501 Not Implemented", true);
+		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unknown method. Closing client.", web_client.client_handle.value);
 		break;
 	case http_request::METHOD::UNSUPPORTED:
 	default:
-		http_server_send_response_status(server, client, "405 Method Not Allowed\r\nAllow: GET, HEAD", true);
-		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unsupported method. Closing client.", client.client_handle.value);
+		http_server_send_response_status(server, web_client, "405 Method Not Allowed\r\nAllow: GET, HEAD", true);
+		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unsupported method. Closing client.", web_client.client_handle.value);
 		break;
 	}	
 
 	// If the request has header field "Connection: Close" then we can drop the client.
-	if (!client.being_dropped 
+	// This can only be applied if the client is specifically in the ACTIVE_HTTP state. Any other state prevents dropping here.
+	if (web_client.state == web_server_client::STATE::ACTIVE_HTTP
 		&& http_request_find_header_field(request, "Connection", connectionField)
 		&& connectionField.value == "close")
 	{
-		client.being_dropped = true;
+		web_client.in_drop = true;
 	}
 }
 
 // Receives bytes buffered on the platform for a client, then attempts to parse a single request to be processed.
 // Returns true if a request was successfully parsed OR no bytes were received (check request method value).
 // Returns false if the request fatally failed to parse, triggering a status code response and dropping the client.
-static bool http_server_receive(game_server& server, http_client& client, http_request& out_request)
+static bool http_server_receive(game_server& server, web_server_client& web_client, http_request& out_request)
 {
+	ASSERT(web_client.is_websocket() == false);
+	http_client& client = web_client.http;
+
 	game_server_platform& platform = *server.platform;
 	out_request = {};
 
@@ -578,13 +674,13 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	if (client.request.size < HTTP_CLIENT_MAX_REQUEST_SIZE - 1)
 	{
 		// Receive bytes on the httpConnection and place them in the request buffer.
-		ui32 receivedBytes = game_server_client_receive_message(server, client.client_handle,
+		ui32 receivedBytes = game_server_client_receive_message(server, web_client.client_handle,
 			(ui8*)client.request.buff + client.request.size, HTTP_CLIENT_MAX_REQUEST_SIZE - client.request.size - 1);
 
 		if (receivedBytes > 0)
 		{
 			client.request.size += receivedBytes;
-			client.last_activity_ms = server.uptime_ms;
+			web_client.last_activity_ms = server.uptime_ms;
 		}
 	}
 
@@ -610,9 +706,9 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		// No full head present in the request buffer. If the buffer is full, it never will be.
 		if (client.request.size >= HTTP_CLIENT_MAX_REQUEST_SIZE - 1)
 		{
-			http_server_send_response_status(server, client, "431 Request Header Fields Too Large", true);
+			http_server_send_response_status(server, web_client, "431 Request Header Fields Too Large", true);
 			server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d sent a request head larger than %d bytes. Closing client.",
-				client.client_handle.value, HTTP_CLIENT_MAX_REQUEST_SIZE);
+				web_client.client_handle.value, HTTP_CLIENT_MAX_REQUEST_SIZE);
 			return false;
 		}
 
@@ -647,7 +743,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	// If there are no more bytes afterward, this is a bad request.
 	if (readBytes >= head_end_index)
 	{
-		http_server_send_response_status(server, client, "400 Bad Request", true);
+		http_server_send_response_status(server, web_client, "400 Bad Request", true);
 		return false;
 	}
 
@@ -661,7 +757,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		// Protect against target names exceeding max length.
 		if (out_request.target_name.length == HTTP_CLIENT_MAX_REQUEST_TARGET_LEN)
 		{
-			http_server_send_response_status(server, client, "414 URL Too Long", true);
+			http_server_send_response_status(server, web_client, "414 URL Too Long", true);
 			return false;
 		}
 
@@ -673,8 +769,8 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	if (readBytes >= head_end_index 
 		|| !ia_str_expect(requestBytes + readBytes, "HTTP/1.1\r\n"))
 	{
-		http_server_send_response_status(server, client, "505 HTTP Version Not Supported.", true);
-		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d used wrong HTTP version. Closing client.", client.client_handle.value);
+		http_server_send_response_status(server, web_client, "505 HTTP Version Not Supported.", true);
+		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d used wrong HTTP version. Closing client.", web_client.client_handle.value);
 		return false;
 	}
 	readBytes += sizeof("HTTP/1.1\r\n") - 1;
@@ -684,7 +780,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	{
 		if (out_request.header.field_count == http_request::MAX_HEADER_FIELD_COUNT)
 		{
-			http_server_send_response_status(server, client, "431 Too Many Headers", true);
+			http_server_send_response_status(server, web_client, "431 Too Many Headers", true);
 			return false;
 		}
 
@@ -697,7 +793,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 			|| readBytes + field.name.length == head_end_index
 			|| requestBytes[readBytes + field.name.length] != ':')
 		{
-			http_server_send_response_status(server, client, "400 Bad Request", true);
+			http_server_send_response_status(server, web_client, "400 Bad Request", true);
 			return false;
 		}
 		readBytes += field.name.length + 1; // Name + ':'.
@@ -707,7 +803,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		if (readBytes + field.value.length == head_end_index
 			|| requestBytes[readBytes + field.value.length + 1] != '\n')
 		{
-			http_server_send_response_status(server, client, "400 Bad Request", true);
+			http_server_send_response_status(server, web_client, "400 Bad Request", true);
 			return false;
 		}
 		readBytes += field.value.length + 2; // Name + '\r\n'.
@@ -736,14 +832,16 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 
 // Frees the memory being used by the passed request from the client's reception buffer.
 // After calling this, the http_request structure should be considered freed and be disposed of.
-void http_server_dispose_request(game_server& server, http_client& client, http_request& request)
+void http_server_dispose_request(game_server& server, web_server_client& web_client, http_request& request)
 {
+	ASSERT(web_client.is_websocket() == false);
+
 	// Left-shift remaining bytes in client request buffer to the left.
-	ia_memcpy(client.request.buff, client.request.buff + request.total_size, client.request.size - request.total_size);
-	client.request.size -= request.total_size;
+	ia_memcpy(web_client.http.request.buff, web_client.http.request.buff + request.total_size, web_client.http.request.size - request.total_size);
+	web_client.http.request.size -= request.total_size;
 }
 // Pushes as much of the response as the platform will take. Whatever is left goes on the next tick.
-static void http_server_progress_response(game_server& server, http_client& client)
+static void http_server_progress_response(game_server& server, web_server_client& web_client)
 {
 	game_server_platform& platform = *server.platform;
 
@@ -751,29 +849,30 @@ static void http_server_progress_response(game_server& server, http_client& clie
 	bool stalled = false;
 
 	// Try to send more data over.
-	while (client.response.head.sent < client.response.head.size)
+	while (web_client.http.response.head.sent < web_client.http.response.head.size)
 	{
-		ui32 chunkSize = ia_min(HTTP_SEND_CHUNK_SIZE, client.response.head.size - client.response.head.sent);
+		ui32 chunkSize = ia_min(HTTP_SEND_CHUNK_SIZE, web_client.http.response.head.size - web_client.http.response.head.sent);
 
-		if (game_server_client_send_message(server, client.client_handle, (const ui8*)client.response.head.str._str + client.response.head.sent, chunkSize))
+		if (game_server_client_send_message(server, web_client.client_handle, 
+			(const ui8*)web_client.http.response.head.str._str + web_client.http.response.head.sent, chunkSize))
 		{
-			client.response.head.sent += chunkSize;
-			client.last_send_progress_ms = server.uptime_ms;
+			web_client.http.response.head.sent += chunkSize;
+			web_client.last_send_progress_ms = server.uptime_ms;
 		}
 		else
 			stalled = true;
 	}
 
 	// Head was sent and we're not stalled -> continue to body.
-	while (!stalled && client.response.body.sent < client.response.body.size)
+	while (!stalled && web_client.http.response.body.sent < web_client.http.response.body.size)
 	{
-		ui32 chunk = client.response.body.size - client.response.body.sent;
+		ui32 chunk = web_client.http.response.body.size - web_client.http.response.body.sent;
 		if (chunk > HTTP_SEND_CHUNK_SIZE) chunk = HTTP_SEND_CHUNK_SIZE;
 
-		if (game_server_client_send_message(server, client.client_handle, client.response.body.buff + client.response.body.sent, chunk))
+		if (game_server_client_send_message(server, web_client.client_handle, web_client.http.response.body.buff + web_client.http.response.body.sent, chunk))
 		{
-			client.response.body.sent += chunk;
-			client.last_send_progress_ms = server.uptime_ms;
+			web_client.http.response.body.sent += chunk;
+			web_client.last_send_progress_ms = server.uptime_ms;
 		}
 		else 
 			stalled = true;
@@ -782,23 +881,23 @@ static void http_server_progress_response(game_server& server, http_client& clie
 	// When stalled on head or body, determine how long since last recorded transfer activity and if past a threshold, drop the transfer & httpConnection.
 	if (stalled)
 	{
-		if (server.uptime_ms - client.last_send_progress_ms > HTTP_SEND_STALL_TIMEOUT_MS)
+		if (server.uptime_ms - web_client.last_send_progress_ms > HTTP_SEND_STALL_TIMEOUT_MS)
 		{
-			server.logf("HTTP SERVER", LOG_ERROR, "Response on client handle %d stalled, closing.", client.client_handle.value);
-			game_server_client_drop(server, client.client_handle);
-			client.being_dropped = true;
+			server.logf("HTTP SERVER", LOG_ERROR, "Response on client handle %d stalled, closing.", web_client.client_handle.value);
+			game_server_client_drop(server, web_client.client_handle);
+			web_client.in_drop = true;
 		}
 		return;
 	}
 
 	// Response fully handed to the platform. Ready for the next request on this client.
-	client.response.in_flight = false;
-	client.last_activity_ms = server.uptime_ms;
+	web_client.http.response.in_flight = false;
+	web_client.last_activity_ms = server.uptime_ms;
 
 	// Drop the client if flagged for closing.
-	if (client.being_dropped)
+	if (web_client.in_drop)
 	{
-		game_server_client_drop(server, client.client_handle);
+		game_server_client_drop(server, web_client.client_handle);
 	}
 }
 
@@ -810,40 +909,54 @@ static void http_server_tick(game_server& server)
 	constexpr ui16 CONNECTIONS_QUERY_BUFFER_SIZE = 32;
 
 	// Handle send / receive on applicable connections.
-	for (ui16 clientIndex = 0; clientIndex < HTTP_MAX_CONNECTIONS; clientIndex++)
+	for (ui16 clientIndex = 0; clientIndex < HTTP_SERVER_MAX_CLIENTS; clientIndex++)
 	{
-		http_client& client = httpServer.clients[clientIndex];
-		if (!client.is_active) continue;
+		web_server_client& client = httpServer.clients[clientIndex];
+		if (!client.is_active()) continue;
 
-		if (client.response.in_flight)
+		if (client.is_websocket() == false)
 		{
-			// Progress response sending.
-			http_server_progress_response(server, client);
-		}
-		else if (!client.being_dropped)
-		{
-			// Handle next request if one can be parsed from reception buffer.
+			if (client.http.response.in_flight)
 			{
-				http_request nextRequest;
-				if (http_server_receive(server, client, nextRequest)
-					&& nextRequest.method != http_request::METHOD::NONE)
+				// Progress response sending.
+				http_server_progress_response(server, client);
+			}
+			else if (!client.in_drop)
+			{
+				// Handle next request if one can be parsed from reception buffer.
 				{
-					http_server_handle_request(server, client, nextRequest);
-					http_server_dispose_request(server, client, nextRequest);
+					http_request nextRequest;
+					if (http_server_receive(server, client, nextRequest)
+						&& nextRequest.method != http_request::METHOD::NONE)
+					{
+						http_server_handle_request(server, client, nextRequest);
+						http_server_dispose_request(server, client, nextRequest);
+					}
+				}
+
+				// Flag the client for dropping if it has been idle for too long (no bytes received, no response finished).
+				if (server.uptime_ms - client.last_activity_ms > HTTP_CLIENT_IDLE_TIMEOUT_MS)
+				{
+					server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
+						client.client_handle.value, HTTP_CLIENT_IDLE_TIMEOUT_MS);
+					client.in_drop = true;
 				}
 			}
-
-			// Flag the client for dropping if it has been idle for too long (no bytes received, no response finished).
-			if (server.uptime_ms - client.last_activity_ms > HTTP_CLIENT_IDLE_TIMEOUT_MS)
+			else if (client.state == web_server_client::STATE::IN_UPGRADE_WEBSOCKET)
 			{
-				server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-					client.client_handle.value, HTTP_CLIENT_IDLE_TIMEOUT_MS);
-				client.being_dropped = true;
+				// Perform upgrade.
+				// This effectively transfers the responsibility over the Game Server Client's connection to the new WebSocket client structure.
+				
+				server.logf("HTTP", LOG_SUCCESS, "Client connection %d upgraded to Websocket.", client.client_handle.value);
+
+				// Reset HTTP client data for re-use.
+				client = {};
+			}
+			else  // Client has no response in flight, no upgrade in progress and is being dropped... finish dropping them !
+			{
+				game_server_client_drop(server, client.client_handle);
 			}
 		}
-		else // Client has no response in flight and is being dropped... finish dropping them !
-		{
-			game_server_client_drop(server, client.client_handle);
-		}
+
 	}
 }

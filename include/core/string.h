@@ -298,7 +298,7 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 }
 
 // Checks whether the string contains the specified null-terminated string.
-static bool ia_string_contains(const ia_string_view& str, const char* contained)
+static bool ia_string_contains(const ia_string_view& str, const char* contained, bool case_sensitive = true)
 {
 	ASSERT(contained != nullptr);
 
@@ -306,26 +306,32 @@ static bool ia_string_contains(const ia_string_view& str, const char* contained)
 	if (firstChar == '\0') return true;
 
 	ui32 contained_len = ia_str_len(contained);
-
+	if (contained_len > str.length) return false;
+	
 	ui32 scanIndex = 0;
 	while (scanIndex <= str.length - contained_len)
 	{
-		if (str.view_str[scanIndex] != firstChar)
-		{
-			scanIndex++;
-			continue;
-		}
-	
 		ui32 match_len = 0;
 		for (match_len = 0; match_len < contained_len; match_len++)
-		{
-			if (str.view_str[scanIndex + match_len] != contained[match_len])
+		{	
+			char str_char = str.view_str[scanIndex + match_len];
+			char comp_char = contained[match_len];
+
+			if (!case_sensitive)
+			{
+				constexpr char TO_UPPER_OFFSET = ('A' - 'a');
+				if (str_char >= 'a' && str_char <= 'z') str_char += TO_UPPER_OFFSET;
+				if (comp_char >= 'a' && comp_char <= 'z') comp_char += TO_UPPER_OFFSET;
+			}
+
+			if (str_char != comp_char) 
 			{
 				break;
 			}
 		}
 
 		if (match_len == contained_len) return true;
+		scanIndex++;
 	}
 
 	return false;

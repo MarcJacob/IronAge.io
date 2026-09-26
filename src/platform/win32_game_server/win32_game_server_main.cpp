@@ -340,13 +340,20 @@ int main(int argc, char** argv)
 	// Files of the web client bundle the game server will preload and serve over HTTP, relative to the web root.
 	// TODO(Marc): Add a platform call to list available files in resources folder, so the server can just discover all available files.
 	static const char* const WEB_FILES[] = {
+
+		// Core JS
 		"index.html",
 		"style.css",
 		"src/main.js",
 		"src/backend.js",
 		"src/render.js",
 		"src/input.js",
+
+		// Client WASM backend
 		"IronAgeIO_WebClient.wasm",
+
+		// Art
+		"favicon.ico",
 	};
 	static constexpr ui8 WEB_FILE_COUNT = sizeof(WEB_FILES) / sizeof(WEB_FILES[0]);
 

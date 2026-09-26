@@ -26,15 +26,20 @@ The platform must then track the passage of time, tick the server as much as pos
 
 The Game Server Client system, implemented mostly in game_server_clients, with specific client types managed in their respective associated server components.
 
-Any new connection detected by the game server will first be matched to any known client by address, allowing them to potentially bypass some authentication steps,
-or they will be associated to a brand new Game Server Client entry.
+Clients start out as Unknown and are given very little time and room to successfully identify themselves into one of the sub-components (Web, native...).
+This done, they become "Non-game clients" which only talk directly with their owning sub-component. Eventually they can be upgraded to full Game Clients by
+the sub-component, allowing them to start participating in standardized game-related communications with the game server itself (account authentication, lobby joining, gameplay...).
 
-### Http Server
+The point of this system is to allow any number of concurrent connection and communications protocols to co-exist and be interpreted as standard game clients by the main game server code.
 
-Server component for handling HTTP Clients. Can serve files and upgrade HTTP Clients to Game Clients through the use of the WebSocket protocol.
+### Web Server
+
+Server component for handling HTTP & Websocket Clients. Can serve files and upgrade HTTP Clients to Game Clients through the use of the WebSocket protocol.
 
 The serveable files are preloaded in memory, and client browser can ask for them by name. It is not a general-purpose serving algorithm, it limits itself to what
 is pre-configured for speed, simplicity and security (since it's not possible to ever get served a file that wasn't intended to be served).
+
+When promoting a client to a Game Client, the provided send & receive functions are made to add / remove the appropriate Websocket framing around the message.
 
 ## Intention
 
@@ -44,4 +49,9 @@ Most of the game server code should end up existing within this folder. The Game
 - Manage its own memory from what the platform gave it on initialization (policy will always be to spawn more game servers if more matches must be simulated).
 - The vast majority of logging.
 
-Currently the network architecture is envisioned to be a web frontend connected to a Game Server backend written in C++ for both the main match simulation and the http file serving.
+Eventually we'll want to expand the server's capabilities to also work with native client connections using an app instead of using a web browser, and come up
+with some system to authentify connections as administrators with special privileges for remote game server monitoring and control.
+
+By default, any networking activity that isn't specific to a communication protocol should exist on the Game Server level and be done only with identified Game Clients.
+
+Try to keep each sub-component as light as possible, and consider ensuring that they can be ran in parallel with one another (currently we just tick them along with the main game server tick).

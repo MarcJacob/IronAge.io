@@ -42,12 +42,15 @@ struct game_server_client
 	// Supported types of clients. Indexes into the event handler tables to allow other sub-systems to react to client events.
 	enum class TYPE
 	{
-		UNKNOWN,		// Client has established a connection but hasn't authentified themselves as any type of client supported by the server.
-		HTTP,			// Client is connected through HTTP. They can request files or upgrade to one of the more advanced client types.
-		GAME_CLIENT,	// Client has established a full two-way connection allowing real-time game synchronization traffic.
-		ADMIN,			// Client is authentified as an administrator and can send commands & special queries to the server.
+		UNKNOWN,		 // Client has established a connection but hasn't authentified themselves as any type of client supported by the server.
+		NON_GAME_CLIENT, // Client is connected and has been taken in by one of the server sub-components pending a possible upgrade a full Game Client.
+		GAME_CLIENT,	 // Client has established a full two-way connection allowing real-time game synchronization traffic.
+		ADMIN,			 // Client is authentified as an administrator and can send commands & special queries to the server.
 		TYPE_COUNT,
 	} type;
+
+	void* connection_context;	// Extra contextual data related to the specific server component in charge of this connection (Web Server, Native Server...).
+								// Allows server components to recognize this client's connection as being managed by them, and find their associated, specific data.
 
 	// Discriminated union of data associated to each connection type.
 	union 
@@ -59,7 +62,19 @@ struct game_server_client
 			ui64 traffic_size; // Total amount of bytes received from this client.
 		} unknown;
 
-		http_client* http;
+		struct
+		{
+			ui8 _empty;
+		} non_game_client;
+
+		struct
+		{
+			using send_game_msg_fn = bool(*)(game_server_client& client, const ui8* msg, ui16 msg_size);
+			send_game_msg_fn send_game_message_func;
+
+			using receive_game_msg_fn = ui16(*)(game_server_client& client, void* context, ui8* msg_buff, ui16 buff_size);
+			receive_game_msg_fn receive_game_message_func;
+		} game_client;
 	};
 };
 
