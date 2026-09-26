@@ -228,12 +228,12 @@ tasks are broken down further.
        - [DONE] Upgrade branch: validate headers, 101 response (tested client-side), web client
          moves to ACTIVE_WEBSOCKET without being dropped once the response is sent.
        - Validate `Origin` on the upgrade.
-       - [WIP] Frame codec (masked client frames, ping / pong / close, partial frames) in
+       - [DONE] Frame codec (masked client frames, ping / pong / close, partial frames) in
          `web_server_websocket.cpp`, plus framed sending through the client sending buffer.
-         Binary echo verified in a browser.
-         - Remaining test cases: message order, burst, invalid frames (close codes 1002 /
-           1003 / 1007 / 1009), client close, idle drop.
-         - Server ping keepalive for websocket clients.
+       - [DONE] Browser-side WebSocket tests (`src/websocket_tests.js`, button on the index
+         page): echo (order, burst, varied sizes, several connections, slot re-use), invalid
+         frames (close codes 1003 / 1007 / 1009), client close, idle. All passing.
+       - Server ping keepalive for websocket clients.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.
      - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.
