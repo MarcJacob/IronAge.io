@@ -36,11 +36,10 @@ GameCommon), logging/file/network/thread callbacks, tick loop, all presentation.
 - **Server Platform** (`src/win32/`): one large up-front memory block sized for N
   parallel matches, sub-allocated to GameCommon instances. Owns networking. Presentation
   is a console for now.
-- **Client Platform** (web, JS + `wasm32-unknown-unknown` GameCommon): grows wasm memory
+  - **Client Platform** (web, JS + `wasm32-unknown-unknown` GameCommon): grows wasm memory
   in chunks on demand (adapts to weaker machines). WebSocket to the Game Server for
-  input. Renders via two layered canvases: a blit canvas (pixels from GameCommon/
-  Platform, for expensive-to-compute stuff like world tiles) and a JS canvas on top
-  (sprites/text/UI/input capture).
+  input. Currently renders through a JS canvas (sprites/text/UI/input capture); a
+  blit canvas for expensive-to-compute pixel content is deferred.
 
 ### Game Server / Client
 
@@ -88,7 +87,8 @@ tasks are broken down further.
 
 1. **Architecture Skeleton** - thin end-to-end slice, no real game rules yet. Expected
    result: browser shows a visible element changing in sync, driven by a lockstep-ticked
-   GameCommon instance, relayed through the Game Server, rendered via both canvases.
+   GameCommon instance, relayed through the Game Server, rendered via the current JS
+   canvas (with the blit canvas deferred).
    - [DONE] Remaining initial project setup: CMake targets for the native win32 exe and
      the `wasm32-unknown-unknown` client (both including GameCommon), plus a minimal JS
      harness loading the `.wasm` and calling one trivial exported function.
@@ -116,12 +116,12 @@ tasks are broken down further.
      - [DONE] Start a match in a slot (create, start, state -> MATCH_ONGOING).
      - [DONE] Platform passes an integer monotonic timestamp (ms) to server tick.
      - [DONE] Server tick: per ongoing slot, tick on a fixed schedule, stubbed input.
-   - [WIP] Client Platform, standalone: local tick loop with dummy input, two-canvas
-     renderer showing GameCommon-driven state - no networking yet.
+   - [DONE] Client Platform, standalone: local tick loop with dummy input, pure-JS
+     renderer showing GameCommon-driven state - no networking yet. The blit canvas is
+     deferred until it is useful.
      - [DONE] Wasm exports: begin match, set input target, tick, render-state readout.
      - [DONE] JS fixed-rate loop (rAF + accumulator, capped catch-up).
      - [DONE] JS canvas: draw entity, mouse click sets target.
-     - Blit canvas.
    - Networking end-to-end: server serves the client bundle over HTTP and relays input
      via WebSocket on a fixed schedule; client connects and replaces its dummy input
      with the relayed stream.
@@ -231,6 +231,7 @@ tasks are broken down further.
 Tasks not currently part of the plan that need to be added to it at some point.
 
 - Client render interpolation between ticks (smooth movement).
+- Blit canvas for expensive-to-compute pixel content; pure-JS rendering is sufficient for now.
 - Logging takes a string view only (no variable arguments) on the server and server platform;
   formatting happens in platform-independent code through an in-house string format
   implementation (numbers, string views).

@@ -311,11 +311,18 @@ static const http_file* http_server_find_file(http_server& http, const ia_string
 	if (target.view_str[0] != '/') return nullptr;
 
 	// Name asked for: everything after the '/', up to any query string or fragment. Empty means the site root.
-	ia_string_view targetName(target.view_str + 1, target.length - 1);
+
+	// Strip away query section.
+	ia_string_view targetName = ia_string_get_until(target.view_str, '?', target.length);
+
+	// Strip away start '/'.
+	targetName.view_str++;
+	targetName.length--;
 	if (targetName.length == 0)
 	{
 		targetName = "index.html";
 	}
+
 
 	for (ui32 fileIndex = 0; fileIndex < http.file_count; fileIndex++)
 	{
@@ -329,8 +336,8 @@ static const http_file* http_server_find_file(http_server& http, const ia_string
 }
 
 // Starts sending a response on the httpConnection. The body, if any, is sent straight from the given memory, which must stay valid until the response is done.
-static void http_server_send_response(game_server& server, http_client& client,
-	const char* status, const char* content_type, const ui8* body, ui32 body_size)
+static void http_server_serve_content(game_server& server, http_client& client,
+	const char* status, const char* content_type, const ui8* content, ui32 content_size)
 {
 	ui32 head_write_pos = 0;
 
@@ -345,7 +352,7 @@ static void http_server_send_response(game_server& server, http_client& client,
 	char bodySizeStrBuff[32] = {0}; // TODO(Marc): Fiiiiiiiiiiiiiiiiiiiine I guess I'll make a proper string format function. Eventually.
 	{
 		ui32 appendCount = 0;
-		ia_str_append_ui64(bodySizeStrBuff, sizeof(bodySizeStrBuff) - 1, appendCount, body_size);
+		ia_str_append_ui64(bodySizeStrBuff, sizeof(bodySizeStrBuff) - 1, appendCount, content_size);
 	}
 	head_write_pos += ia_string_push(client.response.head.str, bodySizeStrBuff);
 	head_write_pos += ia_string_push(client.response.head.str, "\r\nCache-Control: no-cache\r\n\r\n"); // Dev server: always re-fetch after a redeploy.
@@ -358,11 +365,11 @@ static void http_server_send_response(game_server& server, http_client& client,
 	client.response.head.sent = 0;
 	client.response.head.size = head_write_pos;
 
-	if (body != nullptr && body_size > 0)
+	if (content != nullptr && content_size > 0)
 	{
-		client.response.body.buff = body;
+		client.response.body.buff = content;
 		client.response.body.sent = 0;
-		client.response.body.size = body_size;
+		client.response.body.size = content_size;
 	}
 	else
 	{
@@ -370,15 +377,44 @@ static void http_server_send_response(game_server& server, http_client& client,
 		client.response.body.sent = 0;
 		client.response.body.size = 0;
 	}
-
-	// Ensure the client isn't being dropped.
-	client.being_dropped = false;
 }
 
-// Answers with an empty-bodied status response.
-static void http_server_send_response_status(game_server& server, http_client& client, const char* status)
+// Answers with an empty-bodied status response, optionally dropping the client afterward.
+static void http_server_send_response_status(game_server& server, http_client& client, 
+	const char* status_msg, bool drop_client)
 {
-	http_server_send_response(server, client, status, "text/plain; charset=utf-8", nullptr, 0);
+	ASSERT_MSG(client.response.in_flight == false, "Attempted to re-send response data to HTTP client while a response was already in flight.");
+
+	// Build response head section.
+	client.response.head.str.length = 0; // TODO(Marc): String reset function.
+
+	ui32 head_write_pos = 0;
+	head_write_pos += ia_string_push(client.response.head.str, "HTTP/1.1 ");
+	head_write_pos += ia_string_push(client.response.head.str, status_msg);
+	head_write_pos += ia_string_push(client.response.head.str, "\r\n");
+
+	if (drop_client)
+	{
+		client.being_dropped = true;
+		head_write_pos += ia_string_push(client.response.head.str, "Connection: Close\r\n");
+	}
+	else
+	{
+		head_write_pos += ia_string_push(client.response.head.str, "Content-Type: text/plain charset=utf-8\r\n");
+		head_write_pos += ia_string_push(client.response.head.str, "Content-Length: 0\r\n");
+	}
+
+	head_write_pos += ia_string_push(client.response.head.str, "\r\n");
+
+	client.last_activity_ms = server.uptime_ms;
+
+	client.response.head.sent = 0;
+	client.response.head.size = head_write_pos;
+	client.response.body.buff = nullptr;
+	client.response.body.sent = 0;
+	client.response.body.size = 0;
+
+	client.response.in_flight = true;
 }
 
 // Pushes as much of the response as the platform will take. Whatever is left goes on the next tick.
@@ -445,7 +481,11 @@ static void http_server_progress_response(game_server& server, http_client& clie
 static void http_server_handle_request(game_server& server, http_client& client, http_request& request)
 {
 	// NOTE(Marc): Currently only GET and HEAD method requests are handled.
+	// TODO(Marc): Per request type function ?
+
 	const http_file* targetFile = nullptr;
+	http_request::header_field connectionField;
+
 	switch (request.method)
 	{
 	case http_request::METHOD::GET:
@@ -455,27 +495,32 @@ static void http_server_handle_request(game_server& server, http_client& client,
 		targetFile = http_server_find_file(*server.http, request.target_name);
 		if (targetFile == nullptr)
 		{
-			http_server_send_response_status(server, client, "404 Not Found");
+			http_server_send_response_status(server, client, "404 Not Found", false);
 			break;
 		}
 
 		if (request.method == http_request::METHOD::GET)
-			http_server_send_response(server, client, "200 Ok", targetFile->content_type, targetFile->data, targetFile->size);
+			http_server_serve_content(server, client, "200 Ok", targetFile->content_type, targetFile->data, targetFile->size);
 		if (request.method == http_request::METHOD::HEAD)
-			http_server_send_response(server, client, "200 Ok", targetFile->content_type, nullptr, targetFile->size);
+			http_server_serve_content(server, client, "200 Ok", targetFile->content_type, nullptr, targetFile->size);
+
+		// If the request has header field "Connection: Close" then we can drop the client.
+		if (http_request_find_header_field(request, "Connection", connectionField))
+		{
+			if (connectionField.value == "close")
+			{
+				client.being_dropped = true;
+			}
+		}
 
 		break;
 	case http_request::METHOD::UNKNOWN:
-		http_server_send_response_status(server, client, "501 Not Implemented");
-		client.being_dropped = true;
-
+		http_server_send_response_status(server, client, "501 Not Implemented", true);
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unknown method. Closing client.", client.client_handle.value);
 		break;
 	case http_request::METHOD::UNSUPPORTED:
 	default:
-		http_server_send_response_status(server, client, "405 Method Not Allowed\r\nAllow: GET, HEAD");
-		client.being_dropped = true;
-
+		http_server_send_response_status(server, client, "405 Method Not Allowed\r\nAllow: GET, HEAD", true);
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d requested unsupported method. Closing client.", client.client_handle.value);
 		break;
 	}
@@ -525,9 +570,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		// No full head present in the request buffer. If the buffer is full, it never will be.
 		if (client.request.size >= HTTP_CLIENT_MAX_REQUEST_SIZE - 1)
 		{
-			http_server_send_response_status(server, client, "431 Request Header Fields Too Large");
-			client.being_dropped = true;
-
+			http_server_send_response_status(server, client, "431 Request Header Fields Too Large", true);
 			server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d sent a request head larger than %d bytes. Closing client.",
 				client.client_handle.value, HTTP_CLIENT_MAX_REQUEST_SIZE);
 			return false;
@@ -564,8 +607,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	// If there are no more bytes afterward, this is a bad request.
 	if (readBytes >= head_end_index)
 	{
-		http_server_send_response_status(server, client, "400 Bad Request");
-		client.being_dropped = true;
+		http_server_send_response_status(server, client, "400 Bad Request", true);
 		return false;
 	}
 
@@ -574,13 +616,12 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		// We only support simple origin-form names as target (starting with '/'), with query or fragment segments being completely discarded.
 		// No special characters are present in the available file names, so special character encodings are not yet decoded and will simply cut name off.
 		// TODO(Marc): Accept special characters in get_word and add decoding routine.
-		out_request.target_name = ia_string_get_word(requestBytes + readBytes, HTTP_CLIENT_MAX_REQUEST_TARGET_LEN, "/_.");
+		out_request.target_name = ia_string_get_word(requestBytes + readBytes, HTTP_CLIENT_MAX_REQUEST_TARGET_LEN, "/_.?");
 
 		// Protect against target names exceeding max length.
 		if (out_request.target_name.length == HTTP_CLIENT_MAX_REQUEST_TARGET_LEN)
 		{
-			http_server_send_response_status(server, client, "414 URL Too Long");
-			client.being_dropped = true;
+			http_server_send_response_status(server, client, "414 URL Too Long", true);
 			return false;
 		}
 
@@ -592,9 +633,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	if (readBytes >= head_end_index 
 		|| !ia_str_expect(requestBytes + readBytes, "HTTP/1.1\r\n"))
 	{
-		http_server_send_response_status(server, client, "505 HTTP Version Not Supported.");
-		client.being_dropped = true;
-
+		http_server_send_response_status(server, client, "505 HTTP Version Not Supported.", true);
 		server.logf("HTTP SERVER", LOG_WARNING, "Client handle %d used wrong HTTP version. Closing client.", client.client_handle.value);
 		return false;
 	}
@@ -605,8 +644,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 	{
 		if (out_request.header.field_count == http_request::MAX_HEADER_FIELD_COUNT)
 		{
-			http_server_send_response_status(server, client, "431 Too Many Headers");
-			client.being_dropped = true;
+			http_server_send_response_status(server, client, "431 Too Many Headers", true);
 			return false;
 		}
 
@@ -619,8 +657,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 			|| readBytes + field.name.length == head_end_index
 			|| requestBytes[readBytes + field.name.length] != ':')
 		{
-			http_server_send_response_status(server, client, "400 Bad Request");
-			client.being_dropped = true;
+			http_server_send_response_status(server, client, "400 Bad Request", true);
 			return false;
 		}
 		readBytes += field.name.length + 1; // Name + ':'.
@@ -630,8 +667,7 @@ static bool http_server_receive(game_server& server, http_client& client, http_r
 		if (readBytes + field.value.length == head_end_index
 			|| requestBytes[readBytes + field.value.length + 1] != '\n')
 		{
-			http_server_send_response_status(server, client, "400 Bad Request");
-			client.being_dropped = true;
+			http_server_send_response_status(server, client, "400 Bad Request", true);
 			return false;
 		}
 		readBytes += field.value.length + 2; // Name + '\r\n'.
