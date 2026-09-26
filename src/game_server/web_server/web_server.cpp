@@ -30,7 +30,7 @@ void web_server_on_client_disconnected(game_server& server, game_server_client& 
 		&& (iptr)client.connection_context < (iptr)&server.web->clients[WEB_SERVER_MAX_CLIENTS])
 	{
 		server.logf("WEB SERVER", LOG_WARNING, "HTTP Client %d dropped due to Game Server Client disconnection.", client.handle.value);
-		*(web_server_client*)client.connection_context = {};
+		ia_memzero(client.connection_context, sizeof(web_server_client));
 	}
 }
 
@@ -199,17 +199,6 @@ void web_server_tick(game_server& server)
 		else
 		{
 			web_server_websocket_tick_client(server, client);
-		}
-
-		if (!client.in_drop)
-		{
-			// Flag the client for dropping if it has been idle for too long (no bytes received).
-			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
-			{
-				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
-				client.in_drop = true;
-			}
 		}
 	}
 }

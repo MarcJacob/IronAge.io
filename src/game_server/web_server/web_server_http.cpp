@@ -605,12 +605,16 @@ void web_server_http_tick_client(game_server& server, web_server_client& client)
 			}
 		}
 
-		// Flag the client for dropping if it has been idle for too long (no bytes received, no response finished).
-		if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+		// If still not in drop due to a request, check if we've gone past timeout.
+		if (!client.in_drop)
 		{
-			server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-				client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
-			client.in_drop = true;
+			// Flag the client for dropping if it has been idle for too long (no bytes received).
+			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+			{
+				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
+					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
+				client.in_drop = true;
+			}
 		}
 	}
 	else  // Client has no response in flight, no upgrade in progress and is being dropped... finish dropping them !

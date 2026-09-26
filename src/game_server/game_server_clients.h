@@ -86,7 +86,7 @@ struct game_server_client
 
 	// Sends message to this game client. Client must be of type GAME_CLIENT.
 	// Returns whether the message was successfully sent.
-	inline virtual bool game_client_send_message(const game_message_header& msg) 
+	inline bool game_client_send_message(const game_message_header& msg) 
 	{ 
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.send_game_message_func != nullptr);
@@ -96,7 +96,7 @@ struct game_server_client
 
 	// Peeks at the next message received from this game client. Client must be of type GAME_CLIENT.
 	// Returns whether a message is available, in which case out_msg_ptr will point to it. The message stays the same until consumed.
-	inline virtual bool game_client_peek_message(game_message_header*& out_msg_ptr)
+	inline bool game_client_peek_message(game_message_header*& out_msg_ptr)
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.peek_game_message_func != nullptr);
@@ -106,7 +106,7 @@ struct game_server_client
 
 	// Consumes the message last peeked, so the next peek returns the next message. Client must be of type GAME_CLIENT.
 	// Every peeked message MUST be consumed once done with.
-	inline virtual void game_client_consume_message()
+	inline void game_client_consume_message()
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.consume_game_message_func != nullptr);

@@ -166,6 +166,19 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 	}
 }
 
+// TEMP(Marc): Test hook, echoes every game message received from a game client back to it.
+static void game_server_test_echo_game_client(game_server& server, game_server_client& client)
+{
+	game_message_header* message = nullptr;
+	while (client.game_client_peek_message(message))
+	{
+		server.logf("TEST", "Client %d: message type %d, payload %d bytes.", client.handle.value, message->message_type_code, message->payloadSize);
+
+		if (!client.game_client_send_message(*message)) break; // Sending buffer full: try again next tick.
+		client.game_client_consume_message();
+	}
+}
+
 // BEGIN GAME SERVER MAIN FUNCTIONS
 
 game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
@@ -349,6 +362,9 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 
 	// Process UNKNOWN type client connections.
 	game_server_client_for_each_of_type(server, game_server_client::TYPE::UNKNOWN, game_server_process_unknown_client);
+
+	// TEMP(Marc): Echo test for GAME_CLIENT type clients.
+	game_server_client_for_each_of_type(server, game_server_client::TYPE::GAME_CLIENT, game_server_test_echo_game_client);
 
 	// Serve the web client bundle over HTTP on all platform connections.
 	web_server_tick(server);

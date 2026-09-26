@@ -447,5 +447,17 @@ void web_server_websocket_tick_client(game_server& server, web_server_client& cl
 	if (!client.in_drop)
 	{
 		web_server_websocket_client_reception(server, client);
+
+		// If still not in drop after reception, check if we've gone past timeout.
+		if (!client.in_drop)
+		{
+			// Flag the client for dropping if it has been idle for too long (no bytes received).
+			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+			{
+				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
+					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
+				client.in_drop = true;
+			}
+		}
 	}
 }

@@ -31,7 +31,8 @@ else()
 	target_include_directories(IronAgeIO_GameServer PRIVATE ${CMAKE_SOURCE_DIR}/include/)
 	target_compile_options(IronAgeIO_GameServer PRIVATE
 		$<$<CXX_COMPILER_ID:Clang>:-ffp-contract=off>
-		$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>)
+		$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>
+		-fno-exceptions -fno-rtti)
 
 	# Server resources folder, absolute. Override at configure time (-DGAME_SERVER_RESOURCES_DIR=...) for deployments.
 	set(GAME_SERVER_RESOURCES_DIR "${CMAKE_SOURCE_DIR}/game_server_resources" CACHE PATH "Folder the Game Server reads / writes its resources from.")

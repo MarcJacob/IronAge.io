@@ -194,18 +194,17 @@ tasks are broken down further.
        - [DONE] HTTP client type: HTTP connection state is the HTTP variant of the web client
          union; web server works on a client entry instead of owning connections. Verified in
          a browser.
-       - [WIP] Client type changes on upgrade: HTTP -> WEBSOCKET (game client).
+       - [DONE] Client type changes on upgrade: HTTP -> WEBSOCKET (game client).
          - [DONE] Web client goes IN_UPGRADE_WEBSOCKET -> ACTIVE_WEBSOCKET once the handshake
            response is sent (checked before any further request parsing).
          - [DONE] Bytes received after the request head carry over to the websocket client (http
            and websocket reception buffers share the same offset, no copy).
-         - Promote the game server client to GAME_CLIENT, with websocket-framed send / receive
-           functions.
-         - Game client send / receive dispatched through the client's `game_client` function
-           pointers.
-         - Disconnect handlers dispatched by owning component (`connection_context`), so
-           several components can own NON_GAME_CLIENT clients; web server releases its state
-           for GAME_CLIENT clients too.
+         - [DONE] Promote the game server client to GAME_CLIENT, with websocket-framed send /
+           peek / consume functions.
+         - [DONE] Game client send / peek / consume dispatched through the client's
+           `game_client` function pointers (a peeked message stays valid until consumed).
+         - [DONE] Disconnect handlers registered as a list, each checking ownership through
+           `connection_context`.
        - Leaves room for other types later (master server, administration, non-browser
          clients).
      - [DONE] Server: web server component (formerly "http server") split into
@@ -229,8 +228,12 @@ tasks are broken down further.
        - [DONE] Upgrade branch: validate headers, 101 response (tested client-side), web client
          moves to ACTIVE_WEBSOCKET without being dropped once the response is sent.
        - Validate `Origin` on the upgrade.
-       - Frame codec (masked client frames, ping / pong / close, partial frames) in
-         `web_server_websocket.cpp`.
+       - [WIP] Frame codec (masked client frames, ping / pong / close, partial frames) in
+         `web_server_websocket.cpp`, plus framed sending through the client sending buffer.
+         Binary echo verified in a browser.
+         - Remaining test cases: message order, burst, invalid frames (close codes 1002 /
+           1003 / 1007 / 1009), client close, idle drop.
+         - Server ping keepalive for websocket clients.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.
      - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.
