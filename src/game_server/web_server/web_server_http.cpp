@@ -203,11 +203,46 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 		return false;
 	}
 
-	// Let's treat the origin and host fields as optional for now.
-	header_field originField;
+	// Check where the request comes from. Websocket connections aren't restricted by the browsers' same-origin policy, so it's up to us to
+	// refuse pages that weren't served by this server: the host in the Origin header (scheme://host[:port]) must be the one the request was sent to.
+	// Clients that aren't browsers send no Origin, and are let through.
 	header_field hostField;
-	http_request_find_header_field(request, "origin", originField);
-	http_request_find_header_field(request, "host", hostField);
+	if (!http_request_find_header_field(request, "host", hostField))
+	{
+		web_server_http_send_response_status(server, web_client, "400 Bad Request", true);
+		return false;
+	}
+
+	header_field originField;
+	if (http_request_find_header_field(request, "origin", originField))
+	{
+		// Get to the host part: skip "scheme://", then stop at the first '/'.
+		ia_string_view originHost = originField.value;
+		for (ui32 charIndex = 0; charIndex + 3 <= originHost.length; charIndex++)
+		{
+			if (originHost.view_str[charIndex] == ':' && originHost.view_str[charIndex + 1] == '/' && originHost.view_str[charIndex + 2] == '/')
+			{
+				originHost.view_str += charIndex + 3;
+				originHost.length -= charIndex + 3;
+				break;
+			}
+		}
+		if (originHost.length > 0)
+		{
+			originHost = ia_string_get_until(originHost.view_str, '/', originHost.length);
+		}
+
+		if (!ia_string_equal(originHost, hostField.value, false))
+		{
+			server.logf("WEB SERVER", LOG_WARNING, "Refusing Websocket upgrade from client %d: Origin \"%.*s\" doesn't match Host \"%.*s\".",
+				web_client.client_handle.value,
+				(i32)originField.value.length, originField.value.view_str,
+				(i32)hostField.value.length, hostField.value.view_str);
+
+			web_server_http_send_response_status(server, web_client, "403 Forbidden", true);
+			return false;
+		}
+	}
 
 	// We need to determine the acceptance key.
 	// Take the received key, add it together with a specific GUID and have it go through a SHA-1 hash.
@@ -609,10 +644,10 @@ void web_server_http_tick_client(game_server& server, web_server_client& client)
 		if (!client.in_drop)
 		{
 			// Flag the client for dropping if it has been idle for too long (no bytes received).
-			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+			if (server.uptime_ms - client.last_activity_ms > HTTP_CLIENT_TIMEOUT_MS)
 			{
 				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
+					client.client_handle.value, HTTP_CLIENT_TIMEOUT_MS);
 				client.in_drop = true;
 			}
 		}

@@ -20,14 +20,11 @@ Once a HTTP client gets upgraded to Websocket, we assume it does so for the purp
 
 The provided Send function takes in a game message (assumed to be smaller than the maximum Websocket frame size), frames it as required by Websocket and sends it.
 
-Reception is a little more complicated: platform-received bytes are read into a staging buffer for processing either as a standard Websocket message (ping / pong, close signal...)
-or as a Game Message, in which case the relevant bytes are moved to a separate buffer which effectively queues up the messages for actual reception through the receive function.
+Reception works through a "buffers split" strategy that relies on the fact we can immediately get rid and react to non-game messages like pings, closes...
+The reception buffer stays aware of not only how many bytes are waiting but also how many have been "queued" / processed from their websocket frame.
+The receive function on the client can then just reconstruct the processed websocket frame at the beginning of the buffer and obtain its payload location.
+The consume function can do the same thing to know how many bytes to consume.
 
-Note: This means that, in total, we have 3 buffers every game message goes through before actually reaching game logic:
-- OS Buffer
-- Intermediate Buffer
-- Messages Buffer
+It could still be a nice improvement to turn the buffer into a ring buffer so we don't have to shift the bytes left on consumption.
 
-That's a lot of copies. We could get rid of the messages buffer by instead using a ring buffer as intermediate and queuing up messages through pointers into that buffer,
-and somehow being able to free items after consumption in any order. Alternatively we guarantee that only game messages ever stay in the reception buffer while other
-messages are processed immediately on reception, allowing the bytes to be freed up immediately, but that assumes we receive those non-message bytes cleanly... to be determined.
+Websocket clients are pinged regularly as a heartbeat / keep-alive mechanism, based on a ping clock or how long since they sent something to us.

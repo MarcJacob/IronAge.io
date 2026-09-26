@@ -9,7 +9,7 @@
 
 // Values mirrored from the server. Update them here if the server constants change.
 const SERVER_RECEPTION_BUFFER_SIZE = 2048; // WEB_CLIENT_RECEPTION_BUFFER_SIZE: biggest frame the server accepts, header included.
-const SERVER_IDLE_TIMEOUT_MS = 2000; // WEB_CLIENT_TIMEOUT_MS: a client that sends nothing for this long gets dropped.
+const SERVER_WEBSOCKET_TIMEOUT_MS = 6000; // WEBSOCKET_CLIENT_TIMEOUT_MS: a client that sends nothing (not even a pong) for this long gets dropped.
 
 const GAME_MESSAGE_HEADER_SIZE = 4;
 
@@ -63,6 +63,9 @@ function check(condition, message) {
     if (!condition) throw new Error(message);
 }
 
+// Thrown by a test that can't run in the current setup.
+class TestSkipped extends Error {}
+
 function check_bytes_equal(actual, expected, what) {
     let equal = actual.length === expected.length;
     for (let i = 0; equal && i < actual.length; i++) {
@@ -108,9 +111,9 @@ class TestClient {
         });
     }
 
-    static connect(timeout_ms = DEFAULT_TIMEOUT_MS) {
+    static connect(timeout_ms = DEFAULT_TIMEOUT_MS, url = websocket_url()) {
         return new Promise((resolve, reject) => {
-            const socket = new WebSocket(websocket_url());
+            const socket = new WebSocket(url);
             const client = new TestClient(socket);
 
             const timer = setTimeout(() => reject(new Error(`connection not open after ${timeout_ms} ms`)), timeout_ms);
@@ -339,25 +342,40 @@ const TESTS = [
         },
     },
 
-    // Idle connections. Both tests reflect the server's current behavior: it has no keepalive ping yet.
+    // Keepalive. The server pings connections it hasn't sent anything to for a while, and browsers answer pings on their own, without any script involved.
+    // The pings themselves can't be seen from a page, so this only checks that a silent connection outlives the timeout.
 
     {
-        name: `idle: sending messages keeps a connection alive past the idle timeout (${SERVER_IDLE_TIMEOUT_MS} ms)`,
+        name: `keepalive: a silent connection stays open past the server's timeout (${SERVER_WEBSOCKET_TIMEOUT_MS} ms)`,
         run: async (ctx) => {
             const client = await ctx.connect();
-            const rounds = Math.ceil((SERVER_IDLE_TIMEOUT_MS * 2) / 1000) + 1;
+            await sleep(SERVER_WEBSOCKET_TIMEOUT_MS + 2000);
 
-            for (let i = 0; i < rounds; i++) {
-                await sleep(1000);
-                await client.check_echo(build_message(i, [i]), `echoed message after ${i + 1} s`);
-            }
+            check(client.close_event === null, `connection was closed by the server (code ${client.close_event && client.close_event.code})`);
+            await client.check_echo(build_message(1, [1, 2, 3]), 'echoed message after the silence');
         },
     },
+
+    // Origin.
+
     {
-        name: `idle: a silent connection is dropped by the server after about ${SERVER_IDLE_TIMEOUT_MS} ms`,
+        name: 'origin: a connection from a page served under a different host name than the one it connects to is refused',
         run: async (ctx) => {
-            const client = await ctx.connect();
-            await client.wait_closed(SERVER_IDLE_TIMEOUT_MS + 2000);
+            // The page's origin is the host it was loaded from. Reaching the same server under its other loopback name makes Origin and Host disagree.
+            const other_host = { 'localhost': '127.0.0.1', '127.0.0.1': 'localhost' }[window.location.hostname];
+            if (other_host === undefined) throw new TestSkipped(`page not loaded from localhost or 127.0.0.1 (${window.location.hostname})`);
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const port = window.location.port === '' ? '' : `:${window.location.port}`;
+
+            let connected = false;
+            try {
+                await ctx.connect(`${protocol}//${other_host}${port}/ws`);
+                connected = true;
+            } catch (error) {
+                // Expected: the server answers the upgrade with a 403.
+            }
+            check(!connected, 'the connection was accepted although Origin and Host differ');
         },
     },
 ];
@@ -367,8 +385,8 @@ const TESTS = [
 async function run_test(test) {
     const clients = [];
     const ctx = {
-        connect: async () => {
-            const client = await TestClient.connect();
+        connect: async (url = websocket_url()) => {
+            const client = await TestClient.connect(DEFAULT_TIMEOUT_MS, url);
             clients.push(client);
             return client;
         },
@@ -388,6 +406,7 @@ async function run_test(test) {
 export async function run_websocket_tests(log) {
     let passed = 0;
     let failed = 0;
+    let skipped = 0;
 
     log(`Running ${TESTS.length} WebSocket tests against ${websocket_url()}`);
 
@@ -399,6 +418,9 @@ export async function run_websocket_tests(log) {
         if (error === null) {
             passed++;
             log(`[PASS] ${test.name} (${duration} ms)`);
+        } else if (error instanceof TestSkipped) {
+            skipped++;
+            log(`[SKIP] ${test.name}\n       ${error.message}`);
         } else {
             failed++;
             log(`[FAIL] ${test.name}\n       ${error.message}`);
@@ -407,7 +429,7 @@ export async function run_websocket_tests(log) {
         await sleep(50); // Leave the server a moment to process the closed connections.
     }
 
-    log(`\n${passed} passed, ${failed} failed.`);
+    log(`\n${passed} passed, ${failed} failed, ${skipped} skipped.`);
     return failed === 0;
 }
 

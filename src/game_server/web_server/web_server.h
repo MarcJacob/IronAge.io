@@ -18,7 +18,10 @@ static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Files that can be preloaded 
 static constexpr ui64 WEB_SERVER_MAX_FILES_TOTAL_SIZE = MiB(32); // Budget for all preloaded files together.
 
 static constexpr ui32 WEB_CLIENT_RECEPTION_BUFFER_SIZE = 2048;
-static constexpr time_ms WEB_CLIENT_TIMEOUT_MS = 2000; // Connection with no request / activity for this long gets closed.
+static constexpr time_ms HTTP_CLIENT_TIMEOUT_MS = 2000; // HTTP connection with no request / activity for this long gets closed.
+static constexpr time_ms WEBSOCKET_CLIENT_TIMEOUT_MS = 6000; // Websocket connection that sent nothing (not even a pong) for this long gets closed.
+static constexpr time_ms WEBSOCKET_PING_PERIOD_MS = 2000; // A websocket client is sent a ping this often.
+														  // Keep it well under the timeout, so that a few pings can go unanswered before the client is dropped.
 
 static constexpr ui32 HTTP_CLIENT_MAX_REQUEST_TARGET_LEN = 256; // Maximum number of characters in a valid http request target name.
 static constexpr ui32 HTTP_RESPONSE_HEAD_BUFFER_SIZE = 256;
@@ -51,6 +54,8 @@ struct websocket_client
 		ui8 buff[WEBSOCKET_SEND_BUFFER_SIZE]; // Sending buffer for this client.
 		ui32 size; // Number of bytes awaiting dispatch to platform sending buffer.
 		time_ms blocked_since_ms; // Time at which the platform first refused the bytes currently awaiting dispatch. 0 if it has not refused them.
+		time_ms last_ping_ms; // Last time a ping was queued up for this client. A ping goes out once WEBSOCKET_PING_PERIOD_MS have gone by since this or since
+							  // the client last sent anything (web_server_client::last_activity_ms), whichever is more recent.
 	} sending;
 };
 

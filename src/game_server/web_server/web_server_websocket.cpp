@@ -305,8 +305,9 @@ void web_server_websocket_on_client_promotion(game_server& server, web_server_cl
 	// Any bytes it holds are raw Websocket bytes received after the http request, and none of them have been processed yet.
 	web_client.websocket.reception.queued_size = 0;
 
-	// Zero out the send buffer.
+	// Zero out the send buffer. The first ping is due one period from now.
 	web_client.websocket.sending = {};
+	web_client.websocket.sending.last_ping_ms = server.uptime_ms;
 
 	// Promote game server client, assigning it the send, peek & consume functions to use.
 	game_server_promote_game_client(server, web_client.client_handle,
@@ -434,6 +435,16 @@ void web_server_websocket_tick_client(game_server& server, web_server_client& cl
 {
 	ASSERT(client.is_websocket());
 
+	// Ping the client once a period has gone by since we last heard from it or last pinged it, whichever is more recent: a client that keeps sending us
+	// things needs no ping, while a live but quiet one gets something to answer, and its pong counts as activity.
+	time_ms lastSignOfLife = ia_max(client.websocket.sending.last_ping_ms, client.last_activity_ms);
+	if (!client.in_drop
+		&& server.uptime_ms - lastSignOfLife >= WEBSOCKET_PING_PERIOD_MS
+		&& web_server_websocket_queue_frame(client, WEBSOCKET_OPCODE::PING, nullptr, 0))
+	{
+		client.websocket.sending.last_ping_ms = server.uptime_ms;
+	}
+
 	if (client.websocket.sending.size > 0)
 	{
 		web_server_websocket_client_sending(server, client);
@@ -452,10 +463,10 @@ void web_server_websocket_tick_client(game_server& server, web_server_client& cl
 		if (!client.in_drop)
 		{
 			// Flag the client for dropping if it has been idle for too long (no bytes received).
-			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+			if (server.uptime_ms - client.last_activity_ms > WEBSOCKET_CLIENT_TIMEOUT_MS)
 			{
 				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
+					client.client_handle.value, WEBSOCKET_CLIENT_TIMEOUT_MS);
 				client.in_drop = true;
 			}
 		}
