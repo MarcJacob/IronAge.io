@@ -13,7 +13,7 @@
 
 // Unity-compile sub-components.
 #include "game_server_clients.cpp"
-#include "game_server_http.cpp"
+#include "web_server/web_server.cpp"
 
 // BEGIN MATCH SLOT SYSTEM IMPLEMENTATION
 
@@ -147,14 +147,14 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 {
 	// Receive some data from the client connection in a small local buffer.
 	ui8 readBuffer[UNKNOWN_CLIENT_READ_BUFFER_SIZE] = {0};
-	ui32 receivedBytes = game_server_client_receive_message(server, client.handle, readBuffer, sizeof(readBuffer) - 1);
+	ui32 receivedBytes = game_server_client_receive_net_bytes(server, client.handle, readBuffer, sizeof(readBuffer) - 1);
 
 	if (receivedBytes > 0)
 	{
 		client.unknown.traffic_size += receivedBytes;
 
-		// Ask HTTP server if it recognized the bytes to connect as a http request. If it does, register the client with http server and set its type.
-		if (http_server_try_accept_client(server, client, readBuffer, receivedBytes)) return;
+		// Ask Web server if it recognized the bytes to connect as a http request. If it does, register the client with the web server and set its type.
+		if (web_server_try_accept_client(server, client, readBuffer, receivedBytes)) return;
 	}
 
 	// If the connection is still unrecognized and has lasted more than a second, drop it.
@@ -175,12 +175,12 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Check init params.
 	if (init_params.web_root == nullptr || ia_str_len(init_params.web_root) == 0)
 	{
-		platform.log(LOG_ERROR, "HTTP Server requires a valid web root folder, relative to the platform resources path. Aborting.");
+		platform.log(LOG_ERROR, "Web Server requires a valid web root folder, relative to the platform resources path. Aborting.");
 		return nullptr;
 	}
 	if (init_params.web_files == nullptr || init_params.web_file_count == 0)
 	{
-		platform.log(LOG_ERROR, "HTTP Server requires at least one file to serve. Aborting.");
+		platform.log(LOG_ERROR, "Web Server requires at least one file to serve. Aborting.");
 		return nullptr;
 	}
 	if (init_params.match_slot_count == 0)
@@ -216,14 +216,13 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
-	// Initialize HTTP Server.
+	// Initialize Web Server.
 
-	newServer->http = http_server_init(*newServer);
-	http_server_load_files(*newServer);
+	newServer->web = web_server_init(*newServer);
+	web_server_load_files(*newServer);
 
-	// Setup event handler for HTTP server to clean resources tied to non-game-clients losing connection.
-	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, game_server_client::TYPE::NON_GAME_CLIENT,
-		http_server_on_client_disconnected);
+	// Setup event handler for Web server to clean resources tied to non-game-clients losing connection.
+	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, web_server_on_client_disconnected);
 
 	return newServer;
 }
@@ -346,7 +345,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	game_server_client_for_each_of_type(server, game_server_client::TYPE::UNKNOWN, game_server_process_unknown_client);
 
 	// Serve the web client bundle over HTTP on all platform connections.
-	http_server_tick(server);
+	web_server_tick(server);
 
 	// Manage match slots.
 	for (ui8 slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)

@@ -165,7 +165,7 @@ tasks are broken down further.
      - [DONE] Platform `read_file` (+ file size) in "server resources storage" (win32:
        `GAME_SERVER_RESOURCES_DIR`, set by CMake, default `<repo>/game_server_resources`).
      - [DONE] Server: HTTP connection table (fixed max) + per-connection request buffer,
-       chunked response sending (`game_server_http.cpp`).
+       chunked response sending (now `web_server/web_server_http.cpp`).
      - [DONE] Server: static HTTP serving of the client bundle (GET only, keep-alive, MIME
        types). `deploy_web_client.bat` copies the bundle into `game_server_resources/web_root`.
        - [DONE] First version: any file under `web_root`, read on request. Verified in a
@@ -179,7 +179,7 @@ tasks are broken down further.
        - Win32: `win32_stdout` / `win32_stderr` end points (color by type), component-
          prefixed `WIN32 (<component>)` logging, net component logs as `NET`.
        - Game server: `server.log` / `server.logf`, `GAME SERVER (<component>)` prefix.
-     - [WIP] Server: connection ownership moves from the HTTP server to the game server.
+     - [WIP] Server: connection ownership moves from the web server to the game server.
        - [DONE] Clients table on the game server: fixed size, one entry per platform
          connection, discriminated union (client type + type-specific data). Register / lost /
          lookup by client handle, per-type disconnect handlers, wired in `game_server_tick`
@@ -187,16 +187,31 @@ tasks are broken down further.
        - [DONE] New connections start UNKNOWN. On first bytes, detect HTTP; anything else
          is rejected (closed) for now.
          - [DONE] Per-tick function reads a small local buffer per unknown client and asks
-           each subsystem whether it understands the bytes; the HTTP server claims the client
-           (sets type, allocates its HTTP client state, takes the bytes).
+           each subsystem whether it understands the bytes; the web server claims the client
+           (sets type, allocates its web client state, takes the bytes).
          - [DONE] Unknown clients still unrecognized after 1 s are dropped (`connected_at_ms`).
-         - [DONE] HTTP disconnect handler releases the HTTP client state.
-       - [DONE] HTTP client type: HTTP connection state is the HTTP variant of the union; HTTP
-         server works on a client entry instead of owning connections. Verified in a browser.
-       - Client type changes on upgrade: HTTP -> WEBSOCKET (game client). Bytes received
-         after the request head carry over to the new type.
+         - [DONE] Web server disconnect handler releases the web client state.
+       - [DONE] HTTP client type: HTTP connection state is the HTTP variant of the web client
+         union; web server works on a client entry instead of owning connections. Verified in
+         a browser.
+       - [WIP] Client type changes on upgrade: HTTP -> WEBSOCKET (game client).
+         - [DONE] Web client goes IN_UPGRADE_WEBSOCKET -> ACTIVE_WEBSOCKET once the handshake
+           response is sent (checked before any further request parsing).
+         - Bytes received after the request head carry over to the websocket client.
+         - Promote the game server client to GAME_CLIENT, with websocket-framed send / receive
+           functions.
+         - Game client send / receive dispatched through the client's `game_client` function
+           pointers.
+         - Disconnect handlers dispatched by owning component (`connection_context`), so
+           several components can own NON_GAME_CLIENT clients; web server releases its state
+           for GAME_CLIENT clients too.
        - Leaves room for other types later (master server, administration, non-browser
          clients).
+     - [DONE] Server: web server component (formerly "http server") split into
+       `src/game_server/web_server/`: `web_server.h` / `.cpp` (common behavior),
+       `web_server_http.cpp` (http, including the http -> websocket upgrade),
+       `web_server_websocket.cpp` (websocket frame code, to come). Functions prefixed
+       `web_server_`, `web_server_http_`.
      - [DONE] Server: HTTP request handling refactor.
        - [DONE] Request line parse (method, target without query, version 1.1), complete-head
          detection, one request consumed at a time, GET / HEAD file serving, 501 / 405 / 400 /
@@ -210,10 +225,11 @@ tasks are broken down further.
        ping / pong / close, partial frames.
        - [DONE] SHA-1 + base64 encode, in `include/core/math.h` (`ia_sha1`,
          `ia_base64_encode`). Done first, out of order. Verified against test vectors.
-       - [WIP] Upgrade branch: validate headers, 101 response (sent, tested client-side),
-         switch client type (HTTP -> WEBSOCKET, leftover bytes carried over, client not dropped
-         once the response is sent).
+       - [DONE] Upgrade branch: validate headers, 101 response (tested client-side), web client
+         moves to ACTIVE_WEBSOCKET without being dropped once the response is sent.
        - Validate `Origin` on the upgrade.
+       - Frame codec (masked client frames, ping / pong / close, partial frames) in
+         `web_server_websocket.cpp`.
      - Wire protocol v0 (binary, explicit encode/decode, shared header): join/welcome,
        input, per-tick command list.
      - Server: connection <-> slot, per-tick command log, broadcast, late-join by replay.
@@ -244,9 +260,9 @@ Tasks not currently part of the plan that need to be added to it at some point.
   never closed once in SERVER_CLOSED).
 - Platform call to list the files in a folder relative to resources, so the server discovers
   the files under `web_root` instead of taking a list in the init params.
-- HTTP server: optional automatic reload of a preloaded file when it changed on disk since
+- Web server: optional automatic reload of a preloaded file when it changed on disk since
   it was loaded.
-- HTTP server: keep frequently-used files always loaded ("cached"), load rarely-requested or
+- Web server: keep frequently-used files always loaded ("cached"), load rarely-requested or
   large ones on demand.
 - WASM client backend: log messages (typed, like the server's `LOG_TYPE`) straight to the JS
   frontend.

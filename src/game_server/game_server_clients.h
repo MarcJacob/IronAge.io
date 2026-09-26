@@ -99,14 +99,21 @@ void clients_table_register_event_handler_client_connection_lost(game_server_cli
 
 // Extensions to server functionality
 
+// Retrieves pointer to game server client data associated with the handle.
 game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
 
-bool game_server_client_send_message(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size);
+// Sends bytes along a client's associated platform network connection. To be used by server subcomponents.
+// Game Server / Game Client logic should use the Game Client equivalent.
+bool game_server_client_send_net_bytes(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size);
 
-ui32 game_server_client_receive_message(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size);
+// Receive bytes along a client's associated platform network connection. To be used by server subcomponents.
+// Game Server / Game Client logic should use the Game Client equivalent.
+ui32 game_server_client_receive_net_bytes(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size);
 
+// Unilaterally drops the platform connection associated with the client, and the client itself from the table.
 void game_server_client_drop(game_server& server, game_server_client::client_handle handle);
 
+// Executes a function over every client of the given type.
 void game_server_client_for_each_of_type(game_server& server, game_server_client::TYPE type, void(*for_each_func)(game_server&, game_server_client& client));
 
 #endif // GAME_SERVER_CLIENTS_INCLUDED

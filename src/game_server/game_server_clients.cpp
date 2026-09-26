@@ -18,8 +18,9 @@ struct game_server_clients_table
 
 	// Event handlers
 
-	// Allows a single function to react to a client of a certain type to react to that client being dropped / deleted for any reason.
-	on_client_disconnected_fn on_client_disconnected_handlers[(i32)game_server_client::TYPE::TYPE_COUNT];
+	// Called when any non-UNKNOWN client gets disconnected.
+	on_client_disconnected_fn on_client_disconnected_handlers[8];
+	ui8 on_client_disconnected_handler_count;
 };
 
 // Initializes the clients table associated with the server.
@@ -95,9 +96,10 @@ void clients_table_on_connection_lost(game_server& server, game_server_platform:
 				"Lost connection with client %d. Removing from active client connections...", client.handle.value);
 
 			// Free client after calling relevant event handler.
-			if (clientsTable.on_client_disconnected_handlers[(i32)client.type] != nullptr)
+
+			for (ui8 i = 0; clientsTable.on_client_disconnected_handler_count; i++)
 			{
-				clientsTable.on_client_disconnected_handlers[(i32)client.type](server, client);
+				clientsTable.on_client_disconnected_handlers[i](server, client);
 			}
 
 			// Completely reset client data.
@@ -109,10 +111,9 @@ void clients_table_on_connection_lost(game_server& server, game_server_platform:
 	}
 }
 
-void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler)
+void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, on_client_disconnected_fn handler)
 {
-	ASSERT(table.on_client_disconnected_handlers[(i32)client_type] == nullptr);
-	table.on_client_disconnected_handlers[(i32)client_type] = handler;
+	table.on_client_disconnected_handlers[table.on_client_disconnected_handler_count++] = handler;
 }
 
 game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
@@ -129,7 +130,7 @@ game_server_client* game_server_get_client_data(game_server& server, game_server
 	return nullptr; // Handle was stale.
 }
 
-bool game_server_client_send_message(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)
+bool game_server_client_send_net_bytes(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);
@@ -144,7 +145,7 @@ bool game_server_client_send_message(game_server& server, game_server_client::cl
 		msg, msg_size);
 }
 
-ui32 game_server_client_receive_message(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size)
+ui32 game_server_client_receive_net_bytes(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);

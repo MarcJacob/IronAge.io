@@ -10,7 +10,7 @@
 // Defines the actual game server structure and internals.
 
 // Forward-declare game server components.
-struct http_server;
+struct web_server;
 
 struct match_slot;
 struct game_server_clients_table;
@@ -46,7 +46,7 @@ struct game_server
 	mem_arena main_memory; // Main memory allocator for the server.
 	match_slot* match_slots; // Match slots management structures.
 
-	http_server* http; // Serves the web client bundle to connections.
+	web_server* web; // Serves the web client bundle over http, and manages websocket connections.
 
 	// LOGGING
 	// Redirects to the platform, prepending "GAME SERVER (<component>): " to the message, or just "GAME SERVER: " if component is empty.
