@@ -197,7 +197,8 @@ tasks are broken down further.
        - [WIP] Client type changes on upgrade: HTTP -> WEBSOCKET (game client).
          - [DONE] Web client goes IN_UPGRADE_WEBSOCKET -> ACTIVE_WEBSOCKET once the handshake
            response is sent (checked before any further request parsing).
-         - Bytes received after the request head carry over to the websocket client.
+         - [DONE] Bytes received after the request head carry over to the websocket client (http
+           and websocket reception buffers share the same offset, no copy).
          - Promote the game server client to GAME_CLIENT, with websocket-framed send / receive
            functions.
          - Game client send / receive dispatched through the client's `game_client` function

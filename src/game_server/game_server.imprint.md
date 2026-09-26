@@ -36,10 +36,7 @@ The point of this system is to allow any number of concurrent connection and com
 
 Server component for handling HTTP & Websocket Clients. Can serve files and upgrade HTTP Clients to Game Clients through the use of the WebSocket protocol.
 
-The serveable files are preloaded in memory, and client browser can ask for them by name. It is not a general-purpose serving algorithm, it limits itself to what
-is pre-configured for speed, simplicity and security (since it's not possible to ever get served a file that wasn't intended to be served).
-
-When promoting a client to a Game Client, the provided send & receive functions are made to add / remove the appropriate Websocket framing around the message.
+See web_server folder.
 
 ## Intention
 

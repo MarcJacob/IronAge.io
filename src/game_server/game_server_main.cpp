@@ -315,10 +315,16 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		game_server_platform::net_connection_handle closedConnectionsBuffer[CLOSED_CONNECTIONS_BUFF_SIZE];
 		ui16 closedConnectionsCount = server.platform->net_query_closed_connections(closedConnectionsBuffer, CLOSED_CONNECTIONS_BUFF_SIZE);
 
-		for (ui16 closedConnectionCount = 0; closedConnectionCount < closedConnectionsCount; closedConnectionCount++)
+		for (ui16 closedConnectionIndex = 0; closedConnectionIndex < closedConnectionsCount; closedConnectionIndex++)
 		{
-			game_server_platform::net_connection_handle& closedConnectionHandle = closedConnectionsBuffer[closedConnectionCount];
-			clients_table_on_connection_lost(server, closedConnectionHandle);
+			for (ui16 clientIndex = 0; clientIndex < server.client_table->_client_capacity; clientIndex++)
+			{
+				const game_server_client& client = server.client_table->_client_buff[clientIndex];
+				if (client.type == game_server_client::TYPE::NONE
+					|| client.connection_info.connection_handle != closedConnectionsBuffer[closedConnectionIndex]) continue;
+
+				clients_table_on_connection_lost(server, client.handle);
+			}
 		}
 	}
 

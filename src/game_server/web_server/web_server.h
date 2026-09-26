@@ -18,10 +18,10 @@ static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Files that can be preloaded 
 static constexpr ui64 WEB_SERVER_MAX_FILES_TOTAL_SIZE = MiB(32); // Budget for all preloaded files together.
 
 static constexpr ui32 WEB_CLIENT_RECEPTION_BUFFER_SIZE = 2048;
+static constexpr time_ms WEB_CLIENT_TIMEOUT_MS = 2000; // Connection with no request / activity for this long gets closed.
 
 static constexpr ui32 HTTP_CLIENT_MAX_REQUEST_TARGET_LEN = 256; // Maximum number of characters in a valid http request target name.
 static constexpr ui32 HTTP_RESPONSE_HEAD_BUFFER_SIZE = 256;
-static constexpr time_ms HTTP_CLIENT_IDLE_TIMEOUT_MS = 30000; // Connection with no request / activity for this long gets closed.
 
 static constexpr ui32 HTTP_SEND_CHUNK_SIZE = 4096;
 static constexpr ui32 HTTP_PATH_BUFFER_SIZE = 256;
@@ -201,39 +201,13 @@ void web_server_tick(game_server& server);
 
 // END WEB SERVER MAIN FILE FUNCTIONS
 
-// BEGIN HTTP FUNCTIONS (web_server_http.cpp)
-
-// Looks for a header field with the provided name and places it in out_field. Returns whether it was found.
-bool http_request_find_header_field(const http_request& request, const ia_string_view& field_name, http_request::header_field& out_field);
-
-// Checks whether the bytes look like the start of an HTTP request (a known method followed by a space).
-bool web_server_http_recognize_request(const ui8* bytes, ui32 byte_count);
-
-// Starts sending a response on the http client. The body, if any, is sent straight from the given memory, which must stay valid until the response is done.
-void web_server_http_serve_content(game_server& server, web_server_client& web_client,
-	const char* status, const char* content_type, const ui8* content, ui32 content_size);
-
-// Answers with an empty-bodied status response, optionally dropping the client afterward.
-void web_server_http_send_response_status(game_server& server, web_server_client& web_client, const char* status_msg, bool drop_client);
-
-// Handles a complete request for a client.
-void web_server_http_handle_request(game_server& server, web_server_client& web_client, http_request& request);
-
-// Receives bytes buffered on the platform for a client, then attempts to parse a single request to be processed.
-// Returns true if a request was successfully parsed OR no bytes were received (check request method value).
-// Returns false if the request fatally failed to parse, triggering a status code response and dropping the client.
-bool web_server_http_receive(game_server& server, web_server_client& web_client, http_request& out_request);
-
-// Frees the memory being used by the passed request from the client's reception buffer.
-// After calling this, the http_request structure should be considered freed and be disposed of.
-void web_server_http_dispose_request(game_server& server, web_server_client& web_client, http_request& request);
-
-// Pushes as much of the response as the platform will take. Whatever is left goes on the next tick.
-void web_server_http_progress_response(game_server& server, web_server_client& web_client);
-
 // Runs one tick of http dialogue for a client in an http state: response progress, upgrade to websocket completion, request handling, dropping.
 void web_server_http_tick_client(game_server& server, web_server_client& client);
 
-// END HTTP FUNCTIONS
+// Called from http websocket upgrade function so websocket-sided initialization can kick in.
+void web_server_websocket_on_client_promotion(game_server& server, web_server_client& client);
+
+// Runs one tick of Websocket reception / sending handling for a client in a Websocket state.
+void web_server_websocket_tick_client(game_server& server, web_server_client& client);
 
 #endif // WEB_SERVER_INCLUDED

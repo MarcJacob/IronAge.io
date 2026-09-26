@@ -164,7 +164,7 @@ static void web_server_http_handle_request_get_file(game_server& server, web_ser
 
 // Handles a request to upgrade to the websocket protocol.
 // If successful, the server sends the handshake approval and flags the client to be upgraded to Websocket once it has been sent
-// (see web_server_http_finish_upgrade_websocket). Otherwise, an error status is sent and the client is dropped.
+// (see web_server_http_upgrade_to_websocket). Otherwise, an error status is sent and the client is dropped.
 static bool web_server_http_handle_request_upgrade_websocket(game_server& server, web_server_client& web_client, http_request& request)
 {
 	ASSERT(request.method == http_request::METHOD::GET);
@@ -289,19 +289,11 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 // Completes the upgrade of a client that's done being sent its handshake approval: the client becomes a Websocket client.
 // The web server client keeps its slot, so the game server client's connection context stays valid, but its http data is reset
 // since the union storage now belongs to the websocket client.
-static void web_server_http_finish_upgrade_websocket(game_server& server, web_server_client& web_client)
+static void web_server_http_upgrade_to_websocket(game_server& server, web_server_client& web_client)
 {
 	ASSERT(web_client.state == web_server_client::STATE::IN_UPGRADE_WEBSOCKET);
 
-	// Perform a "soft change" without resetting all of the underlying memory. Since the http reception buffer is at the same offset as the websocket reception buffer,
-	// the transfer of data between the two is automatic.
-
-	web_client.state = web_server_client::STATE::ACTIVE_WEBSOCKET;
-	web_client.last_activity_ms = server.uptime_ms;
-
-	// Zero out the send buffer.
-	web_client.websocket.sending = {};
-
+	web_server_websocket_on_client_promotion(server, web_client);
 	server.logf("HTTP", LOG_SUCCESS, "Client connection %d upgraded to Websocket.", web_client.client_handle.value);
 }
 
@@ -520,6 +512,7 @@ void web_server_http_dispose_request(game_server& server, web_server_client& web
 	ASSERT(web_client.is_websocket() == false);
 
 	// Left-shift remaining bytes in client request buffer to the left.
+	// TODO(Marc): Implement platform-independent ring buffer (not thread safe at first) so left shifting the memory isn't necessary.
 	ia_memcpy(web_client.http.request.buff, web_client.http.request.buff + request.total_size, web_client.http.request.size - request.total_size);
 	web_client.http.request.size -= request.total_size;
 }
@@ -586,7 +579,7 @@ void web_server_http_progress_response(game_server& server, web_server_client& w
 
 void web_server_http_tick_client(game_server& server, web_server_client& client)
 {
-	ASSERT(client.is_websocket() == false);
+	ASSERT(client.is_http());
 
 	if (client.http.response.in_flight)
 	{
@@ -597,7 +590,7 @@ void web_server_http_tick_client(game_server& server, web_server_client& client)
 	{
 		// The handshake approval is done being sent, complete the upgrade.
 		// This is checked before receiving a new request, otherwise the client's next bytes would be parsed as http.
-		web_server_http_finish_upgrade_websocket(server, client);
+		web_server_http_upgrade_to_websocket(server, client);
 	}
 	else if (!client.in_drop)
 	{
@@ -613,10 +606,10 @@ void web_server_http_tick_client(game_server& server, web_server_client& client)
 		}
 
 		// Flag the client for dropping if it has been idle for too long (no bytes received, no response finished).
-		if (server.uptime_ms - client.last_activity_ms > HTTP_CLIENT_IDLE_TIMEOUT_MS)
+		if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
 		{
 			server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
-				client.client_handle.value, HTTP_CLIENT_IDLE_TIMEOUT_MS);
+				client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
 			client.in_drop = true;
 		}
 	}

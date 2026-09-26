@@ -52,9 +52,9 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 	for (ui16 clientIndex = 0; clientIndex < clientsTable._client_capacity; clientIndex++)
 	{
 		game_server_client& client = clientsTable._client_buff[clientIndex];
-		if (client.state == game_server_client::STATE::FREE)
+		if (client.type == game_server_client::TYPE::NONE)
 		{
-			client.state = game_server_client::STATE::ONLINE;
+			client.type = game_server_client::TYPE::UNKNOWN;
 			client.connected_at_ms = server.uptime_ms;
 			client.connection_info = {
 				.last_known_address = connection_info.address,
@@ -79,36 +79,29 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 	return nullptr; // Failed to find room. Let the caller handle the consequences.
 }
 
-void clients_table_on_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle)
+void clients_table_on_connection_lost(game_server& server, game_server_client::client_handle client_handle)
 {
 	ASSERT(server.client_table != nullptr);
 	game_server_clients_table& clientsTable = *server.client_table;	
 	
-	// Look for a client with a matching connection handle and get rid of them by setting them to FREE state.
-	// TODO(Marc): Intermediate disconnection state, reconnection system.
+	server.logf(CLIENTS_COMPONENT_NAME, LOG_TYPE::LOG_WARNING,
+		"Lost connection with client %d. Removing from active client connections...", client_handle.value);
 
-	for (ui16 clientIndex = 0; clientIndex < clientsTable._client_capacity; clientIndex++)
+	// Free client after calling relevant event handler.
+
+	game_server_client& client = clientsTable._client_buff[client_handle._table_index];
+	if (client.handle.value != client_handle.value) return; // Stale handle.
+
+	for (ui8 i = 0; i < clientsTable.on_client_disconnected_handler_count; i++)
 	{
-		game_server_client& client = clientsTable._client_buff[clientIndex];
-		if (client.state != game_server_client::STATE::FREE && client.connection_info.connection_handle == connection_handle)
-		{
-			server.logf(CLIENTS_COMPONENT_NAME, LOG_TYPE::LOG_WARNING,
-				"Lost connection with client %d. Removing from active client connections...", client.handle.value);
-
-			// Free client after calling relevant event handler.
-
-			for (ui8 i = 0; clientsTable.on_client_disconnected_handler_count; i++)
-			{
-				clientsTable.on_client_disconnected_handlers[i](server, client);
-			}
-
-			// Completely reset client data.
-			client = {};
-			client.connection_info.connection_handle = game_server_platform::INVALID_NET_CONNECTION_HANDLE;
-
-			clientsTable._client_count--;
-		}
+		clientsTable.on_client_disconnected_handlers[i](server, client);
 	}
+
+	// Completely reset client data.
+	client = {};
+	client.connection_info.connection_handle = game_server_platform::INVALID_NET_CONNECTION_HANDLE;
+
+	clientsTable._client_count--;
 }
 
 void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, on_client_disconnected_fn handler)
@@ -116,7 +109,7 @@ void clients_table_register_event_handler_client_connection_lost(game_server_cli
 	table.on_client_disconnected_handlers[table.on_client_disconnected_handler_count++] = handler;
 }
 
-game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
+const game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);
@@ -124,10 +117,29 @@ game_server_client* game_server_get_client_data(game_server& server, game_server
 	game_server_clients_table& clientsTable = *server.client_table;	
 	
 	game_server_client& client = clientsTable._client_buff[handle._table_index];
-	if (client.state != game_server_client::STATE::FREE 
+	if (client.type != game_server_client::TYPE::NONE 
 		&& client.handle.value == handle.value) return &client;
 
-	return nullptr; // Handle was stale.
+	return nullptr; // Handle was stale or invalid.
+}
+
+void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle, 
+	client_send_game_msg_fn send_func,
+	client_receive_game_msg_fn receive_func)
+{
+	ASSERT(server.client_table != nullptr);
+	ASSERT(handle._table_index < server.client_table->_client_capacity);
+	ASSERT(send_func != nullptr && receive_func != nullptr)
+
+	game_server_clients_table& clientsTable = *server.client_table;	
+	game_server_client& client = clientsTable._client_buff[handle._table_index];
+
+	ASSERT(client.type != game_server_client::TYPE::GAME_CLIENT);
+
+	// Change client type and assign send & receive functions.
+	client.type = game_server_client::TYPE::GAME_CLIENT;
+	client.game_client.send_game_message_func = send_func;
+	client.game_client.receive_game_message_func = receive_func;
 }
 
 bool game_server_client_send_net_bytes(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)
@@ -138,7 +150,7 @@ bool game_server_client_send_net_bytes(game_server& server, game_server_client::
 
 	game_server_clients_table& clientsTable = *server.client_table;	
 
-	game_server_client* client = game_server_get_client_data(server, handle);
+	const game_server_client* client = game_server_get_client_data(server, handle);
 	if (client == nullptr) return false;
 
 	return server.platform->net_send_bytes((game_server_platform::net_connection_handle)client->connection_info.connection_handle,
@@ -153,7 +165,7 @@ ui32 game_server_client_receive_net_bytes(game_server& server, game_server_clien
 
 	game_server_clients_table& clientsTable = *server.client_table;	
 
-	game_server_client* client = game_server_get_client_data(server, handle);
+	const game_server_client* client = game_server_get_client_data(server, handle);
 	if (client == nullptr) return 0;
 
 	return server.platform->net_receive_bytes(client->connection_info.connection_handle, buff, buff_size);
@@ -166,20 +178,15 @@ void game_server_client_drop(game_server& server, game_server_client::client_han
 
 	game_server_clients_table& clientsTable = *server.client_table;	
 
-	game_server_client* client = game_server_get_client_data(server, handle);
+	const game_server_client* client = game_server_get_client_data(server, handle);
 	if (client == nullptr) return;
 
 	if (client->connection_info.connection_handle != game_server_platform::INVALID_NET_CONNECTION_HANDLE)
 	{
 		server.platform->net_close_connection((game_server_platform::net_connection_handle)client->connection_info.connection_handle);
-		clients_table_on_connection_lost(server, client->connection_info.connection_handle);
-	}
-	else
-	{
-		*client = {};
-		client->connection_info.connection_handle = game_server_platform::INVALID_NET_CONNECTION_HANDLE;
 	}
 
+	clients_table_on_connection_lost(server, client->handle);
 }
 
 void game_server_client_for_each_of_type(game_server& server, game_server_client::TYPE type, void(*for_each_func)(game_server&, game_server_client&))
@@ -192,7 +199,7 @@ void game_server_client_for_each_of_type(game_server& server, game_server_client
 	for (ui16 clientIndex = 0; clientIndex < clientsTable._client_capacity; clientIndex++)
 	{
 		game_server_client& client = clientsTable._client_buff[clientIndex];
-		if (client.state != game_server_client::STATE::FREE 
+		if (client.type != game_server_client::TYPE::NONE 
 			&& client.type == type)
 		{
 			for_each_func(server, client);

@@ -3,8 +3,14 @@
 #ifndef GAME_SERVER_CLIENTS_INCLUDED
 #define GAME_SERVER_CLIENTS_INCLUDED
 
-// Forward declaration of client type data structures.
-struct http_client;
+struct game_message_header;
+struct game_server_client;
+
+// Defines a function able to handle sending a game message towards a game server client. The client must be of type GAME_CLIENT.
+using client_send_game_msg_fn = bool(*)(game_server_client& client, const game_message_header& message);
+// Defines a function able to handle receiving a game message from a game server client. The client must be of type GAME_CLIENT.
+// The out_message pointer will point to the actual data in memory making up the message. It can be read as is or copied somewhere else.
+using client_receive_game_msg_fn = bool(*)(game_server_client& client, game_message_header*& out_message_ptr);
 
 // Core data associated with a client connection on the game server.
 // Client connections cover ALL sorts of inward connections started from the outside, and can survive the loss of the platform connection.
@@ -23,13 +29,6 @@ struct game_server_client
 		ui32 value;
 	} handle;
 
-	enum class STATE
-	{
-		FREE,				// Indicates this structure does not refer to any actual client connection and can be used for one.
-		// ... TODO(Marc): Intermediate states to support re-connection.
-		ONLINE,				// Client is online and has an active connection with platform networking.
-	} state;
-
 	time_ms connected_at_ms; // Server uptime at which this client's connection was registered.
 
 	struct
@@ -42,6 +41,7 @@ struct game_server_client
 	// Supported types of clients. Indexes into the event handler tables to allow other sub-systems to react to client events.
 	enum class TYPE
 	{
+		NONE,			 // Structure does not refer to an actual client but can be used to house a new client for a new connection.
 		UNKNOWN,		 // Client has established a connection but hasn't authentified themselves as any type of client supported by the server.
 		NON_GAME_CLIENT, // Client is connected and has been taken in by one of the server sub-components pending a possible upgrade a full Game Client.
 		GAME_CLIENT,	 // Client has established a full two-way connection allowing real-time game synchronization traffic.
@@ -69,13 +69,32 @@ struct game_server_client
 
 		struct
 		{
-			using send_game_msg_fn = bool(*)(game_server_client& client, const ui8* msg, ui16 msg_size);
-			send_game_msg_fn send_game_message_func;
-
-			using receive_game_msg_fn = ui16(*)(game_server_client& client, void* context, ui8* msg_buff, ui16 buff_size);
-			receive_game_msg_fn receive_game_message_func;
+			// Assigned by server sub-component in charge of actual client connection.
+			client_send_game_msg_fn send_game_message_func;
+			// Assigned by server sub-component in charge of actual client connection.
+			client_receive_game_msg_fn receive_game_message_func;
 		} game_client;
 	};
+
+	// Sends message to this game client. Client must be of type GAME_CLIENT.
+	// Returns whether the message was successfully sent.
+	inline virtual bool game_client_send_message(const game_message_header& msg) 
+	{ 
+		ASSERT(type == TYPE::GAME_CLIENT);
+		ASSERT(game_client.send_game_message_func != nullptr);
+
+		return game_client.send_game_message_func(*this, msg);
+	}
+
+	// Sends message to this game client. Client must be of type GAME_CLIENT.
+	// Returns whether a message was received, in which case out_msg_ptr will point to it.
+	inline virtual bool game_client_receive_message(game_message_header*& out_msg_ptr)
+	{
+		ASSERT(type == TYPE::GAME_CLIENT);
+		ASSERT(game_client.receive_game_message_func != nullptr);
+
+		return game_client.receive_game_message_func(*this, out_msg_ptr);
+	}
 };
 
 struct game_server_clients_table;
@@ -88,19 +107,25 @@ using on_client_disconnected_fn = void(*)(game_server& server, game_server_clien
 // max_client_count specifies the maximum amount of concurrent client connections supported by the server.
 void clients_table_init(game_server& server, ui16 max_client_count);
 
-// Registers a new connection with the clients table, associating it with an existing client or creating a new one for it.
+// Registers a new connection with the clients table. The new client starts out as type UNKNOWN.
 // If successful, returns a pointer to the client structure now associated with this connection.
 game_server_client* clients_table_register_new_connection(game_server& server, game_server_platform::in_connection& connection_info);
 
 // Signals the table that a connection was lost or dropped.
-void clients_table_on_connection_lost(game_server& server, game_server_platform::net_connection_handle connection_handle);
+void clients_table_on_connection_lost(game_server& server, game_server_client::client_handle handle);
 
 void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler);
 
 // Extensions to server functionality
 
 // Retrieves pointer to game server client data associated with the handle.
-game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
+const game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
+
+// Promotes a client connection to GAME_CLIENT status, allowing it to take part in the game server / game messages messaging protocols.
+// Used by server sub-components. send_func and receive_func must contain valid functions for the client to use to route messages in and out.
+void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle,
+	client_send_game_msg_fn send_func,
+	client_receive_game_msg_fn receive_func);
 
 // Sends bytes along a client's associated platform network connection. To be used by server subcomponents.
 // Game Server / Game Client logic should use the Game Client equivalent.

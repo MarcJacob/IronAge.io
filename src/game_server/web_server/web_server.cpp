@@ -192,9 +192,24 @@ void web_server_tick(game_server& server)
 		web_server_client& client = webServer.clients[clientIndex];
 		if (!client.is_active()) continue;
 
-		if (client.is_websocket() == false)
+		if (client.is_http())
 		{
 			web_server_http_tick_client(server, client);
+		}
+		else
+		{
+			web_server_websocket_tick_client(server, client);
+		}
+
+		if (!client.in_drop)
+		{
+			// Flag the client for dropping if it has been idle for too long (no bytes received).
+			if (server.uptime_ms - client.last_activity_ms > WEB_CLIENT_TIMEOUT_MS)
+			{
+				server.logf("WEB SERVER", LOG_WARNING, "Client handle %d idle for over %llu ms. Dropping client.",
+					client.client_handle.value, WEB_CLIENT_TIMEOUT_MS);
+				client.in_drop = true;
+			}
 		}
 	}
 }
