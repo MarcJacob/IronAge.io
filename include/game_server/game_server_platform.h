@@ -80,7 +80,7 @@ struct game_server_platform
 	typedef bool (*net_send_bytes_fn)(game_server_platform& platform, net_connection_handle handle, const ui8* bytes, ui32 bytes_count);
 	// Platform function: buffers bytes for sending towards an existing connection identified by a handle.
 	// Returns whether the data was successfully buffered / sent on the platform. Failure usually means the connection was closed,
-	// or that there's too much data already buffered for sending.
+	// or that there's too much data already buffered for sending (either all the bytes can fit, or none are buffered).
 	// Thread safety is not guaranteed on the same connection beyond a single sending thread.
 	net_send_bytes_fn net_send_bytes_func;
 	bool net_send_bytes(net_connection_handle handle, const ui8* bytes, ui32 bytes_count) {

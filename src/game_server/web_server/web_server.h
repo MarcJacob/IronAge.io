@@ -41,6 +41,8 @@ struct websocket_client
 	{
 		ui8 buff[WEB_CLIENT_RECEPTION_BUFFER_SIZE]; // Reception buffer for this client.
 		ui32 size; // Number of received bytes awaiting processing.
+		ui32 queued_size; // Number of bytes, at the start of the buffer, making up complete, validated & unmasked data frames queued up for the game code to peek at & consume.
+						  // Bytes after that are yet to be processed.
 	} reception; // NOTE(Marc): This must remain at the same offset as the equivalent buffer in http_client so it doesn't need a copy when upgrading a client !
 
 	// Bytes sending buffer.
@@ -48,6 +50,7 @@ struct websocket_client
 	{
 		ui8 buff[WEBSOCKET_SEND_BUFFER_SIZE]; // Sending buffer for this client.
 		ui32 size; // Number of bytes awaiting dispatch to platform sending buffer.
+		time_ms blocked_since_ms; // Time at which the platform first refused the bytes currently awaiting dispatch. 0 if it has not refused them.
 	} sending;
 };
 

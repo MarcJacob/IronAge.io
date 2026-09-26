@@ -125,21 +125,23 @@ const game_server_client* game_server_get_client_data(game_server& server, game_
 
 void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle, 
 	client_send_game_msg_fn send_func,
-	client_receive_game_msg_fn receive_func)
+	client_peek_game_msg_fn peek_func,
+	client_consume_game_msg_fn consume_func)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);
-	ASSERT(send_func != nullptr && receive_func != nullptr)
+	ASSERT(send_func != nullptr && peek_func != nullptr && consume_func != nullptr);;
 
 	game_server_clients_table& clientsTable = *server.client_table;	
 	game_server_client& client = clientsTable._client_buff[handle._table_index];
 
 	ASSERT(client.type != game_server_client::TYPE::GAME_CLIENT);
 
-	// Change client type and assign send & receive functions.
+	// Change client type and assign send, peek & consume functions.
 	client.type = game_server_client::TYPE::GAME_CLIENT;
 	client.game_client.send_game_message_func = send_func;
-	client.game_client.receive_game_message_func = receive_func;
+	client.game_client.peek_game_message_func = peek_func;
+	client.game_client.consume_game_message_func = consume_func;
 }
 
 bool game_server_client_send_net_bytes(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)

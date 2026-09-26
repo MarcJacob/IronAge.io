@@ -8,9 +8,15 @@ struct game_server_client;
 
 // Defines a function able to handle sending a game message towards a game server client. The client must be of type GAME_CLIENT.
 using client_send_game_msg_fn = bool(*)(game_server_client& client, const game_message_header& message);
-// Defines a function able to handle receiving a game message from a game server client. The client must be of type GAME_CLIENT.
-// The out_message pointer will point to the actual data in memory making up the message. It can be read as is or copied somewhere else.
-using client_receive_game_msg_fn = bool(*)(game_server_client& client, game_message_header*& out_message_ptr);
+
+// Defines a function able to peek at the next received game message from a game server client, if any. The client must be of type GAME_CLIENT.
+// Returns whether a message is available, in which case out_message_ptr will point to the actual data in memory making up the message.
+// It can be read as is or copied somewhere else, and stays valid, and the same, until the message is consumed.
+using client_peek_game_msg_fn = bool(*)(game_server_client& client, game_message_header*& out_message_ptr);
+
+// Defines a function able to consume the game message currently at the front of a game server client's received messages, so that the next peek
+// gives the following one. Does nothing if there is no message. The client must be of type GAME_CLIENT.
+using client_consume_game_msg_fn = void(*)(game_server_client& client);
 
 // Core data associated with a client connection on the game server.
 // Client connections cover ALL sorts of inward connections started from the outside, and can survive the loss of the platform connection.
@@ -72,7 +78,9 @@ struct game_server_client
 			// Assigned by server sub-component in charge of actual client connection.
 			client_send_game_msg_fn send_game_message_func;
 			// Assigned by server sub-component in charge of actual client connection.
-			client_receive_game_msg_fn receive_game_message_func;
+			client_peek_game_msg_fn peek_game_message_func;
+			// Assigned by server sub-component in charge of actual client connection.
+			client_consume_game_msg_fn consume_game_message_func;
 		} game_client;
 	};
 
@@ -86,14 +94,24 @@ struct game_server_client
 		return game_client.send_game_message_func(*this, msg);
 	}
 
-	// Sends message to this game client. Client must be of type GAME_CLIENT.
-	// Returns whether a message was received, in which case out_msg_ptr will point to it.
-	inline virtual bool game_client_receive_message(game_message_header*& out_msg_ptr)
+	// Peeks at the next message received from this game client. Client must be of type GAME_CLIENT.
+	// Returns whether a message is available, in which case out_msg_ptr will point to it. The message stays the same until consumed.
+	inline virtual bool game_client_peek_message(game_message_header*& out_msg_ptr)
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
-		ASSERT(game_client.receive_game_message_func != nullptr);
+		ASSERT(game_client.peek_game_message_func != nullptr);
 
-		return game_client.receive_game_message_func(*this, out_msg_ptr);
+		return game_client.peek_game_message_func(*this, out_msg_ptr);
+	}
+
+	// Consumes the message last peeked, so the next peek returns the next message. Client must be of type GAME_CLIENT.
+	// Every peeked message MUST be consumed once done with.
+	inline virtual void game_client_consume_message()
+	{
+		ASSERT(type == TYPE::GAME_CLIENT);
+		ASSERT(game_client.consume_game_message_func != nullptr);
+
+		game_client.consume_game_message_func(*this);
 	}
 };
 
@@ -122,10 +140,11 @@ void clients_table_register_event_handler_client_connection_lost(game_server_cli
 const game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
 
 // Promotes a client connection to GAME_CLIENT status, allowing it to take part in the game server / game messages messaging protocols.
-// Used by server sub-components. send_func and receive_func must contain valid functions for the client to use to route messages in and out.
+// Used by server sub-components. send_func, peek_func and consume_func must contain valid functions for the client to use to route messages in and out.
 void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle,
 	client_send_game_msg_fn send_func,
-	client_receive_game_msg_fn receive_func);
+	client_peek_game_msg_fn peek_func,
+	client_consume_game_msg_fn consume_func);
 
 // Sends bytes along a client's associated platform network connection. To be used by server subcomponents.
 // Game Server / Game Client logic should use the Game Client equivalent.
