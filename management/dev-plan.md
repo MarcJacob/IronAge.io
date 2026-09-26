@@ -140,10 +140,58 @@ work to a line or two.
      frame codec, ping keepalive, framed sending. Browser tests (`src/websocket_tests.js`):
      all passing.
    - [NEXT] Game protocol v0 over the WebSocket layer, replacing the temporary echo hook.
-     Design pass pending (messages, match attachment, tick relay, late join).
+     Design pass done (below); implementation not started.
      - Goal: two browser tabs connected to the same server show synchronized, observable
        state, each tab controlling its own separate entity. This is the phase's end-to-end
        proof.
+     - Routing: every game client goes to match slot 0 for now. Lobby skipped, joining
+       straight into the match (also mid-match). Lobby + synchronized start later.
+     - `game_match_start_params` gets `max_players`. Slot memory covers max players + spectator
+       margin.
+     - `match_player` = `{client_handle, player_index}`, array on `match_slot` (outside the
+       lobby / match union). Slot bridges controllers (clients, later AI) and player indices.
+     - Disconnects detected by polling while gathering tick inputs (stale handle), no event
+       handler. Player index stays reserved with a dead controller. Re-join deferred to the
+       User layer.
+     - Join: client attached -> server sends match start params + player index -> server
+       streams the recorded tick messages from tick 0 (same messages as live) -> client
+       fast-forwards, then sends its own inputs.
+     - Per-match input log pre-allocated in the slot arena (sized from a match parameter or
+       max players x estimated length). Log full = match ends / restarts. Later: ring buffer,
+       refuse newcomers, snapshot for re-joiners.
+     - Input commands are compactly packed (they are the bulk of the traffic). Log stores
+       the packed tick messages + per-tick offset index, catch-up sends them as-is.
+     - Per-client send cursor (next tick to send), advanced on successful send so slow
+       catch-up never blocks the live broadcast.
+     - Server-side input gating: player input carries the tick the player was viewing. Server
+       drops inputs staler than a static staleness limit (constant in code) and assigns
+       accepted inputs to the next tick it simulates. Claimed ticks are trusted for now.
+     - Tick messages (server -> client): `TICK` = `tick` (ui32) + one tick body. `TICK_BUNDLE`
+       = `first_tick` (ui32) + `tick_count` (ui16) + bodies back to back (catch-up). Tick body
+       = command count (ui16) + commands. Command = `{player_index (ui16), command_type (ui8),
+       payload}`, size from a shared type -> size table. Player counts up to hundreds:
+       `player_index` and `max_players` are ui16.
+     - Input message (client -> server): `viewed_tick` (ui32) + commands without
+       `player_index` (server fills it from the sender's `match_player`).
+     - Input log stores tick bodies (no tick number) + per-tick offset index. `TICK` /
+       `TICK_BUNDLE` are built by copying from it; bundles are assembled in a contiguous scratch
+       buffer (static max size) since sends take one contiguous message.
+     - Command pre-pass (order / validation, stub for now) runs inside `match_tick` on every
+       host, over the raw receipt-order list. Must be deterministic. `match_tick_commands`
+       is replaced by a command list; the entity-target logic becomes a "set target" command.
+     - Later optimization: `TICKS_EMPTY {first_tick, tick_count}` for runs of empty ticks.
+     - Join (server -> client, spontaneous right after slot attach; a client `JOIN_REQUEST`
+       comes with the lobby system): `JOIN` = embedded `game_match_start_params` (needs a
+       fixed / padding-safe layout) + `player_index` (ui16, 0xFFFF = spectator) +
+       `current_tick` (ui32, catch-up progress). `JOIN_REJECTED` = reason code + short
+       reason string, then the client is dropped.
+     - Tick relay: the server holds the ground-truth match state (also for score keeping,
+       analytics) and ticks on its fixed schedule once the tick's commands are complete. It
+       sends every player the exact same command set for that tick (in parallel with, or just
+       before, simulating it). Inputs arriving at any time are validated and applied to the
+       server's current tick. No client-side prediction: clients simulate only ticks the
+       server gave them, any smoothing lives in the visual layer. The client's JS fixed-rate
+       loop is replaced by "simulate when ticks are received".
 
 2. **World & settlements simulation** through **11. Ops & hardening** - phases from the
    previous plan version (world/settlements, trade, war, diplomacy, victory & scoring,
