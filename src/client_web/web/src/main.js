@@ -31,6 +31,28 @@ function web_frame() {
     requestAnimationFrame(web_frame);
 }
 
+function websocket_url() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws`;
+}
+
+async function start_after_websocket_open(canvas, socket) {
+    console.log("WebSocket connection accepted by server.");
+
+    console.log("Starting local match.");
+    if (!begin_match()) {
+        socket.close();
+        return;
+    }
+
+    init_render(canvas, match_info);
+    init_input(canvas, page_to_world, set_target_loc);
+    canvas.hidden = false;
+
+    lastFrameTime = performance.now() / 1000;
+    requestAnimationFrame(web_frame);
+}
+
 async function start() {
     console.log("Loading client backend...");
     try {
@@ -40,15 +62,20 @@ async function start() {
         return;
     }
 
-    console.log("Starting local match.");
-    if (!begin_match()) return;
-
     const canvas = document.getElementById("game_canvas_foreground");
-    init_render(canvas, match_info);
-    init_input(canvas, page_to_world, set_target_loc);
+    const socket = new WebSocket(websocket_url());
 
-    lastFrameTime = performance.now() / 1000;
-    requestAnimationFrame(web_frame);
+    socket.addEventListener("open", async () => {
+        await start_after_websocket_open(canvas, socket);
+    });
+
+    socket.addEventListener("error", () => {
+        console.error("WebSocket connection failed.");
+    });
+
+    socket.addEventListener("close", () => {
+        console.log("WebSocket connection closed.");
+    });
 }
 
 start();

@@ -248,7 +248,7 @@ static ui32 ia_base64_encode(const ui8* input, ui32 input_size, char* out, ui32 
 		out[segCount * 4 + 2] = '=';
 		out[segCount * 4 + 3] = '=';
 
-		return segCount * 4 + 2;
+		return segCount * 4 + 4;
 	}
 	else if (segMod == 2)
 	{
@@ -263,7 +263,7 @@ static ui32 ia_base64_encode(const ui8* input, ui32 input_size, char* out, ui32 
 		out[segCount * 4 + 2] = index_to_base64(index3);
 		out[segCount * 4 + 3] = '=';
 
-		return segCount * 4 + 2;
+		return segCount * 4 + 4;
 	}
 
 	return segCount * 4;

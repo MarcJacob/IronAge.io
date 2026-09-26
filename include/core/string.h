@@ -192,7 +192,7 @@ static bool ia_string_new(mem_arena& memory, const char* src_str, ia_string& out
 // NOTE(Marc): For now I am deciding on a string policy where you only get one chance to specify their capacity.
 // A new type of string can be created later with the ability to dynamically request more memory / be reallocated through a function pointer or something.
 // This also has the nice effect of making this function work seamlessly with static strings.
-static ui32 ia_string_push(ia_string& string, const char* new_chars, bool must_full_push = false)
+static ui32 ia_string_push(ia_string& string, const char* new_chars, bool must_full_push = true)
 {
 	ASSERT(new_chars != nullptr);
 
@@ -217,7 +217,7 @@ static ui32 ia_string_push(ia_string& string, const char* new_chars, bool must_f
 }
 
 template<ui32 StaticStringCapacity>
-static ui32 ia_string_push(ia_static_string<StaticStringCapacity>& string, const char* new_chars, bool must_full_push = false)
+static ui32 ia_string_push(ia_static_string<StaticStringCapacity>& string, const char* new_chars, bool must_full_push = true)
 {
 	ia_string pushable = string;
 	ui32 pushed = ia_string_push(pushable, new_chars, must_full_push);
@@ -235,15 +235,26 @@ static bool operator==(const ia_string_view& str_a, const char* str_b)
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
 
-		if ((str_a.view_str[i] != str_b[i]) || (str_b[i] == '\0' && i != (str_a.length - 1))) return false;
+		if ((str_a.view_str[i] != str_b[i]) 
+			|| (str_b[i] == '\0' && i != (str_a.length - 1))) return false;
 	}
 
 	return str_b[str_a.length] == '\0';
 }
 
+static inline bool operator!=(const ia_string_view& str_a, const char* str_b)
+{
+	return !(str_a == str_b);
+}
+
 static inline bool operator==(const char* str_a, const ia_string_view& str_b)
 {
 	return str_b == str_a;
+}
+
+static inline bool operator!=(const char* str_a, const ia_string_view& str_b)
+{
+	return str_b != str_a;
 }
 
 static bool operator==(const ia_string_view& str_a, const ia_string_view& str_b)
@@ -284,6 +295,40 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 
 	return true;
 
+}
+
+// Checks whether the string contains the specified null-terminated string.
+static bool ia_string_contains(const ia_string_view& str, const char* contained)
+{
+	ASSERT(contained != nullptr);
+
+	char firstChar = contained[0];
+	if (firstChar == '\0') return true;
+
+	ui32 contained_len = ia_str_len(contained);
+
+	ui32 scanIndex = 0;
+	while (scanIndex <= str.length - contained_len)
+	{
+		if (str.view_str[scanIndex] != firstChar)
+		{
+			scanIndex++;
+			continue;
+		}
+	
+		ui32 match_len = 0;
+		for (match_len = 0; match_len < contained_len; match_len++)
+		{
+			if (str.view_str[scanIndex + match_len] != contained[match_len])
+			{
+				break;
+			}
+		}
+
+		if (match_len == contained_len) return true;
+	}
+
+	return false;
 }
 
 // Returns a string view over the next "word" in the specified string, up to specified maximum length (ignored if 0)
