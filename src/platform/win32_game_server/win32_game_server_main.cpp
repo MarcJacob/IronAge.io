@@ -303,11 +303,11 @@ void win32_platform_shutdown()
 	win32_net_stop(*WIN32_PLATFORM.net_component);
 	win32_net_free(*WIN32_PLATFORM.net_component);
 
+	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
+
 	// Delete logging critical sections.
 	DeleteCriticalSection(&CS_WIN32_STDOUT);
 	DeleteCriticalSection(&CS_WIN32_STDERR);
-
-	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
 
 	WIN32_PLATFORM = {};
 }
@@ -348,13 +348,16 @@ int main(int argc, char** argv)
 		"src/backend.js",
 		"src/render.js",
 		"src/input.js",
-		"src/websocket_tests.js",
 
 		// Client WASM backend
 		"IronAgeIO_WebClient.wasm",
 
 		// Art
 		"favicon.ico",
+
+		// Tests
+		"src/websocket_tests.js",
+		"determinism_test.html"
 	};
 	static constexpr ui8 WEB_FILE_COUNT = sizeof(WEB_FILES) / sizeof(WEB_FILES[0]);
 
@@ -363,7 +366,7 @@ int main(int argc, char** argv)
 
 		.match_slot_count = 4,
 		.max_client_count = 1024,
-		.run_test_scenario = false,
+		.run_test_scenario = true,
 		.test_scenario_dump_filename = "snapshot_native.bin",
 
 		.web_root = "web_root",

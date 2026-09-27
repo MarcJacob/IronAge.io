@@ -11,6 +11,15 @@
 #define ia_min(a, b) (a <= b ? a : b)
 #define ia_max(a, b) (a >= b ? a : b)
 
+template<typename Numeric>
+struct vec2
+{
+	Numeric x, y;
+};
+
+using vec2f = vec2<float>;
+using vec2i = vec2<i32>;
+
 static inline void endian_reverse_ui16(ui16* val)
 {
 	ui8* bytes = (ui8*)val;

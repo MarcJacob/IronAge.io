@@ -52,13 +52,32 @@ export function set_target_loc(x, y) {
 export function read_render_state() {
     // Layout of web_client_render_state: four i32 (entity X, Y, target X, Y). Views are re-created on every read on purpose,
     // as they become invalid if wasm memory ever grows.
-    const stateOffset = backend.client_get_render_state();
-    const state = new Int32Array(backend.memory.buffer, stateOffset, 4);
+    const renderStateOffset = backend.client_get_render_state();
+    const renderStateDataView = new DataView(backend.memory.buffer, renderStateOffset);
 
-    return {
-        entity_x: state[0],
-        entity_y: state[1],
-        target_x: state[2],
-        target_y: state[3],
+    let renderState =
+    {
+        entity_count: renderStateDataView.getUint16(0, true),
+        entity_states: [],
     };
+
+    const entityStatesOffset = renderStateDataView.getUint32(2, true);
+    const entityStatesDataView = new DataView(backend.memory.buffer, entityStatesOffset);
+
+    const ENTITY_MEM_SIZE = 8;
+
+    for (let i = 0; i < renderState.entity_count; i++) {
+        renderState.entity_states.push({
+            loc: {
+                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i),
+                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 2),
+            },
+            target_loc: {
+                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 4),
+                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 6),
+            },
+            });
+    }
+
+    return renderState;
 }

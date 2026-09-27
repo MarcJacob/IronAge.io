@@ -7,6 +7,12 @@
 
 // Match slots system.
 #include "match_slots.h"
+#include "game_common/game_match.h"
+#include "game_common/game_commands.h"
+#include "game_common/game_messages.h"
+
+// Clients table symbols
+#include "game_server_clients.h"
 
 // Unity-compile the Game Common code into the server.
 #include "../game_common/game_common_main.cpp"
@@ -14,6 +20,10 @@
 // Unity-compile sub-components.
 #include "game_server_clients.cpp"
 #include "web_server/web_server.cpp"
+
+#if _DEBUG
+#include "tests/game_server_tests.cpp"
+#endif
 
 // BEGIN MATCH SLOT SYSTEM IMPLEMENTATION
 
@@ -78,7 +88,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	slot.match.last_tick_time = server.uptime_ms;
 
 	game_match& match = *slot.match.match_ptr;
-	match_start(slot.slot_memory, server.uptime_ms, slot.match_params, match);
+	match_start(slot.slot_memory, server.uptime_ms, *slot.match_params, match);
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
 
@@ -166,19 +176,6 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 	}
 }
 
-// TEMP(Marc): Test hook, echoes every game message received from a game client back to it.
-static void game_server_test_echo_game_client(game_server& server, game_server_client& client)
-{
-	game_message_header* message = nullptr;
-	while (client.game_client_peek_message(message))
-	{
-		server.logf("TEST", "Client %d: message type %d, payload %d bytes.", client.handle.value, message->message_type_code, message->payloadSize);
-
-		if (!client.game_client_send_message(*message)) break; // Sending buffer full: try again next tick.
-		client.game_client_consume_message();
-	}
-}
-
 // BEGIN GAME SERVER MAIN FUNCTIONS
 
 game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
@@ -229,6 +226,10 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
+#if _DEBUG
+	TEST_COMMAND_SIZES_CHECK();
+#endif
+
 	// Initialize Web Server.
 
 	newServer->web = web_server_init(*newServer);
@@ -240,71 +241,6 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	return newServer;
 }
 
-void game_server_test_mode_tick(game_server& server)
-{	
-	// TEST: Run the shared test scenario in its own arena allocated from main memory,
-	// dump the resulting match state to specified file and shut down.
-
-	ASSERT(server.platform != nullptr);
-	game_server_platform& platform = *server.platform;
-
-	server.log("TEST", "Running in test scenario mode.\nRunning test scenario match...");
-
-	game_match_start_params scenario_params = match_test_scenario_get_params();
-
-	mem_arena scenario_memory = mem_arena_create_sub(server.main_memory, match_get_required_mem(scenario_params));
-	game_match* scenario_match = match_run_test_scenario(scenario_memory);
-	ASSERT(scenario_match != nullptr);
-
-	if (server.init_params.test_scenario_dump_filename == nullptr)
-	{
-		server.log("TEST", "No dump file specified. Going straight to shutdown.");
-		platform.shutdown(0);
-	}
-
-	server.logf("TEST", "Dumping scenario match end state to file \"%s\".", server.init_params.test_scenario_dump_filename);
-
-	match_dump_stream dump_stream = { };
-	ui64 dumpSize = match_dump_gamestate(*scenario_match, dump_stream);
-
-	struct dump_state_data
-	{
-		ui8* dump_mem;
-		ui64 dump_size;
-	} dump_state = {0};
-
-	if (dumpSize > 0)
-	{
-		dump_state.dump_mem = server.main_memory.alloc<ui8>(dumpSize);
-		ASSERT(dump_state.dump_mem != nullptr);
-
-		auto dump_func = [](void* dump_state, ui8* bytes, ui64 byte_count)
-			{
-				dump_state_data& state = *(dump_state_data*)(dump_state);
-
-				ia_memcpy(state.dump_mem + state.dump_size, bytes, byte_count);
-				state.dump_size += byte_count;
-			};
-
-		dump_stream.dump_func = dump_func;
-		dump_stream.state = &dump_state;
-		match_dump_gamestate(*scenario_match, dump_stream);
-
-		// Write the snapshot so it can be compared with the one simulated by the web client.
-		if (!platform.write_resource_file(server.init_params.test_scenario_dump_filename, dump_state.dump_mem, dump_state.dump_size))
-		{
-			server.log("TEST", LOG_ERROR, "Failed to write native snapshot file.");
-		}
-		else
-		{
-			server.log("TEST", LOG_SUCCESS, "Match ending state dumped successfully.");
-		}
-	}
-
-	server.log("TEST", "Shutting down...");
-	platform.shutdown(0);
-}
-
 void game_server_tick(game_server& server, time_ms platform_time_ms)
 {
 	// ... for convenience.
@@ -314,6 +250,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	server.delta_ms = platform_time_ms - server.uptime_ms;
 	server.uptime_ms = platform_time_ms;
 
+#if _DEBUG
 	// Run in test mode if configured to do so.
 	// NOTE(Marc): Having this here is ugly. Need to design a proper "test mode" alternative server implementation.
 	if (server.init_params.run_test_scenario)
@@ -321,6 +258,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		game_server_test_mode_tick(server);
 		return;
 	}
+#endif
 
 	// Query platform for closed connections, and signal the clients subsystem about them.
 	{
@@ -363,9 +301,6 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	// Process UNKNOWN type client connections.
 	game_server_client_for_each_of_type(server, game_server_client::TYPE::UNKNOWN, game_server_process_unknown_client);
 
-	// TEMP(Marc): Echo test for GAME_CLIENT type clients.
-	game_server_client_for_each_of_type(server, game_server_client::TYPE::GAME_CLIENT, game_server_test_echo_game_client);
-
 	// Serve the web client bundle over HTTP on all platform connections.
 	web_server_tick(server);
 
@@ -381,15 +316,14 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 		case MATCH_SLOT_STATE::MATCH_ONGOING:
 			// Ongoing match tick logic.
 			
-			msPerTick = (1000 / slot.match_params.tick_rate);
+			msPerTick = (1000 / slot.match_params->tick_rate);
 
 			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
 			nextTickTimeMs = slot.match.last_tick_time + msPerTick;
 			while (nextTickTimeMs < server.uptime_ms)
 			{
 				// TODO: Input system based on received network messages.
-				match_tick_commands tickCommands = {};
-				match_tick(*slot.match.match_ptr, tickCommands);
+				match_tick(*slot.match.match_ptr, {});
 
 				// TEST: End match after 2500 ticks.
 				if (slot.match.match_ptr->tick == 2500)

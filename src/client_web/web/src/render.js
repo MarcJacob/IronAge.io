@@ -39,18 +39,16 @@ export function page_to_world(clientX, clientY) {
     };
 }
 
-// Draws the given render state (see backend.read_render_state()).
-export function draw(render_state) {
-    const x = render_state.entity_x * scaleX;
-    const y = render_state.entity_y * scaleY;
+function draw_entity(render_state, entity_index) {
+
+    const x = render_state.entity_states[entity_index].loc.x * scaleX;
+    const y = render_state.entity_states[entity_index].loc.y * scaleY;
     const w = 5 * scaleX;
     const h = 5 * scaleY;
 
-    const cx = render_state.target_x * scaleX;
-    const cy = render_state.target_y * scaleY;
+    const cx = render_state.entity_states[entity_index].target_loc.x * scaleX;
+    const cy = render_state.entity_states[entity_index].target_loc.y * scaleY;
     const radius = 5 * scaleX;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#222';
     ctx.fillRect(x - w / 2, y - h / 2, w, h);
@@ -63,4 +61,14 @@ export function draw(render_state) {
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
+
+}
+
+// Draws the given render state (see backend.read_render_state()).
+export function draw(render_state) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < render_state.entity_count; i++) {
+        draw_entity(render_state, i);
+    }
 }

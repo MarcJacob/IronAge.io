@@ -31,7 +31,7 @@ struct match_slot
 
 	mem_arena slot_memory; // Memory assigned to this slot.
 
-	game_match_start_params match_params; // Parameters for the current or next match (valid when in lobby or in a match).
+	game_match_start_params* match_params; // Parameters for the current or next match (valid when in lobby or in a match).
 
 	union
 	{

@@ -20,12 +20,12 @@
       }
     },
     {
-      "name": "web_client",
-      "displayName": "WASM (Web Client)",
+      "name": "web_client_debug",
+      "displayName": "WASM (Web Client) (Debug)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "toolchainFile": "${sourceDir}/cmake/wasm32-toolchain.cmake",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
     }
   ]
 }
