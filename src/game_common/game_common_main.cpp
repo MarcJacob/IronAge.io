@@ -121,7 +121,7 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 
 // TODO(Marc): Waaaaaaaaaaaaaaaaay better test scenario system. But a static system will be enough for the bulk of early development.
 
-#define MATCH_TEST_SCENARIO_TICKS (200)
+#define MATCH_TEST_SCENARIO_TICKS (2000)
 
 game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 {

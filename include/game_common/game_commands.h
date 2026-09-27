@@ -82,10 +82,8 @@ struct match_command_sequence
 // Full buffer of tick commands exclusively applied over a match tick.
 struct match_tick_commands
 {
-#ifdef MATCH_COMMAND_DEBUG
 	// Total byte size of the sequences buffer.
-	ui32 _total_size;
-#endif
+	ui32 total_size;
 
 	match_player_count sequences_count;
 	ui8 _sequences_buffer[];
@@ -93,7 +91,7 @@ struct match_tick_commands
 	// Returns a typed reference of a match command sequence start struct at the provided byte offset.
 	inline match_command_sequence& get_sequence_at(ui16 byte_offset) const
 	{
-		ASSERT(byte_offset < _total_size);
+		ASSERT(byte_offset < total_size);
 		return *(match_command_sequence*)&_sequences_buffer[byte_offset];
 	}
 };
@@ -216,9 +214,8 @@ struct match_tick_commands_builder
 		_sequence_builder = newBuilder;
 		_tick_commands_start->sequences_count++;
 
-#ifdef MATCH_COMMAND_DEBUG
-		_tick_commands_start->_total_size += sizeof(match_command_sequence);
-#endif
+		// Increment total size.
+		_tick_commands_start->total_size += sizeof(match_command_sequence);
 
 		return true;
 	}
@@ -232,21 +229,14 @@ struct match_tick_commands_builder
 		ASSERT(target_mem != nullptr);
 		ASSERT(get_command_size(command_type) == sizeof(PayloadType));
 
-#ifdef MATCH_COMMAND_DEBUG
-		ui32 prevSequenceSize = _sequence_builder._sequence_start->_total_size;
-#endif
-
 		PayloadType* payload = _sequence_builder.push_command<PayloadType>(command_type);
 		if (payload == nullptr) return nullptr;
 
-#ifdef MATCH_COMMAND_DEBUG
-		ui32 sequenceGrowth = _sequence_builder._sequence_start->_total_size - prevSequenceSize;
-		_tick_commands_start->_total_size += sequenceGrowth;
-#endif
+		// Increment total size.
+		_tick_commands_start->total_size += sizeof(match_command_header) + sizeof(PayloadType);
 
 		return payload;
 	}
-
 };
 
 // COMMAND FUNCTIONS DECLARATIONS

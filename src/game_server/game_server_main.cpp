@@ -64,6 +64,8 @@ bool game_server_open_lobby(game_server& server, ui8 slot_index)
 	slot.state = MATCH_SLOT_STATE::IN_LOBBY;
 
 	// TO IMPLEMENT: Lobby system, tied to the client connection system / player system (abstraction might be convenient for AI / bot players ?)
+	slot.players = slot.slot_memory.alloc<match_player>(slot.match_params->player_count);
+	ASSERT(slot.players != nullptr);
 
 	return true;
 }
@@ -91,6 +93,35 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	match_start(slot.slot_memory, server.uptime_ms, *slot.match_params, match);
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
+
+	// Send MATCH JOINED message to all connected clients.
+
+	ui8 msg_scratch_buff[2048];
+	mem_arena msg_scratch_mem = mem_arena_create(msg_scratch_buff, sizeof(msg_scratch_buff));
+
+	// Allocate message, adding extra data size of the match parameters as extra bytes.
+	game_match_start_params* matchParams = slot.match_params;
+	ASSERT(matchParams != nullptr);
+
+	game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, matchParams->extra_data_size);
+	ASSERT(joinMsgHeader);
+
+	auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_joined>();
+	joinMsgPayload = {};
+	// Copy start params.
+	ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params) + matchParams->extra_data_size);
+
+	for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+	{
+		const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+		if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+
+		joinMsgPayload.controlled_player_id = playerID;
+		joinMsgPayload.join_tick = 0;
+
+		// Send message !
+		playerClient->game_client_send_message(*joinMsgHeader);
+	}
 
 	return true;
 }
@@ -167,12 +198,6 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 		return false;
 	}
 
-	if (slot.players == nullptr)
-	{
-		slot.players = slot.slot_memory.alloc<match_player>(slot.match_params->player_count);
-		ASSERT(slot.players != nullptr);
-	}
-
 	bool attachSuccessful = false;
 	for (ui16 playerIndex = 0; playerIndex < slot.match_params->player_count; playerIndex++)
 	{
@@ -191,39 +216,6 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 		server.logf("MATCH", LOG_WARNING, "Match slot %d has no free player index to attach a client to.", slot_index);
 		return false;
 	}
-
-	ui8 msg_scratch_buff[2048];
-	mem_arena msg_scratch_mem = mem_arena_create(msg_scratch_buff, sizeof(msg_scratch_buff));
-
-	// Send JOIN MATCH message to newly-attached game client.
-
-	// Allocate message, adding extra data size of the match parameters as extra bytes.
-	game_match_start_params* matchParams = slot.match_params;
-	ASSERT(matchParams != nullptr);
-
-	game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, matchParams->extra_data_size);
-	ASSERT(joinMsgHeader);
-
-	auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_joined>();
-	joinMsgPayload = {};
-
-	joinMsgPayload.controlled_player_id = out_player_index;
-	
-	if (server.match_slots[slot_index].state == MATCH_SLOT_STATE::IN_LOBBY)
-	{
-		joinMsgPayload.join_tick = 0;
-	}
-	else
-	{
-		joinMsgPayload.join_tick = slot.match.match_ptr->tick;
-	}
-
-	// Copy start params.
-	ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params) + matchParams->extra_data_size);
-
-	// Send message !
-	client.game_client_send_message(*joinMsgHeader);
-
 	return true;
 }
 
@@ -236,11 +228,43 @@ void game_server_tick_match_slots(game_server& server)
 		time_ms nextTickTimeMs = 0;
 		ui64 msPerTick = 0;
 
+		// TEST: Count how many active connections there are. Once there are 2, start the match.
+		ui8 connectionCount = 0;
+
+		if (slot.state == MATCH_SLOT_STATE::IN_LOBBY || slot.state == MATCH_SLOT_STATE::MATCH_ONGOING)
+		{
+			for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+			{
+				const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+				if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+				connectionCount++;
+			}
+		}
+
 		switch (slot.state)
 		{
+		case MATCH_SLOT_STATE::IN_LOBBY:
+
+			if (connectionCount < 2) break; // Break out below the required number of players.
+
+			// Start match.
+			game_server_start_match_slot(server, slotIndex);
+
+			break;
 		case MATCH_SLOT_STATE::MATCH_ONGOING:
 			// Ongoing match tick logic.
 			
+			// End match early if all players disconnect.
+			if (connectionCount == 0)
+			{
+				server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slotIndex);
+				game_server_end_match_slot(server, slotIndex);
+
+				// TEMP: Until the full match lifecycle + clients delayed joining are here, just shut the server down along with the match.
+				server.platform->shutdown(0);
+				return;
+			}
+
 			msPerTick = (1000 / slot.match_params->tick_rate);
 
 			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
@@ -248,17 +272,45 @@ void game_server_tick_match_slots(game_server& server)
 			while (nextTickTimeMs < server.uptime_ms)
 			{
 				// TODO: Input system based on received network messages.
-				match_tick(*slot.match.match_ptr, {});
+				// Gather inputs for this tick.
+				match_tick_commands tickCommands = {};
 
-				// TEST: End match after 2500 ticks.
-				if (slot.match.match_ptr->tick == 2500)
+				// Send tick update to all players.
+
+				ui8 update_buff[2048];
+				mem_arena update_mem = mem_arena_create(update_buff, sizeof(update_buff));
+
+				game_message_header* tickMsgHeader = build_game_message(GAME_MESSAGE_TYPE::SERVER_TICK, update_mem, tickCommands.total_size);
+				ASSERT(tickMsgHeader != nullptr); // TODO(Marc): extendable memory ? We may have a LOT of input to deal with at times.
+
+				auto& serverTickPayload = tickMsgHeader->get_payload_ref<game_message_payload_server_tick>();
+				serverTickPayload.command_sequence_count = tickCommands.sequences_count;
+				serverTickPayload.apply_tick = slot.match.match_ptr->tick - 1;
+
+				// Copy input sequences into message.
+				ia_memcpy(serverTickPayload._command_sequences_buffer, tickCommands._sequences_buffer, tickCommands.total_size);
+
+				for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+				{
+					const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+					if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+
+					playerClient->game_client_send_message(*tickMsgHeader);
+				}
+
+				// Perform server-side match tick.
+				match_tick(*slot.match.match_ptr, tickCommands);
+
+				slot.match.last_tick_time = nextTickTimeMs;
+				nextTickTimeMs += msPerTick;
+
+				// End match after reaching maximum number of ticks.
+				if (slot.match.match_ptr->tick == slot.match_params->max_tick)
 				{
 					game_server_end_match_slot(server, slotIndex);
 					break;
 				}
 
-				slot.match.last_tick_time = nextTickTimeMs;
-				nextTickTimeMs += msPerTick;
 			}
 			break;
 		default:
@@ -377,14 +429,12 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Setup event handler for Web server to clean resources tied to non-game-clients losing connection.
 	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, web_server_on_client_disconnected);
 
-	// TEMP(Marc): Until we have a full working match slot lifecycle with join request messages from clients, we just start up match slot 0.
-	game_server_open_lobby(*newServer, 0);
+	// TEMP(Marc): Until we have a full working match slot lifecycle with join request messages from clients, just set slot 0 to lobby and redirect all players there.	
 	{
 		// .. Get parameters from test scenario.
-		newServer->match_slots[0].match_params = match_test_scenario_get_params(newServer->match_slots[0].slot_memory);
+		newServer->match_slots[0].match_params = match_test_scenario_get_params(newServer->match_slots[0].slot_memory);	
+		game_server_open_lobby(*newServer, 0);
 	}
-
-	game_server_start_match_slot(*newServer, 0);
 
 	return newServer;
 }
