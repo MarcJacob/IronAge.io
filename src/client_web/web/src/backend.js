@@ -4,7 +4,17 @@
 /** @type {WebAssembly.Exports} */
 let backend = null;
 
-// Static info about the local match. Filled by begin_match().
+// Mirrors GAME_MESSAGE_TYPE (include/game_common/game_messages.h). Update here if the enum changes.
+export const MESSAGE_TYPE = {
+    MATCH_JOINED: 0,
+    MATCH_ENDED: 1,
+    SERVER_TICK: 2,
+    SERVER_TICK_BUNDLE: 3,
+    CLIENT_TICK: 4,
+};
+const UNHANDLED_MESSAGE_TYPE = 5; // GAME_MESSAGE_TYPE::TYPE_COUNT: returned by the backend when a message could not be processed.
+
+// Static info about the local match. Filled by read_match_info(), once a MATCH_JOINED message has been processed.
 export const match_info = {
     tick_rate: 0,
     world_width: 0,
@@ -17,13 +27,35 @@ export async function load_backend(wasm_url) {
     backend = result.instance.exports;
 }
 
-// Starts a local match and reads its static info into match_info. Returns false if anything went wrong.
-export function begin_match() {
-    if (!backend.client_begin_match()) {
-        console.error("Failed to start local match.");
-        return false;
+// Copies a received websocket message's bytes into wasm memory and has the backend parse & apply it.
+// Returns the handled message type (see MESSAGE_TYPE), or null if the message could not be processed.
+export function process_net_message(bytes) {
+    const bufferSize = backend.client_get_net_message_buffer_size();
+    if (bytes.length > bufferSize) {
+        console.error(`Received message (${bytes.length} bytes) is larger than the client's net message buffer (${bufferSize} bytes). Dropping.`);
+        return null;
     }
 
+    const bufferOffset = backend.client_get_net_message_buffer();
+    new Uint8Array(backend.memory.buffer, bufferOffset, bytes.length).set(bytes);
+
+    const messageType = backend.client_process_net_message(bytes.length);
+    return messageType === UNHANDLED_MESSAGE_TYPE ? null : messageType;
+}
+
+// Reads the message the backend built in response to the last process_net_message call, if any.
+// Call this right after process_net_message and send the result over the websocket. Returns null if there's nothing to send.
+export function read_pending_output_message() {
+    const size = backend.client_get_pending_output_message_size();
+    if (size === 0) return null;
+
+    const bufferOffset = backend.client_get_pending_output_message_buffer();
+    // Copy out: the backend may overwrite this buffer the next time it builds an outgoing message.
+    return new Uint8Array(backend.memory.buffer, bufferOffset, size).slice();
+}
+
+// Reads static info about the currently active local match into match_info. Call after a MATCH_JOINED message was processed.
+export function read_match_info() {
     // Layout of web_client_match_info: three ui32 (tick rate, world width, world height).
     const infoOffset = backend.client_get_local_match_info();
     const infoView = new DataView(backend.memory.buffer, infoOffset, 12);
@@ -31,17 +63,11 @@ export function begin_match() {
     match_info.tick_rate = infoView.getUint32(0, true);
     match_info.world_width = infoView.getUint32(4, true);
     match_info.world_height = infoView.getUint32(8, true);
-
-    if (match_info.tick_rate == 0 || match_info.world_width == 0 || match_info.world_height == 0) {
-        console.error("Invalid local match info.", match_info);
-        return false;
-    }
-
-    return true;
 }
 
-export function tick_match() {
-    backend.client_tick_match();
+// Reads which player id the client is currently in control of. Call after a MATCH_JOINED message was processed.
+export function read_controlled_player_id() {
+    return backend.client_get_controlled_player_id();
 }
 
 export function set_target_loc(x, y) {
@@ -69,12 +95,12 @@ export function read_render_state() {
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push({
             loc: {
-                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i),
-                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 2),
+                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i, true),
+                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 2, true),
             },
             target_loc: {
-                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 4),
-                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 6),
+                x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 4, true),
+                y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 6, true),
             },
             });
     }

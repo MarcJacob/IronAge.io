@@ -22,7 +22,7 @@ web_server* web_server_init(game_server& server)
 
 void web_server_on_client_disconnected(game_server& server, game_server_client& client)
 {
-	ASSERT(client.connection_context != nullptr);
+	if (client.connection_context == nullptr) return;
 
 	// Give the Web Server Client structure back to the pool.
 	// We can check that the client's non-game client connection context points to an element of the web server's own clients table to establish ownership.

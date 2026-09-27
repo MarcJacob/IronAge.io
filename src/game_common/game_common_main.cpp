@@ -159,22 +159,25 @@ match_tick_commands* build_test_scenario_commands(const game_match& match)
 
 	if (!commandsBuilder.init()) return nullptr;
 
-	// For each player in the match, have them move their entity to a point on the map.
-	for (match_player_id playerID = 0; playerID < match.start_params->player_count; playerID++)
+	if (match.tick == 0)
 	{
-		// Push new sequence for this player.
-		if (!commandsBuilder.push_sequence(playerID)) return nullptr;
+		// For each player in the match, have them move their entity to a point on the map.
+		for (match_player_id playerID = 0; playerID < match.start_params->player_count; playerID++)
+		{
+			// Push new sequence for this player.
+			if (!commandsBuilder.push_sequence(playerID)) return nullptr;
 
-		// Output a single command, to move the entity to a target location that depends on the player's ID.
-		world_location targetLoc = {
-			(ui16)(playerID * 100 / match.start_params->world_dimensions.x * 300 % match.start_params->world_dimensions.x),
-			(ui16)(playerID * 500 % match.start_params->world_dimensions.y) };
+			// Output a single command, to move the entity to a target location that depends on the player's ID.
+			world_location targetLoc = {
+				(ui16)((playerID + match.tick) * 2000 / match.start_params->world_dimensions.x * 300 % match.start_params->world_dimensions.x),
+				(ui16)((playerID + match.tick) * 5000 % match.start_params->world_dimensions.y) };
 
-		auto payload = commandsBuilder.push_command<command_payload_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
-		if (payload == nullptr) return nullptr;
+			auto payload = commandsBuilder.push_command<command_payload_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+			if (payload == nullptr) return nullptr;
 
-		payload->target_entity = playerID;
-		payload->new_target = targetLoc;
+			payload->target_entity = playerID;
+			payload->new_target = targetLoc;
+		}
 	}
 
 	// Extract constructed tick commands.

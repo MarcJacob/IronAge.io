@@ -1,5 +1,19 @@
+#main_layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
 #game_canvas_foreground {
     outline: 2px solid #000;
+}
+
+#debug_panel {
+    font-family: monospace;
+    white-space: pre-wrap;
+    border: 1px solid #000;
+    padding: 8px;
+    min-width: 220px;
 }
 
 #websocket_test_output {

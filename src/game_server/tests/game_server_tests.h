@@ -16,6 +16,9 @@ struct game_server_client;
 // Checks the client for received messages and echoes them back with the exact same content.
 static void game_server_test_echo_game_client(game_server& server, game_server_client& client);
 
+// Generates test input commands for a match.
+static match_tick_commands* build_test_scenario_commands(const game_match& match);
+
 // Alternative tick function ran by the server when in test mode.
 void game_server_test_mode_tick(game_server& server);
 

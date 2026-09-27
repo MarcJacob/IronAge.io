@@ -219,14 +219,120 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 	return true;
 }
 
+// Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
+static void game_server_tick_match_slot_lobby(game_server& server, ui8 slotIndex, ui8 connectionCount)
+{
+	if (connectionCount < 2) return; // Not enough players yet.
+
+	game_server_start_match_slot(server, slotIndex);
+}
+
+// Ticks a match slot with an ongoing match: gathers input, simulates & relays as many ticks as have elapsed since last time.
+static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotIndex, ui8 connectionCount)
+{
+	match_slot& slot = server.match_slots[slotIndex];
+
+	// End match early if all players disconnect.
+	if (connectionCount == 0)
+	{
+		server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slotIndex);
+		game_server_end_match_slot(server, slotIndex);
+
+		// TEMP: Until the full match lifecycle + clients delayed joining are here, just shut the server down along with the match.
+		server.platform->shutdown(0);
+		return;
+	}
+
+	ui64 msPerTick = (1000 / slot.match_params->tick_rate);
+
+	// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
+	time_ms nextTickTimeMs = slot.match.last_tick_time + msPerTick;
+	while (nextTickTimeMs < server.uptime_ms)
+	{
+		// Remember how much memory was allocated at this point, so the throwaway per-tick command data below can be reclaimed once it's been sent.
+		ui32 slotMemoryAllocated = slot.slot_memory.allocated_count;
+
+		ui8 tick_commands_scratch[4096];
+		mem_arena tick_commands_scratch_mem = mem_arena_create(tick_commands_scratch, sizeof(tick_commands_scratch));
+
+		match_tick_commands_builder tickCommandsBuilder = {};
+		tickCommandsBuilder.target_mem = &tick_commands_scratch_mem;
+		ASSERT(tickCommandsBuilder.init());
+
+		// Gather inputs for this tick.
+		// Do so by going over every player controlled by a Game Client and checking them for CLIENT_TICK messages.
+		for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+		{
+			const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+			if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+
+			game_message_header* msgHeader;
+			if (!playerClient->game_client_peek_message(msgHeader)) continue;
+
+			if (msgHeader->message_type == GAME_MESSAGE_TYPE::CLIENT_TICK)
+			{
+				const auto& payload = msgHeader->get_payload_ref<game_message_payload_client_tick>();
+				if (slot.match.match_ptr->tick - payload.emit_tick < slot.match_params->tick_rate) // Don't take command into account if it was emitted on too old a tick.
+				{
+					// Create new sequence for this player then push the received commands.
+					tickCommandsBuilder.push_sequence(playerID);
+
+					// Push commands received straight from the payload. Buffers size is the payload size minus the payload structure itself.
+					ui16 commandsBufferSize = msgHeader->payloadSize - sizeof(payload);
+					tickCommandsBuilder.push_commands_buffer(payload._command_headers_buffer, commandsBufferSize, payload.command_header_count);
+				}
+			}
+			playerClient->game_client_consume_message();
+		}
+
+		match_tick_commands& tickCommands = *tickCommandsBuilder._tick_commands_start;
+
+		// Send tick update to all players.
+
+		ui8 update_buff[2048];
+		mem_arena update_mem = mem_arena_create(update_buff, sizeof(update_buff));
+
+		game_message_header* tickMsgHeader = build_game_message(GAME_MESSAGE_TYPE::SERVER_TICK, update_mem, tickCommands.total_size);
+		ASSERT(tickMsgHeader != nullptr); // TODO(Marc): extendable memory ? We may have a LOT of input to deal with at times.
+
+		auto& serverTickPayload = tickMsgHeader->get_payload_ref<game_message_payload_server_tick>();
+		serverTickPayload.apply_tick = slot.match.match_ptr->tick - 1;
+
+		// Copy the whole tick commands structure (header + trailing sequence buffer) in one go.
+		ia_memcpy(&serverTickPayload.commands, &tickCommands, sizeof(match_tick_commands) + tickCommands.total_size);
+
+		for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+		{
+			const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+			if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+
+			playerClient->game_client_send_message(*tickMsgHeader);
+		}
+
+		// Perform server-side match tick.
+		match_tick(*slot.match.match_ptr, tickCommands);
+
+		// Reclaim the throwaway per-tick command memory now that it's been sent and applied.
+		slot.slot_memory.allocated_count = slotMemoryAllocated;
+
+		slot.match.last_tick_time = nextTickTimeMs;
+		nextTickTimeMs += msPerTick;
+
+		// End match after reaching maximum number of ticks.
+		if (slot.match.match_ptr->tick == slot.match_params->max_tick)
+		{
+			game_server_end_match_slot(server, slotIndex);
+			break;
+		}
+	}
+}
+
 void game_server_tick_match_slots(game_server& server)
 {
 	// Manage match slots.
 	for (ui8 slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
 	{
 		match_slot& slot = server.match_slots[slotIndex];
-		time_ms nextTickTimeMs = 0;
-		ui64 msPerTick = 0;
 
 		// TEST: Count how many active connections there are. Once there are 2, start the match.
 		ui8 connectionCount = 0;
@@ -244,74 +350,10 @@ void game_server_tick_match_slots(game_server& server)
 		switch (slot.state)
 		{
 		case MATCH_SLOT_STATE::IN_LOBBY:
-
-			if (connectionCount < 2) break; // Break out below the required number of players.
-
-			// Start match.
-			game_server_start_match_slot(server, slotIndex);
-
+			game_server_tick_match_slot_lobby(server, slotIndex, connectionCount);
 			break;
 		case MATCH_SLOT_STATE::MATCH_ONGOING:
-			// Ongoing match tick logic.
-			
-			// End match early if all players disconnect.
-			if (connectionCount == 0)
-			{
-				server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slotIndex);
-				game_server_end_match_slot(server, slotIndex);
-
-				// TEMP: Until the full match lifecycle + clients delayed joining are here, just shut the server down along with the match.
-				server.platform->shutdown(0);
-				return;
-			}
-
-			msPerTick = (1000 / slot.match_params->tick_rate);
-
-			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
-			nextTickTimeMs = slot.match.last_tick_time + msPerTick;
-			while (nextTickTimeMs < server.uptime_ms)
-			{
-				// TODO: Input system based on received network messages.
-				// Gather inputs for this tick.
-				match_tick_commands tickCommands = {};
-
-				// Send tick update to all players.
-
-				ui8 update_buff[2048];
-				mem_arena update_mem = mem_arena_create(update_buff, sizeof(update_buff));
-
-				game_message_header* tickMsgHeader = build_game_message(GAME_MESSAGE_TYPE::SERVER_TICK, update_mem, tickCommands.total_size);
-				ASSERT(tickMsgHeader != nullptr); // TODO(Marc): extendable memory ? We may have a LOT of input to deal with at times.
-
-				auto& serverTickPayload = tickMsgHeader->get_payload_ref<game_message_payload_server_tick>();
-				serverTickPayload.command_sequence_count = tickCommands.sequences_count;
-				serverTickPayload.apply_tick = slot.match.match_ptr->tick - 1;
-
-				// Copy input sequences into message.
-				ia_memcpy(serverTickPayload._command_sequences_buffer, tickCommands._sequences_buffer, tickCommands.total_size);
-
-				for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
-				{
-					const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
-					if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
-
-					playerClient->game_client_send_message(*tickMsgHeader);
-				}
-
-				// Perform server-side match tick.
-				match_tick(*slot.match.match_ptr, tickCommands);
-
-				slot.match.last_tick_time = nextTickTimeMs;
-				nextTickTimeMs += msPerTick;
-
-				// End match after reaching maximum number of ticks.
-				if (slot.match.match_ptr->tick == slot.match_params->max_tick)
-				{
-					game_server_end_match_slot(server, slotIndex);
-					break;
-				}
-
-			}
+			game_server_tick_match_slot_ongoing(server, slotIndex, connectionCount);
 			break;
 		default:
 			// Do nothing.

@@ -1,56 +1,39 @@
-// Web client entry point: start-up order and the frame loop.
+// Web client entry point: start-up order and the socket-driven message loop.
+// Every received websocket message is handed to the backend to parse and apply; the backend's return value tells this
+// layer what happened (see MESSAGE_TYPE), which is the only signal it reacts to. There is no separate JS-driven tick loop:
+// the server drives ticks, the client just applies whatever it's told.
 
-import { load_backend, begin_match, tick_match, set_target_loc, read_render_state, match_info } from './backend.js';
+import { load_backend, process_net_message, read_pending_output_message, read_match_info, read_controlled_player_id, set_target_loc, read_render_state, match_info, MESSAGE_TYPE } from './backend.js';
 import { init_render, draw, page_to_world } from './render.js';
 import { init_input } from './input.js';
-
-const MAX_TICKS_PER_FRAME = 5;
-
-let lastFrameTime = 0; // In seconds.
-let timeSinceTick = 0; // In seconds.
-
-function web_frame() {
-    const now = performance.now() / 1000;
-    timeSinceTick += now - lastFrameTime;
-    lastFrameTime = now;
-
-    const tickPeriod = 1 / match_info.tick_rate;
-
-    let ticksThisFrame = 0;
-    while (timeSinceTick >= tickPeriod && ticksThisFrame < MAX_TICKS_PER_FRAME) {
-        tick_match();
-
-        ticksThisFrame++;
-        timeSinceTick -= tickPeriod;
-    }
-
-    // If still behind after hitting the cap, the backlog stays in timeSinceTick and is worked off over the next frames (capped catch-up speed).
-
-    if (ticksThisFrame > 0) draw(read_render_state()); // No need to update rendering unless there was a tick. Later this will also be needed if there's view movement.
-
-    requestAnimationFrame(web_frame);
-}
+import { init_debug_panel, update_debug_panel } from './debug.js';
 
 function websocket_url() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/ws`;
 }
 
-async function start_after_websocket_open(canvas, socket) {
-    console.log("WebSocket connection accepted by server.");
+function on_socket_message(event, canvas, socket) {
+    const messageType = process_net_message(new Uint8Array(event.data));
+    if (messageType === null) return; // Message could not be processed: nothing changed.
 
-    console.log("Starting local match.");
-    if (!begin_match()) {
-        socket.close();
-        return;
+    if (messageType === MESSAGE_TYPE.MATCH_JOINED) {
+        console.log("Joined match as player", read_controlled_player_id());
+
+        read_match_info();
+        init_render(canvas, match_info);
+        init_input(canvas, page_to_world, set_target_loc);
+        canvas.hidden = false;
     }
 
-    init_render(canvas, match_info);
-    init_input(canvas, page_to_world, set_target_loc);
-    canvas.hidden = false;
+    const renderState = read_render_state();
+    draw(renderState);
+    update_debug_panel(renderState);
 
-    lastFrameTime = performance.now() / 1000;
-    requestAnimationFrame(web_frame);
+    // The backend may have built a reply (e.g. pending input) in response to the message just processed.
+    // There is no separate send loop: outgoing messages only ever go out piggybacked on a received one.
+    const outgoing = read_pending_output_message();
+    if (outgoing !== null) socket.send(outgoing);
 }
 
 async function start() {
@@ -63,11 +46,16 @@ async function start() {
     }
 
     const canvas = document.getElementById("game_canvas_foreground");
-    const socket = new WebSocket(websocket_url());
+    init_debug_panel(document.getElementById("debug_entity_states"));
 
-    socket.addEventListener("open", async () => {
-        await start_after_websocket_open(canvas, socket);
+    const socket = new WebSocket(websocket_url());
+    socket.binaryType = 'arraybuffer';
+
+    socket.addEventListener("open", () => {
+        console.log("WebSocket connection accepted by server. Waiting to join a match...");
     });
+
+    socket.addEventListener("message", (event) => on_socket_message(event, canvas, socket));
 
     socket.addEventListener("error", () => {
         console.error("WebSocket connection failed.");

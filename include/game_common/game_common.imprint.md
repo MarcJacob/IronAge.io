@@ -37,6 +37,15 @@ Later on, we may want to make the registration of commands more convenient and c
 together in one place. This could be done with a macro whose role is to output a command to some static buffer any program could choose to place in their static memory where they wish.
 Then a command's *code* could be related to its index in that collection instead of its command type enumeration value (which could even be replaced with a string name).
 
+#### Structuring for messages & input into match tick
+
+Commands follow a structure leading to the the root "full tick commands" structure that is passed to a match for ticking:
+- Command Header + Payload[] = "Basic command" with only its type and payload.
+- Player ID + Command Count + Commands Buffer[] = "Command Sequence" linking a player to the sequence of commands they are sending.
+- Total byte size + Sequences Count + Sequences[] = "Tick Commands" putting together all sequences to run for a tick as a single memory block.
+
+Sequences or full Tick Commands structures can be built using corresponding builder structures for an easier time feeding into such structures from generalized input logic.
+
 ## Game Messages
 
 Games messages are a network-oriented protocol for communicating specifically between a client and server in the IronAge "ecosystem". They acknowledge two roles:
@@ -77,10 +86,10 @@ On each Server tick until MATCH END:
 	- Bundles contain multiple ticks worth of input command sequences for faster catchup.
 	- The client must apply the commands to their local match state and preferably stop allowing the emission of input commands to the server.
 - IF Client is *current* = Server -> Client: "Server Tick" message.
-	- Contains the input command sequence to apply for a specific tick. **The client must not have already simulated the tick locally**.
+	- Contains a full Tick Commands structure and the tick it is supposed to apply to. **The client must not have already simulated the tick locally**.
 	- Is trusted to contain the exhaustive sequence of ticks applied to the match on that tick on the server.
 - IF Client is *current* = Client -> Server: "Client Tick" message.
-	- Contains a sequence of inputs and the visible match tick on the client at the moment of emission.
+	- Contains a sequence of input commands and the visible match tick on the client at the moment of emission.
 	- The server is free to apply or discard any or all of those inputs at their discretion.
 
 - On server-side match ending (due to game rules or server ending the match manually), or client departure, MATCH END.

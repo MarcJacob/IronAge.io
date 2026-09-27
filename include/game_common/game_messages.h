@@ -3,6 +3,8 @@
 #ifndef GAME_MESSAGES_INCLUDED
 #define GAME_MESSAGES_INCLUDED
 
+#include "game_commands.h" // For match_tick_commands, embedded by value in the tick message payloads below.
+
 // Enumaration of supported game message types.
 // Each type features a high-level description of its functionality. More detail can be found atop the corresponding payload structure.
 enum class GAME_MESSAGE_TYPE : ui8
@@ -62,26 +64,13 @@ struct game_message_payload_match_ended
 
 // BEGIN MATCH COMMAND MESSAGES
 
-struct match_command_header;
-struct match_command_sequence;
-struct match_tick_commands;
-
 // Server -> Client message payload.
 // Received by a client as the authoritative set of input command sequences applied over a specific match tick.
 struct game_message_payload_server_tick
 {
 	ui32 apply_tick; // Which tick the input sequence happened for.
 
-	// Buffer of command sequences following this structure.
-	// Contains command sequences
-	ui16 command_sequence_count;
-	ui8 _command_sequences_buffer[];
-
-	// Returns a typed reference of a match command sequence start struct at the provided byte offset.
-	inline match_command_sequence& get_sequence_at(ui16 byte_offset) const
-	{
-		return *(match_command_sequence*)&_command_sequences_buffer[byte_offset];
-	}
+	match_tick_commands commands; // Must stay last: match_tick_commands ends in a flexible array.
 };
 
 // Server -> Client message payload.

@@ -145,6 +145,27 @@ struct command_sequence_builder
 		return true;
 	}
 
+	// Pushes a buffer of commands to this sequence, assuming the memory can be directly interpreted as series of <Command Header><Payload> structures.
+	// Useful to copy commands from an existing sequence.
+	inline bool push_commands_buffer(const ui8* commands_buff, ui16 buff_size, ui8 command_count)
+	{
+		ASSERT(target_mem != nullptr);
+		ASSERT(_sequence_start != nullptr);
+
+		void* sequenceContinuation = target_mem->alloc(buff_size, 1);
+		if (sequenceContinuation == nullptr) return false;
+
+		ia_memcpy(sequenceContinuation, commands_buff, buff_size);
+
+		_sequence_start->command_count += command_count;
+
+#ifdef MATCH_COMMAND_DEBUG
+		_sequence_start->_total_size += buff_size;
+#endif
+
+		return true;
+	}
+
 	// Attempts to allocate a new command. Returns the payload for parameterization. 
 	// The header is automatically allocated in preceding memory with the correct command type value.
 	// If allocation fails, will return nullptr. In this case, abort the whole building process or just set the arena back to its previous size.
@@ -216,6 +237,21 @@ struct match_tick_commands_builder
 
 		// Increment total size.
 		_tick_commands_start->total_size += sizeof(match_command_sequence);
+
+		return true;
+	}
+
+	// Calls the push_commands_buffer function of the current sequence builder (will assert if none have been pushed !).
+	// This is used so the match_tick_commands structure can keep track of its total size.
+	// Otherwise works the same way as command_sequence_builder::push_commands_buffer().
+	inline bool push_commands_buffer(const ui8* commands_buff, ui16 buff_size, ui8 command_count)
+	{
+		ASSERT(target_mem != nullptr);
+
+		if (!_sequence_builder.push_commands_buffer(commands_buff, buff_size, command_count)) 
+			return false;
+
+		_tick_commands_start->total_size += buff_size;
 
 		return true;
 	}

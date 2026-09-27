@@ -109,7 +109,7 @@ struct game_server_client
 
 	// Consumes the message last peeked, so the next peek returns the next message. Client must be of type GAME_CLIENT.
 	// Every peeked message MUST be consumed once done with.
-	inline void game_client_consume_message()
+	inline void game_client_consume_message() const
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.consume_game_message_func != nullptr);

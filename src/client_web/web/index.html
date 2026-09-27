@@ -6,8 +6,15 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="game_canvas_foreground" width="800" height="800" hidden>
-    </canvas>
+    <div id="main_layout">
+        <canvas id="game_canvas_foreground" width="800" height="800" hidden>
+        </canvas>
+
+        <div id="debug_panel">
+            <h3>Render state</h3>
+            <pre id="debug_entity_states"></pre>
+        </div>
+    </div>
 
     <div id="test_panel">
         <button id="run_websocket_tests">Run WebSocket tests</button>

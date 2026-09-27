@@ -348,6 +348,7 @@ int main(int argc, char** argv)
 		"src/backend.js",
 		"src/render.js",
 		"src/input.js",
+		"src/debug.js",
 
 		// Client WASM backend
 		"IronAgeIO_WebClient.wasm",
