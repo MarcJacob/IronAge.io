@@ -146,6 +146,128 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 	return true;
 }
 
+bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_server_client::client_handle client_handle, ui16& out_player_index)
+{
+	ASSERT(slot_index < server.init_params.match_slot_count);
+	match_slot& slot = server.match_slots[slot_index];
+
+	ASSERT(slot.state == MATCH_SLOT_STATE::IN_LOBBY
+		|| slot.state == MATCH_SLOT_STATE::MATCH_ONGOING);
+
+	const game_server_client* clientPtr = game_server_get_client_data(server, client_handle);
+	ASSERT(clientPtr != nullptr);	
+	
+	const game_server_client& client = *clientPtr;
+	ASSERT(client.type == game_server_client::TYPE::GAME_CLIENT);
+
+
+	if (slot.match_params == nullptr)
+	{
+		server.logf("MATCH", LOG_ERROR, "Attempted to attach a client to match slot %d, which has no match parameters set.", slot_index);
+		return false;
+	}
+
+	if (slot.players == nullptr)
+	{
+		slot.players = slot.slot_memory.alloc<match_player>(slot.match_params->player_count);
+		ASSERT(slot.players != nullptr);
+	}
+
+	bool attachSuccessful = false;
+	for (ui16 playerIndex = 0; playerIndex < slot.match_params->player_count; playerIndex++)
+	{
+		match_player& player = slot.players[playerIndex];
+		if (game_server_get_client_data(server, player.client) != nullptr) continue;	// NOTE(Marc): Skip over any slot that aren't CURRENTLY assigned to a live client.
+																						// Later this will change to being any slot that was NEVER assigned to a client.
+
+		player.client = client_handle;
+		out_player_index = playerIndex;
+		attachSuccessful = true;
+		break;
+	}
+
+	if (!attachSuccessful)
+	{
+		server.logf("MATCH", LOG_WARNING, "Match slot %d has no free player index to attach a client to.", slot_index);
+		return false;
+	}
+
+	ui8 msg_scratch_buff[2048];
+	mem_arena msg_scratch_mem = mem_arena_create(msg_scratch_buff, sizeof(msg_scratch_buff));
+
+	// Send JOIN MATCH message to newly-attached game client.
+
+	// Allocate message, adding extra data size of the match parameters as extra bytes.
+	game_match_start_params* matchParams = slot.match_params;
+	ASSERT(matchParams != nullptr);
+
+	game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, matchParams->extra_data_size);
+	ASSERT(joinMsgHeader);
+
+	auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_joined>();
+	joinMsgPayload = {};
+
+	joinMsgPayload.controlled_player_id = out_player_index;
+	
+	if (server.match_slots[slot_index].state == MATCH_SLOT_STATE::IN_LOBBY)
+	{
+		joinMsgPayload.join_tick = 0;
+	}
+	else
+	{
+		joinMsgPayload.join_tick = slot.match.match_ptr->tick;
+	}
+
+	// Copy start params.
+	ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params) + matchParams->extra_data_size);
+
+	// Send message !
+	client.game_client_send_message(*joinMsgHeader);
+
+	return true;
+}
+
+void game_server_tick_match_slots(game_server& server)
+{
+	// Manage match slots.
+	for (ui8 slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
+	{
+		match_slot& slot = server.match_slots[slotIndex];
+		time_ms nextTickTimeMs = 0;
+		ui64 msPerTick = 0;
+
+		switch (slot.state)
+		{
+		case MATCH_SLOT_STATE::MATCH_ONGOING:
+			// Ongoing match tick logic.
+			
+			msPerTick = (1000 / slot.match_params->tick_rate);
+
+			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
+			nextTickTimeMs = slot.match.last_tick_time + msPerTick;
+			while (nextTickTimeMs < server.uptime_ms)
+			{
+				// TODO: Input system based on received network messages.
+				match_tick(*slot.match.match_ptr, {});
+
+				// TEST: End match after 2500 ticks.
+				if (slot.match.match_ptr->tick == 2500)
+				{
+					game_server_end_match_slot(server, slotIndex);
+					break;
+				}
+
+				slot.match.last_tick_time = nextTickTimeMs;
+				nextTickTimeMs += msPerTick;
+			}
+			break;
+		default:
+			// Do nothing.
+			break;
+		}
+	}
+}
+
 // END MATCH SLOT SYSTEM IMPLEMENTATION
 
 // Unknown client handling.
@@ -173,6 +295,21 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 		server.logf("Clients", LOG_WARNING, "Dropping unrecognized client %d after %llu ms (received %llu bytes).",
 			client.handle.value, server.uptime_ms - client.connected_at_ms, client.unknown.traffic_size);
 		game_server_client_drop(server, client.handle);
+	}
+}
+
+// GAME_CLIENT type client handling. Top-level Game Client management.
+
+void game_server_tick_game_client(game_server& server, game_server_client& client)
+{
+	if (!client.game_client.attached_to_match)
+	{
+		ui16 playerIndex = 0;
+		if (game_server_slot_attach_client(server, 0, client.handle, playerIndex))
+		{
+			client.game_client.attached_to_match = true;
+			server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot 0 as player %d.", client.handle.value, playerIndex);
+		}
 	}
 }
 
@@ -226,8 +363,10 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
-#if _DEBUG
+	// In debug, run checks over commands & game messages.
+#ifndef NDEBUG
 	TEST_COMMAND_SIZES_CHECK();
+	TEST_MESSAGE_TYPE_SIZES_CHECK();
 #endif
 
 	// Initialize Web Server.
@@ -238,12 +377,60 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Setup event handler for Web server to clean resources tied to non-game-clients losing connection.
 	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, web_server_on_client_disconnected);
 
+	// TEMP(Marc): Until we have a full working match slot lifecycle with join request messages from clients, we just start up match slot 0.
+	game_server_open_lobby(*newServer, 0);
+	{
+		// .. Get parameters from test scenario.
+		newServer->match_slots[0].match_params = match_test_scenario_get_params(newServer->match_slots[0].slot_memory);
+	}
+
+	game_server_start_match_slot(*newServer, 0);
+
 	return newServer;
+}
+
+void game_server_query_new_connections(game_server& server)
+{
+	// Query platform for closed connections, and signal the clients subsystem about them.
+	static constexpr ui16 CLOSED_CONNECTIONS_BUFF_SIZE = 32;
+	game_server_platform::net_connection_handle closedConnectionsBuffer[CLOSED_CONNECTIONS_BUFF_SIZE];
+	ui16 closedConnectionsCount = server.platform->net_query_closed_connections(closedConnectionsBuffer, CLOSED_CONNECTIONS_BUFF_SIZE);
+
+	for (ui16 closedConnectionIndex = 0; closedConnectionIndex < closedConnectionsCount; closedConnectionIndex++)
+	{
+		for (ui16 clientIndex = 0; clientIndex < server.client_table->_client_capacity; clientIndex++)
+		{
+			const game_server_client& client = server.client_table->_client_buff[clientIndex];
+			if (client.type == game_server_client::TYPE::NONE
+				|| client.connection_info.connection_handle != closedConnectionsBuffer[closedConnectionIndex]) continue;
+
+			clients_table_on_connection_lost(server, client.handle);
+		}
+	}
+}
+
+void game_server_query_closed_connections(game_server& server)
+{
+	// Query platform for new connections, and register them into the clients subsystem.
+	static constexpr ui16 NEW_CONNECTIONS_BUFF_SIZE = 32;
+	game_server_platform::in_connection newConnectionsBuffer[NEW_CONNECTIONS_BUFF_SIZE];
+	ui16 newConnectionsCount = server.platform->net_query_new_connections(newConnectionsBuffer, NEW_CONNECTIONS_BUFF_SIZE);
+
+	for (ui16 newConnectionIndex = 0; newConnectionIndex < newConnectionsCount; newConnectionIndex++)
+	{
+		// Register new connection with clients table.
+		game_server_platform::in_connection& newConnection = newConnectionsBuffer[newConnectionIndex];
+		if (clients_table_register_new_connection(server, newConnection) == nullptr)
+		{
+			server.logf(LOG_TYPE::LOG_ERROR, "Out of room in the clients table (capacity = %d), dropping platform connection handle %d.",
+				server.init_params.max_client_count, newConnection.platform_handle);
+			server.platform->net_close_connection(newConnection.platform_handle);
+		}
+	}
 }
 
 void game_server_tick(game_server& server, time_ms platform_time_ms)
 {
-	// ... for convenience.
 	ASSERT(server.platform != nullptr);
 	game_server_platform& platform = *server.platform;
 
@@ -260,88 +447,25 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	}
 #endif
 
-	// Query platform for closed connections, and signal the clients subsystem about them.
-	{
-		static constexpr ui16 CLOSED_CONNECTIONS_BUFF_SIZE = 32;
-		game_server_platform::net_connection_handle closedConnectionsBuffer[CLOSED_CONNECTIONS_BUFF_SIZE];
-		ui16 closedConnectionsCount = server.platform->net_query_closed_connections(closedConnectionsBuffer, CLOSED_CONNECTIONS_BUFF_SIZE);
-
-		for (ui16 closedConnectionIndex = 0; closedConnectionIndex < closedConnectionsCount; closedConnectionIndex++)
-		{
-			for (ui16 clientIndex = 0; clientIndex < server.client_table->_client_capacity; clientIndex++)
-			{
-				const game_server_client& client = server.client_table->_client_buff[clientIndex];
-				if (client.type == game_server_client::TYPE::NONE
-					|| client.connection_info.connection_handle != closedConnectionsBuffer[closedConnectionIndex]) continue;
-
-				clients_table_on_connection_lost(server, client.handle);
-			}
-		}
-	}
-
-	// Query platform for new connections, and register them into the clients subsystem.
-	{
-		static constexpr ui16 NEW_CONNECTIONS_BUFF_SIZE = 32;
-		game_server_platform::in_connection newConnectionsBuffer[NEW_CONNECTIONS_BUFF_SIZE];
-		ui16 newConnectionsCount = server.platform->net_query_new_connections(newConnectionsBuffer, NEW_CONNECTIONS_BUFF_SIZE);
-
-		for (ui16 newConnectionIndex = 0; newConnectionIndex < newConnectionsCount; newConnectionIndex++)
-		{
-			// Register new connection with clients table.
-			game_server_platform::in_connection& newConnection = newConnectionsBuffer[newConnectionIndex];
-			if (clients_table_register_new_connection(server, newConnection) == nullptr)
-			{
-				server.logf(LOG_TYPE::LOG_ERROR, "Out of room in the clients table (capacity = %d), dropping platform connection handle %d.",
-					server.init_params.max_client_count, newConnection.platform_handle);
-				platform.net_close_connection(newConnection.platform_handle);
-			}
-		}
-	}
+	// Query new & closed connections.
+	game_server_query_new_connections(server), game_server_query_closed_connections(server);
 
 	// Process UNKNOWN type client connections.
 	game_server_client_for_each_of_type(server, game_server_client::TYPE::UNKNOWN, game_server_process_unknown_client);
 
-	// Serve the web client bundle over HTTP on all platform connections.
-	web_server_tick(server);
-
-	// Manage match slots.
-	for (ui8 slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
+	// Tick sub-components
 	{
-		match_slot& slot = server.match_slots[slotIndex];
-		time_ms nextTickTimeMs = 0;
-		ui64 msPerTick = 0;
+		// Tick web server.
+		web_server_tick(server);
 
-		switch (slot.state)
-		{
-		case MATCH_SLOT_STATE::MATCH_ONGOING:
-			// Ongoing match tick logic.
-			
-			msPerTick = (1000 / slot.match_params->tick_rate);
-
-			// TODO: Avoid starvation by budgeting ticking time on each slot and ticking each once evenly instead of catching each one up then the next.
-			nextTickTimeMs = slot.match.last_tick_time + msPerTick;
-			while (nextTickTimeMs < server.uptime_ms)
-			{
-				// TODO: Input system based on received network messages.
-				match_tick(*slot.match.match_ptr, {});
-
-				// TEST: End match after 2500 ticks.
-				if (slot.match.match_ptr->tick == 2500)
-				{
-					game_server_end_match_slot(server, slotIndex);
-					break;
-				}
-
-				slot.match.last_tick_time = nextTickTimeMs;
-				nextTickTimeMs += msPerTick;
-			}
-
-			break;
-		default:
-			// Do nothing.
-			break;
-		}
+		// ...
 	}
+
+	// Process GAME_CLIENT type client connections.
+	game_server_client_for_each_of_type(server, game_server_client::TYPE::GAME_CLIENT, game_server_tick_game_client);
+
+	// Update / tick match slots.
+	game_server_tick_match_slots(server);
 
 	server.tick_count++;
 

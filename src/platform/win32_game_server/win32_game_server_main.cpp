@@ -366,7 +366,7 @@ int main(int argc, char** argv)
 
 		.match_slot_count = 4,
 		.max_client_count = 1024,
-		.run_test_scenario = true,
+		.run_test_scenario = false,
 		.test_scenario_dump_filename = "snapshot_native.bin",
 
 		.web_root = "web_root",

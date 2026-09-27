@@ -29,6 +29,9 @@ using match_player_count = match_player_id; // Alias type for places where we ne
 
 static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0;
 
+// Pack the start params structure since, as of now, it gets sent over the network as-is.
+#pragma pack(push, 1)
+
 // Params structure for the creation of a match. Contains all necessary components to determine the match's starting state, parameters, and resource requirements.
 struct game_match_start_params
 {
@@ -53,6 +56,8 @@ struct game_match_start_params
 		return world_locs[player_index];
 	}
 };
+
+#pragma pack(pop)
 
 // Main memory ownership and definition structure for a single ongoing match.
 struct game_match

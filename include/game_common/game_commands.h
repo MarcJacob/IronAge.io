@@ -108,11 +108,12 @@ static inline ui8 get_command_size(MATCH_COMMAND_TYPE type)
 	case(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET):
 		return sizeof(command_payload_set_entity_move_target);
 	default:
-		ASSERT_MSG(0, "Command type does not have an associated size.");
+		ASSERT_MSG(0, "Command type %d is missing a payload struct size association.", type);
 		return 0;
 	}
 }
 
+#ifndef NDEBUG
 // Simple testing function to ensure all declared command types have an associated size,
 // and by extension, a payload structure.
 static inline void TEST_COMMAND_SIZES_CHECK()
@@ -123,6 +124,7 @@ static inline void TEST_COMMAND_SIZES_CHECK()
 		sum += get_command_size((MATCH_COMMAND_TYPE)commandTypeIndex);
 	}
 }
+#endif
 
 // Convenience tool for building a sequence of inputs inside a memory arena.
 struct command_sequence_builder
@@ -155,7 +157,7 @@ struct command_sequence_builder
 		ASSERT(_sequence_start != nullptr);
 		ASSERT(get_command_size(command_type) == sizeof(PayloadType));
 
-		match_command_header* newCommandHeader = target_mem->alloc<match_command_header>();
+		match_command_header* newCommandHeader = (match_command_header*)target_mem->alloc(sizeof(match_command_header) + sizeof(PayloadType), 1);
 		if (newCommandHeader == nullptr) return nullptr;
 
 		newCommandHeader->type = command_type;
@@ -164,17 +166,13 @@ struct command_sequence_builder
 		newCommandHeader->_data_size = sizeof(PayloadType);
 #endif
 
-		// Allocate payload. On the same arena, the memory should be located right behind the header.
-		PayloadType* payload = target_mem->alloc<PayloadType>();
-		if (payload == nullptr) return nullptr;
-
 		_sequence_start->command_count++;
 
 #ifdef MATCH_COMMAND_DEBUG
 		_sequence_start->_total_size += sizeof(newCommandHeader) + newCommandHeader->_data_size;
 #endif
 
-		return payload;
+		return (PayloadType*)newCommandHeader->command_data;
 	}
 };
 

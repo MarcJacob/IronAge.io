@@ -236,7 +236,7 @@ static void web_server_websocket_remove_reception_bytes(websocket_client& websoc
 	websocket.reception.size -= byte_count;
 }
 
-bool web_server_websocket_client_send_message(game_server_client& client, const game_message_header& message)
+bool web_server_websocket_client_send_message(const game_server_client& client, const game_message_header& message)
 {
 	ASSERT(client.connection_context != nullptr);
 	web_server_client& web_client = *(web_server_client*)client.connection_context;
@@ -254,7 +254,7 @@ bool web_server_websocket_client_send_message(game_server_client& client, const 
 	return web_server_websocket_queue_frame(web_client, WEBSOCKET_OPCODE::BINARY, (const ui8*)&message, messageSize);
 }
 
-bool web_server_websocket_client_peek_message(game_server_client& client, game_message_header*& out_message_ptr)
+bool web_server_websocket_client_peek_message(const game_server_client& client, game_message_header*& out_message_ptr)
 {
 	ASSERT(client.connection_context != nullptr);
 	web_server_client& web_client = *(web_server_client*)client.connection_context;
@@ -273,7 +273,7 @@ bool web_server_websocket_client_peek_message(game_server_client& client, game_m
 	return true;
 }
 
-void web_server_websocket_client_consume_message(game_server_client& client)
+void web_server_websocket_client_consume_message(const game_server_client& client)
 {
 	ASSERT(client.connection_context != nullptr);
 	web_server_client& web_client = *(web_server_client*)client.connection_context;

@@ -7,16 +7,16 @@ struct game_message_header;
 struct game_server_client;
 
 // Defines a function able to handle sending a game message towards a game server client. The client must be of type GAME_CLIENT.
-using client_send_game_msg_fn = bool(*)(game_server_client& client, const game_message_header& message);
+using client_send_game_msg_fn = bool(*)(const game_server_client& client, const game_message_header& message);
 
 // Defines a function able to peek at the next received game message from a game server client, if any. The client must be of type GAME_CLIENT.
 // Returns whether a message is available, in which case out_message_ptr will point to the actual data in memory making up the message.
 // It can be read as is or copied somewhere else, and stays valid, and the same, until the message is consumed.
-using client_peek_game_msg_fn = bool(*)(game_server_client& client, game_message_header*& out_message_ptr);
+using client_peek_game_msg_fn = bool(*)(const game_server_client& client, game_message_header*& out_message_ptr);
 
 // Defines a function able to consume the game message currently at the front of a game server client's received messages, so that the next peek
 // gives the following one. Does nothing if there is no message. The client must be of type GAME_CLIENT.
-using client_consume_game_msg_fn = void(*)(game_server_client& client);
+using client_consume_game_msg_fn = void(*)(const game_server_client& client);
 
 // Core data associated with a client connection on the game server.
 // Client connections cover ALL sorts of inward connections started from the outside, and can survive the loss of the platform connection.
@@ -81,12 +81,15 @@ struct game_server_client
 			client_peek_game_msg_fn peek_game_message_func;
 			// Assigned by server sub-component in charge of actual client connection.
 			client_consume_game_msg_fn consume_game_message_func;
+
+			// Whether this client is currently attached to a match slot as a controlling player.
+			bool attached_to_match;
 		} game_client;
 	};
 
 	// Sends message to this game client. Client must be of type GAME_CLIENT.
 	// Returns whether the message was successfully sent.
-	inline bool game_client_send_message(const game_message_header& msg) 
+	inline bool game_client_send_message(const game_message_header& msg) const
 	{ 
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.send_game_message_func != nullptr);
@@ -96,7 +99,7 @@ struct game_server_client
 
 	// Peeks at the next message received from this game client. Client must be of type GAME_CLIENT.
 	// Returns whether a message is available, in which case out_msg_ptr will point to it. The message stays the same until consumed.
-	inline bool game_client_peek_message(game_message_header*& out_msg_ptr)
+	inline bool game_client_peek_message(game_message_header*& out_msg_ptr) const
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
 		ASSERT(game_client.peek_game_message_func != nullptr);
@@ -132,7 +135,8 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 // Signals the table that a connection was lost or dropped.
 void clients_table_on_connection_lost(game_server& server, game_server_client::client_handle handle);
 
-void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, game_server_client::TYPE client_type, on_client_disconnected_fn handler);
+// Registers an event handler to be called when any non-UNKNOWN client connection is lost.
+void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, on_client_disconnected_fn handler);
 
 // Extensions to server functionality
 

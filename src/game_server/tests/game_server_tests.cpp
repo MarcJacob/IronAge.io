@@ -9,7 +9,7 @@ static void game_server_test_echo_game_client(game_server& server, game_server_c
 	game_message_header* message = nullptr;
 	while (client.game_client_peek_message(message))
 	{
-		server.logf("TEST", "Client %d: message type %d, payload %d bytes.", client.handle.value, message->message_type_code, message->payloadSize);
+		server.logf("TEST", "Client %d: message type %d, payload %d bytes.", client.handle.value, message->message_type, message->payloadSize);
 
 		if (!client.game_client_send_message(*message)) break; // Sending buffer full: try again next tick.
 		client.game_client_consume_message();

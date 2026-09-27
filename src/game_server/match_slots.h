@@ -3,6 +3,8 @@
 #ifndef MATCH_SLOTS_INCLUDED
 #define MATCH_SLOTS_INCLUDED
 
+#include "game_server_clients.h" // For game_server_client::client_handle.
+
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]
 enum class MATCH_SLOT_STATE : ui8
@@ -23,6 +25,13 @@ struct match_slot_lobby
 	ui8 to_implement;
 };
 
+// Associates a player index (its position in a slot's players array) with the client currently controlling it, if any.
+// A stale client handle (game_server_get_client_data returns nullptr for it) means the index has no live controller.
+struct match_player
+{
+	game_server_client::client_handle client;
+};
+
 // Wraps memory and a match structure that can be in multiple states.
 // Allows the use and re-use of a same span of memory for a match's entire lifecycle: building the lobby, starting the match, ticking it...
 struct match_slot
@@ -32,6 +41,8 @@ struct match_slot
 	mem_arena slot_memory; // Memory assigned to this slot.
 
 	game_match_start_params* match_params; // Parameters for the current or next match (valid when in lobby or in a match).
+
+	match_player* players; // Array of match_params->player_count entries, indexed by player index. Allocated once match_params is known.
 
 	union
 	{
@@ -68,5 +79,8 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index);
 
 // Resets a match slot to its cleaned state for re-use.
 bool game_server_reset_match_slot(game_server& server, ui8 slot_index);
+
+// Attaches a client as the controller of a free player index in the slot. Writes the assigned index to out_player_index on success.
+bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
 
 #endif // MATCH_SLOTS_INCLUDED
