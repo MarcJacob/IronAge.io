@@ -43,11 +43,13 @@ WASM_EXPORT void client_input_set_target_loc(int x, int y)
 	client_backend_input_set_target_loc(get_backend(), x, y);
 }
 
-WASM_EXPORT void client_apply_viewport_input(float pan_x, float pan_y, float zoom_delta, float move_time)
+WASM_EXPORT void client_apply_viewport_input(float pan_x, float pan_y, float zoom_delta, float move_time,
+	float cursor_viewport_frac_x, float cursor_viewport_frac_y)
 {
 	client_backend& backend = get_backend();
 	vec2<ui16> worldSize = { (ui16)backend.match_info.match_world_width, (ui16)backend.match_info.match_world_height };
-	client_backend_apply_viewport_input(backend.player_viewport, worldSize, { pan_x, pan_y }, zoom_delta, move_time);
+	client_backend_apply_viewport_input(backend.player_viewport, worldSize, { pan_x, pan_y }, zoom_delta, move_time,
+		{ cursor_viewport_frac_x, cursor_viewport_frac_y });
 }
 
 // Ticks the local match with no commands. For standalone / no-server testing only.

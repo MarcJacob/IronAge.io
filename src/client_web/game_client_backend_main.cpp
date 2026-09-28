@@ -83,16 +83,26 @@ static constexpr float VIEWPORT_PAN_SPEED_FRACTION = 0.5f; // Fraction of curren
 static constexpr float VIEWPORT_ZOOM_EASE_RATE = 3.0f; // How fast zoom_level eases toward its target, per second.
 
 void client_backend_apply_viewport_input(client_viewport_state& viewport, vec2<ui16> world_size,
-	vec2<float> pan_vector, float zoom_delta, float move_time)
+	vec2<float> pan_vector, float zoom_delta, float move_time, vec2<float> cursor_viewport_fraction)
 {
 	vec2<float> viewportSize = client_backend_get_viewport_size(viewport);
 
 	viewport.bottom_left_corner.x += pan_vector.x * VIEWPORT_PAN_SPEED_FRACTION * viewportSize.x * move_time;
 	viewport.bottom_left_corner.y += pan_vector.y * VIEWPORT_PAN_SPEED_FRACTION * viewportSize.y * move_time;
 
+	// World point currently under the cursor, before zoom changes viewport size - held fixed across the zoom below.
+	vec2<float> cursorWorldLoc = {
+		viewport.bottom_left_corner.x + cursor_viewport_fraction.x * viewportSize.x,
+		viewport.bottom_left_corner.y + cursor_viewport_fraction.y * viewportSize.y,
+	};
+
 	float zoomEaseAmount = ia_min(VIEWPORT_ZOOM_EASE_RATE * move_time, 1.0f);
 	viewport.zoom_level += (zoom_delta - viewport.zoom_level) * zoomEaseAmount;
 	viewport.zoom_level = ia_max(0.0f, ia_min(1.0f, viewport.zoom_level));
+
+	vec2<float> newViewportSize = client_backend_get_viewport_size(viewport);
+	viewport.bottom_left_corner.x = cursorWorldLoc.x - cursor_viewport_fraction.x * newViewportSize.x;
+	viewport.bottom_left_corner.y = cursorWorldLoc.y - cursor_viewport_fraction.y * newViewportSize.y;
 
 	// Lazy clamp: keep the corner within world bounds, ignoring viewport size.
 	viewport.bottom_left_corner.x = ia_max(-viewport.viewport_size_max.x / 2, ia_min((float)world_size.x, viewport.bottom_left_corner.x));

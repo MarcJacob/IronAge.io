@@ -44,7 +44,8 @@ interface ClientExports extends WebAssembly.Exports
     // Input
 
     client_input_set_target_loc(x: number, y: number): void;
-    client_apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number): void;
+    client_apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number,
+        cursor_viewport_frac_x: number, cursor_viewport_frac_y: number): void;
 }
 
 let backend: ClientExports;
@@ -113,9 +114,11 @@ export function set_target_loc(target_loc: Core.WorldLocation)
 }
 
 // pan_x / pan_y: normalized direction. zoom_delta: desired zoom level. Both need repeated calls to keep taking effect.
-export function apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number): void
+// cursor_viewport_frac_x / y: cursor position within the viewport, normalized [0, 1] on both axes (0,0 = bottom-left).
+export function apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number,
+    cursor_viewport_frac_x: number, cursor_viewport_frac_y: number): void
 {
-    backend.client_apply_viewport_input(pan_x, pan_y, zoom_delta, move_time);
+    backend.client_apply_viewport_input(pan_x, pan_y, zoom_delta, move_time, cursor_viewport_frac_x, cursor_viewport_frac_y);
 }
 
 export class BackendRenderEntity

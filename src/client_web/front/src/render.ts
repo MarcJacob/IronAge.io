@@ -43,6 +43,20 @@ export function page_to_world(clientX: number, clientY: number)
     };
 }
 
+// Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas,
+// (0,0) = bottom-left, for viewport-relative input (e.g. zoom-to-cursor) that doesn't need a world position.
+export function page_to_viewport_fraction(clientX: number, clientY: number)
+{
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+
+    return {
+        x: Math.min(Math.max(canvasX / canvas.width, 0), 1),
+        y: Math.min(Math.max(1 - canvasY / canvas.height, 0), 1),
+    };
+}
+
 function draw_entity(render_state: Backend.BackendRenderState, entity_index: number) {
 
     const entity = render_state.entity_states[entity_index];

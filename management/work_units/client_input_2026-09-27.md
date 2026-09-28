@@ -13,7 +13,7 @@ panning, by building a proper camera/viewport and input system.
   via a `client_backend&` instead of file-scope statics.
 - [x] Camera / viewport: pan + zoom, occlusion, and screen <-> world
   conversion moved into the client backend (C++) - see Notes.
-- [ ] Viewport movement extra: zoom in where the cursor is located.
+- [x] Viewport movement extra: zoom in where the cursor is located.
 - [ ] Generalized gameplay input: front-facing render/UI layer sends
   semantic events (entity selected, button pressed, ...), not raw
   coordinates; backend interprets per current mode/selection.
@@ -21,6 +21,7 @@ panning, by building a proper camera/viewport and input system.
   network message yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
   canvas (DOM overlay, like the debug panel).
+- [ ] Smooth rendering: currently jittery when zoomed in close - see Notes.
 
 ## Progress
 
@@ -54,8 +55,16 @@ panning, by building a proper camera/viewport and input system.
   viewport placement of that same data as the camera moves/zooms) - the
   latter needs a new `requestAnimationFrame` loop calling a new "recompute
   viewport" export, independent of the tick-driven path.
+- Zoom-to-cursor: backend needs the viewport-space cursor position each
+  frame (JS already tracks it for the debug panel); on zoom, shift the
+  viewport position so the world point under the cursor stays fixed as
+  zoom_level changes.
 - An interpolation layer (entities moving smoothly between ticks) is also
   planned, likely riding the same frame-driven path as the camera.
+- Jitter at high zoom: unconfirmed cause yet - candidates are sub-pixel
+  rounding of viewport/entity positions before draw, and/or entities
+  needing the interpolation layer above rather than snapping tick-to-tick.
+  Needs investigation before picking a fix.
 - C++ iteration cost (rebuild/redeploy per change) for tuning camera feel
   is accepted: the client already needs a redeploy on every change today,
   so this doesn't change the loop - may revisit if the server gains the

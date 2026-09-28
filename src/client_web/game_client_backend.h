@@ -142,8 +142,10 @@ vec2<float> client_backend_get_viewport_size(const client_viewport_state& viewpo
 // Applies input to the viewport state. pan_vector is a normalized direction; zoom_delta is the new desired zoom
 // level. Both need repeated calls (e.g. once per frame while held) to keep taking effect - pan speed is scaled
 // by current viewport size, zoom eases toward its target, both scaled by move_time. world_size clamps the result.
+// cursor_viewport_fraction is the cursor's position within the viewport, normalized [0, 1] on both axes (0,0 =
+// bottom-left corner); the viewport is shifted as zoom changes so the world point under the cursor stays fixed.
 void client_backend_apply_viewport_input(client_viewport_state& viewport, vec2<ui16> world_size,
-	vec2<float> pan_vector, float zoom_delta, float move_time);
+	vec2<float> pan_vector, float zoom_delta, float move_time, vec2<float> cursor_viewport_fraction);
 
 void client_backend_input_set_target_loc(client_backend& backend, int x, int y);
 

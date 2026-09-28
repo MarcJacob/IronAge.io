@@ -7,6 +7,7 @@ import * as Render from "./render.js"
 const heldKeys = new Set<string>();
 let desiredZoomLevel = 0.5;
 let lastMouseWorldLoc: { x: number, y: number } | null = null;
+let lastMouseViewportFrac: { x: number, y: number } = { x: 0.5, y: 0.5 };
 
 function read_pan_vector(): { x: number, y: number }
 {
@@ -44,6 +45,7 @@ export function init_input(canvas_element: HTMLCanvasElement)
     canvas_element.addEventListener('mousemove', (moveEvent) =>
     {
         lastMouseWorldLoc = Render.page_to_world(moveEvent.clientX, moveEvent.clientY);
+        lastMouseViewportFrac = Render.page_to_viewport_fraction(moveEvent.clientX, moveEvent.clientY);
     });
 
     window.addEventListener('keydown', (keyEvent) => heldKeys.add(keyEvent.key));
@@ -58,6 +60,7 @@ export function init_input(canvas_element: HTMLCanvasElement)
     Core.register_frame_callback((delta_time_s) =>
     {
         const pan = read_pan_vector();
-        Backend.apply_viewport_input(pan.x, pan.y, desiredZoomLevel, delta_time_s);
+        Backend.apply_viewport_input(pan.x, pan.y, desiredZoomLevel, delta_time_s,
+            lastMouseViewportFrac.x, lastMouseViewportFrac.y);
     });
 }
