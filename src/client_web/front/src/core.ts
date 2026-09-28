@@ -23,4 +23,40 @@ export class MatchInfo
     world_size: WorldSize = new WorldSize();
 }
 
+// Per-frame delegate: a requestAnimationFrame loop that calls every registered callback once per frame, with
+// the elapsed time since the last frame in seconds. Lets independent components (camera input, later
+// interpolation, ...) each hook into the frame loop without owning one, or knowing about each other.
+
+type FrameCallback = (delta_time_s: number) => void;
+
+const frameCallbacks: FrameCallback[] = [];
+let lastFrameTimeMs: number | null = null;
+let frameLoopStarted = false;
+
+export function register_frame_callback(callback: FrameCallback): void
+{
+    frameCallbacks.push(callback);
+}
+
+function frame_tick(nowMs: number): void
+{
+    if (lastFrameTimeMs !== null)
+    {
+        const delta_time_s = (nowMs - lastFrameTimeMs) / 1000;
+        for (const callback of frameCallbacks) callback(delta_time_s);
+    }
+
+    lastFrameTimeMs = nowMs;
+    requestAnimationFrame(frame_tick);
+}
+
+// Starts the frame loop. Idempotent - safe to call more than once.
+export function start_frame_loop(): void
+{
+    if (frameLoopStarted) return;
+    frameLoopStarted = true;
+
+    requestAnimationFrame(frame_tick);
+}
+
 

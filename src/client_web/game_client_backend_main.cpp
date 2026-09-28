@@ -71,12 +71,41 @@ void client_backend_input_set_target_loc(client_backend& backend, int x, int y)
 	backend.input.pending = true;
 }
 
+vec2<float> client_backend_get_viewport_size(const client_viewport_state& viewport)
+{
+	return {
+		viewport.viewport_size_min.x + (viewport.viewport_size_max.x - viewport.viewport_size_min.x) * viewport.zoom_level,
+		viewport.viewport_size_min.y + (viewport.viewport_size_max.y - viewport.viewport_size_min.y) * viewport.zoom_level,
+	};
+}
+
+static constexpr float VIEWPORT_PAN_SPEED_FRACTION = 0.5f; // Fraction of current viewport size crossed per second, at full pan input.
+static constexpr float VIEWPORT_ZOOM_EASE_RATE = 3.0f; // How fast zoom_level eases toward its target, per second.
+
+void client_backend_apply_viewport_input(client_viewport_state& viewport, vec2<ui16> world_size,
+	vec2<float> pan_vector, float zoom_delta, float move_time)
+{
+	vec2<float> viewportSize = client_backend_get_viewport_size(viewport);
+
+	viewport.bottom_left_corner.x += pan_vector.x * VIEWPORT_PAN_SPEED_FRACTION * viewportSize.x * move_time;
+	viewport.bottom_left_corner.y += pan_vector.y * VIEWPORT_PAN_SPEED_FRACTION * viewportSize.y * move_time;
+
+	float zoomEaseAmount = ia_min(VIEWPORT_ZOOM_EASE_RATE * move_time, 1.0f);
+	viewport.zoom_level += (zoom_delta - viewport.zoom_level) * zoomEaseAmount;
+	viewport.zoom_level = ia_max(0.0f, ia_min(1.0f, viewport.zoom_level));
+
+	// Lazy clamp: keep the corner within world bounds, ignoring viewport size.
+	viewport.bottom_left_corner.x = ia_max(-viewport.viewport_size_max.x / 2, ia_min((float)world_size.x, viewport.bottom_left_corner.x));
+	viewport.bottom_left_corner.y = ia_max(-viewport.viewport_size_max.y / 2, ia_min((float)world_size.y, viewport.bottom_left_corner.y));
+}
+
 void client_backend_tick_match(client_backend& backend)
 {
 	if (backend.local_match == nullptr) return;
 
+	game_match& localMatch = client_backend_get_local_match(backend);
+
 	// TODO(Marc): external source (server messages or "local play" mode with direct output from client input to here).
 	match_tick_commands tickCommands = {};
-	match_tick(client_backend_get_local_match(backend), tickCommands);
-	client_backend_rebuild_render_state(backend);
+	match_tick(localMatch, tickCommands);
 }

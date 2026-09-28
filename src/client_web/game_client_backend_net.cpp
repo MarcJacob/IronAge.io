@@ -66,10 +66,11 @@ GAME_MESSAGE_TYPE client_backend_process_net_message(client_backend& backend, ui
 	{
 		if (backend.local_match == nullptr) return GAME_MESSAGE_TYPE::TYPE_COUNT;
 
+		game_match& localMatch = client_backend_get_local_match(backend);
 		auto& payload = header->get_payload_ref<game_message_payload_server_tick>();
-		match_tick(client_backend_get_local_match(backend), payload.commands);
 
-		client_backend_rebuild_render_state(backend);
+		match_tick(localMatch, payload.commands);
+
 		client_backend_build_net_output_message(backend);
 
 		break;

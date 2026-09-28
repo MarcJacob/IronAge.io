@@ -7,7 +7,7 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
 import { init_render, draw, page_to_world } from './render.js';
-import { init_input } from './input.js';
+import { init_input, get_last_mouse_world_location } from './input.js';
 import { init_debug_panel, update_debug_panel } from './debug.js';
 
 function websocket_url() {
@@ -30,11 +30,14 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         init_render(canvas, matchInfo);
         init_input(canvas);
         canvas.hidden = false;
-    }
 
-    const renderState = Backend.read_render_state();
-    draw(renderState);
-    update_debug_panel(renderState);
+        Core.register_frame_callback(() => {
+            Backend.refresh_render_state();
+            const renderState = Backend.read_render_state();
+            draw(renderState);
+            update_debug_panel(renderState, get_last_mouse_world_location());
+        });
+    }
 
     // The backend may have built a reply (e.g. pending input) in response to the message just processed.
     // There is no separate send loop: outgoing messages only ever go out piggybacked on a received one.
@@ -54,6 +57,9 @@ async function start()
         console.error("Failed to load client backend.", e);
         return;
     }
+
+    // Drives per-frame callbacks: camera input, render/draw, later interpolation.
+    Core.start_frame_loop();
 
     // Get foreground canvas.
     const canvas = document.getElementById("game_canvas_foreground") as HTMLCanvasElement;

@@ -33,6 +33,7 @@ interface ClientExports extends WebAssembly.Exports
 
     // Render state
     client_get_render_state(): number;
+    client_refresh_render_state(): void;
 
     // Local match
 
@@ -43,6 +44,7 @@ interface ClientExports extends WebAssembly.Exports
     // Input
 
     client_input_set_target_loc(x: number, y: number): void;
+    client_apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number): void;
 }
 
 let backend: ClientExports;
@@ -84,6 +86,7 @@ export function read_pending_output_message()
 }
 
 // Reads static info about the currently active local match into match_info. Call after a MATCH_JOINED message was processed.
+// Mirrors web_client_match_info (src/client_web/game_client_backend.h) by hand. Keep both in sync.
 export function read_match_info()
 {
     // Layout of web_client_match_info: three ui32 (tick rate, world width, world height).
@@ -109,45 +112,68 @@ export function set_target_loc(target_loc: Core.WorldLocation)
     backend.client_input_set_target_loc(target_loc.x, target_loc.y);
 }
 
-export class BackendEntityState
+// pan_x / pan_y: normalized direction. zoom_delta: desired zoom level. Both need repeated calls to keep taking effect.
+export function apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number): void
 {
-    location: Core.WorldLocation = new Core.WorldLocation();
-    target_location: Core.WorldLocation = new Core.WorldLocation();
+    backend.client_apply_viewport_input(pan_x, pan_y, zoom_delta, move_time);
 }
 
-export class BackendRenderState 
+export class BackendRenderEntity
 {
+    viewport_x: number = 0;
+    viewport_y: number = 0;
+    target_viewport_x: number = 0;
+    target_viewport_y: number = 0;
+}
+
+export class BackendRenderState
+{
+    viewport_bottom_left_x: number = 0;
+    viewport_bottom_left_y: number = 0;
+    viewport_width: number = 0;
+    viewport_height: number = 0;
+    zoom_level: number = 0;
     entity_count: number = 0;
-    entity_states: Array<BackendEntityState> = [];
+    entity_states: Array<BackendRenderEntity> = [];
+}
+
+// Rebuilds the render state from current match + viewport state. Call once per animation frame, before read_render_state.
+export function refresh_render_state(): void
+{
+    backend.client_refresh_render_state();
 }
 
 // Reads the latest render state of the local match.
+// Mirrors web_client_render_state (src/client_web/game_client_backend.h) by hand. Keep both in sync.
 export function read_render_state()
 {
-    // Layout of web_client_render_state: four i32 (entity X, Y, target X, Y). Views are re-created on every read on purpose,
-    // as they become invalid if wasm memory ever grows.
+    // Layout of web_client_render_state: viewport (bottom_left x/y ui16, width ui16, height ui16, zoom_level f32),
+    // entity_count (ui16), entity_states pointer (ui32). Views are re-created on every read on purpose, as they
+    // become invalid if wasm memory ever grows.
     const renderStateOffset: number = backend.client_get_render_state();
     const renderStateDataView: DataView = new DataView(backend.memory.buffer, renderStateOffset);
-    const entityStatesOffset: number = renderStateDataView.getUint32(2, true);
-    const entityStatesDataView: DataView = new DataView(backend.memory.buffer, entityStatesOffset);
-
-    const ENTITY_MEM_SIZE: number = 8;
 
     let renderState = new BackendRenderState();
+    renderState.viewport_bottom_left_x = renderStateDataView.getInt32(0, true);
+    renderState.viewport_bottom_left_y = renderStateDataView.getInt32(4, true);
+    renderState.viewport_width = renderStateDataView.getUint16(8, true);
+    renderState.viewport_height = renderStateDataView.getUint16(10, true);
+    renderState.zoom_level = renderStateDataView.getFloat32(12, true);
+    renderState.entity_count = renderStateDataView.getUint16(16, true);
 
-    renderState.entity_count = renderStateDataView.getUint16(0, true);
+    const entityStatesOffset: number = renderStateDataView.getUint32(18, true);
+    const entityStatesDataView: DataView = new DataView(backend.memory.buffer, entityStatesOffset);
+
+    // Layout of render_entity: four f32 (viewport X, Y, target viewport X, Y).
+    const ENTITY_MEM_SIZE: number = 16;
 
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push(
             {
-                location: {
-                    x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i, true),
-                    y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 2, true),
-                },
-                target_location: {
-                    x: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 4, true),
-                    y: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 6, true),
-                },
+                viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i, true),
+                viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 4, true),
+                target_viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 8, true),
+                target_viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 12, true),
             });
     }
 

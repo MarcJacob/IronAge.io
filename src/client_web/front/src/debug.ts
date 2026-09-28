@@ -9,15 +9,19 @@ export function init_debug_panel(element: HTMLElement): void
 }
 
 // Renders the given render state (see backend.read_render_state()) as text into the debug panel.
-export function update_debug_panel(render_state: Backend.BackendRenderState): void
+export function update_debug_panel(render_state: Backend.BackendRenderState, mouse_world_loc: { x: number, y: number } | null = null): void
 {
     if (panelElement === null) return;
 
-    const lines:string[] = [`entity_count: ${render_state.entity_count}`];
+    const lines:string[] = [
+        `viewport: (${render_state.viewport_bottom_left_x}, ${render_state.viewport_bottom_left_y}) ${render_state.viewport_width}x${render_state.viewport_height}, zoom ${render_state.zoom_level.toFixed(2)}`,
+        `mouse world loc: ${mouse_world_loc === null ? 'n/a' : `(${mouse_world_loc.x}, ${mouse_world_loc.y})`}`,
+        `entity_count: ${render_state.entity_count}`,
+    ];
     for (let i = 0; i < render_state.entity_count; i++)
     {
-        const entity:Backend.BackendEntityState = render_state.entity_states[i];
-        lines.push(`[${i}] loc: (${entity.location.x}, ${entity.location.y})  target: (${entity.target_location.x}, ${entity.target_location.y})`);
+        const entity:Backend.BackendRenderEntity = render_state.entity_states[i];
+        lines.push(`[${i}] viewport loc: (${entity.viewport_x}, ${entity.viewport_y})  target: (${entity.target_viewport_x}, ${entity.target_viewport_y})`);
     }
 
     panelElement.textContent = lines.join('\n');
