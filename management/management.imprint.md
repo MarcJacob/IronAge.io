@@ -9,6 +9,9 @@ architecture for the project. It should be kept up to date as architecture decis
 made or phases of work complete, and consulted whenever the shape of upcoming work is
 unclear.
 
+The /work_units/ folder contains all current work units file which are then moved to /archive/ on completion.
+While a work unit is ongoing, it also appears in the main dev plan file.
+
 ## AI Agent use
 
 AI agents working in this project are allowed to assign work to developers when asked
@@ -27,4 +30,5 @@ When doing so:
   flagged to the user rather than assumed).
 - Whenever work is done, or when the user explicitly request it, the dev-plan.md file should be updated
   to add / remove [WIP] or [DONE] flags after the relevant plan items, and if necessary add sub-items
-  as the tasks are better understood and broken down.
+  as the tasks are better understood and broken down, and offer to split away from the plan into a work unit
+  when a coherent set of tasks comes together.

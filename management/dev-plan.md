@@ -8,6 +8,15 @@ Approach: build a thin, working, end-to-end slice through every component first 
 "architecture skeleton") before building any one component out fully, so there's a real
 cross-component testing loop from early on.
 
+## Active Work Units
+
+Detailed design / progress for in-flight, coherent task groups lives in
+`management/work_units/<name>_<start-date>.md`, keeping this file a high-level
+index. Update the entry here when a unit starts / finishes.
+
+- [DONE] TypeScript migration - `work_units/typescript_migration_2026-09-27.md`
+- [WIP] Client input & camera prep - `work_units/client_input_2026-09-27.md`
+
 ## Current Status
 
 Phase 1 (Architecture Skeleton), networking end-to-end: everything up to and including the

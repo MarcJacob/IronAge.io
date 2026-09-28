@@ -1,0 +1,10 @@
+{
+  "name": "IronAgeIO-Web-Client",
+  "private": "true",
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  },
+  "scripts": {
+    "build": "tsc"
+  }
+}

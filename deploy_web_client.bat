@@ -4,6 +4,7 @@ rem Optional arg 1: path to the .wasm (CMake passes it). Without args, uses buil
 setlocal
 set "ROOT=%~dp0"
 set "WEB_SRC=%ROOT%src\client_web\web"
+set "TS_SRC=%ROOT%src\client_web\front"
 set "OUT=%ROOT%game_server_resources\web_root\"
 
 if "%~1"=="" (
@@ -14,6 +15,26 @@ if "%~1"=="" (
 
 if not exist "%WEB_SRC%" (
     echo ERROR: web sources not found at %WEB_SRC%
+    goto :fail
+)
+
+rem Compile the web client's TypeScript (front\*.ts -> web\src\*.js) before copying sources.
+where npm >nul 2>nul
+if errorlevel 1 (
+    echo ERROR: npm not found on PATH. Install Node.js, then run "npm install" in %TS_SRC%.
+    goto :fail
+)
+if not exist "%TS_SRC%\node_modules" (
+    echo ERROR: %TS_SRC%\node_modules not found. Run "npm install" in %TS_SRC% once, then retry.
+    goto :fail
+)
+
+pushd "%TS_SRC%"
+call npm run build
+set "TSC_ERR=%errorlevel%"
+popd
+if not "%TSC_ERR%"=="0" (
+    echo ERROR: TypeScript build failed.
     goto :fail
 )
 

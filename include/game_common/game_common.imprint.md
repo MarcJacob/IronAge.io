@@ -25,6 +25,8 @@ Each input command type is structured this way:
 - Payload structure (with rare cases of re-use of the same structure, although inheritance is recommended).
 - Implementation functions, some essential like Apply and Validity Check, others optional (compression / decompression ?)
 
+Then the functions must be used in the appropriate match host and match tick code (early tick function when all input sequences are processed).
+
 Guidelines:
 - They must be entirely implemented within the Game Common codebase.
 - Payload structures must have consistent padding behavior, with no padding at all preferably (for compatibility across machines).
@@ -36,6 +38,9 @@ Guidelines:
 Later on, we may want to make the registration of commands more convenient and centralized, in the sense that we should be able to see every element of a command
 together in one place. This could be done with a macro whose role is to output a command to some static buffer any program could choose to place in their static memory where they wish.
 Then a command's *code* could be related to its index in that collection instead of its command type enumeration value (which could even be replaced with a string name).
+
+Another advantage of a more data-oriented approach like that would be that the match code could loop over all commands abstractly, such that match code wouldn't need to be touched
+to implement the effects of a command.
 
 #### Structuring for messages & input into match tick
 

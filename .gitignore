@@ -4,6 +4,10 @@
 /build/
 /game_server_resources/
 
+# Web client TypeScript build: node_modules, and web/src/ (generated from src/client_web/front/*.ts).
+/src/client_web/front/node_modules/
+/src/client_web/web/src/
+
 # Ignore AI Harness stuff.
 
 MEMORY.md

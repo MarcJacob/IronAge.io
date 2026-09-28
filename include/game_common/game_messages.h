@@ -17,6 +17,7 @@ enum class GAME_MESSAGE_TYPE : ui8
 	CLIENT_TICK,
 
 	TYPE_COUNT,
+	INVALID,
 };
 
 // Have all structures below (message header and payloads) packed.

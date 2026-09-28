@@ -341,9 +341,12 @@ int main(int argc, char** argv)
 	// TODO(Marc): Add a platform call to list available files in resources folder, so the server can just discover all available files.
 	static const char* const WEB_FILES[] = {
 
-		// Core JS
+		// HTML & CSS 
 		"index.html",
 		"style.css",
+
+		// JS Sources
+		"src/core.js",
 		"src/main.js",
 		"src/backend.js",
 		"src/render.js",

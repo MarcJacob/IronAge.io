@@ -155,7 +155,7 @@ WASM_EXPORT match_player_id client_get_controlled_player_id()
 static constexpr ui32 NET_MSG_BUFFER_SIZE = KiB(4);
 static ui8 NET_MSG_BUFFER[NET_MSG_BUFFER_SIZE];
 
-WASM_EXPORT ui8* client_get_net_message_buffer()
+WASM_EXPORT ui8* client_get_net_message_buffer_offset()
 {
 	return NET_MSG_BUFFER;
 }
@@ -174,7 +174,7 @@ static ui32 OUTGOING_MSG_SIZE = 0; // 0 = nothing pending.
 
 // Builds a CLIENT_TICK message out of the pending input, if any, into OUTGOING_MSG_BUFFER.
 // Resets OUTGOING_MSG_SIZE to 0 first: a message is only ever offered once, right after it's built.
-static void build_pending_output_message()
+static void build_net_output_message_buffer()
 {
 	OUTGOING_MSG_SIZE = 0;
 
@@ -205,13 +205,13 @@ static void build_pending_output_message()
 	CLIENT_BACKEND_STATE.input.pending = false;
 }
 
-WASM_EXPORT ui8* client_get_pending_output_message_buffer()
+WASM_EXPORT ui8* client_get_net_output_message_buffer_offset()
 {
 	return OUTGOING_MSG_BUFFER;
 }
 
 // Returns the size of the message built by the last client_process_net_message call, or 0 if there is none to send.
-WASM_EXPORT ui32 client_get_pending_output_message_size()
+WASM_EXPORT ui32 client_get_net_output_message_size()
 {
 	return OUTGOING_MSG_SIZE;
 }
@@ -251,12 +251,13 @@ WASM_EXPORT GAME_MESSAGE_TYPE client_process_net_message(ui32 message_size)
 		match_tick(get_local_match(), payload.commands);
 
 		rebuild_render_state();
-		build_pending_output_message();
+
+		build_net_output_message_buffer();
 
 		break;
 	}
 	default:
-		return GAME_MESSAGE_TYPE::TYPE_COUNT;
+		return GAME_MESSAGE_TYPE::INVALID;
 	}
 
 	return header->message_type;
