@@ -23,7 +23,7 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 	static const ui32 ASSERT_MSG_BUFF_COUNT = 1024;
 
 	char assert_msg_buff[ASSERT_MSG_BUFF_COUNT];
-	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
+	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 
 	va_list va;
 	va_start(va, line);
@@ -32,7 +32,7 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 
 	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
 
-	memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
+	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
 
 	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);

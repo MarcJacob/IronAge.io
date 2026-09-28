@@ -184,4 +184,48 @@ void ia_memset(void* dest, ui8 val, ui64 size)
 	}
 }
 
+// TODO(Marc): optimize this.
+void ia_memmove(void* dest, const void* src, ui64 size)
+{
+	if (size == 0 || dest == src) return;
+
+	ASSERT(dest != nullptr && src != nullptr);
+
+	ui8* destMem = (ui8*)dest;
+	const ui8* srcMem = (const ui8*)src;
+
+	if (destMem < srcMem)
+	{
+		for (ui64 i = 0; i < size; i++) destMem[i] = srcMem[i];
+	}
+	else
+	{
+		for (ui64 i = size; i > 0; i--) destMem[i - 1] = srcMem[i - 1];
+	}
+}
+
+// These exist for the compiler to call when there's no libc to provide them (freestanding builds).
+// Use the ia_ versions above in source code.
+#if !__STDC_HOSTED__
+
+extern "C" void* memset(void* dest, int val, mem_size size)
+{
+	ia_memset(dest, (ui8)val, size);
+	return dest;
+}
+
+extern "C" void* memcpy(void* dest, const void* src, mem_size size)
+{
+	ia_memcpy(dest, src, size);
+	return dest;
+}
+
+extern "C" void* memmove(void* dest, const void* src, mem_size size)
+{
+	ia_memmove(dest, src, size);
+	return dest;
+}
+
+#endif // !__STDC_HOSTED__
+
 #endif // CORE_MEMORY_INCLUDED

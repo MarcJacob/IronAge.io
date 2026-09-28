@@ -1,6 +1,7 @@
 // Testing mode function exports.
 
-#include "game_client_web.h"
+#include "core.h"
+#include "game_common/game_match.h"
 
 // DETERMINISM TEST: runs the shared test scenario and exposes the resulting snapshot so JS can compare it with the native one.
 static ui8 determinism_match_memory[MiB(1)];

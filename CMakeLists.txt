@@ -6,7 +6,7 @@ project (IronAgeIO CXX)
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 	# WEB CLIENT
 	add_executable(IronAgeIO_WebClient
-		src/platform/wasm_client_main.cpp)
+		src/platform/wasm_web_client/wasm_client_main.cpp)
 	target_include_directories(IronAgeIO_WebClient PRIVATE ${CMAKE_SOURCE_DIR}/include/)
 	set_target_properties(IronAgeIO_WebClient PROPERTIES SUFFIX ".wasm")
 

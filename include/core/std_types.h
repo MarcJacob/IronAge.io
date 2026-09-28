@@ -17,8 +17,10 @@ typedef char i8;
 
 #if _WIN64
 typedef ui64 iptr;
+typedef ui64 mem_size; // Size of a memory region, in bytes.
 #else
 typedef ui32 iptr;
+typedef ui32 mem_size;
 #endif
 
 typedef ui64 time_ms; // Used on some apps as a way to measure time precisely.
