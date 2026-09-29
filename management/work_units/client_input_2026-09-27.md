@@ -16,7 +16,9 @@ panning, by building a proper camera/viewport and input system.
 - [x] Viewport movement extra: zoom in where the cursor is located.
 - [ ] Generalized gameplay input: front-facing render/UI layer sends
   semantic events (entity selected, button pressed, ...), not raw
-  coordinates; backend interprets per current mode/selection.
+  coordinates; backend interprets per current mode/selection. Unblocked -
+  platform split (`work_units/game_client_platform_split_2026-09-29.md`)
+  is done.
 - [ ] Selection state: client-local "currently selected entity", no new
   network message yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game

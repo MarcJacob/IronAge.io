@@ -9,7 +9,9 @@ let canvas: HTMLCanvasElement;
 
 let ctx: CanvasRenderingContext2D;
 
-let match_info: Core.MatchInfo;
+// World size, viewport rect and scale below are all snapshots as of the last draw() call - everything the render
+// state can report (including world size / controlled player) is read fresh every call, nothing is cached at init.
+let world_size: Core.WorldSize = new Core.WorldSize();
 
 // Pixels per viewport tile on each axis. Recomputed every draw() call, since viewport size changes with zoom.
 let scaleX : number = 1;
@@ -19,11 +21,9 @@ let scaleY : number = 1;
 let viewportBottomLeftX : number = 0;
 let viewportBottomLeftY : number = 0;
 
-export function init_render(canvas_element : HTMLCanvasElement, info: Core.MatchInfo) {
+export function init_render(canvas_element : HTMLCanvasElement) {
     canvas = canvas_element;
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-
-    match_info = info;
 }
 
 // Converts a position on the page (mouse event coordinates) to a world tile position, clamped inside the world.
@@ -38,8 +38,8 @@ export function page_to_world(clientX: number, clientY: number)
     const worldY = viewportBottomLeftY + (canvas.height - canvasY) / scaleY;
 
     return {
-        x: Math.min(Math.max(Math.round(worldX), 0), match_info.world_size.width - 1),
-        y: Math.min(Math.max(Math.round(worldY), 0), match_info.world_size.height - 1),
+        x: Math.min(Math.max(Math.round(worldX), 0), world_size.width - 1),
+        y: Math.min(Math.max(Math.round(worldY), 0), world_size.height - 1),
     };
 }
 
@@ -94,8 +94,8 @@ function draw_entity(render_state: Backend.BackendRenderState, entity_index: num
 function draw_world_border()
 {
     const left = (0 - viewportBottomLeftX) * scaleX;
-    const right = (match_info.world_size.width - viewportBottomLeftX) * scaleX;
-    const top = canvas.height - (match_info.world_size.height - viewportBottomLeftY) * scaleY;
+    const right = (world_size.width - viewportBottomLeftX) * scaleX;
+    const top = canvas.height - (world_size.height - viewportBottomLeftY) * scaleY;
     const bottom = canvas.height - (0 - viewportBottomLeftY) * scaleY;
 
     ctx.strokeStyle = '#000';
@@ -110,6 +110,7 @@ export function draw(render_state: Backend.BackendRenderState)
     scaleY = canvas.height / render_state.viewport_height;
     viewportBottomLeftX = render_state.viewport_bottom_left_x;
     viewportBottomLeftY = render_state.viewport_bottom_left_y;
+    world_size = render_state.world_size;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 

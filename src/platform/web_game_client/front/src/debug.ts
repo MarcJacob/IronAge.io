@@ -14,7 +14,7 @@ export function update_debug_panel(render_state: Backend.BackendRenderState, mou
     if (panelElement === null) return;
 
     const lines:string[] = [
-        `viewport: (${render_state.viewport_bottom_left_x}, ${render_state.viewport_bottom_left_y}) ${render_state.viewport_width}x${render_state.viewport_height}, zoom ${render_state.zoom_level.toFixed(2)}`,
+        `viewport: (${render_state.viewport_bottom_left_x}, ${render_state.viewport_bottom_left_y}) ${render_state.viewport_width}x${render_state.viewport_height}`,
         `mouse world loc: ${mouse_world_loc === null ? 'n/a' : `(${mouse_world_loc.x}, ${mouse_world_loc.y})`}`,
         `entity_count: ${render_state.entity_count}`,
     ];

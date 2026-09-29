@@ -6,7 +6,7 @@ project (IronAgeIO CXX)
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 	# WEB CLIENT
 	add_executable(IronAgeIO_WebClient
-		src/platform/wasm_web_client/wasm_client_main.cpp)
+		src/platform/web_game_client/wasm_client_main.cpp)
 	target_include_directories(IronAgeIO_WebClient PRIVATE ${CMAKE_SOURCE_DIR}/include/)
 	set_target_properties(IronAgeIO_WebClient PROPERTIES SUFFIX ".wasm")
 
@@ -23,7 +23,7 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 
 	target_link_options(IronAgeIO_WebClient PRIVATE
 	    --target=wasm32-unknown-unknown 
-		-nostdlib -fuse-ld=lld -Wl,--no-entry -Wl,--export-dynamic) 
+		-nostdlib -fuse-ld=lld -Wl,--no-entry -Wl,--export-dynamic, -Wl,--global-base=1024)
 else()
 	# Win32 GAME SERVER
 	add_executable (IronAgeIO_GameServer 

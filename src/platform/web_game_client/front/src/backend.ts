@@ -21,6 +21,11 @@ interface ClientExports extends WebAssembly.Exports
 {
     memory: WebAssembly.Memory;
 
+    // Lifecycle
+
+    web_client_start(): number;
+    web_client_tick(delta_time: number): void;
+
     // Net input & output
 
     client_get_net_message_buffer_size(): number;
@@ -33,13 +38,6 @@ interface ClientExports extends WebAssembly.Exports
 
     // Render state
     client_get_render_state(): number;
-    client_refresh_render_state(): void;
-
-    // Local match
-
-    client_get_local_match_info(): number;
-
-    client_get_controlled_player_id(): number;
 
     // Input
 
@@ -53,8 +51,27 @@ let backend: ClientExports;
 // Loads and instantiates the client backend. Rejects if loading fails.
 export async function load(wasm_url: string)
 {
+    console.log("Loading backend...");
     const result = await WebAssembly.instantiateStreaming(fetch(wasm_url), {});
     backend = result.instance.exports as ClientExports;
+}
+
+// Initializes the backend's own memory. Call once, right after load().
+export function start(): boolean
+{
+    console.log("Starting backend.");
+    if (!backend.web_client_start()) {
+        console.error("Failed to initialize client backend.");
+        return false;
+    }
+
+    return true;
+}
+
+// Ticks the backend: applies pending viewport input and rebuilds the render state. Call once per animation frame.
+export function tick(delta_time: number): void
+{
+    backend.web_client_tick(delta_time);
 }
 
 // Copies a received websocket message's bytes into wasm memory and has the backend parse & apply it.
@@ -86,28 +103,6 @@ export function read_pending_output_message()
     return new Core.ByteBuffer(backend.memory.buffer, bufferOffset, size).slice() as Core.ByteBuffer;
 }
 
-// Reads static info about the currently active local match into match_info. Call after a MATCH_JOINED message was processed.
-// Mirrors web_client_match_info (src/client_web/game_client_backend.h) by hand. Keep both in sync.
-export function read_match_info()
-{
-    // Layout of web_client_match_info: three ui32 (tick rate, world width, world height).
-    const infoOffset: number = backend.client_get_local_match_info();
-    const infoView: DataView = new DataView(backend.memory.buffer, infoOffset, 12);
-
-    let matchInfo = new Core.MatchInfo();
-    matchInfo.tick_rate = infoView.getUint32(0, true);
-    matchInfo.world_size.width = infoView.getUint32(4, true);
-    matchInfo.world_size.height = infoView.getUint32(8, true);
-
-    return matchInfo;
-}
-
-// Reads which player id the client is currently in control of. Call after a MATCH_JOINED message was processed.
-export function read_controlled_player_id()
-{
-    return backend.client_get_controlled_player_id();
-}
-
 export function set_target_loc(target_loc: Core.WorldLocation)
 {
     backend.client_input_set_target_loc(target_loc.x, target_loc.y);
@@ -135,24 +130,19 @@ export class BackendRenderState
     viewport_bottom_left_y: number = 0;
     viewport_width: number = 0;
     viewport_height: number = 0;
-    zoom_level: number = 0;
+    controlled_player_id: number = 0;
+    world_size: Core.WorldSize = new Core.WorldSize();
     entity_count: number = 0;
     entity_states: Array<BackendRenderEntity> = [];
 }
 
-// Rebuilds the render state from current match + viewport state. Call once per animation frame, before read_render_state.
-export function refresh_render_state(): void
-{
-    backend.client_refresh_render_state();
-}
-
-// Reads the latest render state of the local match.
-// Mirrors web_client_render_state (src/client_web/game_client_backend.h) by hand. Keep both in sync.
+// Reads the latest render state of the local match. Call once per animation frame, after tick().
+// Mirrors client_render_state (include/game_client/game_client_backend.h) by hand. Keep both in sync.
 export function read_render_state()
 {
-    // Layout of web_client_render_state: viewport (bottom_left x/y ui16, width ui16, height ui16, zoom_level f32),
-    // entity_count (ui16), entity_states pointer (ui32). Views are re-created on every read on purpose, as they
-    // become invalid if wasm memory ever grows.
+    // Layout of client_render_state: viewport (bottom_left x/y i32, width ui16, height ui16), controlled_player_id
+    // (ui16), world_size (ui16 width/height), entity_count (ui16), entity_states pointer (ui32). Views are
+    // re-created on every read on purpose, as they become invalid if wasm memory ever grows.
     const renderStateOffset: number = backend.client_get_render_state();
     const renderStateDataView: DataView = new DataView(backend.memory.buffer, renderStateOffset);
 
@@ -161,10 +151,12 @@ export function read_render_state()
     renderState.viewport_bottom_left_y = renderStateDataView.getInt32(4, true);
     renderState.viewport_width = renderStateDataView.getUint16(8, true);
     renderState.viewport_height = renderStateDataView.getUint16(10, true);
-    renderState.zoom_level = renderStateDataView.getFloat32(12, true);
-    renderState.entity_count = renderStateDataView.getUint16(16, true);
+    renderState.controlled_player_id = renderStateDataView.getUint16(12, true);
+    renderState.world_size.width = renderStateDataView.getUint16(14, true);
+    renderState.world_size.height = renderStateDataView.getUint16(16, true);
+    renderState.entity_count = renderStateDataView.getUint16(18, true);
 
-    const entityStatesOffset: number = renderStateDataView.getUint32(18, true);
+    const entityStatesOffset: number = renderStateDataView.getUint32(20, true);
     const entityStatesDataView: DataView = new DataView(backend.memory.buffer, entityStatesOffset);
 
     // Layout of render_entity: four f32 (viewport X, Y, target viewport X, Y).

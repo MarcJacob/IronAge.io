@@ -16,13 +16,6 @@ export class WorldSize
     height: number = 0;
 }
 
-// Parameters of a match. To see current world state of a match, look into the world_state structure.
-export class MatchInfo
-{
-    tick_rate: number = 0;
-    world_size: WorldSize = new WorldSize();
-}
-
 // Per-frame delegate: a requestAnimationFrame loop that calls every registered callback once per frame, with
 // the elapsed time since the last frame in seconds. Lets independent components (camera input, later
 // interpolation, ...) each hook into the frame loop without owning one, or knowing about each other.

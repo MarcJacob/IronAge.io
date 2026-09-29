@@ -3,8 +3,8 @@ rem Assembles web client files into /game_server_resources/ from src\client_web\
 rem Optional arg 1: path to the .wasm (CMake passes it). Without args, uses build\web_client_debug\wasm and pauses.
 setlocal
 set "ROOT=%~dp0"
-set "WEB_SRC=%ROOT%src\client_web\web"
-set "TS_SRC=%ROOT%src\client_web\front"
+set "WEB_SRC=%ROOT%src\platform\web_game_client\web"
+set "TS_SRC=%ROOT%src\platform\web_game_client\front"
 set "OUT=%ROOT%game_server_resources\web_root\"
 
 if "%~1"=="" (

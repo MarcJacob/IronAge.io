@@ -16,26 +16,28 @@ index. Update the entry here when a unit starts / finishes.
 
 - [DONE] TypeScript migration - `work_units/typescript_migration_2026-09-27.md`
 - [WIP] Client input & camera prep - `work_units/client_input_2026-09-27.md`
+- [DONE] Game Client / Platform split - `work_units/game_client_platform_split_2026-09-29.md`
 
 ## Current Status
 
-Phase 1 (Architecture Skeleton), networking end-to-end: everything up to and including the
-WebSocket layer is done and tested. What remains is the game protocol on top of it.
+Phase 1 (Architecture Skeleton): networking, wire protocol v0, and the web client's game-client
+backend / platform split are all working end-to-end.
 
 - Working: web client bundle served over HTTP; `/ws` upgrades to WebSocket (frame codec, ping
   keepalive, `Origin` check); upgraded connections are `GAME_CLIENT`s exchanging binary
-  `game_message_header` messages; browser-side tests (`src/websocket_tests.js`) all pass.
-- Temporary: `game_server_test_echo_game_client` (`game_server_main.cpp`) echoes game
-  messages, and the web client page still runs a local match while only opening a websocket.
-  Both get replaced by the wire protocol.
-- Next: wire protocol v0 (phase 1 items below).
+  `game_message_header` messages; browser-side tests (`src/websocket_tests.js`) all pass; a
+  real client connects, joins a match, renders the world, and round-trips input back to the
+  server without the connection dropping.
+- Next: Generalized Input Events (see `work_units/client_input_2026-09-27.md`).
 - Testing loop: build the server and the web client (the wasm build deploys the bundle to
   `game_server_resources/web_root`), restart the server (files are preloaded at startup), open
   `http://localhost:8000/`, click "Run WebSocket tests".
 - Where things live: `src/game_server/` (server; clients in `game_server_clients.*`, web server
   in `web_server/`), `src/platform/win32_game_server/` (platform, network threads),
-  `src/client_web/` (web client), `include/game_common/` (shared simulation and messages).
-  `*.imprint.md` files document each folder.
+  `src/game_client/` (platform-independent web client backend, public contract in
+  `include/game_client/`), `src/platform/web_game_client/` (WASM/web platform + frontend TS),
+  `include/game_common/` (shared simulation and messages). `*.imprint.md` files document each
+  folder.
 
 ## Technical Architecture
 
