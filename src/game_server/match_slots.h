@@ -5,6 +5,8 @@
 
 #include "game_server_clients.h" // For game_server_client::client_handle.
 
+#include "game_common/AI_logic.h"
+
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]
 enum class MATCH_SLOT_STATE : ui8
@@ -29,7 +31,12 @@ struct match_slot_lobby
 // A stale client handle (game_server_get_client_data returns nullptr for it) means the index has no live controller.
 struct match_player
 {
-	game_server_client::client_handle client;
+	bool bIsClientPlayer; // Whether this slot is occupied by a Game Client player or not.
+	union
+	{
+		game_server_client::client_handle client;
+		AI_player_state* AI;
+	};
 };
 
 // Wraps memory and a match structure that can be in multiple states.
@@ -52,6 +59,9 @@ struct match_slot
 		{
 			game_match* match_ptr;
 			ui64 last_tick_time;
+
+			ui16 ai_player_count; 
+			AI_player_state* ai_players;
 
 		} match;					// Valid when the slot state is MATCH_*
 	};

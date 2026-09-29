@@ -6,6 +6,9 @@
 #include "game_common/game_match.h"
 #include "game_common/game_commands.h"
 
+// Unity compile AI player system.
+#include "AI_logic.cpp"
+
 // BEGIN COMMAND FUNCTIONS
 
 // Example of command sanity check function.

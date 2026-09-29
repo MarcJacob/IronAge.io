@@ -86,6 +86,8 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
 	// Create match.
 
+	slot.match = {}; // Reset memory associated with the match state.
+
 	slot.match.match_ptr = slot.slot_memory.alloc<game_match>();
 	slot.match.last_tick_time = server.uptime_ms;
 
@@ -111,10 +113,31 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	// Copy start params.
 	ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params) + matchParams->extra_data_size);
 
+	// Allocate room for AI players in match memory.
+	// TODO(Marc): Prepass to count how many human players there are so we never over-allocate.
+	mem_arena AIPlayersMem = mem_arena_create_sub(slot.slot_memory, ia_min(256, matchParams->player_count) * sizeof(AI_player_state));
+	AIPlayersMem.clear();
+
 	for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
 	{
-		const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
-		if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+		match_player& playerSlot = slot.players[playerID];
+		const game_server_client* playerClient = game_server_get_client_data(server, playerSlot.client);
+		if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT)
+		{
+			playerSlot.bIsClientPlayer = false;
+
+			// Alloc AI player for this player index.
+			if (AI_player_state* newAI = AIPlayersMem.alloc<AI_player_state>())
+			{
+				newAI->controlled_player = playerID;
+				newAI->controlled_entity = playerID;
+
+				slot.match.ai_player_count++;
+			}
+			continue;
+		}
+
+		playerSlot.bIsClientPlayer = true;
 
 		joinMsgPayload.controlled_player_id = playerID;
 		joinMsgPayload.join_tick = 0;
@@ -122,6 +145,9 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 		// Send message !
 		playerClient->game_client_send_message(*joinMsgHeader);
 	}
+
+	// Link AI players buffer.
+	slot.match.ai_players = (AI_player_state*)AIPlayersMem.mem_start;
 
 	return true;
 }
@@ -283,6 +309,13 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotInd
 				}
 			}
 			playerClient->game_client_consume_message();
+		}
+
+		// Gather AI input.
+		for (ui16 aiPlayerIndex = 0; aiPlayerIndex < slot.match.ai_player_count; aiPlayerIndex++)
+		{
+			AI_player_state& aiState = slot.match.ai_players[aiPlayerIndex];
+			AI_player_output_commands(*slot.match.match_ptr, aiState, tickCommandsBuilder);
 		}
 
 		match_tick_commands& tickCommands = *tickCommandsBuilder._tick_commands_start;
@@ -461,6 +494,17 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 #ifndef NDEBUG
 	TEST_COMMAND_SIZES_CHECK();
 	TEST_MESSAGE_TYPE_SIZES_CHECK();
+
+	// Math tests !!
+
+	newServer->logf("sqrt(2.f) = %f", ia_sqrt(2.f));
+	newServer->logf("sqrt(16.f) = %f", ia_sqrt(16.f));
+	newServer->logf("sqrt(64.f) = %f", ia_sqrt(64.f));
+	newServer->logf("sqrt(900.f) = %f", ia_sqrt(900.f));
+	newServer->logf("sqrt(10000.f) = %f", ia_sqrt(10000.f));
+
+	newServer->logf("rand(1.f, 2.f) = %f", ia_rand_range(1.f, 2.f));
+
 #endif
 
 	// Initialize Web Server.

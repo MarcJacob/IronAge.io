@@ -6,5 +6,8 @@
   },
   "scripts": {
     "build": "tsc"
+  },
+  "dependencies": {
+    "package": "^1.0.1"
   }
 }
