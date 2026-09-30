@@ -4,8 +4,9 @@
 #define PLAYER_AI_INCLUDED
 
 #include "core.h"
-#include "game_match.h"
-#include "game_commands.h"
+
+#include "match.h"
+#include "commands.h"
 
 // Main AI state structure, holding its own decision-making data and high level parameters.
 struct AI_player_state

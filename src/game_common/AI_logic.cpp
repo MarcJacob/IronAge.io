@@ -2,7 +2,7 @@
 // AI players, like human players, observe the match state and create desired input commands in response to it and to their internal state,
 // which doesn't have to follow the same rules of determinism as the match tick code since they live outside of it.
 
-#include "game_common/AI_logic.h"
+#include "game_common/match/AI_logic.h"
 
 // Pushes a new command sequence for the AI's controlled player containing their desired input for the next match tick.
 // Returns whether the AI could push all its commands successfully.
@@ -31,7 +31,7 @@ bool AI_output_commands(const game_match& match, AI_player_state& ai_state, matc
 		// Emit command.
 		if (!commands_builder.push_new_sequence(ai_state.controlled_player)) return false;
 
-		auto set_target_payload = commands_builder.push_command<command_payload_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+		auto set_target_payload = commands_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
 		if (set_target_payload == nullptr) return false;
 
 		set_target_payload->new_target = newTarget;

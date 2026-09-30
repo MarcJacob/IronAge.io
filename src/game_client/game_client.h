@@ -6,9 +6,11 @@
 #define game_client_INCLUDED
 
 #include "core.h"
-#include "game_common/game_match.h"
+
+#include "game_common/match/match.h"
+#include "game_common/match/commands.h"
+
 #include "game_common/game_messages.h"
-#include "game_common/game_commands.h"
 
 struct game_client;
 

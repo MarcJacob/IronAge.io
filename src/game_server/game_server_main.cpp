@@ -7,8 +7,9 @@
 
 // Match slots system.
 #include "match_slots.h"
-#include "game_common/game_match.h"
-#include "game_common/game_commands.h"
+
+#include "game_common/match/match.h"
+#include "game_common/match/commands.h"
 #include "game_common/game_messages.h"
 
 // Clients table symbols

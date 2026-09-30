@@ -4,7 +4,7 @@
 
 #include "game_client.h"
 
-#include "game_common/game_match.h"
+#include "game_common/match/match.h"
 #include "game_common/game_messages.h"
 
 ui8* game_client_get_net_msg_buffer(game_client& backend)

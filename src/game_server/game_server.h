@@ -4,7 +4,7 @@
 #define GAME_SERVER_INCLUDED
 
 #include "core.h"
-#include "game_common/game_match.h"
+#include "game_common/match/match.h"
 
 // Main symbols file for the game server implementation.
 // Defines the actual game server structure and internals.

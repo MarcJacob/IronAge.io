@@ -10,7 +10,7 @@
 #endif
 
 #include "core.h"
-#include "game_match.h"
+#include "match.h"
 
 // Top-level type designations a match command can have.
 enum class MATCH_COMMAND_TYPE : ui8
@@ -25,7 +25,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 // All structures must be aligned to 1 since they must exist in packed contexts for network transmission and structured reading.
 #pragma pack(push, 1)
 
-struct command_payload_set_entity_move_target
+struct command_data_set_entity_move_target
 {
 	entity_id target_entity;
 	world_location new_target;
@@ -110,9 +110,9 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 	switch (type)
 	{
 	case(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET):
-		return sizeof(command_payload_set_entity_move_target);
+		return sizeof(command_data_set_entity_move_target);
 	default:
-		ASSERT_MSG(0, "Command type %d is missing a payload struct size association.", type);
+		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
 		return 0;
 	}
 }
@@ -331,11 +331,11 @@ struct match_tick_commands_builder
 
 // VALIDITY CHECK
 bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player,
-	const command_payload_set_entity_move_target& command);
+	const command_data_set_entity_move_target& command);
 
 // APPLY
 void command_set_entity_move_target_apply(game_match& match, match_player_id player,
-	const command_payload_set_entity_move_target& command);
+	const command_data_set_entity_move_target& command);
 
 // ...
 

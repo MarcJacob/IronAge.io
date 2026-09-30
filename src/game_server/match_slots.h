@@ -5,7 +5,7 @@
 
 #include "game_server_clients.h" // For game_server_client::client_handle.
 
-#include "game_common/AI_logic.h"
+#include "game_common/match/AI_logic.h"
 
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]

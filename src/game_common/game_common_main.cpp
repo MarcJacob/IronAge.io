@@ -3,8 +3,8 @@
 
 #include "core.h"
 
-#include "game_common/game_match.h"
-#include "game_common/game_commands.h"
+#include "game_common/match/match.h"
+#include "game_common/match/commands.h"
 
 // Unity compile AI player system.
 #include "AI_logic.cpp"
@@ -12,7 +12,7 @@
 // BEGIN COMMAND FUNCTIONS
 
 // Example of command sanity check function.
-bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_payload_set_entity_move_target& command)
+bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
 	// Ownership: Entity ID == Player ID.
 	if (player != command.target_entity) return false; // Can only be controlled by owning player.
@@ -22,7 +22,7 @@ bool command_set_entity_move_target_validity_check(const game_match& match, matc
 }
 
 // Example of a command apply function.
-void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_payload_set_entity_move_target& command)
+void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
 	// Sets target entity's location.
 
@@ -80,7 +80,7 @@ bool match_command_validity_check(game_match& match, match_player_id player, con
 	switch (command.type)
 	{
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_payload_set_entity_move_target>());
+			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_data_set_entity_move_target>());
 		default:
 			ASSERT_MSG(0, "No validity check logic associated with command type.");
 			return false;
@@ -102,7 +102,7 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		{
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 			isValid = command_set_entity_move_target_validity_check(target_match, player_id,
-				commandHeader.get_command_data<command_payload_set_entity_move_target>());
+				commandHeader.get_command_data<command_data_set_entity_move_target>());
 			break;
 		default:
 			// Only assert if the command type IS valid but not handled.
@@ -157,7 +157,7 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 			{
 			case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 				command_set_entity_move_target_apply(match, sequencePlayerId,
-					commandHeader.get_command_data<command_payload_set_entity_move_target>());
+					commandHeader.get_command_data<command_data_set_entity_move_target>());
 				break;
 			default:
 				ASSERT_MSG(0, "No apply logic associated with command type.");
@@ -238,7 +238,7 @@ match_tick_commands* build_test_scenario_commands(const game_match& match)
 				(ui16)((playerID + match.tick) * 2000 / match.start_params->world_dimensions.x * 300 % match.start_params->world_dimensions.x),
 				(ui16)((playerID + match.tick) * 5000 % match.start_params->world_dimensions.y) };
 
-			auto payload = commandsBuilder.push_command<command_payload_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+			auto payload = commandsBuilder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
 			if (payload == nullptr) return nullptr;
 
 			payload->target_entity = playerID;

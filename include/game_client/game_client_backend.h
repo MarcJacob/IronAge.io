@@ -7,7 +7,8 @@
 
 #include "core.h"
 
-#include "game_common/game_match.h"
+#include "game_common/match/match.h"
+
 #include "game_common/game_messages.h"
 
 // Structure definitions for resources sent from the client backend to frontend.
