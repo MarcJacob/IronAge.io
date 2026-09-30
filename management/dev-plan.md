@@ -18,106 +18,6 @@ index. Update the entry here when a unit starts / finishes.
 - [WIP] Client input & camera prep - `work_units/client_input_2026-09-27.md`
 - [DONE] Game Client / Platform split - `work_units/game_client_platform_split_2026-09-29.md`
 
-## Current Status
-
-Phase 1 (Architecture Skeleton): networking, wire protocol v0, and the web client's game-client
-backend / platform split are all working end-to-end.
-
-- Working: web client bundle served over HTTP; `/ws` upgrades to WebSocket (frame codec, ping
-  keepalive, `Origin` check); upgraded connections are `GAME_CLIENT`s exchanging binary
-  `game_message_header` messages; browser-side tests (`src/websocket_tests.js`) all pass; a
-  real client connects, joins a match, renders the world, and round-trips input back to the
-  server without the connection dropping.
-- Next: Generalized Input Events (see `work_units/client_input_2026-09-27.md`).
-- Testing loop: build the server and the web client (the wasm build deploys the bundle to
-  `game_server_resources/web_root`), restart the server (files are preloaded at startup), open
-  `http://localhost:8000/`, click "Run WebSocket tests".
-- Where things live: `src/game_server/` (server; clients in `game_server_clients.*`, web server
-  in `web_server/`), `src/platform/win32_game_server/` (platform, network threads),
-  `src/game_client/` (platform-independent web client backend, public contract in
-  `include/game_client/`), `src/platform/web_game_client/` (WASM/web platform + frontend TS),
-  `include/game_common/` (shared simulation and messages). `*.imprint.md` files document each
-  folder.
-
-## Technical Architecture
-
-### GameCommon (`include/game_common/`)
-
-The full game simulation, shared source compiled into both the Game Server and the
-Client. No OS calls, no rendering, no audio, no networking, no system allocator, no
-system math library.
-
-- Deterministic lockstep: runs identically on server and every client. Fixed timestep.
-  No system libm beyond native instructions (`sqrt` is safe/correctly-rounded;
-  `sin`/`cos`/`log`/`pow` etc. are not guaranteed identical across libm builds - use a
-  shared vendored implementation, or fixed-point if float drift becomes a problem).
-- Memory: requests memory from its host via a callback, up to a host-declared cap, and
-  sub-allocates internally. Never calls a system allocator. How the host services
-  requests (pre-reserved block vs. on-demand growth) is a host decision.
-- Exposes a deterministic state-snapshot function (fixed layout, no padding/pointers).
-  Used for: determinism testing (diff native vs. wasm snapshots), late-join state sync,
-  debug/test snapshots.
-- No rendering/audio - only exposes state; each host renders/plays it however it wants.
-
-### Platform (`src/<platform>/`)
-
-Host-specific glue: process startup, memory (reserving/growing what it gives
-GameCommon), logging/file/network/thread callbacks, tick loop, all presentation.
-
-- **Server Platform** (`src/platform/win32_game_server/`): one large up-front memory block
-  sized for N parallel matches, sub-allocated to GameCommon instances. Owns networking.
-  Presentation is a console for now.
-- **Client Platform** (web, JS + `wasm32-unknown-unknown` GameCommon): grows wasm memory
-  in chunks on demand (adapts to weaker machines). WebSocket to the Game Server for
-  input. Currently renders through a JS canvas (sprites/text/UI/input capture); a
-  blit canvas for expensive-to-compute pixel content is deferred.
-
-### Game Server / Client
-
-- **Game Server**: Server Platform + one or more GameCommon match instances + connection
-  and match-lifecycle management + networking.
-- **Clients** (`game_server_clients.*`): every inbound connection is a `game_server_client`.
-  It starts UNKNOWN, is claimed by a sub-component (the web server) as NON_GAME_CLIENT, and
-  becomes GAME_CLIENT once upgraded. Game code talks to GAME_CLIENTs through send / peek /
-  consume message functions provided by the sub-component.
-- **Web server** (`src/game_server/web_server/`): preloaded static files over HTTP, http ->
-  websocket upgrade, websocket framing.
-- **Client**: Client Platform + JS canvas renderer. Shipped to the browser by the
-  Game Server over plain HTTP during early development.
-
-### Toolchain
-
-- GameCommon is header-included (unity build) into each host's main file, not built as a
-  separate library. CMake builds two host targets: native Game Server exe, and Client
-  as `wasm32-unknown-unknown` via Clang (separate build tree + toolchain file).
-  Freestanding, no Emscripten.
-- Freestanding consequences: hand-write `memcpy`/`memset`/`memmove`; disable exceptions/
-  RTTI (`-fno-exceptions -fno-rtti`); no system math lib (see determinism above).
-- Emscripten not used: its value (hosted libc/libc++, filesystem emulation, WebGL,
-  pthreads, BSD-socket-shaped networking) doesn't apply here - no browser wasm target
-  gets real socket access regardless of toolchain, no WebGL planned, no STL-heavy legacy
-  code to port. Reconsider only if porting a large hosted-environment library, or moving
-  to WebGL/3D.
-
-### Networking
-
-Hand-rolled, no third-party libraries. The Server Platform only provides non-blocking
-byte-stream connections (Winsock on win32) through a pull-based interface. HTTP and
-WebSocket handling live in Game Server code over that interface (portable, testable
-natively). TLS (wss) via reverse proxy at deployment time. Early dev phase: Game Server also
-serves the client bundle over plain HTTP, and relays input between connected clients on a
-fixed tick schedule for lockstep. Master server (matchmaking, persistent cross-match
-scoring) deferred; direct frontend-to-server connection stays available as a dev/self-host
-mode after it exists too.
-
-### Shared conventions
-
-- `include/core/`: common types/macros (`std_types.h`, `assert.h`), via `include/core.h`.
-- `include/game_common/`: GameCommon's public interface, and the network message structures
-  shared with the client (`game_messages.h`).
-- `include/game_server/`: Server-Platform <-> Game Server interface, match-lifecycle.
-- Client-side Platform header location: TBD when that work starts.
-
 ## Development Phases
 
 High-level sequencing, not a scope commitment. Mark `[WIP]`/`[DONE]`/`[NEXT]`; keep finished
@@ -202,3 +102,8 @@ Tasks not currently part of the plan that need to be added to it at some point.
   headcount start.
 - Catch-up / late join: tick bundles, per-client send cursor, `JOIN_REJECTED`, ring-buffer
   log eviction for long matches.
+- Memory arenas functionality expansion:
+     - Ability to work with virtual memory and page sizes so they can be given *reserved* address spaces and commit as needed on platforms that support it.
+          - This effectively solves the growing memory needs in specific cases on the server especially for match slots running large games. Each slot can be given a huge address range and commit as needed.
+     - Contract flags: Can be expanded, guarantees contiguousness between different allocations...
+          - Some systems require their memory arenas to have certain properties, others don't. It'd be nice to assert on wrong properties while allowing them on systems that don't care.
