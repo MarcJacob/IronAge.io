@@ -94,6 +94,14 @@ struct vec2
 using vec2f = vec2<float>;
 using vec2i = vec2<i32>;
 
+// Vec2 - Vec2
+template<typename VecTypeA, typename VecTypeB>
+static inline vec2<VecTypeA> operator-(const vec2<VecTypeA>& vec_a, vec2<VecTypeB> vec_b)
+{
+	return { vec_a.x - vec_b.x, vec_a.y - vec_b.y };
+}
+
+// Vec2 * Scalar
 template<typename VecType, typename Scalar>
 static inline vec2<VecType> operator*(const vec2<VecType>& vec, Scalar scalar)
 {
@@ -113,29 +121,28 @@ static inline float vec2_dist(vec2<VecAType> vec_a, vec2<VecBType> vec_b)
 	return ia_sqrt(squaredDist);
 }
 
-#if __STDC_HOSTED__
-#include <stdlib.h>
+// Simple xorshift32 PRNG
+static inline ui32 ia_rand_u32()
+{
+	static ui32 RAND_STATE = 0x9E3779B9; // Must stay non-zero.
+	RAND_STATE ^= RAND_STATE << 13;
+	RAND_STATE ^= RAND_STATE >> 17;
+	RAND_STATE ^= RAND_STATE << 5;
+	return RAND_STATE;
+}
 
-// TODO(Marc): Proper random generator, get rid of libc dependency.
 float ia_rand_range(float min, float max)
 {
-	float alpha = rand() % RAND_MAX / (float)RAND_MAX;
+	float alpha = ia_rand_u32() / (float)0xFFFFFFFFu;
 	return min + (max - min) * alpha;
 }
-#else
-
-float ia_rand_range(float min, float max)
-{
-	return min;
-}
-#endif
 
 template<typename VecType>
 vec2<VecType> ia_rand_vec(vec2<VecType> min, vec2<VecType> max)
 {
 	vec2<VecType> rand = {
-		(VecType)ia_rand_range(0.f, (float)max.x),
-		(VecType)ia_rand_range(0.f, (float)max.y),
+		(VecType)ia_rand_range((float)min.x, (float)max.x),
+		(VecType)ia_rand_range((float)min.y, (float)max.y),
 	};
 
 	return rand;

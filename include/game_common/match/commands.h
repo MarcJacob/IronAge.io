@@ -135,8 +135,10 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 {
 	switch (type)
 	{
-	case(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET):
+	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 		return sizeof(command_data_set_entity_move_target);
+	case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
+		return sizeof(command_data_set_entity_attack_target);
 	default:
 		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
 		return 0;

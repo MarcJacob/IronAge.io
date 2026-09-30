@@ -4,6 +4,7 @@
 #include "game_client/game_client_backend.h"
 
 static constexpr float ENTITY_RADIUS = 5.0f; // TODO: sync this with JS instead of assuming a fixed size for every entity.
+static constexpr ui8 SETTLEMENT_RENDER_SIZE = 6; // Square size of a settlement icon in viewport tiles.
 
 // Gets the size of viewport in world units.
 vec2<float> client_backend_get_viewport_size(const client_viewport_state& viewport)
@@ -41,13 +42,40 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 	vec2<float> viewportSize = client_backend_get_viewport_size(viewport);
 	vec2<float> bottomLeft = viewport.bottom_left_corner;
 
-	render_state.viewport.viewport_bottom_left = { (i32)bottomLeft.x, (i32)bottomLeft.y };
-	render_state.viewport.viewport_width = (ui16)viewportSize.x;
-	render_state.viewport.viewport_height = (ui16)viewportSize.y;
+	render_state.viewport.viewport_bottom_left = { bottomLeft.x, bottomLeft.y };
+	render_state.viewport.viewport_width = viewportSize.x;
+	render_state.viewport.viewport_height = viewportSize.y;
 
 	render_state.controlled_player_id = controlled_player_id;
 	render_state.world_size = world.terrain.size_tiles;
 
-	// Build render entity states...
+	// Build render entity states.
 
+	const world_entity_settlements& settlements = world.entities.settlements;
+
+	render_state.entity_count = 0;
+	render_state.entity_states = nullptr;
+
+	if (settlements.active_count > 0)
+	{
+		render_entity* entityStates = render_memory.alloc<render_entity>(settlements.active_count);
+		ui16 visibleCount = 0;
+
+		for (ui16 settlementIndex = 0; settlementIndex < settlements.active_count; settlementIndex++)
+		{
+			vec2<float> settlementLoc = { (float)settlements.locations[settlementIndex].x, (float)settlements.locations[settlementIndex].y };
+			if (!is_visible_in_viewport(settlementLoc, bottomLeft, viewportSize)) continue;
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::SETTLEMENT;
+			outEntity.owner = settlements.owners[settlementIndex];
+			outEntity.viewport_location = { settlementLoc.x - bottomLeft.x, settlementLoc.y - bottomLeft.y };
+			outEntity.size_viewport = SETTLEMENT_RENDER_SIZE;
+
+			visibleCount++;
+		}
+
+		render_state.entity_count = visibleCount;
+		render_state.entity_states = entityStates;
+	}
 }

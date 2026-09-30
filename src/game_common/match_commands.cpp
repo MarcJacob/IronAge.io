@@ -21,13 +21,13 @@ void command_set_entity_move_target_apply(game_match& match, match_player_id pla
 
 // ENTITY SET ATTACK TARGET
 
-bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
 	// TODO(Marc): Find entity ID, determine if it can attack, and if it is controllable by this player.
 	return false;
 }
 
-void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+void command_set_entity_attack_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
 	// TODO(Marc): Find entity from ID in the command and set its attack target if possible.
 }
@@ -52,11 +52,11 @@ bool match_command_validity_check(const game_match& match, match_player_id playe
 inline void match_command_apply(game_match& match, match_player_id player, const match_command_header& command)
 {
 	// Route to type-specific logic.
-	switch (commandHeader.type)
+	switch (command.type)
 	{
 	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-		command_set_entity_move_target_apply(match, sequencePlayerId,
-			commandHeader.get_command_data<command_data_set_entity_move_target>());
+		command_set_entity_move_target_apply(match, player,
+			command.get_command_data<command_data_set_entity_move_target>());
 		break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
@@ -67,12 +67,12 @@ void match_command_apply_all(game_match& match, const match_tick_commands& tick_
 {
 	ui32 commandBufferPos = 0;
 
-	for (ui16 sequenceIndex = 0; sequenceIndex < commands.sequences_count; sequenceIndex++)
+	for (ui16 sequenceIndex = 0; sequenceIndex < tick_commands.sequences_count; sequenceIndex++)
 	{
-		match_player_id sequencePlayerId = commands.get_sequence_player_at(commandBufferPos);
+		match_player_id sequencePlayerId = tick_commands.get_sequence_player_at(commandBufferPos);
 		commandBufferPos += sizeof(match_player_id);
 
-		match_command_sequence& sequence = commands.get_sequence_at(commandBufferPos);
+		match_command_sequence& sequence = tick_commands.get_sequence_at(commandBufferPos);
 		commandBufferPos += sizeof(match_command_sequence);
 
 		ui32 sequenceBufferPos = 0;

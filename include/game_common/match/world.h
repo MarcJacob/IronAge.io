@@ -115,6 +115,10 @@ struct world_entity_container
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
+	// Number of settlements currently spawned. Since spawning always claims the lowest free slot, active settlements
+	// are exactly indices [0, active_count) - lets consumers stop at active_count instead of scanning to max_count.
+	ui16 active_count;
+
 	match_player_id*	owners;
 	world_location*		locations;
 

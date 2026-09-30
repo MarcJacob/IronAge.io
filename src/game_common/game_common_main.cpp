@@ -24,6 +24,7 @@ bool world_alloc_settlements(mem_arena& memory, match_world_state& world, ui32 c
 	world_entity_settlements& settlements = world.entities.settlements;
 
 	settlements.max_count = count;
+	settlements.active_count = 0;
 
 	settlements._activeFlags = memory.alloc<bool>(count);
 	if (settlements._activeFlags == nullptr) return false;
@@ -114,24 +115,26 @@ match_world_state* world_state_init(mem_arena& memory, world_dimensions size_reg
 	// - X micro entities of each type per region.
 
 	ui64 memoryStart = memory.allocated_count;
+	ui16 regionCount = size_regions.x * size_regions.y;
 
 	match_world_state* newWorld = memory.alloc<match_world_state>();
 	if (newWorld == nullptr) goto WORLD_INIT_FAIL;
 
 	newWorld->terrain.size_regions = size_regions;
 	newWorld->terrain.size_tiles = size_regions * world_terrain::REGION_SIZE;
-	ui16 regionCount = size_regions.x * size_regions.y;
 
 	newWorld->terrain.regions = memory.alloc<world_terrain::region>(regionCount);
 	if (newWorld->terrain.regions == nullptr) goto WORLD_INIT_FAIL;
 
 	// Alloc entities
-	const ui32 settlement_count = SETTLEMENTS_PER_REGION * regionCount;
-	const ui32 micro_entity_count = MICRO_ENTITIES_PER_TYPE_PER_REGION * regionCount;
+	{
+		const ui32 settlement_count = SETTLEMENTS_PER_REGION * regionCount;
+		const ui32 micro_entity_count = MICRO_ENTITIES_PER_TYPE_PER_REGION * regionCount;
 
-	if (!world_alloc_settlements(memory, *newWorld, settlement_count)) goto WORLD_INIT_FAIL;
-	if (!world_alloc_caravans(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
-	if (!world_alloc_armies(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_settlements(memory, *newWorld, settlement_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_caravans(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_armies(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
+	}
 
 	return newWorld;
 
@@ -156,6 +159,7 @@ entity_guid match_spawn_settlement(game_match& match, const world_entity_settlem
 	ASSERT(freeIndex < world.entities.settlements.max_count);
 
 	world.entities.settlements._activeFlags[freeIndex] = true;
+	world.entities.settlements.active_count++;
 
 	entity_guid newID = { 0 };
 	newID._type = ENTITY_TYPE::SETTLEMENT;

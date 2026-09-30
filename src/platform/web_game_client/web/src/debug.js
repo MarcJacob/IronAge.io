@@ -1,4 +1,5 @@
 // Textual debug panel showing the raw render state, as an alternative to reading it off the canvas.
+import * as Backend from "./backend.js";
 let panelElement = null;
 export function init_debug_panel(element) {
     panelElement = element;
@@ -14,7 +15,7 @@ export function update_debug_panel(render_state, mouse_world_loc = null) {
     ];
     for (let i = 0; i < render_state.entity_count; i++) {
         const entity = render_state.entity_states[i];
-        lines.push(`[${i}] viewport loc: (${entity.viewport_x}, ${entity.viewport_y})  target: (${entity.target_viewport_x}, ${entity.target_viewport_y})`);
+        lines.push(`[${i}] type: ${Backend.ENTITY_TYPE[entity.entity_type]}  owner: ${entity.owner}  viewport loc: (${entity.viewport_x}, ${entity.viewport_y})  size: ${entity.size_viewport}`);
     }
     panelElement.textContent = lines.join('\n');
 }

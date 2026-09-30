@@ -65,6 +65,6 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
 	}
 
 	backend.local_match = localMatch;
-	backend.player_viewport.world_size = params.world_dimensions;
+	backend.player_viewport.world_size = params.world_size_regions * world_terrain::REGION_SIZE;
 	return true;
 }

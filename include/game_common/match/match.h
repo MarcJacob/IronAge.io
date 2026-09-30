@@ -6,6 +6,7 @@
 #include "core.h"
 
 struct match_world_state;
+struct game_match_start_params;
 
 using match_player_id = ui16;
 using match_player_count = match_player_id; // Alias type for places where we need to count player.
@@ -24,7 +25,6 @@ struct game_match
 	match_world_state* world; // Observable world state associated to this match, recomputed on each tick.
 };
 
-struct game_match_start_params;
 
 // Returns the estimated maximum required memory for a match started with the given parameters.
 constexpr ui64 match_get_required_mem(game_match_start_params& params);

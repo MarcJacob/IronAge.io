@@ -3,54 +3,6 @@
 This folder contains the public-facing symbols for the Game Common logic, which mostly includes the ability to simulate game matches using input commands,
 and the network-facing Game Message structures.
 
-## Match System
-
-IronAge matches have an approach to simulation intended to work with a Lockstep mechanism: a *sequence* of *input commands* are applied over a match's world state,
-and affect it alongside the standard tick / time integration to **deterministically** output a new world state. This way, supporting networked multiplayer
-only requires broadcasting inputs from the server and for each client to send theirs as fast as possible.
-
-Matches identify players by a simple ID. It is up to the host app to match this ID with some sort of control scheme (Local player, network player, AI...) coherently.
-
-### Commands
-
-The Input Command system is based on identifiable *Command Types* each associated with a *payload size*, *payload structure* and two fundamental functions:
-- Apply, which takes in the appropriate emitting player ID and payload structure and applies it over a specified match's state.
-- Validity Check, which takes in the same parameters and estimates whether the command is valid (mostly that the parameters are coherent and that the emitting player is
-	actually allowed to do that).
-
-Outside their final applications commands usually exist in simple byte buffers along with a command count, to be parsed read command-by-command.
-
-Each input command type is structured this way:
-- Entry in the COMMAND_TYPES enumeration.
-- Payload structure (with rare cases of re-use of the same structure, although inheritance is recommended).
-- Implementation functions, some essential like Apply and Validity Check, others optional (compression / decompression ?)
-
-Then the functions must be used in the appropriate match host and match tick code (early tick function when all input sequences are processed).
-
-Guidelines:
-- They must be entirely implemented within the Game Common codebase.
-- Payload structures must have consistent padding behavior, with no padding at all preferably (for compatibility across machines).
-- Payload structures must be as small as possible (striking a good balance with parsing work).
-- Validity Check must adopt a "return false as soon as possible" mindset.
-- Apply must do its work as quickly as possible as each command is run sequentially pre-tick.
-	- Do not mix up what should be in the match's tick work and what should be in the Apply function !
-
-Later on, we may want to make the registration of commands more convenient and centralized, in the sense that we should be able to see every element of a command
-together in one place. This could be done with a macro whose role is to output a command to some static buffer any program could choose to place in their static memory where they wish.
-Then a command's *code* could be related to its index in that collection instead of its command type enumeration value (which could even be replaced with a string name).
-
-Another advantage of a more data-oriented approach like that would be that the match code could loop over all commands abstractly, such that match code wouldn't need to be touched
-to implement the effects of a command.
-
-#### Structuring for input into match tick
-
-Commands follow a structure leading to the the root "full tick commands" structure that is passed to a match for ticking:
-- Command Header + Payload[] = "Basic command" with only its type and payload.
-- Player ID + Command Count + Commands Buffer[] = "Command Sequence" linking a player to the sequence of commands they are sending.
-- Total byte size + Sequences Count + Sequences[] = "Tick Commands" putting together all sequences to run for a tick as a single memory block.
-
-Sequences or full Tick Commands structures can be built using corresponding builder structures for an easier time feeding into such structures from generalized input logic.
-
 ## Game Messages
 
 Games messages are a network-oriented protocol for communicating specifically between a client and server in the IronAge "ecosystem". They acknowledge two roles:

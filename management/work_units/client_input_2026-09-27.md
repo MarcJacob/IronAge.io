@@ -27,7 +27,10 @@ panning, by building a proper camera/viewport and input system.
   network message yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
   canvas (DOM overlay, like the debug panel).
-- [ ] Smooth rendering: currently jittery when zoomed in close - see Notes.
+- [x] Smooth rendering: jitter traced to `client_render_state`'s viewport
+  fields being rounded to whole world tiles (`i32`/`ui16`) every frame -
+  changed to `float` end to end (backend struct, `backend.ts` offsets) -
+  see Progress.
 
 ## Progress
 
@@ -86,6 +89,15 @@ panning, by building a proper camera/viewport and input system.
   (not the sequence header) as `build_game_message`'s extra size, since the
   header's already accounted for by the embedded `commands` member.
 
+- 2026-10-01: jitter root cause confirmed - `viewport.viewport_bottom_left`
+  (`i32`) and `viewport_width`/`viewport_height` (`ui16`) were truncating the
+  eased zoom/pan to whole world tiles every frame; since `scaleX`/`scaleY` in
+  `render.ts` derive from `viewport_width`/`height`, that truncation caused a
+  visible scale jump each time it crossed a tile boundary - worse at high
+  zoom, where a 1-tile step is a much bigger relative jump. Changed all three
+  fields to `float` (`game_client_backend.h`, `game_client_render.cpp`,
+  `backend.ts`'s offsets - struct grew by 4 bytes).
+
 ## Notes / Decisions
 
 - Camera/viewport ownership moves to the client backend (C++), not JS:
@@ -106,10 +118,6 @@ panning, by building a proper camera/viewport and input system.
   zoom_level changes.
 - An interpolation layer (entities moving smoothly between ticks) is also
   planned, likely riding the same frame-driven path as the camera.
-- Jitter at high zoom: unconfirmed cause yet - candidates are sub-pixel
-  rounding of viewport/entity positions before draw, and/or entities
-  needing the interpolation layer above rather than snapping tick-to-tick.
-  Needs investigation before picking a fix.
 - C++ iteration cost (rebuild/redeploy per change) for tuning camera feel
   is accepted: the client already needs a redeploy on every change today,
   so this doesn't change the loop - may revisit if the server gains the

@@ -9,11 +9,13 @@ static constexpr float VIEWPORT_ZOOM_EASE_RATE = 3.0f; // How fast zoom_level ea
 
 void game_client_input_set_target_loc(game_client& backend, int x, int y)
 {
-	auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
-	if (payload == nullptr) return; // Queue full - drop the command.
+	return;
 
-	payload->target_entity = backend.controlled_player_id;
-	payload->new_target = { (ui16)x, (ui16)y };
+	//auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+	//if (payload == nullptr) return; // Queue full - drop the command.
+
+	//payload->target_entity = backend.controlled_player_id;
+	//payload->new_target = { (ui16)x, (ui16)y };
 }
 
 void game_client_set_viewport_input(game_client& backend, vec2<float> pan_vector, float zoom_delta, vec2f zoom_target)

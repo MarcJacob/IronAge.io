@@ -64,54 +64,28 @@ export function page_to_viewport_fraction(clientX: number, clientY: number)
     };
 }
 
-function draw_entity(render_state: Backend.BackendRenderState, entity_index: number) {
-
-    const entity = render_state.entity_states[entity_index];
-    const w = 5 * scaleX;
-    const h = 5 * scaleY;
-
-    const radius = 5 * scaleX;
-
-    ctx.fillStyle = '#222';
-
-    const entityCanvasLoc = {
-        x: entity.viewport_x * scaleX,
-        y: canvas.height - entity.viewport_y * scaleY,
-    };
-
-    ctx.fillRect(entityCanvasLoc.x - w / 2, entityCanvasLoc.y  - h / 2, w, h);
-
-    ctx.strokeStyle = '#888';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(entityCanvasLoc.x - w / 2, entityCanvasLoc.y - h / 2, w, h);
-
-    const entityCanvasTargetLoc = {
-        x: entity.target_viewport_x * scaleX,
-        y: canvas.height - entity.target_viewport_y * scaleY,
-    };
-
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(entityCanvasTargetLoc.x, entityCanvasTargetLoc.y, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-}
-
 // Draws a settlement icon at the given viewport location, sized `scale` world tiles across. No-op until the icon
-// has finished loading.
-export function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number)
+// has finished loading. owned_by_local_player tints the icon green.
+export function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
 {
     if (!settlementImageLoaded) return;
 
     const w = scale * scaleX;
     const h = scale * scaleY;
 
-    const canvasLoc = {
-        x: viewport_x * scaleX,
-        y: canvas.height - viewport_y * scaleY,
-    };
+    const drawX = viewport_x * scaleX - w / 2;
+    const drawY = canvas.height - viewport_y * scaleY - h / 2;
 
-    ctx.drawImage(settlementImage, canvasLoc.x - w / 2, canvasLoc.y - h / 2, w, h);
+    ctx.drawImage(settlementImage, drawX, drawY, w, h);
+
+    if (owned_by_local_player) {
+        // Tint the icon's own drawn pixels only (source-atop only paints where the image already set alpha).
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-atop';
+        ctx.fillStyle = 'rgba(40, 200, 90, 0.45)';
+        ctx.fillRect(drawX, drawY, w, h);
+        ctx.restore();
+    }
 }
 
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
@@ -142,6 +116,11 @@ export function draw(render_state: Backend.BackendRenderState)
 
     for (let i = 0; i < render_state.entity_count; i++)
     {
-        draw_entity(render_state, i);
+        const entity = render_state.entity_states[i];
+
+        if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
+            draw_entity_settlement(entity.viewport_x, entity.viewport_y, entity.size_viewport,
+                entity.owner === render_state.controlled_player_id);
+        }
     }
 }

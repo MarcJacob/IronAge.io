@@ -33,9 +33,11 @@ struct client_render_state
 	// Used to have an idea of the size of world elements compared to viewport.
 	struct viewport_state
 	{
-		vec2<i32> viewport_bottom_left; // World-space coordinates of the viewport.
-		ui16 viewport_width; // Width of the viewport in world tiles.
-		ui16 viewport_height; // Height of the viewport in world tiles.
+		// Kept as floats (not rounded to whole tiles): rounding here caused visible per-frame jitter in
+		// scaleX/scaleY (canvas pixels per tile) on the frontend as the eased zoom crossed tile boundaries.
+		vec2f viewport_bottom_left; // World-space coordinates of the viewport.
+		float viewport_width; // Width of the viewport in world tiles.
+		float viewport_height; // Height of the viewport in world tiles.
 	} viewport;
 
 	match_player_id controlled_player_id; // ID of the player this client is in control of.

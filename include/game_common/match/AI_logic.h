@@ -12,7 +12,6 @@
 struct AI_player_state
 {
 	match_player_id controlled_player;
-	entity_guid controlled_entity;
 };
 
 bool AI_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder);

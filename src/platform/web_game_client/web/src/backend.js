@@ -21,6 +21,15 @@ export var INPUT_EVENT_TYPE;
     INPUT_EVENT_TYPE[INPUT_EVENT_TYPE["SET_TARGET_LOC"] = 1] = "SET_TARGET_LOC";
 })(INPUT_EVENT_TYPE || (INPUT_EVENT_TYPE = {}));
 ;
+// Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
+export var ENTITY_TYPE;
+(function (ENTITY_TYPE) {
+    ENTITY_TYPE[ENTITY_TYPE["INVALID"] = 0] = "INVALID";
+    ENTITY_TYPE[ENTITY_TYPE["SETTLEMENT"] = 1] = "SETTLEMENT";
+    ENTITY_TYPE[ENTITY_TYPE["CARAVAN"] = 2] = "CARAVAN";
+    ENTITY_TYPE[ENTITY_TYPE["ARMY"] = 3] = "ARMY";
+})(ENTITY_TYPE || (ENTITY_TYPE = {}));
+;
 let CLIENT_BACKEND;
 // Loads and instantiates the client backend. Rejects if loading fails.
 export async function load(wasm_url) {
@@ -95,10 +104,11 @@ export var ClientInput;
     ClientInput.commit_input_event = commit_input_event;
 })(ClientInput || (ClientInput = {}));
 export class BackendRenderEntity {
+    entity_type = ENTITY_TYPE.INVALID;
+    owner = 0;
     viewport_x = 0;
     viewport_y = 0;
-    target_viewport_x = 0;
-    target_viewport_y = 0;
+    size_viewport = 0;
 }
 export class BackendRenderState {
     viewport_bottom_left_x = 0;
@@ -113,30 +123,31 @@ export class BackendRenderState {
 // Reads the latest render state of the local match. Call once per animation frame, after tick().
 // Mirrors client_render_state (include/game_client/game_client_backend.h) by hand. Keep both in sync.
 export function read_render_state() {
-    // Layout of client_render_state: viewport (bottom_left x/y i32, width ui16, height ui16), controlled_player_id
+    // Layout of client_render_state: viewport (bottom_left x/y f32, width f32, height f32), controlled_player_id
     // (ui16), world_size (ui16 width/height), entity_count (ui16), entity_states pointer (ui32). Views are
     // re-created on every read on purpose, as they become invalid if wasm memory ever grows.
     const renderStateOffset = CLIENT_BACKEND.client_get_render_state();
     const renderStateDataView = new DataView(CLIENT_BACKEND.memory.buffer, renderStateOffset);
     let renderState = new BackendRenderState();
-    renderState.viewport_bottom_left_x = renderStateDataView.getInt32(0, true);
-    renderState.viewport_bottom_left_y = renderStateDataView.getInt32(4, true);
-    renderState.viewport_width = renderStateDataView.getUint16(8, true);
-    renderState.viewport_height = renderStateDataView.getUint16(10, true);
-    renderState.controlled_player_id = renderStateDataView.getUint16(12, true);
-    renderState.world_size.width = renderStateDataView.getUint16(14, true);
-    renderState.world_size.height = renderStateDataView.getUint16(16, true);
-    renderState.entity_count = renderStateDataView.getUint16(18, true);
-    const entityStatesOffset = renderStateDataView.getUint32(20, true);
+    renderState.viewport_bottom_left_x = renderStateDataView.getFloat32(0, true);
+    renderState.viewport_bottom_left_y = renderStateDataView.getFloat32(4, true);
+    renderState.viewport_width = renderStateDataView.getFloat32(8, true);
+    renderState.viewport_height = renderStateDataView.getFloat32(12, true);
+    renderState.controlled_player_id = renderStateDataView.getUint16(16, true);
+    renderState.world_size.width = renderStateDataView.getUint16(18, true);
+    renderState.world_size.height = renderStateDataView.getUint16(20, true);
+    renderState.entity_count = renderStateDataView.getUint16(22, true);
+    const entityStatesOffset = renderStateDataView.getUint32(24, true);
     const entityStatesDataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
-    // Layout of render_entity: four f32 (viewport X, Y, target viewport X, Y).
-    const ENTITY_MEM_SIZE = 16;
+    // Layout of render_entity: entity_type (ui8), owner (ui16), viewport_location (f32 x/y), size_viewport (ui8).
+    const ENTITY_MEM_SIZE = 12;
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push({
-            viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i, true),
-            viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 4, true),
-            target_viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 8, true),
-            target_viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 12, true),
+            entity_type: entityStatesDataView.getUint8(ENTITY_MEM_SIZE * i),
+            owner: entityStatesDataView.getUint16(ENTITY_MEM_SIZE * i + 1, true),
+            viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 3, true),
+            viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 7, true),
+            size_viewport: entityStatesDataView.getUint8(ENTITY_MEM_SIZE * i + 11),
         });
     }
     return renderState;

@@ -33,8 +33,8 @@ struct game_match_start_params
 		ASSERT(sizeof(world_entity_settlements::single) * index < extra_data_size);
 		ASSERT(index < start_settlement_count);
 
-		world_entity_settlements::single* settlement = (world_entity_settlements::single*)_extra_data;
-		return settlement;
+		world_entity_settlements::single* settlements = (world_entity_settlements::single*)_extra_data;
+		return settlements[index];
 	}
 };
 

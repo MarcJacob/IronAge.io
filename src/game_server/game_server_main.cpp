@@ -131,8 +131,6 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 			if (AI_player_state* newAI = AIPlayersMem.alloc<AI_player_state>())
 			{
 				newAI->controlled_player = playerID;
-				newAI->controlled_entity = playerID;
-
 				slot.match.ai_player_count++;
 			}
 			continue;

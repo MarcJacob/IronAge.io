@@ -4,6 +4,7 @@
 #define GAME_MESSAGES_INCLUDED
 
 #include "match/commands.h" // For match_tick_commands, embedded by value in the tick message payloads below.
+#include "match/start_params.h"
 
 // Enumaration of supported game message types.
 // Each type features a high-level description of its functionality. More detail can be found atop the corresponding payload structure.

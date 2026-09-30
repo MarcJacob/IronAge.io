@@ -21,7 +21,7 @@ export function update_debug_panel(render_state: Backend.BackendRenderState, mou
     for (let i = 0; i < render_state.entity_count; i++)
     {
         const entity:Backend.BackendRenderEntity = render_state.entity_states[i];
-        lines.push(`[${i}] viewport loc: (${entity.viewport_x}, ${entity.viewport_y})  target: (${entity.target_viewport_x}, ${entity.target_viewport_y})`);
+        lines.push(`[${i}] type: ${Backend.ENTITY_TYPE[entity.entity_type]}  owner: ${entity.owner}  viewport loc: (${entity.viewport_x}, ${entity.viewport_y})  size: ${entity.size_viewport}`);
     }
 
     panelElement.textContent = lines.join('\n');
