@@ -65,6 +65,12 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	out_match.world_state.entity_states = out_match.memory->alloc<match_world_state::entity>(params.player_count);
 	ASSERT(out_match.world_state.entity_states != nullptr);
 
+	// Apply entity start positions.
+	for (ui8 startEntityIndex = 0; startEntityIndex < params.player_count; startEntityIndex++)
+	{
+		out_match.world_state.entity_states[startEntityIndex].location = params.get_player_start_pos(startEntityIndex);
+	}
+
 	return true;
 }
 
@@ -204,7 +210,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 
 	for (match_player_id player = 0; player < params.player_count; player++)
 	{
-		params.get_player_start_pos(player) = { (ui16)(player / 3 * 100), (ui16)(player % 3 * 100) };
+		params.get_player_start_pos(player) = ia_rand_vec({0, 0}, params.world_dimensions);
 	}
 
 	params.extra_data_size = extraDataSize;

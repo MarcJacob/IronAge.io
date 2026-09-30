@@ -18,18 +18,11 @@ panning, by building a proper camera/viewport and input system.
   struct per event, `game_client_process_input_event(backend, code,
   payload_bytes)` in the public header - see Notes for the buffer/ownership
   split.
-- [ ] Command queue: adapt entity target-location input (currently the
-  `input.pending`/`pending_target` single-slot temp state, see
-  `game_client_input_state`) to push onto a proper match command queue on
-  the client backend, instead of a lone pending flag; `game_client_process_input_event`'s
-  `SET_TARGET_LOC` case pushes a command there instead of setting
-  `input.pending` directly. `game_client_output_client_tick_message` then
-  reads/drains that queue to build the `CLIENT_TICK` command sequence,
-  instead of building a single hardcoded `SET_ENTITY_MOVE_TARGET` command
-  from `input.pending_target`. General shape per-event going forward:
-  receive code + payload -> interpret/validate -> consume directly (like
-  viewport input) and/or push a match command onto the queue for the next
-  `CLIENT_TICK`.
+- [x] Command queue: `game_client_input_state` holds a `command_queue` arena +
+  `command_sequence_builder`; `game_client_input_set_target_loc` pushes a
+  `SET_ENTITY_MOVE_TARGET` command onto it, `game_client_output_client_tick_message`
+  drains the whole queue into the `CLIENT_TICK` message and resets it - see
+  Progress for the `match_command_sequence`/wire-format work this rode on.
 - [ ] Selection state: client-local "currently selected entity", no new
   network message yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
@@ -68,6 +61,30 @@ panning, by building a proper camera/viewport and input system.
   backend's bool return) if the code wasn't recognized - signals TS/C++
   drift. Old `client_apply_viewport_input` / `client_input_set_target_loc`
   wasm exports collapsed into this single path.
+- Client input command queue: `match_command_sequence` (`game_commands.h`)
+  had its `player_id` moved out into `match_tick_commands`'s own sequence
+  entries (`<match_player_id><match_command_sequence>`), making
+  `command_sequence_builder` player-agnostic and reusable as-is for the
+  client's local queue; `game_client_input_set_target_loc` now pushes onto
+  it via `command_queue_builder.push_command<...>()`, and
+  `game_client_output_client_tick_message` drains the whole queue into the
+  `CLIENT_TICK` message in one `memcpy`, then clears + re-inits the builder.
+  `game_message_payload_client_tick` also now embeds `match_command_sequence
+  commands` directly instead of its own separate
+  `command_header_count`/`_command_headers_buffer` fields, reusing the same
+  struct end to end.
+- Bugs hit and fixed along the way: a `sizeof(pointer)` vs
+  `sizeof(match_command_header)` typo in `command_sequence_builder::push_command`'s
+  debug-only size bookkeeping; `match_tick_commands_builder::push_new_sequence`
+  allocating its `match_player_id` at natural (2-byte) alignment instead of
+  packed (1-byte), which could insert an invisible pad byte before a
+  sequence and desync every reader after the first; and the CLIENT_TICK
+  output copy first missing the sequence's own fixed part entirely (so
+  `command_count` read back as garbage/zero - symptom: target location
+  always landing at 0,0), then over/under-sizing the message once fixed,
+  now copying the full sequence while only counting the commands buffer
+  (not the sequence header) as `build_game_message`'s extra size, since the
+  header's already accounted for by the embedded `commands` member.
 
 ## Notes / Decisions
 

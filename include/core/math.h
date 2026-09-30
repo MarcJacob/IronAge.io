@@ -80,6 +80,12 @@ template<typename Numeric>
 struct vec2
 {
 	Numeric x, y;
+
+	vec2() : x(0), y(0) {}
+	vec2(Numeric in_x, Numeric in_y) : x(in_x), y(in_y) {}
+
+	template<typename OtherNumeric>
+	vec2(const vec2<OtherNumeric>& other) : x(other.x), y(other.y) {}
 };
 
 using vec2f = vec2<float>;
@@ -114,6 +120,17 @@ float ia_rand_range(float min, float max)
 	return min;
 }
 #endif
+
+template<typename VecType>
+vec2<VecType> ia_rand_vec(vec2<VecType> min, vec2<VecType> max)
+{
+	vec2<VecType> rand = {
+		(VecType)ia_rand_range(0.f, (float)max.x),
+		(VecType)ia_rand_range(0.f, (float)max.y),
+	};
+
+	return rand;
+}
 
 static inline void endian_reverse_ui16(ui16* val)
 {

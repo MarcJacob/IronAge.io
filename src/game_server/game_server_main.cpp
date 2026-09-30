@@ -310,7 +310,7 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotInd
 		for (ui16 aiPlayerIndex = 0; aiPlayerIndex < slot.match.ai_player_count; aiPlayerIndex++)
 		{
 			AI_player_state& aiState = slot.match.ai_players[aiPlayerIndex];
-			AI_player_output_commands(*slot.match.match_ptr, aiState, tickCommandsBuilder);
+			AI_output_commands(*slot.match.match_ptr, aiState, tickCommandsBuilder);
 		}
 
 		match_tick_commands& tickCommands = *tickCommandsBuilder._tick_commands_start;

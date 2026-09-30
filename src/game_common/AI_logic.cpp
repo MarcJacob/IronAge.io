@@ -7,7 +7,7 @@
 // Pushes a new command sequence for the AI's controlled player containing their desired input for the next match tick.
 // Returns whether the AI could push all its commands successfully.
 // NOTE: The commands are NOT checked for validity !
-bool AI_player_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder)
+bool AI_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder)
 {
 	// Drive the controlled entity to a target location. Once it reaches that location, change it.
 
@@ -18,13 +18,15 @@ bool AI_player_output_commands(const game_match& match, AI_player_state& ai_stat
 	const match_world_state::entity& controlledEntity = world.entity_states[ai_state.controlled_entity];
 
 	float squaredDistToTarget = vec2_dist_squared(controlledEntity.location, controlledEntity.target_location);
-	if (squaredDistToTarget < 5.f)
+	if (match.tick == 0 || squaredDistToTarget < 5.f)
 	{
 		// Pick new spot at random.
-		world_location newTarget = {
-			(ui16)ia_rand_range(0.f, match.start_params->world_dimensions.x),
-			(ui16)ia_rand_range(0.f, match.start_params->world_dimensions.y),
-		};
+		world_location newTarget = ia_rand_vec(
+			vec2f{ 0, 0 }, 
+			vec2f {
+				(float)match.start_params->world_dimensions.x,
+				(float)match.start_params->world_dimensions.y
+			});
 
 		// Emit command.
 		if (!commands_builder.push_new_sequence(ai_state.controlled_player)) return false;

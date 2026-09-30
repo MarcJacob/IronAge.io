@@ -15,6 +15,6 @@ struct AI_player_state
 	entity_id controlled_entity;
 };
 
-bool AI_player_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder);
+bool AI_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder);
 
 #endif // PLAYER_AI_INCLUDED
