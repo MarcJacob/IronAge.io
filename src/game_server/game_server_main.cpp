@@ -300,12 +300,7 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotInd
 				const auto& payload = msgHeader->get_payload_ref<game_message_payload_client_tick>();
 				if (slot.match.match_ptr->tick - payload.emit_tick < slot.match_params->tick_rate) // Don't take command into account if it was emitted on too old a tick.
 				{
-					// Create new sequence for this player then push the received commands.
-					tickCommandsBuilder.push_sequence(playerID);
-
-					// Push commands received straight from the payload. Buffers size is the payload size minus the payload structure itself.
-					ui16 commandsBufferSize = msgHeader->payloadSize - sizeof(payload);
-					tickCommandsBuilder.push_commands_buffer(payload._command_headers_buffer, commandsBufferSize, payload.command_header_count);
+					tickCommandsBuilder.push_validated_sequence(playerID, *slot.match.match_ptr, payload.commands);
 				}
 			}
 			playerClient->game_client_consume_message();

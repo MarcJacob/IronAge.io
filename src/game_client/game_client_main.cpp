@@ -26,13 +26,18 @@ game_client* game_client_init(mem_arena& backend_memory)
 
 	backend->memory = &backend_memory;
 
-	// Sub-allocate the match / render arenas once. Match (re)starts and render rebuilds reuse this same backing
-	// memory via clear(), rather than sub-allocating again each time.
+	// Sub-allocate the match / render / input queue arenas once. Match (re)starts, render rebuilds, and input queue
+	// drains all reuse this same backing memory via clear(), rather than sub-allocating again each time.
 	static constexpr ui64 LOCAL_MATCH_MEM_SIZE = MiB(64);
 	static constexpr ui64 RENDER_MEM_SIZE = KiB(64);
+	static constexpr ui64 COMMAND_QUEUE_MEM_SIZE = KiB(1);
 
 	backend->local_match_mem = mem_arena_create_sub(*backend->memory, LOCAL_MATCH_MEM_SIZE);
 	backend->render_memory = mem_arena_create_sub(*backend->memory, RENDER_MEM_SIZE);
+
+	backend->input.command_queue = mem_arena_create_sub(*backend->memory, COMMAND_QUEUE_MEM_SIZE);
+	backend->input.command_queue_builder.target_mem = &backend->input.command_queue;
+	ASSERT(backend->input.command_queue_builder.init());
 
 	return backend;
 }

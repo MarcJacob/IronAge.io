@@ -8,16 +8,17 @@
 #include "core.h"
 #include "game_common/game_match.h"
 #include "game_common/game_messages.h"
+#include "game_common/game_commands.h"
 
 struct game_client;
 
 // BEGIN CLIENT INPUT
 
 // Sets current viewport control input state.
-void client_backend_set_viewport_input(game_client& backend, vec2<float> pan_vector, float zoom_delta, vec2f zoom_target);
+void game_client_set_viewport_input(game_client& backend, vec2<float> pan_vector, float zoom_delta, vec2f zoom_target);
 
-// Temp primitive entity control input.
-void client_backend_input_set_target_loc(game_client& backend, int x, int y);
+// Queues a command to set the controlled player's entity target location.
+void game_client_input_set_target_loc(game_client& backend, int x, int y);
 
 // Applies current viewport input state onto the render viewport.
 void game_client_apply_viewport_input(game_client& backend, float delta_time);
@@ -26,7 +27,6 @@ void game_client_apply_viewport_input(game_client& backend, float delta_time);
 // away to the server on the next opportunity.
 struct game_client_input_state
 {
-	//mem_arena command_queue; // Contains a sequence of match input commands in the format <Header><Payload>.
 	struct viewport
 	{
 		vec2f movement_vec;
@@ -34,9 +34,11 @@ struct game_client_input_state
 		vec2f zoom_target; // Normalized viewport-space coordinates for where to center (de)zooming.
 	} viewport_control;
 
-	// TEMP
-	bool pending;
-	world_location pending_target;
+	// Queue of match commands built by input events (e.g. game_client_input_set_target_loc), drained into the next
+	// CLIENT_TICK message by game_client_output_client_tick_message. command_queue_builder wraps command_queue and
+	// always has a sequence ready to push commands into - reset (re-init'd) right after each drain.
+	mem_arena command_queue;
+	command_sequence_builder command_queue_builder;
 };
 
 // END CLIENT INPUT

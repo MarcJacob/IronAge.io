@@ -6,6 +6,7 @@
 
 // Pushes a new command sequence for the AI's controlled player containing their desired input for the next match tick.
 // Returns whether the AI could push all its commands successfully.
+// NOTE: The commands are NOT checked for validity !
 bool AI_player_output_commands(const game_match& match, AI_player_state& ai_state, match_tick_commands_builder& commands_builder)
 {
 	// Drive the controlled entity to a target location. Once it reaches that location, change it.
@@ -26,7 +27,7 @@ bool AI_player_output_commands(const game_match& match, AI_player_state& ai_stat
 		};
 
 		// Emit command.
-		if (!commands_builder.push_sequence(ai_state.controlled_player)) return false;
+		if (!commands_builder.push_new_sequence(ai_state.controlled_player)) return false;
 
 		auto set_target_payload = commands_builder.push_command<command_payload_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
 		if (set_target_payload == nullptr) return false;

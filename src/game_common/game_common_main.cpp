@@ -12,7 +12,7 @@
 // BEGIN COMMAND FUNCTIONS
 
 // Example of command sanity check function.
-bool match_command_sanity_check_set_entity_move_target(game_match& match, match_player_id player, command_payload_set_entity_move_target& command)
+bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_payload_set_entity_move_target& command)
 {
 	// Ownership: Entity ID == Player ID.
 	if (player != command.target_entity) return false; // Can only be controlled by owning player.
@@ -22,7 +22,7 @@ bool match_command_sanity_check_set_entity_move_target(game_match& match, match_
 }
 
 // Example of a command apply function.
-void match_command_apply_set_entity_move_target(game_match& match, match_player_id player, command_payload_set_entity_move_target& command)
+void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_payload_set_entity_move_target& command)
 {
 	// Sets target entity's location.
 
@@ -68,6 +68,60 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	return true;
 }
 
+// Checks that an input command would be valid to apply to the match over its next tick.
+bool match_command_validity_check(game_match& match, match_player_id player, const match_command_header& command)
+{
+	switch (command.type)
+	{
+		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
+			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_payload_set_entity_move_target>());
+		default:
+			ASSERT_MSG(0, "No validity check logic associated with command type.");
+			return false;
+	}
+}
+
+bool match_command_sequence_output_validated(const game_match& target_match, const match_command_sequence& unvalidated,
+	match_player_id player_id, command_sequence_builder& output_builder)
+{
+	ui32 sequenceBufferPos = 0;
+	for (ui16 commandIndex = 0; commandIndex < unvalidated.command_count; commandIndex++)
+	{
+		const match_command_header& commandHeader = unvalidated.get_sequence_at(sequenceBufferPos);
+		sequenceBufferPos += sizeof(match_command_header);
+
+		// Route to type-specific logic.
+		bool isValid = false;
+		switch (commandHeader.type)
+		{
+		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
+			isValid = command_set_entity_move_target_validity_check(target_match, player_id,
+				commandHeader.get_command_data<command_payload_set_entity_move_target>());
+			break;
+		default:
+			// Only assert if the command type IS valid but not handled.
+			if ((i8)commandHeader.type >= 0 && (i8)commandHeader.type < (i8)MATCH_COMMAND_TYPE::TYPE_COUNT)
+			{
+				ASSERT_MSG(0, "No validity check logic associated with command type %d.", commandHeader.type);
+			}
+
+			// From there the whole unvalidated sequence becomes impossible to keep reading safely.
+			// Stop process now and signal caller that the sequence couldn't be fully validated.
+			return false;
+		}
+		sequenceBufferPos += get_command_data_size(commandHeader.type);
+
+		// If command is valid, add it to the output sequence. Otherwise discard it.
+		if (isValid)
+		{
+			void* validatedPayload = output_builder.push_command(commandHeader.type);
+			ia_memcpy(validatedPayload, commandHeader.command_data, get_command_data_size(commandHeader.type));
+		}
+	}
+
+	return true;
+}
+
 // Advances time in a match's world simulation. Requires the aggregated inputs / commands to apply into the tick.
 void match_tick(game_match& match, const match_tick_commands& commands)
 {
@@ -80,6 +134,9 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 
 	for (ui16 sequenceIndex = 0; sequenceIndex < commands.sequences_count; sequenceIndex++)
 	{
+		match_player_id sequencePlayerId = commands.get_sequence_player_at(commandBufferPos);
+		commandBufferPos += sizeof(match_player_id);
+
 		match_command_sequence& sequence = commands.get_sequence_at(commandBufferPos);
 		commandBufferPos += sizeof(match_command_sequence);
 
@@ -93,14 +150,14 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 			switch (commandHeader.type)
 			{
 			case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-				match_command_apply_set_entity_move_target(match, sequence.player_id, 
-					commandHeader.get_command_payload<command_payload_set_entity_move_target>());
+				command_set_entity_move_target_apply(match, sequencePlayerId,
+					commandHeader.get_command_data<command_payload_set_entity_move_target>());
 				break;
 			default:
-				ASSERT_MSG(0, "No logic associated with command type.");
+				ASSERT_MSG(0, "No apply logic associated with command type.");
 			}
 
-			sequenceBufferPos += get_command_size(commandHeader.type);
+			sequenceBufferPos += get_command_data_size(commandHeader.type);
 		}
 		commandBufferPos += sequenceBufferPos;
 	}
@@ -168,7 +225,7 @@ match_tick_commands* build_test_scenario_commands(const game_match& match)
 		for (match_player_id playerID = 0; playerID < match.start_params->player_count; playerID++)
 		{
 			// Push new sequence for this player.
-			if (!commandsBuilder.push_sequence(playerID)) return nullptr;
+			if (!commandsBuilder.push_new_sequence(playerID)) return nullptr;
 
 			// Output a single command, to move the entity to a target location that depends on the player's ID.
 			world_location targetLoc = {

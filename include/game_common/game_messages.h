@@ -98,16 +98,7 @@ struct game_message_payload_client_tick
 {
 	ui32 emit_tick; // Which tick the client's game state was at when the message was emitted.
 
-	// Buffer of commands immediately following this structure.
-	// Directly contains command headers with their payloads.
-	ui8 command_header_count;
-	ui8 _command_headers_buffer[];
-
-	// Returns a typed reference of a match command sequence start struct at the provided byte offset.
-	inline match_command_header& get_command_at(ui16 byte_offset) const
-	{
-		return *(match_command_header*)&_command_headers_buffer[byte_offset];
-	}
+	match_command_sequence commands; // Sequence of commands associated to the emitting player they wish to apply over the next match tick.
 };
 
 // END MATCH COMMAND MESSAGES

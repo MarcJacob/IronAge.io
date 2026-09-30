@@ -27,37 +27,37 @@ ui32 game_client_get_net_msg_output_size(game_client& backend)
 	return backend.net_output_msg_size;
 }
 
-// Fills in the provided buffer with the CLIENT_TICK message the client should send, if any.
+// Fills in the provided buffer with the CLIENT_TICK message the client should send, if any, draining the input
+// command queue into it.
 void game_client_output_client_tick_message(game_client& backend)
 {
 	backend.net_output_msg_size = 0;
 
-	if (!backend.input.pending) return;
+	match_command_sequence& queuedSequence = *backend.input.command_queue_builder._sequence_start;
+	if (queuedSequence.command_count == 0) return;
+
+	// Total bytes to copy: the sequence's fixed part plus its raw <header><payload>... commands buffer.
+	ui32 queuedSequenceBytes = (ui32)backend.input.command_queue.allocated_count;
+
+	// Extra bytes to allocate beyond game_message_payload_client_tick's own size: just the commands buffer, since
+	// the sequence's fixed part is already accounted for by the embedded commands member.
+	ui32 queuedCommandBytes = queuedSequenceBytes - sizeof(match_command_sequence);
 
 	mem_arena outgoing_mem = mem_arena_create(backend.net_output_buffer, game_client::NET_OUTPUT_BUFFER_SIZE);
 
-	game_message_header* header = build_game_message(GAME_MESSAGE_TYPE::CLIENT_TICK, outgoing_mem,
-		sizeof(match_command_header) + sizeof(command_payload_set_entity_move_target));
+	game_message_header* header = build_game_message(GAME_MESSAGE_TYPE::CLIENT_TICK, outgoing_mem, queuedCommandBytes);
 	ASSERT(header != nullptr);
 
 	auto& payload = header->get_payload_ref<game_message_payload_client_tick>();
 	payload.emit_tick = backend.local_match->tick;
-	payload.command_header_count = 1;
 
-	match_command_header* commandHeader = (match_command_header*)payload._command_headers_buffer;
-	*commandHeader = {};
-	commandHeader->type = MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET;
-#ifdef MATCH_COMMAND_DEBUG
-	commandHeader->_data_size = sizeof(command_payload_set_entity_move_target);
-#endif
-
-	command_payload_set_entity_move_target& movePayload = commandHeader->get_command_payload<command_payload_set_entity_move_target>();
-	movePayload.target_entity = backend.controlled_player_id;
-	movePayload.new_target = { backend.input.pending_target.x, backend.input.pending_target.y };
+	ia_memcpy(&payload.commands, &queuedSequence, queuedSequenceBytes);
 
 	backend.net_output_msg_size = sizeof(game_message_header) + header->payloadSize;
 
-	backend.input.pending = false;
+	// Reset the queue: clear the arena and re-init the builder so the next input event has a fresh sequence ready.
+	backend.input.command_queue.clear();
+	ASSERT(backend.input.command_queue_builder.init());
 }
 
 GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 message_size)

@@ -37,7 +37,7 @@ struct command_payload_set_entity_move_target
 struct match_command_header
 {
 #ifdef MATCH_COMMAND_DEBUG
-	// Byte size of the command data.
+	// Byte size of the command data to use for debugging purposes.
 	ui8 _data_size;
 #endif
 
@@ -48,7 +48,7 @@ struct match_command_header
 
 	// Returns a typed reference of a command payload struct on the memory immediately following this structure.
 	template<typename CommandPayloadType>
-	inline CommandPayloadType& get_command_payload() const
+	inline CommandPayloadType& get_command_data() const
 	{
 #ifdef MATCH_COMMAND_DEBUG
 		ASSERT(_data_size == sizeof(CommandPayloadType));
@@ -57,14 +57,12 @@ struct match_command_header
 	}
 };
 
-// Defines a sequence of commands associated to a player ID.
+// Defines a sequence of commands.
 struct match_command_sequence
 {
 #ifdef MATCH_COMMAND_DEBUG
 	ui32 _total_size; // Total byte size of the commands buffer.
 #endif
-
-	match_player_id player_id; // Player ID wishing to apply the sequence of commands.
 
 	ui8 command_count;
 	ui8 _commands_buffer[]; // Buffer of match commands started by their header.
@@ -80,6 +78,7 @@ struct match_command_sequence
 };
 
 // Full buffer of tick commands exclusively applied over a match tick.
+// Each entry in _sequences_buffer is a match_player_id followed by a match_command_sequence.
 struct match_tick_commands
 {
 	// Total byte size of the sequences buffer.
@@ -88,7 +87,14 @@ struct match_tick_commands
 	match_player_count sequences_count;
 	ui8 _sequences_buffer[];
 
-	// Returns a typed reference of a match command sequence start struct at the provided byte offset.
+	// Returns the player ID of the sequence entry at the provided byte offset.
+	inline match_player_id get_sequence_player_at(ui16 byte_offset) const
+	{
+		ASSERT(byte_offset < total_size);
+		return *(match_player_id*)&_sequences_buffer[byte_offset];
+	}
+
+	// Returns a typed reference of the match command sequence at the provided byte offset.
 	inline match_command_sequence& get_sequence_at(ui16 byte_offset) const
 	{
 		ASSERT(byte_offset < total_size);
@@ -99,7 +105,7 @@ struct match_tick_commands
 #pragma pack(pop)
 
 // Mapping between command type and size.
-static inline ui8 get_command_size(MATCH_COMMAND_TYPE type)
+static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 {
 	switch (type)
 	{
@@ -119,7 +125,7 @@ static inline void TEST_COMMAND_SIZES_CHECK()
 	ui16 sum = 0;
 	for (ui8 commandTypeIndex = 0; commandTypeIndex < (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT; commandTypeIndex++)
 	{
-		sum += get_command_size((MATCH_COMMAND_TYPE)commandTypeIndex);
+		sum += get_command_data_size((MATCH_COMMAND_TYPE)commandTypeIndex);
 	}
 }
 #endif
@@ -130,9 +136,11 @@ struct command_sequence_builder
 	mem_arena* target_mem;
 	match_command_sequence* _sequence_start; // Read only, use init() to create.
 
+	ui32 total_size; // Total byte size of the sequence.
+
 	// Initializes the builder by allocating the sequence start structure.
 	// The target memory arena must be assigned !
-	inline bool init(match_player_id player_id)
+	inline bool init()
 	{
 		ASSERT(target_mem != nullptr);
 
@@ -141,7 +149,8 @@ struct command_sequence_builder
 
 		*_sequence_start = {};
 
-		_sequence_start->player_id = player_id;
+		total_size = sizeof(match_command_sequence);
+
 		return true;
 	}
 
@@ -163,7 +172,40 @@ struct command_sequence_builder
 		_sequence_start->_total_size += buff_size;
 #endif
 
+		total_size += buff_size;
+
 		return true;
+	}
+
+	// Attempts to allocate a new command. Returns the pointer to payload. 
+	// The header is automatically allocated in preceding memory with the correct command type value.
+	// If allocation fails, will return nullptr. In this case, abort the whole building process or just set the arena back to its previous size.
+	inline void* push_command(MATCH_COMMAND_TYPE command_type)
+	{
+		ASSERT(target_mem != nullptr);
+		ASSERT(_sequence_start != nullptr);
+
+		ui8 payloadSize = get_command_data_size(command_type);
+
+		match_command_header* newCommandHeader = (match_command_header*)target_mem->alloc(sizeof(match_command_header) + payloadSize, 1);
+		if (newCommandHeader == nullptr) return nullptr;
+
+		newCommandHeader->type = command_type;
+		
+#ifdef MATCH_COMMAND_DEBUG
+		newCommandHeader->_data_size = payloadSize;
+#endif
+
+		_sequence_start->command_count++;
+
+#ifdef MATCH_COMMAND_DEBUG
+		_sequence_start->_total_size += sizeof(match_command_header) + newCommandHeader->_data_size;
+#endif
+
+		total_size += sizeof(match_command_header) + get_command_data_size(newCommandHeader->type);
+
+		return (void*)newCommandHeader->command_data;
+
 	}
 
 	// Attempts to allocate a new command. Returns the payload for parameterization. 
@@ -171,35 +213,26 @@ struct command_sequence_builder
 	// If allocation fails, will return nullptr. In this case, abort the whole building process or just set the arena back to its previous size.
 	template<typename PayloadType>
 	inline PayloadType* push_command(MATCH_COMMAND_TYPE command_type)
-	{
+	{	
 		ASSERT(target_mem != nullptr);
 		ASSERT(_sequence_start != nullptr);
-		ASSERT(get_command_size(command_type) == sizeof(PayloadType));
+		ASSERT(get_command_data_size(command_type) == sizeof(PayloadType));
 
-		match_command_header* newCommandHeader = (match_command_header*)target_mem->alloc(sizeof(match_command_header) + sizeof(PayloadType), 1);
-		if (newCommandHeader == nullptr) return nullptr;
-
-		newCommandHeader->type = command_type;
-		
-#ifdef MATCH_COMMAND_DEBUG
-		newCommandHeader->_data_size = sizeof(PayloadType);
-#endif
-
-		_sequence_start->command_count++;
-
-#ifdef MATCH_COMMAND_DEBUG
-		_sequence_start->_total_size += sizeof(newCommandHeader) + newCommandHeader->_data_size;
-#endif
-
-		return (PayloadType*)newCommandHeader->command_data;
+		return (PayloadType*)push_command(command_type);
 	}
 };
+
+// Outputs a clone of the passed unvalidated command sequence structure into the given builder, with only valid commands for the specified target match.
+// Returns whether the unvalidated sequence could be fully validated (IE no corrupted / "fatally invalid" command was present to prevent reading the whole sequence).
+bool match_command_sequence_output_validated(const game_match& target_match, const match_command_sequence& unvalidated,
+	match_player_id player_id, command_sequence_builder& output_builder);
 
 // Convenience structure for building a set of tick command sequences to apply to a match inside of a memory arena.
 // An example of how to use it can be found in the match test code.
 struct match_tick_commands_builder
 {
 	mem_arena* target_mem;
+
 	match_tick_commands* _tick_commands_start;
 
 	command_sequence_builder _sequence_builder; // Current sequence builder used to push commands. Initialized / Replaced when calling push_sequence.
@@ -218,27 +251,42 @@ struct match_tick_commands_builder
 		return true;
 	}
 
-	// Creates a new sequence builder pointing on the same memory and initializing it with the provided player id.
-	// The new builder replaces the current one in the structure if any.
-	// Returns whether the buider was successfully initialized & replaced the previous one.
-	inline bool push_sequence(match_player_id player_id)
+	// Writes player_id, then creates a new sequence builder right after it, pointing on the same memory. The new
+	// builder replaces the current one in the structure if any.
+	// Returns whether the player id was written and the builder was successfully initialized & replaced the previous one.
+	inline bool push_new_sequence(match_player_id player_id)
 	{
 		ASSERT(target_mem != nullptr);
 		ASSERT(_tick_commands_start != nullptr);
 
-		// Init builder with same target memory and provided player id.
+		match_player_id* playerIdSlot = (match_player_id*)target_mem->alloc(sizeof(match_player_id), 1);
+		if (playerIdSlot == nullptr) return false;
+		*playerIdSlot = player_id;
+
 		command_sequence_builder newBuilder = {};
 		newBuilder.target_mem = target_mem;
 
-		if (!newBuilder.init(player_id)) return false;
+		if (!newBuilder.init()) return false;
 
 		_sequence_builder = newBuilder;
 		_tick_commands_start->sequences_count++;
 
 		// Increment total size.
-		_tick_commands_start->total_size += sizeof(match_command_sequence);
+		_tick_commands_start->total_size += sizeof(match_player_id) + sizeof(match_command_sequence);
 
 		return true;
+	}
+
+	// Pushes a new sequence in the tick commands structure, ensuring each command is valid. Invalid commands are discarded.
+	inline void push_validated_sequence(match_player_id player_id, const game_match& target_match, const match_command_sequence& unvalidated)
+	{
+		ASSERT(target_mem != nullptr);
+
+		push_new_sequence(player_id);
+		bool res = match_command_sequence_output_validated(target_match, unvalidated, player_id, _sequence_builder);
+
+		// Increment total size.
+		_tick_commands_start->total_size += _sequence_builder.total_size - sizeof(match_command_sequence); // size of the sequence struct was already counted in.
 	}
 
 	// Calls the push_commands_buffer function of the current sequence builder (will assert if none have been pushed !).
@@ -247,6 +295,7 @@ struct match_tick_commands_builder
 	inline bool push_commands_buffer(const ui8* commands_buff, ui16 buff_size, ui8 command_count)
 	{
 		ASSERT(target_mem != nullptr);
+		ASSERT(_sequence_builder.target_mem != nullptr);
 
 		if (!_sequence_builder.push_commands_buffer(commands_buff, buff_size, command_count)) 
 			return false;
@@ -263,7 +312,8 @@ struct match_tick_commands_builder
 	inline PayloadType* push_command(MATCH_COMMAND_TYPE command_type)
 	{
 		ASSERT(target_mem != nullptr);
-		ASSERT(get_command_size(command_type) == sizeof(PayloadType));
+		ASSERT(_sequence_builder.target_mem != nullptr);
+		ASSERT(get_command_data_size(command_type) == sizeof(PayloadType));
 
 		PayloadType* payload = _sequence_builder.push_command<PayloadType>(command_type);
 		if (payload == nullptr) return nullptr;
@@ -280,12 +330,12 @@ struct match_tick_commands_builder
 // SET ENTITY MOVE TARGET
 
 // VALIDITY CHECK
-bool command_set_entity_move_target_validity_check(game_match& match, match_player_id player,
-	command_payload_set_entity_move_target& command);
+bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player,
+	const command_payload_set_entity_move_target& command);
 
 // APPLY
 void command_set_entity_move_target_apply(game_match& match, match_player_id player,
-	command_payload_set_entity_move_target& command);
+	const command_payload_set_entity_move_target& command);
 
 // ...
 

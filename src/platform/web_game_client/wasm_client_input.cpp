@@ -1,19 +1,26 @@
 // Implementation for the "input bridging code" between JS frontend and Client backend.
-// General Input Events made of a code and a fixed-size payload are sent from the JS at anytime. The code here must read the code, the bytes,
-// and output a proper input event structure to send to the backend so it may mutate input-related state.
+// General Input Events made of a code and a fixed-size payload are sent from the JS at anytime. JS writes the
+// payload bytes into INPUT_EVENT_BUFFER (below, sized to the backend's INPUT_EVENT_MAX_PAYLOAD_SIZE) then calls
+// client_send_input_event(code) - the buffer's ownership/location is a platform concern, the backend just gets
+// handed a pointer.
 
 #include "game_client/game_client_backend.h"
 #include "wasm_client.h"
 
-WASM_EXPORT void client_apply_viewport_input(float pan_x, float pan_y, float zoom_delta, float move_time,
-	float cursor_viewport_frac_x, float cursor_viewport_frac_y)
+static ui8 INPUT_EVENT_BUFFER[INPUT_EVENT_MAX_PAYLOAD_SIZE];
+
+WASM_EXPORT ui8* client_get_input_event_buffer_offset()
 {
-	game_client_set_viewport_input(*WEB_CLIENT.backend, vec2f{ pan_x, pan_y }, zoom_delta, { cursor_viewport_frac_x, cursor_viewport_frac_y });
+	return INPUT_EVENT_BUFFER;
 }
 
-WASM_EXPORT void client_input_set_target_loc(int x, int y)
+WASM_EXPORT ui32 client_get_input_event_buffer_size()
 {
-	game_client_input_set_target_loc(*WEB_CLIENT.backend, x, y);
+	return INPUT_EVENT_MAX_PAYLOAD_SIZE;
 }
 
+WASM_EXPORT bool client_send_input_event(INPUT_EVENT_TYPE code)
+{
+	return game_client_process_input_event(*WEB_CLIENT.backend, code, INPUT_EVENT_BUFFER);
+}
 

@@ -43,6 +43,41 @@ struct client_render_state
 
 #pragma pack(pop)
 
+// INPUT SYSTEM
+
+// Identifies which payload struct below a generalized input event's bytes should be read as.
+enum class INPUT_EVENT_TYPE : ui16
+{
+	VIEWPORT_CONTROL,
+	SET_TARGET_LOC,
+};
+
+// Max size in bytes of any one input event's payload.
+static constexpr ui32 INPUT_EVENT_MAX_PAYLOAD_SIZE = 64;
+
+#define INPUT_EVENT_PAYLOAD_SIZE_GUARD(payload_struct) \
+static_assert(sizeof(payload_struct) <= INPUT_EVENT_MAX_PAYLOAD_SIZE, "Input event payload struct \"" #payload_struct "\" is too large.");
+
+#pragma pack(push, 1)
+
+struct input_event_payload_viewport_control
+{
+	float pan_x, pan_y;
+	float zoom_delta;
+	float cursor_viewport_frac_x, cursor_viewport_frac_y;
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_viewport_control);
+
+struct input_event_payload_set_target_loc
+{
+	i32 x, y;
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_set_target_loc);
+
+#pragma pack(pop)
+
+#undef INPUT_EVENT_PAYLOAD_SIZE_GUARD
+
 // BACKEND INTERFACE DEFINITION.
 
 struct game_client;
@@ -50,11 +85,9 @@ struct game_match_start_params;
 
 // INPUT
 
-// Temp. To be replaced by generalized input system.
-void game_client_input_set_target_loc(game_client& backend, int x, int y);
-
-// Updates the current viewport control input.
-void game_client_set_viewport_input(game_client& backend, vec2<float> pan_vector, float zoom_delta, vec2f zoom_target);
+// Interprets payload_bytes (at most INPUT_EVENT_MAX_PAYLOAD_SIZE bytes, owned by the caller) as the payload struct
+// matching code, and applies it. Returns false if code isn't recognized (frontend out of sync with this header).
+bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code, ui8 payload_bytes[INPUT_EVENT_MAX_PAYLOAD_SIZE]);
 
 // RENDERING 
 

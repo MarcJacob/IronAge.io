@@ -26,6 +26,8 @@ function on_socket_message(event, canvas, socket) {
             draw(renderState);
             update_debug_panel(renderState, get_last_mouse_world_location());
         });
+        // Automatically set focus on the foreground canvas.
+        canvas.focus();
     }
     // The backend may have built a reply (e.g. pending input) in response to the message just processed.
     // There is no separate send loop: outgoing messages only ever go out piggybacked on a received one.

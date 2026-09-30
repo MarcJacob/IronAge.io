@@ -17,6 +17,13 @@ export enum MESSAGE_TYPE
     INVALID,
 };
 
+// Mirrors INPUT_EVENT_TYPE (include/game_client/game_client_backend.h). Update here if the enum changes.
+export enum INPUT_EVENT_TYPE
+{
+    VIEWPORT_CONTROL = 0,
+    SET_TARGET_LOC = 1,
+};
+
 interface ClientExports extends WebAssembly.Exports
 {
     memory: WebAssembly.Memory;
@@ -41,53 +48,54 @@ interface ClientExports extends WebAssembly.Exports
 
     // Input
 
-    client_input_set_target_loc(x: number, y: number): void;
-    client_apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number,
-        cursor_viewport_frac_x: number, cursor_viewport_frac_y: number): void;
+    client_get_input_event_buffer_offset(): number;
+    client_get_input_event_buffer_size(): number;
+    client_send_input_event(code: INPUT_EVENT_TYPE): number; // wasm bool: 0 or 1.
 }
 
-let backend: ClientExports;
+let CLIENT_BACKEND: ClientExports;
 
 // Loads and instantiates the client backend. Rejects if loading fails.
 export async function load(wasm_url: string)
 {
     console.log("Loading backend...");
     const result = await WebAssembly.instantiateStreaming(fetch(wasm_url), {});
-    backend = result.instance.exports as ClientExports;
+    CLIENT_BACKEND = result.instance.exports as ClientExports;
 }
 
 // Initializes the backend's own memory. Call once, right after load().
 export function start(): boolean
 {
     console.log("Starting backend.");
-    if (!backend.web_client_start()) {
+    if (!CLIENT_BACKEND.web_client_start()) {
         console.error("Failed to initialize client backend.");
         return false;
     }
 
+    ClientInput.init();
     return true;
 }
 
 // Ticks the backend: applies pending viewport input and rebuilds the render state. Call once per animation frame.
 export function tick(delta_time: number): void
 {
-    backend.web_client_tick(delta_time);
+    CLIENT_BACKEND.web_client_tick(delta_time);
 }
 
 // Copies a received websocket message's bytes into wasm memory and has the backend parse & apply it.
 // Returns the handled message type (see MESSAGE_TYPE), or null if the message could not be processed.
 export function process_net_message(bytes: ByteBuffer)
 {
-    const bufferSize: number = backend.client_get_net_message_buffer_size();
+    const bufferSize: number = CLIENT_BACKEND.client_get_net_message_buffer_size();
     if (bytes.length > bufferSize) {
         console.error(`Received message (${bytes.length} bytes) is larger than the client's net message buffer (${bufferSize} bytes). Dropping.`);
         return null; 
     }
 
-    const bufferOffset: number = backend.client_get_net_message_buffer_offset();
-    new ByteBuffer(backend.memory.buffer, bufferOffset, bytes.length).set(bytes);
+    const bufferOffset: number = CLIENT_BACKEND.client_get_net_message_buffer_offset();
+    new ByteBuffer(CLIENT_BACKEND.memory.buffer, bufferOffset, bytes.length).set(bytes);
 
-    const messageType: MESSAGE_TYPE = backend.client_process_net_message(bytes.length);
+    const messageType: MESSAGE_TYPE = CLIENT_BACKEND.client_process_net_message(bytes.length);
     return messageType;
 }
 
@@ -95,25 +103,44 @@ export function process_net_message(bytes: ByteBuffer)
 // Call this right after process_net_message and send the result over the websocket. Returns null if there's nothing to send.
 export function read_pending_output_message()
 {
-    const size: number = backend.client_get_net_output_message_size();
+    const size: number = CLIENT_BACKEND.client_get_net_output_message_size();
     if (size === 0) return null;
 
-    const bufferOffset: number = backend.client_get_net_output_message_buffer_offset();
+    const bufferOffset: number = CLIENT_BACKEND.client_get_net_output_message_buffer_offset();
     // Copy out: the backend may overwrite this buffer the next time it builds an outgoing message.
-    return new Core.ByteBuffer(backend.memory.buffer, bufferOffset, size).slice() as Core.ByteBuffer;
+    return new Core.ByteBuffer(CLIENT_BACKEND.memory.buffer, bufferOffset, size).slice() as Core.ByteBuffer;
 }
 
-export function set_target_loc(target_loc: Core.WorldLocation)
+// Input subsystem.
+export namespace ClientInput
 {
-    backend.client_input_set_target_loc(target_loc.x, target_loc.y);
-}
+    let bufferOffset: number = 0;
+    let bufferMaxSize: number = 0;
 
-// pan_x / pan_y: normalized direction. zoom_delta: desired zoom level. Both need repeated calls to keep taking effect.
-// cursor_viewport_frac_x / y: cursor position within the viewport, normalized [0, 1] on both axes (0,0 = bottom-left).
-export function apply_viewport_input(pan_x: number, pan_y: number, zoom_delta: number, move_time: number,
-    cursor_viewport_frac_x: number, cursor_viewport_frac_y: number): void
-{
-    backend.client_apply_viewport_input(pan_x, pan_y, zoom_delta, move_time, cursor_viewport_frac_x, cursor_viewport_frac_y);
+    // Initializes Buffer offset/size.
+    export function init(): void
+    {
+        bufferOffset = CLIENT_BACKEND.client_get_input_event_buffer_offset();
+        bufferMaxSize = CLIENT_BACKEND.client_get_input_event_buffer_size();
+    }
+
+    // Fresh DataView over the input event buffer, after it gets zeroed.
+    // Payload bytes can be written directly into the view. Call commit_input_event once it is ready.
+    export function begin_input_event(): DataView
+    {
+        new Uint8Array(CLIENT_BACKEND.memory.buffer, bufferOffset, bufferMaxSize).fill(0);
+        return new DataView(CLIENT_BACKEND.memory.buffer, bufferOffset, bufferMaxSize);
+    }
+
+    // Reads outstanding input bytes written in the input buffer and uses them as the payload associated with the specified code.
+    // Returns whether the event was interpret as a valid input. If it wasn't, it's likely the written bytes are not in sync with whatever backend input struct
+    // they're supposed to mirror.
+    export function commit_input_event(code: INPUT_EVENT_TYPE): boolean
+    {
+        const valid = CLIENT_BACKEND.client_send_input_event(code) !== 0;
+        if (!valid) console.error(`Input event ${INPUT_EVENT_TYPE[code]} was rejected by the backend - is backend.ts out of sync with game_client_backend.h?`);
+        return valid;
+    }
 }
 
 export class BackendRenderEntity
@@ -143,8 +170,8 @@ export function read_render_state()
     // Layout of client_render_state: viewport (bottom_left x/y i32, width ui16, height ui16), controlled_player_id
     // (ui16), world_size (ui16 width/height), entity_count (ui16), entity_states pointer (ui32). Views are
     // re-created on every read on purpose, as they become invalid if wasm memory ever grows.
-    const renderStateOffset: number = backend.client_get_render_state();
-    const renderStateDataView: DataView = new DataView(backend.memory.buffer, renderStateOffset);
+    const renderStateOffset: number = CLIENT_BACKEND.client_get_render_state();
+    const renderStateDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, renderStateOffset);
 
     let renderState = new BackendRenderState();
     renderState.viewport_bottom_left_x = renderStateDataView.getInt32(0, true);
@@ -157,7 +184,7 @@ export function read_render_state()
     renderState.entity_count = renderStateDataView.getUint16(18, true);
 
     const entityStatesOffset: number = renderStateDataView.getUint32(20, true);
-    const entityStatesDataView: DataView = new DataView(backend.memory.buffer, entityStatesOffset);
+    const entityStatesDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
 
     // Layout of render_entity: four f32 (viewport X, Y, target viewport X, Y).
     const ENTITY_MEM_SIZE: number = 16;

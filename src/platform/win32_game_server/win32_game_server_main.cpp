@@ -44,7 +44,7 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 // Break into the debugger right here if one is attached, then raise SIGABRT.
 void ASSERT_EXIT_FUNC()
 {
-	__debugbreak();
+__debugbreak();
 	raise(SIGABRT);
 }
 

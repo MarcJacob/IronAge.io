@@ -14,11 +14,22 @@ panning, by building a proper camera/viewport and input system.
 - [x] Camera / viewport: pan + zoom, occlusion, and screen <-> world
   conversion moved into the client backend (C++) - see Notes.
 - [x] Viewport movement extra: zoom in where the cursor is located.
-- [ ] Generalized gameplay input: front-facing render/UI layer sends
-  semantic events (entity selected, button pressed, ...), not raw
-  coordinates; backend interprets per current mode/selection. Unblocked -
-  platform split (`work_units/game_client_platform_split_2026-09-29.md`)
-  is done.
+- [x] Generalized gameplay input: `INPUT_EVENT_TYPE` code + packed payload
+  struct per event, `game_client_process_input_event(backend, code,
+  payload_bytes)` in the public header - see Notes for the buffer/ownership
+  split.
+- [ ] Command queue: adapt entity target-location input (currently the
+  `input.pending`/`pending_target` single-slot temp state, see
+  `game_client_input_state`) to push onto a proper match command queue on
+  the client backend, instead of a lone pending flag; `game_client_process_input_event`'s
+  `SET_TARGET_LOC` case pushes a command there instead of setting
+  `input.pending` directly. `game_client_output_client_tick_message` then
+  reads/drains that queue to build the `CLIENT_TICK` command sequence,
+  instead of building a single hardcoded `SET_ENTITY_MOVE_TARGET` command
+  from `input.pending_target`. General shape per-event going forward:
+  receive code + payload -> interpret/validate -> consume directly (like
+  viewport input) and/or push a match command onto the queue for the next
+  `CLIENT_TICK`.
 - [ ] Selection state: client-local "currently selected entity", no new
   network message yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
@@ -42,6 +53,21 @@ panning, by building a proper camera/viewport and input system.
 - Web client input now drives the camera every frame (WASD/arrows pan,
   wheel zoom) via the same frame-callback delegate.
 - World border and mouse world-location added to the canvas / debug panel.
+- Generalized input events: `INPUT_EVENT_TYPE` (`VIEWPORT_CONTROL`,
+  `SET_TARGET_LOC`) + one packed payload struct per code in
+  `game_client_backend.h`, capped at `INPUT_EVENT_MAX_PAYLOAD_SIZE` (64
+  bytes) so every platform knows the max size up front without tracking
+  individual struct sizes. The backend function takes `(code,
+  payload_bytes)` as plain parameters - it doesn't own or know where the
+  bytes live. The WASM platform owns a static scratch buffer sized to that
+  constant (`wasm_client_input.cpp`), exposed via
+  `client_get_input_event_buffer_offset/size()`; `backend.ts`'s
+  `ClientInput` namespace caches both once at `start()`, and
+  `get_dataview()`/`commit_input(code)` let `input.ts` write one event's
+  bytes and commit it by code, with `commit_input` reporting back (via the
+  backend's bool return) if the code wasn't recognized - signals TS/C++
+  drift. Old `client_apply_viewport_input` / `client_input_set_target_loc`
+  wasm exports collapsed into this single path.
 
 ## Notes / Decisions
 
