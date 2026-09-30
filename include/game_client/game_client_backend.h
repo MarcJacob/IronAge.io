@@ -19,8 +19,11 @@
 // Entity's location and target location in viewport space.
 struct render_entity
 {
-	float viewport_x, viewport_y;
-	float target_viewport_x, target_viewport_y;
+	ENTITY_TYPE entity_type; // Type of entity being rendered.
+	match_player_id owner; // ID of owner player if any.
+
+	vec2f viewport_location; // Location of center of entity.
+	ui8 size_viewport; // Square size of the entity in viewport space.
 };
 
 // Render state exposed to the frontend.

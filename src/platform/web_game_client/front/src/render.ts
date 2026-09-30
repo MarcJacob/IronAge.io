@@ -9,6 +9,10 @@ let canvas: HTMLCanvasElement;
 
 let ctx: CanvasRenderingContext2D;
 
+// Settlement entity icon, preloaded once at init so draw_entity_settlement() never blocks on it.
+let settlementImage: HTMLImageElement = new Image();
+let settlementImageLoaded: boolean = false;
+
 // World size, viewport rect and scale below are all snapshots as of the last draw() call - everything the render
 // state can report (including world size / controlled player) is read fresh every call, nothing is cached at init.
 let world_size: Core.WorldSize = new Core.WorldSize();
@@ -24,6 +28,9 @@ let viewportBottomLeftY : number = 0;
 export function init_render(canvas_element : HTMLCanvasElement) {
     canvas = canvas_element;
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+
+    settlementImage.onload = () => { settlementImageLoaded = true; };
+    settlementImage.src = "art/settlement.svg";
 }
 
 // Converts a position on the page (mouse event coordinates) to a world tile position, clamped inside the world.
@@ -88,6 +95,23 @@ function draw_entity(render_state: Backend.BackendRenderState, entity_index: num
     ctx.arc(entityCanvasTargetLoc.x, entityCanvasTargetLoc.y, radius, 0, Math.PI * 2);
     ctx.fill();
 
+}
+
+// Draws a settlement icon at the given viewport location, sized `scale` world tiles across. No-op until the icon
+// has finished loading.
+export function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number)
+{
+    if (!settlementImageLoaded) return;
+
+    const w = scale * scaleX;
+    const h = scale * scaleY;
+
+    const canvasLoc = {
+        x: viewport_x * scaleX,
+        y: canvas.height - viewport_y * scaleY,
+    };
+
+    ctx.drawImage(settlementImage, canvasLoc.x - w / 2, canvasLoc.y - h / 2, w, h);
 }
 
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).

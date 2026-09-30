@@ -358,6 +358,7 @@ int main(int argc, char** argv)
 
 		// Art
 		"favicon.ico",
+		"art/settlement.svg",
 
 		// Tests
 		"src/websocket_tests.js",

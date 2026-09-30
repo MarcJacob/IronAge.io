@@ -42,7 +42,7 @@ Then a command's *code* could be related to its index in that collection instead
 Another advantage of a more data-oriented approach like that would be that the match code could loop over all commands abstractly, such that match code wouldn't need to be touched
 to implement the effects of a command.
 
-#### Structuring for messages & input into match tick
+#### Structuring for input into match tick
 
 Commands follow a structure leading to the the root "full tick commands" structure that is passed to a match for ticking:
 - Command Header + Payload[] = "Basic command" with only its type and payload.

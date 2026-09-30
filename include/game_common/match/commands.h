@@ -11,25 +11,51 @@
 
 #include "core.h"
 #include "match.h"
+#include "world.h"
 
 // Top-level type designations a match command can have.
 enum class MATCH_COMMAND_TYPE : ui8
 {
-	SET_ENTITY_MOVE_TARGET,
+	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
+	SET_ENTITY_ATTACK_TARGET, // Orders an entity to attack another entity if able.
 
 	TYPE_COUNT,
 };
 
-// COMMAND STRUCTURES & PAYLOADS
+// COMMAND DATA STRUCTURES & FUNCTIONS 
 
 // All structures must be aligned to 1 since they must exist in packed contexts for network transmission and structured reading.
 #pragma pack(push, 1)
 
+// SET ENTITY MOVE TARGET
 struct command_data_set_entity_move_target
 {
-	entity_id target_entity;
-	world_location new_target;
+	entity_guid entity;
+	world_location move_target;
 };
+
+// VALIDITY CHECK
+bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player,
+	const command_data_set_entity_move_target& command);
+
+// APPLY
+void command_set_entity_move_target_apply(game_match& match, match_player_id player,
+	const command_data_set_entity_move_target& command);
+
+// SET ENTITY ATTACK TARGET
+struct command_data_set_entity_attack_target
+{
+	entity_guid attacker_entity;
+	entity_guid target_entity;
+};
+
+// VALIDITY CHECK
+bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player,
+	const command_data_set_entity_move_target& command);
+
+// APPLY
+void command_set_entity_attack_target_apply(game_match& match, match_player_id player,
+	const command_data_set_entity_move_target& command);
 
 // Header & command size mapping definitions.
 
@@ -324,19 +350,5 @@ struct match_tick_commands_builder
 		return payload;
 	}
 };
-
-// COMMAND FUNCTIONS DECLARATIONS
-
-// SET ENTITY MOVE TARGET
-
-// VALIDITY CHECK
-bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player,
-	const command_data_set_entity_move_target& command);
-
-// APPLY
-void command_set_entity_move_target_apply(game_match& match, match_player_id player,
-	const command_data_set_entity_move_target& command);
-
-// ...
 
 #endif // GAME_COMMANDS_INCLUDED

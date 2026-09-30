@@ -75,35 +75,7 @@ work to a line or two.
 
 ## Backlog
 
-Tasks not currently part of the plan that need to be added to it at some point.
-
-- Client render interpolation between ticks (smooth movement).
-- Blit canvas for expensive-to-compute pixel content; pure-JS rendering is sufficient for now.
-- Logging takes a string view only (no variable arguments) on the server and server platform;
-  formatting happens in platform-independent code through an in-house string format
-  implementation (numbers, string views).
-- Persistent client identity / reconnection: a client outlives its connection (OFFLINE and
-  CONNECTION_LOST states, reconnection grace time).
-- Win32 net: timeout to close a connection whose peer stays alive but stops reading (it is
-  never closed once in SERVER_CLOSED).
-- Platform call to list the files in a folder relative to resources, so the server discovers
-  the files under `web_root` instead of taking a list in the init params.
-- Web server: optional automatic reload of a preloaded file when it changed on disk since
-  it was loaded.
-- Web server: keep frequently-used files always loaded ("cached"), load rarely-requested or
-  large ones on demand.
-- WASM client backend: log messages (typed, like the server's `LOG_TYPE`) straight to the JS
-  frontend.
-- Generalized client input system: multiple queued commands / command types, not just one
-  pending "set target".
-- Server-side input validation & recording: wire the existing (unused) command sanity-check
-  functions into `match_tick`; per-match input log; viewed-tick staleness gating.
-- Lobby system: player list, ready-up, synchronized match start, replacing the 2-connection
-  headcount start.
-- Catch-up / late join: tick bundles, per-client send cursor, `JOIN_REJECTED`, ring-buffer
-  log eviction for long matches.
-- Memory arenas functionality expansion:
-     - Ability to work with virtual memory and page sizes so they can be given *reserved* address spaces and commit as needed on platforms that support it.
-          - This effectively solves the growing memory needs in specific cases on the server especially for match slots running large games. Each slot can be given a huge address range and commit as needed.
-     - Contract flags: Can be expanded, guarantees contiguousness between different allocations...
-          - Some systems require their memory arenas to have certain properties, others don't. It'd be nice to assert on wrong properties while allowing them on systems that don't care.
+Tasks not currently part of the plan that need to be added to it at some point. Each has its
+own file under `management/backlog/<name>_<input-date>.md`: the item itself, a description,
+why it's there, and the date it was first raised (so old items can be prioritized or
+discarded). Add new items there directly - see the folder for the current list.

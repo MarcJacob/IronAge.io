@@ -82,6 +82,7 @@ static const char* http_get_content_type(const char* path)
 		{ "wasm", "application/wasm" },
 		{ "txt", "text/plain; charset=utf-8" },
 		{ "ico", "image/x-icon"},
+		{ "svg", "image/svg+xml"},
 	};
 	static constexpr ui8 SUPPORTED_CONTENT_TYPE_COUNT = sizeof(SUPPORTED_CONTENT_TYPES) / sizeof(content_type);
 

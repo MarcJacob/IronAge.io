@@ -5,59 +5,12 @@
 
 #include "core.h"
 
-// TODO(Marc): Temp defines that should really be parameters.
-static constexpr ui16 MIN_WORLD_DIM_SIZE = 100; // Minimum width and height of a match's world.
-static constexpr ui8 MATCH_DEFAULT_TICK_RATE = 20;	// Default Ticks per second. Used by game mechanics so time-relative elements can be defined using time units,
-													// and by host app to know how many ticks it should have simulated for the match by now.
-using world_location = vec2<ui16>;
-using entity_id = ui32;
-
-// Temporary arbitrary structure for the state of the various entities / objects inside the match world.
-struct match_world_state
-{
-	ui16 entity_count;
-
-	struct entity
-	{
-		world_location location;
-		world_location target_location;
-	} *entity_states;
-};
+struct match_world_state;
 
 using match_player_id = ui16;
 using match_player_count = match_player_id; // Alias type for places where we need to count player.
 
 static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0;
-
-// Pack the start params structure since, as of now, it gets sent over the network as-is.
-#pragma pack(push, 1)
-
-// Params structure for the creation of a match. Contains all necessary components to determine the match's starting state, parameters, and resource requirements.
-struct game_match_start_params
-{
-	vec2<ui16> world_dimensions; // Dimensions of the world map in number of tiles.
-
-	ui16 player_count; // Number of players present in the match (including all types of players).
-	ui8 tick_rate; // Number of ticks per second.
-	ui32 max_tick; // Maximum number of ticks before forcing the match to end.
-
-	// Extra Data. Layout:
-	// - Player start location indexed by player.
-	// ...
-
-	ui16 extra_data_size; // Total amount of extra data bytes.
-	ui8 _extra_data[]; // Dynamically-allocated data attached to this match, sized according to parameters like player count.
-
-	inline world_location& get_player_start_pos(ui16 player_index) const
-	{
-		ASSERT(sizeof(world_location) * player_index < extra_data_size);
-
-		world_location* world_locs = (world_location*)_extra_data;
-		return world_locs[player_index];
-	}
-};
-
-#pragma pack(pop)
 
 // Main memory ownership and definition structure for a single ongoing match.
 struct game_match
@@ -68,8 +21,10 @@ struct game_match
 	mem_arena* memory; // Memory arena this match will use to allocate memory as needed.
 
 	ui32 tick; // Next tick to be computed.
-	match_world_state world_state; // Observable world state associated to this match, recomputed on each tick.
+	match_world_state* world; // Observable world state associated to this match, recomputed on each tick.
 };
+
+struct game_match_start_params;
 
 // Returns the estimated maximum required memory for a match started with the given parameters.
 constexpr ui64 match_get_required_mem(game_match_start_params& params);

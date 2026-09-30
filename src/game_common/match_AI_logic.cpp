@@ -14,10 +14,10 @@ bool AI_output_commands(const game_match& match, AI_player_state& ai_state, matc
 	// Inspect controlled entity state and determine whether we need to pick a new target location, then have the entity move there if not
 	// doing so already.
 
-	const match_world_state& world = match.world_state;
-	const match_world_state::entity& controlledEntity = world.entity_states[ai_state.controlled_entity];
+	const match_world_state& world = match.world;
+	const match_world_state::entity& controlledEntity = world.entity_states[ai_state.controlled_entity._dynamic._index];
 
-	float squaredDistToTarget = vec2_dist_squared(controlledEntity.location, controlledEntity.target_location);
+	float squaredDistToTarget = vec2_dist_squared(controlledEntity.location, controlledEntity.move_target);
 	if (match.tick == 0 || squaredDistToTarget < 5.f)
 	{
 		// Pick new spot at random.
@@ -34,8 +34,8 @@ bool AI_output_commands(const game_match& match, AI_player_state& ai_state, matc
 		auto set_target_payload = commands_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
 		if (set_target_payload == nullptr) return false;
 
-		set_target_payload->new_target = newTarget;
-		set_target_payload->target_entity = ai_state.controlled_entity;
+		set_target_payload->move_target = newTarget;
+		set_target_payload->entity = ai_state.controlled_entity;
 	}
 
 	return true;

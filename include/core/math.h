@@ -85,11 +85,20 @@ struct vec2
 	vec2(Numeric in_x, Numeric in_y) : x(in_x), y(in_y) {}
 
 	template<typename OtherNumeric>
-	vec2(const vec2<OtherNumeric>& other) : x(other.x), y(other.y) {}
+	vec2(const vec2<OtherNumeric>& other) : x((Numeric)other.x), y((Numeric)other.y) {}
+
+	template<typename OtherNumeric>
+	vec2(OtherNumeric in_x, OtherNumeric in_y) : x((Numeric)in_x), y((Numeric)in_y) {}
 };
 
 using vec2f = vec2<float>;
 using vec2i = vec2<i32>;
+
+template<typename VecType, typename Scalar>
+static inline vec2<VecType> operator*(const vec2<VecType>& vec, Scalar scalar)
+{
+	return { vec.x * scalar, vec.y * scalar };
+}
 
 template<typename VecAType, typename VecBType>
 static inline float vec2_dist_squared(vec2<VecAType> vec_a, vec2<VecBType> vec_b)

@@ -3,44 +3,249 @@
 
 #include "core.h"
 
+#include "game_common_internals.h"
+
 #include "game_common/match/match.h"
+#include "game_common/match/start_params.h"
 #include "game_common/match/commands.h"
 
-// Unity compile AI player system.
-#include "AI_logic.cpp"
+// Unity compile game common components.
+#include "match_commands.cpp"
+#include "match_AI_logic.cpp"
+#include "game_common_tests.cpp"
 
-// BEGIN COMMAND FUNCTIONS
+// WORLD MEMORY LAYOUT PROPERTIES
 
-// Example of command sanity check function.
-bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+constexpr ui32 SETTLEMENTS_PER_REGION = 10;
+constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
+
+bool world_alloc_settlements(mem_arena& memory, match_world_state& world, ui32 count)
 {
-	// Ownership: Entity ID == Player ID.
-	if (player != command.target_entity) return false; // Can only be controlled by owning player.
-	if (command.target_entity >= match.world_state.entity_count) return false; // Must be valid target entity.
+	world_entity_settlements& settlements = world.entities.settlements;
+
+	settlements.max_count = count;
+
+	settlements._activeFlags = memory.alloc<bool>(count);
+	if (settlements._activeFlags == nullptr) return false;
+
+	settlements.owners = memory.alloc<match_player_id>(count);
+	if (settlements.owners == nullptr) return false;
+
+	settlements.locations = memory.alloc<world_location>(count);
+	if (settlements.locations == nullptr) return false;
+
+	settlements.populations = memory.alloc<ui32>(count);
+	if (settlements.populations == nullptr) return false;
+
+	settlements.local_wealth = memory.alloc<ui32>(count);
+	if (settlements.local_wealth == nullptr) return false;
+
+	settlements.tier = memory.alloc<ui8>(count);
+	if (settlements.tier == nullptr) return false;
+
+	settlements.trade_attractivity = memory.alloc<ui8>(count);
+	if (settlements.trade_attractivity == nullptr) return false;
+
+	settlements.area_influence = memory.alloc<ui8>(count);
+	if (settlements.area_influence == nullptr) return false;
 
 	return true;
 }
 
-// Example of a command apply function.
-void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+bool world_alloc_caravans(mem_arena& memory, match_world_state& world, ui32 count)
 {
-	// Sets target entity's location.
+	world_entity_caravans& caravans = world.entities.caravans;
 
-	match_world_state::entity& targetEntity = match.world_state.entity_states[command.target_entity];
-	targetEntity.target_location = command.new_target;
+	caravans.max_count = count;
+
+	caravans._activeFlags = memory.alloc<bool>(count);
+	if (caravans._activeFlags == nullptr) return false;
+
+	caravans.locations = memory.alloc<world_location>(count);
+	if (caravans.locations == nullptr) return false;
+
+	caravans.movements = memory.alloc<world_entity_movement>(count);
+	if (caravans.movements == nullptr) return false;
+
+	caravans.origin_settlements = memory.alloc<entity_guid>(count);
+	if (caravans.origin_settlements == nullptr) return false;
+
+	caravans.dest_settlements = memory.alloc<entity_guid>(count);
+	if (caravans.dest_settlements == nullptr) return false;
+
+	return true;
 }
 
-// END COMMAND FUNCTIONS
+bool world_alloc_armies(mem_arena& memory, match_world_state& world, ui32 count)
+{
+	world_entity_armies& armies = world.entities.armies;
+
+	armies.max_count = count;
+
+	armies._activeFlags = memory.alloc<bool>(count);
+	if (armies._activeFlags == nullptr) return false;
+
+	armies.owners = memory.alloc<match_player_id>(count);
+	if (armies.owners == nullptr) return false;
+
+	armies.locations = memory.alloc<world_location>(count);
+	if (armies.locations == nullptr) return false;
+
+	armies.movements = memory.alloc<world_entity_movement>(count);
+	if (armies.movements == nullptr) return false;
+
+	armies.compositions = memory.alloc<world_entity_armies::comp>(count);
+	if (armies.compositions == nullptr) return false;
+
+	armies.action_targets = memory.alloc<entity_guid>(count);
+	if (armies.action_targets == nullptr) return false;
+
+	armies.arrows_targets = memory.alloc<entity_guid>(count);
+	if (armies.arrows_targets == nullptr) return false;
+
+	return true;
+}
+
+match_world_state* world_state_init(mem_arena& memory, world_dimensions size_regions)
+{
+	// Estimate size:
+	// - A terrain of the given size in regions
+	// - N settlements per region
+	// - X micro entities of each type per region.
+
+	ui64 memoryStart = memory.allocated_count;
+
+	match_world_state* newWorld = memory.alloc<match_world_state>();
+	if (newWorld == nullptr) goto WORLD_INIT_FAIL;
+
+	newWorld->terrain.size_regions = size_regions;
+	newWorld->terrain.size_tiles = size_regions * world_terrain::REGION_SIZE;
+	ui16 regionCount = size_regions.x * size_regions.y;
+
+	newWorld->terrain.regions = memory.alloc<world_terrain::region>(regionCount);
+	if (newWorld->terrain.regions == nullptr) goto WORLD_INIT_FAIL;
+
+	// Alloc entities
+	const ui32 settlement_count = SETTLEMENTS_PER_REGION * regionCount;
+	const ui32 micro_entity_count = MICRO_ENTITIES_PER_TYPE_PER_REGION * regionCount;
+
+	if (!world_alloc_settlements(memory, *newWorld, settlement_count)) goto WORLD_INIT_FAIL;
+	if (!world_alloc_caravans(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
+	if (!world_alloc_armies(memory, *newWorld, micro_entity_count)) goto WORLD_INIT_FAIL;
+
+	return newWorld;
+
+WORLD_INIT_FAIL:
+	memory.allocated_count = memoryStart;
+	return nullptr;
+}
+
+// Spawns a new settlement in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid match_spawn_settlement(game_match& match, const world_entity_settlements::single& start_state)
+{
+	ASSERT(match.world != nullptr);
+	match_world_state& world = *match.world;
+
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.settlements.max_count && world.entities.settlements._activeFlags[freeIndex])
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.settlements.max_count);
+
+	world.entities.settlements._activeFlags[freeIndex] = true;
+
+	entity_guid newID = { 0 };
+	newID._type = ENTITY_TYPE::SETTLEMENT;
+	newID._static._index = freeIndex;
+	newID._static._extra = match.tick % 0xFFFF;
+
+	// Apply start state.
+	world.entities.settlements.owners[freeIndex] = start_state.owner;
+	world.entities.settlements.locations[freeIndex] = start_state.location;
+	world.entities.settlements.populations[freeIndex] = start_state.population;
+	world.entities.settlements.local_wealth[freeIndex] = start_state.local_wealth;
+	world.entities.settlements.tier[freeIndex] = start_state.tier;
+	world.entities.settlements.trade_attractivity[freeIndex] = start_state.trade_attractivity;
+	world.entities.settlements.area_influence[freeIndex] = start_state.area_influence;
+
+	return newID;
+}
+
+// Spawns a new caravan in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid match_spawn_caravan(game_match& match, const world_entity_caravans::single& start_state)
+{
+	ASSERT(match.world != nullptr);
+	match_world_state& world = *match.world;
+
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.caravans.max_count && world.entities.caravans._activeFlags[freeIndex])
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.caravans.max_count);
+
+	world.entities.caravans._activeFlags[freeIndex] = true;
+
+	entity_guid newID = { 0 };
+	newID._type = ENTITY_TYPE::CARAVAN;
+	newID._dynamic._index = freeIndex;
+	newID._dynamic._extra = match.tick % 0x100;
+
+	// Apply start state.
+	world.entities.caravans.locations[freeIndex] = start_state.location;
+	world.entities.caravans.movements[freeIndex] = start_state.movement;
+	world.entities.caravans.origin_settlements[freeIndex] = start_state.origin_settlement;
+	world.entities.caravans.dest_settlements[freeIndex] = start_state.dest_settlement;
+
+	return newID;
+}
+
+// Spawns a new army in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid match_spawn_army(game_match& match, const world_entity_armies::single& start_state)
+{
+	ASSERT(match.world != nullptr);
+	match_world_state& world = *match.world;
+
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.armies.max_count && world.entities.armies._activeFlags[freeIndex])
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.armies.max_count);
+
+	world.entities.armies._activeFlags[freeIndex] = true;
+
+	entity_guid newID = { 0 };
+	newID._type = ENTITY_TYPE::ARMY;
+	newID._dynamic._index = freeIndex;
+	newID._dynamic._extra = match.tick % 0x100;
+
+	// Apply start state.
+	world.entities.armies.owners[freeIndex] = start_state.owner;
+	world.entities.armies.locations[freeIndex] = start_state.location;
+	world.entities.armies.movements[freeIndex] = start_state.movement;
+	world.entities.armies.compositions[freeIndex] = start_state.composition;
+	world.entities.armies.action_targets[freeIndex] = start_state.action_target;
+	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
+
+	return newID;
+}
 
 constexpr ui64 match_get_required_mem(game_match_start_params& params)
 {
-	return MiB(1); // For now let's just keep it static at one mibibyte.
+	return MiB(32); // For now let's just keep it static at 32 mibibyte.
 }
 
 bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_params& params, game_match& out_match)
 {
-	if (params.world_dimensions.x < MIN_WORLD_DIM_SIZE
-		|| params.world_dimensions.y < MIN_WORLD_DIM_SIZE)
+	if (params.world_size_regions.x == 0 || params.world_size_regions.y == 0)
 	{
 		return false; // Invalid params.
 	}
@@ -58,71 +263,15 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	out_match.start_time = start_time;
 
 	// Initialize match world state.
-	out_match.world_state = {};
+	out_match.world = world_state_init(match_mem, params.world_size_regions);
+	if (out_match.world == nullptr) return false;
 
-	// Allocate player entities.
-	out_match.world_state.entity_count = params.player_count;
-	out_match.world_state.entity_states = out_match.memory->alloc<match_world_state::entity>(params.player_count);
-	ASSERT(out_match.world_state.entity_states != nullptr);
+	// Apply start params to world state
 
-	// Apply entity start positions.
-	for (ui8 startEntityIndex = 0; startEntityIndex < params.player_count; startEntityIndex++)
+	for (ui32 settlementIndex = 0; settlementIndex < params.start_settlement_count; settlementIndex++)
 	{
-		out_match.world_state.entity_states[startEntityIndex].location = params.get_player_start_pos(startEntityIndex);
-	}
-
-	return true;
-}
-
-// Checks that an input command would be valid to apply to the match over its next tick.
-bool match_command_validity_check(game_match& match, match_player_id player, const match_command_header& command)
-{
-	switch (command.type)
-	{
-		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_data_set_entity_move_target>());
-		default:
-			ASSERT_MSG(0, "No validity check logic associated with command type.");
-			return false;
-	}
-}
-
-bool match_command_sequence_output_validated(const game_match& target_match, const match_command_sequence& unvalidated,
-	match_player_id player_id, command_sequence_builder& output_builder)
-{
-	ui32 sequenceBufferPos = 0;
-	for (ui16 commandIndex = 0; commandIndex < unvalidated.command_count; commandIndex++)
-	{
-		const match_command_header& commandHeader = unvalidated.get_sequence_at(sequenceBufferPos);
-		sequenceBufferPos += sizeof(match_command_header);
-
-		// Route to type-specific logic.
-		bool isValid = false;
-		switch (commandHeader.type)
-		{
-		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-			isValid = command_set_entity_move_target_validity_check(target_match, player_id,
-				commandHeader.get_command_data<command_data_set_entity_move_target>());
-			break;
-		default:
-			// Only assert if the command type IS valid but not handled.
-			if ((i8)commandHeader.type >= 0 && (i8)commandHeader.type < (i8)MATCH_COMMAND_TYPE::TYPE_COUNT)
-			{
-				ASSERT_MSG(0, "No validity check logic associated with command type %d.", commandHeader.type);
-			}
-
-			// From there the whole unvalidated sequence becomes impossible to keep reading safely.
-			// Stop process now and signal caller that the sequence couldn't be fully validated.
-			return false;
-		}
-		sequenceBufferPos += get_command_data_size(commandHeader.type);
-
-		// If command is valid, add it to the output sequence. Otherwise discard it.
-		if (isValid)
-		{
-			void* validatedPayload = output_builder.push_command(commandHeader.type);
-			ia_memcpy(validatedPayload, commandHeader.command_data, get_command_data_size(commandHeader.type));
-		}
+		world_entity_settlements::single& settlementStartState = params.get_settlement_start_state(settlementIndex);
+		match_spawn_settlement(out_match, settlementStartState);
 	}
 
 	return true;
@@ -133,168 +282,19 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 {
 	match.tick++;
 
-	match_world_state& world = match.world_state;
+	// Start by applying all input commands sequentially.
+	match_command_apply_all(match, commands);
 
-	// Apply inputs.
-	ui32 commandBufferPos = 0;
+	// Run world behavior.
+	match_world_state& world = *match.world;
 
-	for (ui16 sequenceIndex = 0; sequenceIndex < commands.sequences_count; sequenceIndex++)
-	{
-		match_player_id sequencePlayerId = commands.get_sequence_player_at(commandBufferPos);
-		commandBufferPos += sizeof(match_player_id);
-
-		match_command_sequence& sequence = commands.get_sequence_at(commandBufferPos);
-		commandBufferPos += sizeof(match_command_sequence);
-
-		ui32 sequenceBufferPos = 0;
-		for (ui16 commandIndex = 0; commandIndex < sequence.command_count; commandIndex++)
-		{
-			const match_command_header& commandHeader = sequence.get_sequence_at(sequenceBufferPos);
-			sequenceBufferPos += sizeof(match_command_header);
-
-			// Route to type-specific logic.
-			switch (commandHeader.type)
-			{
-			case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-				command_set_entity_move_target_apply(match, sequencePlayerId,
-					commandHeader.get_command_data<command_data_set_entity_move_target>());
-				break;
-			default:
-				ASSERT_MSG(0, "No apply logic associated with command type.");
-			}
-
-			sequenceBufferPos += get_command_data_size(commandHeader.type);
-		}
-		commandBufferPos += sequenceBufferPos;
-	}
-
-	// Process entity behavior.
-	for (entity_id entityID = 0; entityID < world.entity_count; entityID++)
-	{
-		match_world_state::entity& entity = world.entity_states[entityID];
-
-		// Move to target location.
-
-		// Manhattan travel: one tile per tick, independently on each axis.
-		if (entity.location.x < entity.target_location.x) entity.location.x++;
-		else if (entity.location.x > entity.target_location.x) entity.location.x--;
-
-		if (entity.location.y < entity.target_location.y) entity.location.y++;
-		else if (entity.location.y > entity.target_location.y) entity.location.y--;
-	}
-
-}
-
-// TODO(Marc): Waaaaaaaaaaaaaaaaay better test scenario system. But a static system will be enough for the bulk of early development.
-
-#define MATCH_TEST_SCENARIO_TICKS (2000)
-
-game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
-{
-	game_match_start_params* params_ptr = memory.alloc<game_match_start_params>();
-	ASSERT(params_ptr != nullptr);
-
-	game_match_start_params& params = *params_ptr;
-	params.tick_rate = 20;
-	params.player_count = 10;
-	params.world_dimensions = { 1024, 1024 };
-	params.max_tick = MATCH_TEST_SCENARIO_TICKS;
-
-	// Initialize player entity start locations.
-	ui16 extraDataSize = sizeof(world_location) * params.player_count;
-
-	void* extraData = memory.alloc(extraDataSize); // Will be readable as params's extra data memory.
-	ASSERT(extraData != nullptr);
-
-	params.extra_data_size = extraDataSize;
-
-	for (match_player_id player = 0; player < params.player_count; player++)
-	{
-		params.get_player_start_pos(player) = ia_rand_vec({0, 0}, params.world_dimensions);
-	}
-
-	params.extra_data_size = extraDataSize;
-	return &params;
-}
-
-// Procedurally generates tick commands for the given match, using the match's own memory.
-match_tick_commands* build_test_scenario_commands(const game_match& match)
-{
-	match_tick_commands_builder commandsBuilder = {};
-	commandsBuilder.target_mem = match.memory;
-
-	if (!commandsBuilder.init()) return nullptr;
-
-	if (match.tick == 0)
-	{
-		// For each player in the match, have them move their entity to a point on the map.
-		for (match_player_id playerID = 0; playerID < match.start_params->player_count; playerID++)
-		{
-			// Push new sequence for this player.
-			if (!commandsBuilder.push_new_sequence(playerID)) return nullptr;
-
-			// Output a single command, to move the entity to a target location that depends on the player's ID.
-			world_location targetLoc = {
-				(ui16)((playerID + match.tick) * 2000 / match.start_params->world_dimensions.x * 300 % match.start_params->world_dimensions.x),
-				(ui16)((playerID + match.tick) * 5000 % match.start_params->world_dimensions.y) };
-
-			auto payload = commandsBuilder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
-			if (payload == nullptr) return nullptr;
-
-			payload->target_entity = playerID;
-			payload->new_target = targetLoc;
-		}
-	}
-
-	// Extract constructed tick commands.
-	return commandsBuilder._tick_commands_start;
-}
-
-game_match* match_run_test_scenario(mem_arena& match_mem)
-{
-	game_match_start_params* params = match_test_scenario_get_params(match_mem);
-	ASSERT(params != nullptr);
-
-	game_match* match = match_mem.alloc<game_match>();
-	ASSERT(match != nullptr);
-
-	// Start and run the required number of ticks over the match.
-	if (!match_start(match_mem, 0, *params, *match))
-	{
-		return nullptr;
-	}
-
-	while (match->tick < MATCH_TEST_SCENARIO_TICKS)
-	{
-		ui64 input_memory_start = match->memory->allocated_count;
-
-		match_tick_commands* commands = build_test_scenario_commands(*match);
-		ASSERT(commands != nullptr);
-
-		match_tick(*match, *commands);
-
-		// "Free" the input memory by setting the allocated count back.
-		match->memory->allocated_count = input_memory_start;
-	}
-
-	return match;
-}
-
-ui64 match_dump_gamestate(game_match& match, match_dump_stream& dump_stream)
-{
-	dump_stream.dump_size = 0;
-
-	dump_stream.dump(match.start_time);
-	dump_stream.dump(match.tick);
-	dump_stream.dump(*match.start_params);
-
-	match_world_state& world = match.world_state;
-
-	dump_stream.dump(world.entity_count);
-	for (entity_id entity = 0; entity < world.entity_count; entity++)
-	{
-		dump_stream.dump(world.entity_states[entity]);
-	}
-
-	return dump_stream.dump_size;
+	// Pseudo-code / Sequence:
+	// - 1: Settlement growth / eco tick (log growth based on local wealth / population).
+	// - 2: Caravans & Army movement target determination (caravans flee from nearby non-friendly armies or go towards destination, armies go to attack target or move target if set, if not engaged).
+	// - 3: Caravans & Army movement (Move towards target at constant speed)
+	// - 4: Army engagement / fighting (If army touches its target (ENTITY_WORLD_SIZE), start engagement.
+	//		- Engagement system: Create Engagement entity.
+	// - 5: Engagement entities: caravans are instantly flagged for destruction, armies take manpower damage and deal manpower damage based on some simple formula. If no manpower left, get destroyed.
+	// - 6: Caravans arrival in target settlement (Increase origin settlement local wealth by 1) then get destroyed.
+	// - 7: Caravans automatically spawn from settlements if 1000 / local wealth % match tick == 0. Destination is chosen at as much random as possible without libc deterministically.
 }

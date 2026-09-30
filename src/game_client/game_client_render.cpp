@@ -37,7 +37,7 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 	// Clear existing render memory.
 	render_memory.clear();
 
-	const match_world_state& world = match.world_state;
+	const match_world_state& world = *match.world;
 	vec2<float> viewportSize = client_backend_get_viewport_size(viewport);
 	vec2<float> bottomLeft = viewport.bottom_left_corner;
 
@@ -46,25 +46,8 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 	render_state.viewport.viewport_height = (ui16)viewportSize.y;
 
 	render_state.controlled_player_id = controlled_player_id;
-	render_state.world_size = match.start_params->world_dimensions;
+	render_state.world_size = world.terrain.size_tiles;
 
-	render_entity* entities = render_memory.alloc<render_entity>(world.entity_count);
+	// Build render entity states...
 
-	ui16 visibleCount = 0;
-	for (entity_id entityID = 0; entityID < world.entity_count; entityID++)
-	{
-		const match_world_state::entity& entity = world.entity_states[entityID];
-		vec2<float> loc = { (float)entity.location.x, (float)entity.location.y };
-
-		if (!is_visible_in_viewport(loc, bottomLeft, viewportSize)) continue;
-
-		render_entity& renderEntity = entities[visibleCount++];
-		renderEntity.viewport_x = loc.x - bottomLeft.x;
-		renderEntity.viewport_y = loc.y - bottomLeft.y;
-		renderEntity.target_viewport_x = (float)entity.target_location.x - bottomLeft.x;
-		renderEntity.target_viewport_y = (float)entity.target_location.y - bottomLeft.y;
-	}
-
-	render_state.entity_count = visibleCount;
-	render_state.entity_states = entities;
 }
