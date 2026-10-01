@@ -6,9 +6,10 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
-import { init_render, draw, page_to_world } from './render.js';
+import { init_render, draw } from './render.js';
 import { init_input, get_last_mouse_world_location } from './input.js';
 import { init_debug_panel, update_debug_panel } from './debug.js';
+import { FRONTEND_CAMERA } from './camera.js';
 
 function websocket_url() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -26,8 +27,16 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
     {
         console.log("Joined match.");
 
+        const initialRenderState = Backend.read_render_state();
+        const worldSize = initialRenderState.world_size;
+
+        // Init camera world size and center on world center.
+        FRONTEND_CAMERA.set_world_size(worldSize.width, worldSize.height);
+        FRONTEND_CAMERA.set_view_center({ x: worldSize.width / 2, y: worldSize.height / 2 });
+
         canvas.hidden = false;
 
+        // Register major game-related tick events with core.
         Core.register_frame_callback((delta_time_s) => {
             Backend.tick(delta_time_s);
             const renderState = Backend.read_render_state();

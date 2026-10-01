@@ -17,8 +17,8 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 
 	game_match_start_params& params = *params_ptr;
 	params.tick_rate = 20;
-	params.player_count = 4;
-	params.world_size_regions = { 1, 1 };
+	params.player_count = 8;
+	params.world_size_regions = { 4, 4 };
 	params.max_tick = MATCH_TEST_SCENARIO_TICKS;
 
 	// Initialize player entity start locations.

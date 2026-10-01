@@ -17,7 +17,7 @@ struct game_client;
 // BEGIN CLIENT INPUT
 
 // Sets current viewport control input state.
-void game_client_set_viewport_input(game_client& backend, vec2<ui16> view_rect_min, vec2<ui16> view_rect_max);
+void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max);
 
 // Queues a command to set the controlled player's entity target location.
 void game_client_input_set_target_loc(game_client& backend, int x, int y);
@@ -31,8 +31,8 @@ struct game_client_input_state
 {
 	struct viewport
 	{
-		vec2<ui16> view_rect_min; // Min rectangle coordinates of the world area the frontend wants to view, in world tiles.
-		vec2<ui16> view_rect_max; // Max rectangle coordinates of the world area the frontend wants to view, in world tiles.
+		vec2f view_rect_min; // Min rectangle corner of the world area the frontend wants to view, in world tiles.
+		vec2f view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
 	} viewport_control;
 
 	// Queue of match commands built by input events (e.g. game_client_input_set_target_loc), drained into the next
@@ -52,8 +52,8 @@ struct client_viewport_state
 {
 	vec2<ui16> world_size; // Total world size in tiles this viewport is viewing.
 
-	vec2<ui16> view_rect_min; // Min rectangle corner of the world area the frontend wants to view, in world tiles.
-	vec2<ui16> view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
+	vec2f view_rect_min; // Min rectangle corner of the world area the frontend wants to view, in world tiles.
+	vec2f view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
 };
 
 // Rebuilds Render State from the local match's current state and viewport. controlled_player_id and the

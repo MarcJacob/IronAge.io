@@ -18,7 +18,7 @@ void game_client_input_set_target_loc(game_client& backend, int x, int y)
 	//payload->new_target = { (ui16)x, (ui16)y };
 }
 
-void game_client_set_viewport_input(game_client& backend, vec2<ui16> view_rect_min, vec2<ui16> view_rect_max)
+void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
 {
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
 
@@ -33,8 +33,8 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	case INPUT_EVENT_TYPE::VIEWPORT_CONTROL:
 	{
 		auto& payload = *(input_event_payload_viewport_control*)payload_bytes;
-		game_client_set_viewport_input(backend, 
-			vec2f{ payload.view_rect_min_x, payload.view_rect_min_y }, 
+		game_client_set_viewport_input(backend,
+			vec2f{ payload.view_rect_min_x, payload.view_rect_min_y },
 			vec2f{ payload.view_rect_max_x, payload.view_rect_max_y });
 		return true;
 	}

@@ -4,10 +4,14 @@
 
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
+import { FRONTEND_CAMERA } from "./camera.js"
 
 let canvas: HTMLCanvasElement;
 
 let ctx: CanvasRenderingContext2D;
+
+let tintCanvas: HTMLCanvasElement | null = null;
+let tintCtx: CanvasRenderingContext2D | null = null;
 
 class RESOURCE_SPRITE
 {
@@ -59,6 +63,9 @@ let RENDER_STATE =
 export function init_render(canvas_element : HTMLCanvasElement) {
     canvas = canvas_element;
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    tintCanvas = document.createElement('canvas');
+    tintCtx = tintCanvas.getContext('2d') as CanvasRenderingContext2D;
+    FRONTEND_CAMERA.set_canvas_size(canvas.width, canvas.height);
 
     // LOAD RENDER RESOURCES
     console.log("Loading render resources...");
@@ -72,8 +79,9 @@ export function page_to_world(clientX: number, clientY: number)
     const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
     const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
 
-    const worldX = RENDER_STATE.viewportBottomLeftX + canvasX / RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const worldY = RENDER_STATE.viewportBottomLeftY + (canvas.height - canvasY) / RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const viewRect = FRONTEND_CAMERA.get_rect();
+    const worldX = viewRect.min.x + canvasX / canvas.width * (viewRect.max.x - viewRect.min.x);
+    const worldY = viewRect.min.y + (canvas.height - canvasY) / canvas.height * (viewRect.max.y - viewRect.min.y);
 
     return {
         x: Math.min(Math.max(Math.round(worldX), 0), RENDER_STATE.WORLD_SIZE.width - 1),
@@ -81,8 +89,8 @@ export function page_to_world(clientX: number, clientY: number)
     };
 }
 
-// Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas,
-// (0,0) = bottom-left, for viewport-relative input (e.g. zoom-to-cursor) that doesn't need a world position.
+// Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas.
+// (0,0) = bottom-left.
 export function page_to_viewport_fraction(clientX: number, clientY: number)
 {
     const rect = canvas.getBoundingClientRect();
@@ -105,19 +113,23 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
 
     ctx.drawImage(entity_img, drawX, drawY, w, h);
 
-    // Tint the icon's own drawn pixels only (source-atop only paints where the image already set alpha) according to diplo status with local player.
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-atop';
-    if (owned_by_local_player)
-    {
-        ctx.fillStyle = DIPLOMATIC_TINTS.OWN;
-    }
-    else
-    {
-        ctx.fillStyle = DIPLOMATIC_TINTS.ENEMY;
-    }
-    ctx.fillRect(drawX, drawY, w, h);
-    ctx.restore();
+    // Tint on an isolated transparent surface so compositing cannot clear the world or other entities.
+    if (tintCanvas === null || tintCtx === null) return;
+
+    const tintWidth = Math.max(1, Math.ceil(w));
+    const tintHeight = Math.max(1, Math.ceil(h));
+    tintCanvas.width = tintWidth;
+    tintCanvas.height = tintHeight;
+
+    tintCtx.clearRect(0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'source-over';
+    tintCtx.drawImage(entity_img, 0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'source-in';
+    tintCtx.fillStyle = owned_by_local_player ? DIPLOMATIC_TINTS.OWN : DIPLOMATIC_TINTS.ENEMY;
+    tintCtx.fillRect(0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'source-over';
+
+    ctx.drawImage(tintCanvas, drawX, drawY, w, h);
 
 }
 
@@ -139,6 +151,18 @@ function draw_entity_army(viewport_x: number, viewport_y: number, scale: number,
     draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, scale, owned_by_local_player);
 }
 
+// Fills the world's projected area white, leaving the out-of-world canvas area transparent/dark.
+function draw_world_background()
+{
+    const left = (0 - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const right = (RENDER_STATE.WORLD_SIZE.width - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const top = canvas.height - (RENDER_STATE.WORLD_SIZE.height - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const bottom = canvas.height - (0 - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(left, top, right - left, bottom - top);
+}
+
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
 function draw_world_border()
 {
@@ -155,13 +179,14 @@ function draw_world_border()
 // Draws the given render state (see backend.read_render_state()).
 export function draw(render_state: Backend.BackendRenderState)
 {
-    RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE = Math.min(canvas.height, canvas.width) / render_state.viewport_width;
+    RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE = canvas.width / render_state.viewport_width;
     RENDER_STATE.viewportBottomLeftX = render_state.viewport_bottom_left_x;
     RENDER_STATE.viewportBottomLeftY = render_state.viewport_bottom_left_y;
     RENDER_STATE.WORLD_SIZE = render_state.world_size;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    draw_world_background();
     draw_world_border();
 
     for (let i = 0; i < render_state.entity_count; i++)
