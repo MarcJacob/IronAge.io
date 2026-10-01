@@ -322,13 +322,14 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 		entity_guid settlementGUID = match_spawn_settlement(out_match, settlementStartState);
 
 		// Temp: Spawn an army near every settlement.
-		world_location settlementLoc = world_get_entity_location(out_match, settlementGUID);
+		world_location startLoc = world_get_entity_location(out_match, settlementGUID) + vec2i{ -10, 10 };
+
 		world_entity_armies::single newArmy = {
 			.owner = settlementStartState.owner,
-			.location = settlementLoc + vec2i{-10, 10},
+			.location = startLoc,
 			.movement = {
 				.travel_speed = 10,
-				.move_target = settlementLoc,
+				.move_target = startLoc,
 			},
 			.composition = {
 				.levies = 100,
@@ -378,7 +379,7 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 		if (settlements.active_count > 1 && (match.tick + settlementIndex * 10) % 500 == 0)
 		{
 			int destIndex = match.tick * 1000 % (settlements.max_count / (settlementIndex + 1));
-			while (destIndex == settlementIndex || !settlements.guids[destIndex].is_valid() == false)
+			while (destIndex == settlementIndex || !settlements.guids[destIndex].is_valid())
 			{
 				destIndex = (destIndex + 1) % settlements.max_count;
 			}
