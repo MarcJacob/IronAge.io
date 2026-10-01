@@ -8,6 +8,8 @@
 using world_location = vec2<ui16>;
 using world_dimensions = vec2<ui16>;
 
+static constexpr world_location INVALID_WORLD_LOCATION = { ~0, ~0 };
+
 // Types of terrain tiles.
 enum TERRAIN_TILE_TYPE : ui8
 {
@@ -82,25 +84,30 @@ union entity_guid
 			{
 				ui16 _index : 12; // Up to 4098 active macro entities at a time, per type.
 				ui16 _extra : 12; // Based on something unpredictable like time of creation.
-			} _static;
+			} _macro;
 			struct
 			{
 				ui16 _index; // Up to 65635 active micro entities at a time per type.
 				ui8 _extra; // Based on something unpredictable like time of creation.
-			} _dynamic;
+			} _micro;
 		};
 	};
+
+	inline bool is_valid() const { return guid != 0; }
 };
 
 // Invalid / non-existent entity value. Note that non-zero values may still reference an entity that is not valid, in which case that is because it doesn't exist anymore.
 constexpr entity_guid INVALID_ENTITY_GUID = { 0 };
 
+bool operator==(const entity_guid& guid_a, const entity_guid& guid_b)
+{
+	return guid_a.guid == guid_b.guid;
+}
+
 // Reused entity sub-components
 
 struct world_entity_movement
 {
-	bool* _activeFlags;
-
 	ui8 travel_speed; // Speed in tiles per second.
 	ui8 fractional_loc; // Normalized distance from logical location tile center as the entity travels. At 0, dead center. At 1, at tile edge.
 	world_location move_target; // Location the entity is moving towards.
@@ -109,16 +116,13 @@ struct world_entity_movement
 struct world_entity_container
 {
 	ui16 max_count;
-	bool* _activeFlags; // Whether a specific entry is being used by an actual entity instance or not.
+	entity_guid* guids; // Computed GUIDs for active entities. Set to 0 for inactive slots.
+	ui16 active_count; // How many entities in the container are known to be active.
 };
 
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
-	// Number of settlements currently spawned. Since spawning always claims the lowest free slot, active settlements
-	// are exactly indices [0, active_count) - lets consumers stop at active_count instead of scanning to max_count.
-	ui16 active_count;
-
 	match_player_id*	owners;
 	world_location*		locations;
 

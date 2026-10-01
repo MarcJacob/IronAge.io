@@ -81,14 +81,14 @@ struct vec2
 {
 	Numeric x, y;
 
-	vec2() : x(0), y(0) {}
-	vec2(Numeric in_x, Numeric in_y) : x(in_x), y(in_y) {}
+	constexpr vec2() : x(0), y(0) {}
+	constexpr vec2(Numeric in_x, Numeric in_y) : x(in_x), y(in_y) {}
 
 	template<typename OtherNumeric>
-	vec2(const vec2<OtherNumeric>& other) : x((Numeric)other.x), y((Numeric)other.y) {}
+	constexpr vec2(const vec2<OtherNumeric>& other) : x((Numeric)other.x), y((Numeric)other.y) {}
 
 	template<typename OtherNumeric>
-	vec2(OtherNumeric in_x, OtherNumeric in_y) : x((Numeric)in_x), y((Numeric)in_y) {}
+	constexpr vec2(OtherNumeric in_x, OtherNumeric in_y) : x((Numeric)in_x), y((Numeric)in_y) {}
 };
 
 using vec2f = vec2<float>;
@@ -99,6 +99,13 @@ template<typename VecTypeA, typename VecTypeB>
 static inline vec2<VecTypeA> operator-(const vec2<VecTypeA>& vec_a, vec2<VecTypeB> vec_b)
 {
 	return { vec_a.x - vec_b.x, vec_a.y - vec_b.y };
+}
+
+// Vec2 + Vec2
+template<typename VecTypeA, typename VecTypeB>
+static inline vec2<VecTypeA> operator+(const vec2<VecTypeA>& vec_a, vec2<VecTypeB> vec_b)
+{
+	return { vec_a.x + vec_b.x, vec_a.y + vec_b.y };
 }
 
 // Vec2 * Scalar

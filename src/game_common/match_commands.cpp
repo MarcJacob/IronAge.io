@@ -9,14 +9,34 @@
 // Example of command sanity check function.
 bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
-	// TODO(Marc): Find entity ID, determine if it can move and if it is controllable by this player.
-	return false;
+	ENTITY_TYPE entityType = command.entity._type;
+
+	switch (entityType)
+	{
+		// With valid types, just need to check that player can control them.
+	case ENTITY_TYPE::ARMY:
+		return match.world->entities.armies.owners[command.entity._micro._index] == player;
+	default:
+		// Command invalid: entity can't move or can't be ordered to move somewhere.
+		return false;
+	}
 }
 
 // Example of a command apply function.
 void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
-	// TODO(Marc): Find entity from ID in the command and set its target move location if possible.
+	ENTITY_TYPE entityType = command.entity._type;
+
+	switch (entityType)
+	{
+		// With valid types, just need to check that player can control them.
+	case ENTITY_TYPE::ARMY:
+		match.world->entities.armies.movements[command.entity._micro._index].move_target = command.move_target;
+	default:
+		// Command invalid: entity can't move or can't be ordered to move somewhere.
+		break;
+	}
+
 }
 
 // ENTITY SET ATTACK TARGET

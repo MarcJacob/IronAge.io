@@ -26,8 +26,8 @@ bool world_alloc_settlements(mem_arena& memory, match_world_state& world, ui32 c
 	settlements.max_count = count;
 	settlements.active_count = 0;
 
-	settlements._activeFlags = memory.alloc<bool>(count);
-	if (settlements._activeFlags == nullptr) return false;
+	settlements.guids = memory.alloc<entity_guid>(count);
+	if (settlements.guids == nullptr) return false;
 
 	settlements.owners = memory.alloc<match_player_id>(count);
 	if (settlements.owners == nullptr) return false;
@@ -59,8 +59,8 @@ bool world_alloc_caravans(mem_arena& memory, match_world_state& world, ui32 coun
 
 	caravans.max_count = count;
 
-	caravans._activeFlags = memory.alloc<bool>(count);
-	if (caravans._activeFlags == nullptr) return false;
+	caravans.guids = memory.alloc<entity_guid>(count);
+	if (caravans.guids == nullptr) return false;
 
 	caravans.locations = memory.alloc<world_location>(count);
 	if (caravans.locations == nullptr) return false;
@@ -83,8 +83,8 @@ bool world_alloc_armies(mem_arena& memory, match_world_state& world, ui32 count)
 
 	armies.max_count = count;
 
-	armies._activeFlags = memory.alloc<bool>(count);
-	if (armies._activeFlags == nullptr) return false;
+	armies.guids = memory.alloc<entity_guid>(count);
+	if (armies.guids == nullptr) return false;
 
 	armies.owners = memory.alloc<match_player_id>(count);
 	if (armies.owners == nullptr) return false;
@@ -151,20 +151,28 @@ entity_guid match_spawn_settlement(game_match& match, const world_entity_settlem
 	match_world_state& world = *match.world;
 
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities.settlements.max_count && world.entities.settlements._activeFlags[freeIndex])
+	while (freeIndex < world.entities.settlements.max_count && world.entities.settlements.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
 	ASSERT(freeIndex < world.entities.settlements.max_count);
 
-	world.entities.settlements._activeFlags[freeIndex] = true;
+	// Compute GUID
+	world.entities.settlements.guids[freeIndex] = {
+		._type = ENTITY_TYPE::SETTLEMENT,
+	};
+	world.entities.settlements.guids[freeIndex]._macro = {
+		._index = freeIndex,
+		._extra = (ui16)(match.tick % 0x100),
+	};
+
 	world.entities.settlements.active_count++;
 
 	entity_guid newID = { 0 };
 	newID._type = ENTITY_TYPE::SETTLEMENT;
-	newID._static._index = freeIndex;
-	newID._static._extra = match.tick % 0xFFFF;
+	newID._macro._index = freeIndex;
+	newID._macro._extra = match.tick % 0xFFFF;
 
 	// Apply start state.
 	world.entities.settlements.owners[freeIndex] = start_state.owner;
@@ -186,19 +194,28 @@ entity_guid match_spawn_caravan(game_match& match, const world_entity_caravans::
 	match_world_state& world = *match.world;
 
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities.caravans.max_count && world.entities.caravans._activeFlags[freeIndex])
+	while (freeIndex < world.entities.caravans.max_count && world.entities.caravans.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
 	ASSERT(freeIndex < world.entities.caravans.max_count);
 
-	world.entities.caravans._activeFlags[freeIndex] = true;
+	// Compute GUID
+	world.entities.caravans.guids[freeIndex] = {
+		._type = ENTITY_TYPE::CARAVAN,
+	};
+	world.entities.caravans.guids[freeIndex]._micro = {
+		._index = freeIndex,
+		._extra = (ui8)(match.tick % 0xFF),
+	};
+
+	world.entities.caravans.active_count++;
 
 	entity_guid newID = { 0 };
 	newID._type = ENTITY_TYPE::CARAVAN;
-	newID._dynamic._index = freeIndex;
-	newID._dynamic._extra = match.tick % 0x100;
+	newID._micro._index = freeIndex;
+	newID._micro._extra = match.tick % 0x100;
 
 	// Apply start state.
 	world.entities.caravans.locations[freeIndex] = start_state.location;
@@ -217,19 +234,28 @@ entity_guid match_spawn_army(game_match& match, const world_entity_armies::singl
 	match_world_state& world = *match.world;
 
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities.armies.max_count && world.entities.armies._activeFlags[freeIndex])
+	while (freeIndex < world.entities.armies.max_count && world.entities.armies.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
 	ASSERT(freeIndex < world.entities.armies.max_count);
 
-	world.entities.armies._activeFlags[freeIndex] = true;
+	// Compute GUID
+	world.entities.armies.guids[freeIndex] = {
+		._type = ENTITY_TYPE::ARMY,
+	};
+	world.entities.armies.guids[freeIndex]._micro = {
+		._index = freeIndex,
+		._extra = (ui8)(match.tick % 0xFF),
+	};
+
+	world.entities.armies.active_count++;
 
 	entity_guid newID = { 0 };
 	newID._type = ENTITY_TYPE::ARMY;
-	newID._dynamic._index = freeIndex;
-	newID._dynamic._extra = match.tick % 0x100;
+	newID._micro._index = freeIndex;
+	newID._micro._extra = match.tick % 0x100;
 
 	// Apply start state.
 	world.entities.armies.owners[freeIndex] = start_state.owner;
@@ -240,6 +266,24 @@ entity_guid match_spawn_army(game_match& match, const world_entity_armies::singl
 	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
 
 	return newID;
+}
+
+world_location world_get_entity_location(game_match& match, entity_guid entity)
+{
+	ENTITY_TYPE type = entity._type;
+	
+	switch (type)
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		return match.world->entities.settlements.locations[entity._macro._index];
+	case ENTITY_TYPE::CARAVAN:
+		return match.world->entities.caravans.locations[entity._micro._index];
+	case ENTITY_TYPE::ARMY:
+		return match.world->entities.armies.locations[entity._micro._index];
+	default:
+		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
+		return INVALID_WORLD_LOCATION;
+	}
 }
 
 constexpr ui64 match_get_required_mem(game_match_start_params& params)
@@ -275,7 +319,23 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	for (ui32 settlementIndex = 0; settlementIndex < params.start_settlement_count; settlementIndex++)
 	{
 		world_entity_settlements::single& settlementStartState = params.get_settlement_start_state(settlementIndex);
-		match_spawn_settlement(out_match, settlementStartState);
+		entity_guid settlementGUID = match_spawn_settlement(out_match, settlementStartState);
+
+		// Temp: Spawn an army near every settlement.
+		world_location settlementLoc = world_get_entity_location(out_match, settlementGUID);
+		world_entity_armies::single newArmy = {
+			.owner = settlementStartState.owner,
+			.location = settlementLoc + vec2i{-10, 10},
+			.movement = {
+				.travel_speed = 10,
+				.move_target = settlementLoc,
+			},
+			.composition = {
+				.levies = 100,
+			},
+		};
+
+		entity_guid armyGUID = match_spawn_army(out_match, newArmy);
 	}
 
 	return true;
@@ -292,6 +352,9 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 	// Run world behavior.
 	match_world_state& world = *match.world;
 
+	// TEMP WORLD SIMULATION CODE
+	// TODO(Marc): Move to a dedicated subcomponent of the game common code. Make it multithreadable.
+
 	// Pseudo-code / Sequence:
 	// - 1: Settlement growth / eco tick (log growth based on local wealth / population).
 	// - 2: Caravans & Army movement target determination (caravans flee from nearby non-friendly armies or go towards destination, armies go to attack target or move target if set, if not engaged).
@@ -301,4 +364,93 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 	// - 5: Engagement entities: caravans are instantly flagged for destruction, armies take manpower damage and deal manpower damage based on some simple formula. If no manpower left, get destroyed.
 	// - 6: Caravans arrival in target settlement (Increase origin settlement local wealth by 1) then get destroyed.
 	// - 7: Caravans automatically spawn from settlements if 1000 / local wealth % match tick == 0. Destination is chosen at as much random as possible without libc deterministically.
+
+	world_entity_settlements& settlements = world.entities.settlements;
+	world_entity_caravans& caravans = world.entities.caravans;
+	world_entity_armies& armies = world.entities.armies;
+
+	// Temp: Randomly spawn caravans at settlements.
+	for (ui32 settlementIndex = 0; settlementIndex < world.entities.settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+		// Every 500 ticks, spawn a caravan. TODO: Do this at random, with higher chance with lower total caravan count and local wealth.
+		if (settlements.active_count > 1 && (match.tick + settlementIndex * 10) % 500 == 0)
+		{
+			int destIndex = match.tick * 1000 % (settlements.max_count / (settlementIndex + 1));
+			while (destIndex == settlementIndex || !settlements.guids[destIndex].is_valid() == false)
+			{
+				destIndex = (destIndex + 1) % settlements.max_count;
+			}
+
+			entity_guid destGUID = settlements.guids[destIndex];
+
+			world_entity_caravans::single newCaravan = {
+				.location = settlements.locations[settlementIndex],
+				.movement =
+				{
+					.travel_speed = 10,
+					.move_target = settlements.locations[destIndex],
+				},
+				.origin_settlement = settlements.guids[settlementIndex],
+				.dest_settlement = destGUID,
+			};
+			match_spawn_caravan(match, newCaravan);
+		}
+	}
+
+	// Make sure caravans have their movement target set to their destination settlement.
+	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+	{
+		if (!caravans.guids[caravanIndex].is_valid()) continue;
+
+		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex]._macro._index];
+		caravans.movements[caravanIndex].move_target = destLoc;
+	}
+
+	// TEMP: Move armies and caravans towards their destination.
+	auto process_entity_movement = [&](const world_entity_movement& movement, world_location& location)
+		{
+			// Ignore move speed. Manhattan movement.
+			// TODO: Actual movement algorithm using fractional tile locations for precise movement.
+
+			if (location.x > movement.move_target.x) location.x--;
+			else if (location.x < movement.move_target.x) location.x++;
+			if (location.y > movement.move_target.y) location.y--;
+			else if (location.y < movement.move_target.y) location.y++;
+		};
+
+	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+	{
+		if (!caravans.guids[caravanIndex].is_valid()) continue;
+
+		process_entity_movement(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+	}
+
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid()) continue;
+
+		process_entity_movement(armies.movements[armyIndex], armies.locations[armyIndex]);
+	}
+
+	// Once caravans reach close enough to their destination, despawn them and increase origin & destination local wealth.
+	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+	{
+		if (!caravans.guids[caravanIndex].is_valid()) continue;
+
+		const world_location& caravanLoc = caravans.locations[caravanIndex];
+		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex]._macro._index];
+
+		if (vec2_dist_squared(caravanLoc, destLoc) < 5)
+		{
+			// Despawn caravan.
+			caravans.guids[caravanIndex] = INVALID_ENTITY_GUID;
+			caravans.active_count--;
+
+			// Increase local wealth in origin and destination town.
+			settlements.local_wealth[caravans.dest_settlements[caravanIndex]._macro._index]++;
+			settlements.local_wealth[caravans.origin_settlements[caravanIndex]._macro._index]++;
+		}
+	}
 }

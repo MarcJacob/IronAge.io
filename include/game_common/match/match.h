@@ -11,7 +11,7 @@ struct game_match_start_params;
 using match_player_id = ui16;
 using match_player_count = match_player_id; // Alias type for places where we need to count player.
 
-static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0;
+static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0; // TODO(Marc): Make this 0 so things have an invalid player ID by default.
 
 // Main memory ownership and definition structure for a single ongoing match.
 struct game_match

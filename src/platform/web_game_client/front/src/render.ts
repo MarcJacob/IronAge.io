@@ -30,6 +30,7 @@ class RESOURCES_STORE
     // ENTITY SPRITES
     ENTITY = {
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
+        CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
     };
 
@@ -142,11 +143,20 @@ function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: n
     draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, scale, owned_by_local_player);
 }
 
+// Draws a caravan entity icon at the given viewport location, sized 'scale' world tiles across.
+function draw_entity_caravan(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
+{
+    if (RESOURCES == null) return;
+    if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
+
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, scale, owned_by_local_player);
+}
+
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
 function draw_entity_army(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
 {
     if (RESOURCES == null) return;
-    if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
+    if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
     draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, scale, owned_by_local_player);
 }
@@ -196,6 +206,10 @@ export function draw(render_state: Backend.BackendRenderState)
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
             draw_entity_settlement(entity.viewport_x, entity.viewport_y, entity.size_viewport,
                 entity.owner === render_state.controlled_player_id);
+        }
+        else if (entity.entity_type == Backend.ENTITY_TYPE.CARAVAN) {
+            draw_entity_caravan(entity.viewport_x, entity.viewport_y, entity.size_viewport,
+                entity.owner == render_state.controlled_player_id);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
             draw_entity_army(entity.viewport_x, entity.viewport_y, entity.size_viewport,

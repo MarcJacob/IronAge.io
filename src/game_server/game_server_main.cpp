@@ -93,7 +93,12 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	slot.match.last_tick_time = server.uptime_ms;
 
 	game_match& match = *slot.match.match_ptr;
-	match_start(slot.slot_memory, server.uptime_ms, *slot.match_params, match);
+	if (!match_start(slot.slot_memory, server.uptime_ms, *slot.match_params, match))
+	{
+		server.logf("MATCH", LOG_ERROR, "Failed to start match in slot %d.", slot_index);
+		slot.state = MATCH_SLOT_STATE::AWAITING_CLEANUP;
+		return false;
+	}
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
 
@@ -344,13 +349,6 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotInd
 
 		slot.match.last_tick_time = nextTickTimeMs;
 		nextTickTimeMs += msPerTick;
-
-		// End match after reaching maximum number of ticks.
-		if (slot.match.match_ptr->tick == slot.match_params->max_tick)
-		{
-			game_server_end_match_slot(server, slotIndex);
-			break;
-		}
 	}
 }
 
@@ -477,7 +475,7 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Initialize all match slots.
 	newServer->match_slots = newServer->main_memory.alloc<match_slot>(newServer->init_params.match_slot_count);
 
-	constexpr ui64 MEM_PER_SLOT = MiB(2); // TEMP(Marc): Just keep this number above the required memory for a match or a lobby, whichever is larger.
+	constexpr ui64 MEM_PER_SLOT = MiB(64); // TEMP(Marc): Just keep this number above the required memory for a match or a lobby, whichever is larger.
 	for (ui8 matchSlotIndex = 0; matchSlotIndex < init_params.match_slot_count; matchSlotIndex++)
 	{
 		mem_arena slot_mem = mem_arena_create_sub(newServer->main_memory, MEM_PER_SLOT);	
