@@ -6,15 +6,6 @@
 static constexpr float ENTITY_RADIUS = 5.0f; // TODO: sync this with JS instead of assuming a fixed size for every entity.
 static constexpr ui8 SETTLEMENT_RENDER_SIZE = 6; // Square size of a settlement icon in viewport tiles.
 
-// Gets the size of viewport in world units.
-vec2<float> client_backend_get_viewport_size(const client_viewport_state& viewport)
-{
-	return {
-		viewport.viewport_size_min.x + (viewport.viewport_size_max.x - viewport.viewport_size_min.x) * viewport.zoom_level,
-		viewport.viewport_size_min.y + (viewport.viewport_size_max.y - viewport.viewport_size_min.y) * viewport.zoom_level,
-	};
-}
-
 // Whether a circle of ENTITY_RADIUS centered on loc overlaps [bottom_left, bottom_left + size].
 static bool is_visible_in_viewport(vec2<float> loc, vec2<float> bottom_left, vec2<float> size)
 {
@@ -39,8 +30,8 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 	render_memory.clear();
 
 	const match_world_state& world = *match.world;
-	vec2<float> viewportSize = client_backend_get_viewport_size(viewport);
-	vec2<float> bottomLeft = viewport.bottom_left_corner;
+	vec2f viewportSize = viewport.view_rect_max - viewport.view_rect_min;
+	vec2f bottomLeft = viewport.view_rect_min;
 
 	render_state.viewport.viewport_bottom_left = { bottomLeft.x, bottomLeft.y };
 	render_state.viewport.viewport_width = viewportSize.x;

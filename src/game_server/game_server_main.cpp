@@ -247,7 +247,7 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 // Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
 static void game_server_tick_match_slot_lobby(game_server& server, ui8 slotIndex, ui8 connectionCount)
 {
-	if (connectionCount < 2) return; // Not enough players yet.
+	if (connectionCount < 1) return; // Wait until a player connects.
 
 	game_server_start_match_slot(server, slotIndex);
 }

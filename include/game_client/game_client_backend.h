@@ -68,9 +68,8 @@ static_assert(sizeof(payload_struct) <= INPUT_EVENT_MAX_PAYLOAD_SIZE, "Input eve
 
 struct input_event_payload_viewport_control
 {
-	float pan_x, pan_y;
-	float zoom_delta;
-	float cursor_viewport_frac_x, cursor_viewport_frac_y;
+	float view_rect_min_x, view_rect_min_y;
+	float view_rect_max_x, view_rect_max_y;
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_viewport_control);
 

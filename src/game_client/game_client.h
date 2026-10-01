@@ -17,7 +17,7 @@ struct game_client;
 // BEGIN CLIENT INPUT
 
 // Sets current viewport control input state.
-void game_client_set_viewport_input(game_client& backend, vec2<float> pan_vector, float zoom_delta, vec2f zoom_target);
+void game_client_set_viewport_input(game_client& backend, vec2<ui16> view_rect_min, vec2<ui16> view_rect_max);
 
 // Queues a command to set the controlled player's entity target location.
 void game_client_input_set_target_loc(game_client& backend, int x, int y);
@@ -31,9 +31,8 @@ struct game_client_input_state
 {
 	struct viewport
 	{
-		vec2f movement_vec;
-		float zoom_level; // Current desired zoom level.
-		vec2f zoom_target; // Normalized viewport-space coordinates for where to center (de)zooming.
+		vec2<ui16> view_rect_min; // Min rectangle coordinates of the world area the frontend wants to view, in world tiles.
+		vec2<ui16> view_rect_max; // Max rectangle coordinates of the world area the frontend wants to view, in world tiles.
 	} viewport_control;
 
 	// Queue of match commands built by input events (e.g. game_client_input_set_target_loc), drained into the next
@@ -48,15 +47,13 @@ struct game_client_input_state
 // BEGIN CLIENT RENDER
 
 // Contains information about what the client's viewport: where in the world it is located, its zoom level...
+// Indirectly set / driven by viewport input, used by render state to determine what's in view, and where.
 struct client_viewport_state
 {
 	vec2<ui16> world_size; // Total world size in tiles this viewport is viewing.
 
-	vec2<float> bottom_left_corner; // World location of the viewport's bottom left corner. Float for smooth panning.
-	float zoom_level; // Current desired normalized zoom level. The lower, the fewer world tiles are visible at once.
-
-	vec2<ui16> viewport_size_min = {50, 50}; // Minimum dimensions of the viewport into the world at zoom_level = 0.
-	vec2<ui16> viewport_size_max = {1000, 1000}; // Maximum dimensions of the viewport into the world at zoom_level = 1.
+	vec2<ui16> view_rect_min; // Min rectangle corner of the world area the frontend wants to view, in world tiles.
+	vec2<ui16> view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
 };
 
 // Rebuilds Render State from the local match's current state and viewport. controlled_player_id and the

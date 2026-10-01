@@ -23,7 +23,7 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 
 	target_link_options(IronAgeIO_WebClient PRIVATE
 	    --target=wasm32-unknown-unknown 
-		-nostdlib -fuse-ld=lld -Wl,--no-entry -Wl,--export-dynamic, -Wl,--global-base=1024)
+		-nostdlib -fuse-ld=lld -Wl,--no-entry -Wl,--export-dynamic)
 else()
 	# Win32 GAME SERVER
 	add_executable (IronAgeIO_GameServer 
