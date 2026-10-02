@@ -21,35 +21,52 @@ export class WorldSize
 // interpolation, ...) each hook into the frame loop without owning one, or knowing about each other.
 
 type FrameCallback = (delta_time_s: number) => void;
+type OnMatchJoinedCallback = () => void;
 
-const frameCallbacks: FrameCallback[] = [];
-let lastFrameTimeMs: number | null = null;
-let frameLoopStarted = false;
+const FRAME_CALLBACKS: FrameCallback[] = [];
+let LAST_FRAME_TIME_MS: number | null = null;
+let FRAME_LOOP_STARTED = false;
+
+const ON_MATCH_JOINED_CALLBACKS: OnMatchJoinedCallback[] = [];
 
 export function register_frame_callback(callback: FrameCallback): void
 {
-    frameCallbacks.push(callback);
+    FRAME_CALLBACKS.push(callback);
+}
+
+export function register_on_match_joined_callback(callback: OnMatchJoinedCallback): void
+{
+    ON_MATCH_JOINED_CALLBACKS.push(callback);
 }
 
 function frame_tick(nowMs: number): void
 {
-    if (lastFrameTimeMs !== null)
+    if (LAST_FRAME_TIME_MS !== null)
     {
-        const delta_time_s = (nowMs - lastFrameTimeMs) / 1000;
-        for (const callback of frameCallbacks) callback(delta_time_s);
+        const delta_time_s = (nowMs - LAST_FRAME_TIME_MS) / 1000;
+        for (const callback of FRAME_CALLBACKS) callback(delta_time_s);
     }
 
-    lastFrameTimeMs = nowMs;
+    LAST_FRAME_TIME_MS = nowMs;
     requestAnimationFrame(frame_tick);
 }
 
 // Starts the frame loop. Idempotent - safe to call more than once.
 export function start_frame_loop(): void
 {
-    if (frameLoopStarted) return;
-    frameLoopStarted = true;
+    if (FRAME_LOOP_STARTED) return;
+    FRAME_LOOP_STARTED = true;
 
     requestAnimationFrame(frame_tick);
 }
 
+export function broadcast_on_match_joined(): void
+{
+    for (const callback of ON_MATCH_JOINED_CALLBACKS) callback();
+}
+
+export function broadcast_on_match_ended(): void
+{
+    // ... (match ended event for cleanup / menu nav).
+}
 

@@ -13,6 +13,7 @@
 #include "game_client_net.cpp"
 #include "game_client_render.cpp"
 #include "game_client_input.cpp"
+#include "game_client_query.cpp"
 
 game_client* game_client_init(mem_arena& backend_memory)
 {

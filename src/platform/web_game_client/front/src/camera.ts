@@ -1,5 +1,9 @@
 // Frontend-owned camera state. Produces the world-space rectangle sent to the client backend.
-// NOTE(Marc): For now this is all AI-generated and only reviewed by me, we'll see if I need to take a more direct hand in designing good-feeling camera movements.
+// NOTE(Marc): For now this is all AI - generated and only reviewed by me, we'll see if I need to take a more direct hand in designing good-feeling camera movements.
+
+import * as Core from "./core.js"
+import * as Backend from "./backend.js"
+
 export interface CameraPoint
 {
     x: number;
@@ -165,3 +169,18 @@ export class Camera
 }
 
 export const FRONTEND_CAMERA = new Camera();
+
+function on_match_joined()
+{
+    // Assume backend has read its first render state.
+    const worldSize = (Backend.LAST_RENDER_STATE as Backend.RenderState).world_size;
+
+    // Init camera world size and center on world center.
+    FRONTEND_CAMERA.set_world_size(worldSize.width, worldSize.height);
+    FRONTEND_CAMERA.set_view_center({ x: worldSize.width / 2, y: worldSize.height / 2 });
+}
+
+export function init_camera_system()
+{
+    Core.register_on_match_joined_callback(on_match_joined);
+}

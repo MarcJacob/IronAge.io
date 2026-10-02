@@ -38,10 +38,12 @@ panning, by building a proper camera/viewport and input system.
     the wasm platform layer owns when to ask and how to marshal the
     result to JS, since that request/response flow is the platform-specific
     part, not the data access itself.
-  - Side effect to pick up opportunistically, not required for this task:
-    `command_set_entity_move_target_validity_check`/`_apply` index straight
-    into `armies.owners[...]` by hand - could go through
-    `query_entity_state_army` instead once it exists.
+  - Step 1 [x] (2026-10-02, game_common side): `render_entity.guid`,
+    `match_entity_is_valid(match, guid)` (type + index + full-guid compare
+    against stored guid), `query_entity_state_*(match, guid, single&) -> bool`,
+    command validity check/apply use `match_entity_is_valid` (not the full query).
+  - Step 2 [ ]: `game_client_backend` query wrapper, wasm export,
+    `backend.ts` marshaling, JS hit-testing + selected state.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
   canvas (DOM overlay, like the debug panel).
 - [x] Smooth rendering: jitter traced to `client_render_state`'s viewport
@@ -116,6 +118,14 @@ panning, by building a proper camera/viewport and input system.
   `backend.ts`'s offsets - struct grew by 4 bytes).
 
 ## Notes / Decisions
+
+- `entity_guid` is a plain 4-byte `ui32` with shift/mask accessors
+  (`get_type/get_index/get_extra`, `make`); no C++ bitfields (layout differs
+  across compilers). Macro: 8 type / 12 index / 12 extra; micro: 8 / 16 / 8.
+  `operator==` covers the whole value. Spawn computes the guid once (extra =
+  tick-based) and stores/returns the same value.
+- `render_entity` is 16 bytes (`static_assert`ed); `backend.ts` reads guid as
+  u32 at +3.
 
 - Camera/viewport ownership moves to the client backend (C++), not JS:
   it computes the visible world rectangle and places entities in viewport

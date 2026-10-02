@@ -49,7 +49,7 @@ let DIPLOMATIC_TINTS =
 }
 
 // Current state / parameteres of the render surface. Updated on every tick.
-let RENDER_STATE =
+let RENDER_PARAMS =
 {
 	WORLD_SIZE : new Core.WorldSize(),
 
@@ -61,56 +61,13 @@ let RENDER_STATE =
 	viewportBottomLeftY : 0,
 }
 
-export function init_render(canvas_element : HTMLCanvasElement) {
-    canvas = canvas_element;
-    ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-    tintCanvas = document.createElement('canvas');
-    tintCtx = tintCanvas.getContext('2d') as CanvasRenderingContext2D;
-    FRONTEND_CAMERA.set_canvas_size(canvas.width, canvas.height);
-
-    // LOAD RENDER RESOURCES
-    console.log("Loading render resources...");
-    RESOURCES = new RESOURCES_STORE();
-}
-
-// Converts a position on the page (mouse event coordinates) to a world tile position, clamped inside the world.
-export function page_to_world(clientX: number, clientY: number)
-{
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
-    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
-
-    const viewRect = FRONTEND_CAMERA.get_rect();
-    const worldX = viewRect.min.x + canvasX / canvas.width * (viewRect.max.x - viewRect.min.x);
-    const worldY = viewRect.min.y + (canvas.height - canvasY) / canvas.height * (viewRect.max.y - viewRect.min.y);
-
-    return {
-        x: Math.min(Math.max(Math.round(worldX), 0), RENDER_STATE.WORLD_SIZE.width - 1),
-        y: Math.min(Math.max(Math.round(worldY), 0), RENDER_STATE.WORLD_SIZE.height - 1),
-    };
-}
-
-// Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas.
-// (0,0) = bottom-left.
-export function page_to_viewport_fraction(clientX: number, clientY: number)
-{
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
-    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
-
-    return {
-        x: Math.min(Math.max(canvasX / canvas.width, 0), 1),
-        y: Math.min(Math.max(1 - canvasY / canvas.height, 0), 1),
-    };
-}
-
 function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, scale:number, owned_by_local_player: boolean = false)
 {
-    const w = scale * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const h = scale * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const w = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const h = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 
-    const drawX = viewport_x * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE - w / 2;
-    const drawY = canvas.height - viewport_y * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE - h / 2;
+    const drawX = viewport_x * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - w / 2;
+    const drawY = canvas.height - viewport_y * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - h / 2;
 
     ctx.drawImage(entity_img, drawX, drawY, w, h);
 
@@ -164,10 +121,10 @@ function draw_entity_army(viewport_x: number, viewport_y: number, scale: number,
 // Fills the world's projected area white, leaving the out-of-world canvas area transparent/dark.
 function draw_world_background()
 {
-    const left = (0 - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const right = (RENDER_STATE.WORLD_SIZE.width - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const top = canvas.height - (RENDER_STATE.WORLD_SIZE.height - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const bottom = canvas.height - (0 - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const left = (0 - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const right = (RENDER_PARAMS.WORLD_SIZE.width - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const top = canvas.height - (RENDER_PARAMS.WORLD_SIZE.height - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const bottom = canvas.height - (0 - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 
     ctx.fillStyle = '#fff';
     ctx.fillRect(left, top, right - left, bottom - top);
@@ -176,10 +133,10 @@ function draw_world_background()
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
 function draw_world_border()
 {
-    const left = (0 - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const right = (RENDER_STATE.WORLD_SIZE.width - RENDER_STATE.viewportBottomLeftX) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const top = canvas.height - (RENDER_STATE.WORLD_SIZE.height - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
-    const bottom = canvas.height - (0 - RENDER_STATE.viewportBottomLeftY) * RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE;
+    const left = (0 - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const right = (RENDER_PARAMS.WORLD_SIZE.width - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const top = canvas.height - (RENDER_PARAMS.WORLD_SIZE.height - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const bottom = canvas.height - (0 - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
@@ -187,14 +144,17 @@ function draw_world_border()
 }
 
 // Draws the given render state (see backend.read_render_state()).
-export function draw(render_state: Backend.BackendRenderState)
+export function draw(render_state: Backend.RenderState | null)
 {
-    RENDER_STATE.VIEWPORT_TO_CANVAS_SCALE = canvas.width / render_state.viewport_width;
-    RENDER_STATE.viewportBottomLeftX = render_state.viewport_bottom_left_x;
-    RENDER_STATE.viewportBottomLeftY = render_state.viewport_bottom_left_y;
-    RENDER_STATE.WORLD_SIZE = render_state.world_size;
-
+    // Clear full canvas to background color.
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (render_state == null) return;
+
+    RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE = canvas.width / render_state.viewport_width;
+    RENDER_PARAMS.viewportBottomLeftX = render_state.viewport_bottom_left_x;
+    RENDER_PARAMS.viewportBottomLeftY = render_state.viewport_bottom_left_y;
+    RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
     draw_world_background();
     draw_world_border();
@@ -217,3 +177,65 @@ export function draw(render_state: Backend.BackendRenderState)
         }
     }
 }
+
+export function init_render(canvas_element : HTMLCanvasElement) {
+    canvas = canvas_element;
+    ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    tintCanvas = document.createElement('canvas');
+    tintCtx = tintCanvas.getContext('2d') as CanvasRenderingContext2D;
+    FRONTEND_CAMERA.set_canvas_size(canvas.width, canvas.height);
+
+    // LOAD RENDER RESOURCES
+    console.log("Loading render resources...");
+    RESOURCES = new RESOURCES_STORE();
+
+    // Register frame event.
+    Core.register_frame_callback((dt) => draw(Backend.LAST_RENDER_STATE));
+}
+
+// Converts a position on the page (mouse event coordinates) to a world tile position, clamped inside the world.
+export function page_to_world(clientX: number, clientY: number)
+{
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+
+    const viewRect = FRONTEND_CAMERA.get_rect();
+    const worldX = viewRect.min.x + canvasX / canvas.width * (viewRect.max.x - viewRect.min.x);
+    const worldY = viewRect.min.y + (canvas.height - canvasY) / canvas.height * (viewRect.max.y - viewRect.min.y);
+
+    return {
+        x: Math.min(Math.max(Math.round(worldX), 0), RENDER_PARAMS.WORLD_SIZE.width - 1),
+        y: Math.min(Math.max(Math.round(worldY), 0), RENDER_PARAMS.WORLD_SIZE.height - 1),
+    };
+}
+
+// Converts a position on the page (mouse event coordinates) to viewport coordinates, assuming the pointer is inside it.
+export function page_to_viewport(clientX: number, clientY: number)
+{
+    if (Backend.LAST_RENDER_STATE == null) return { x:0, y:0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+
+    return {
+        x: canvasX / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE,
+        y: (canvas.height - canvasY) / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE
+    };
+}
+
+// Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas.
+// (0,0) = bottom-left.
+export function page_to_viewport_fraction(clientX: number, clientY: number)
+{
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+
+    return {
+        x: Math.min(Math.max(canvasX / canvas.width, 0), 1),
+        y: Math.min(Math.max(1 - canvasY / canvas.height, 0), 1),
+    };
+}
+

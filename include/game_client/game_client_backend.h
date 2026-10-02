@@ -51,6 +51,67 @@ struct client_render_state
 
 #pragma pack(pop)
 
+// ENTITY INSPECTION
+
+// Full view of a single entity's current state, for the frontend to inspect it (filled by game_client_query_entity).
+// "Fat struct": a core section common to all entity types, then an extra block read according to entity_type.
+// Fields that don't apply to a type are zeroed.
+// Targets: has_target_entity / has_target_location say whether the corresponding value is meaningful.
+// Army: target entity = what it is engaging / following. Caravan: target entity = destination settlement.
+// Army / caravan: target location = where it is moving towards. Settlements have neither.
+// Read by backend.ts at fixed offsets: keep both in sync (the static_assert below catches size changes only).
+#pragma pack(push, 1)
+
+struct entity_full_view
+{
+	// Core
+	ENTITY_TYPE entity_type;
+	entity_guid guid;
+
+	ui16 location_x;
+	ui16 location_y;
+	match_player_id owner; // For caravans, resolved through their origin settlement.
+
+	ui8 has_target_entity;
+	entity_guid target_entity;
+	ui8 has_target_location;
+	ui16 target_location_x;
+	ui16 target_location_y;
+
+	ui8 travel_speed; // Tiles per second, 0 for settlements.
+
+	// Type-specific, sized by the largest member (army).
+	union
+	{
+		struct
+		{
+			ui32 population;
+			ui32 local_wealth;
+			ui8 tier;
+			ui8 trade_attractivity;
+			ui8 area_influence;
+		} settlement;
+
+		struct
+		{
+			entity_guid origin_settlement;
+		} caravan;
+
+		struct
+		{
+			ui16 levies;
+			ui16 archers;
+			ui32 men_at_arms;
+			ui16 horsemen;
+			ui16 knights;
+			entity_guid arrows_target; // 0 if none.
+		} army;
+	} extra;
+};
+static_assert(sizeof(entity_full_view) == 38, "entity_full_view layout is read by backend.ts at fixed offsets (size 38).");
+
+#pragma pack(pop)
+
 // INPUT SYSTEM
 
 // Identifies which payload struct below a generalized input event's bytes should be read as.
@@ -100,6 +161,12 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 
 // Gets current render state for presentation.
 client_render_state* game_client_get_render_state(game_client& backend);
+
+// ENTITY INSPECTION
+
+// Fills out_view with the current state of the entity if it exists in the local match and is of a supported type.
+// Returns false (leaving out_view untouched) if there is no local match, the GUID is invalid / stale, or its type is unsupported.
+bool game_client_query_entity(game_client& backend, entity_guid entity, entity_full_view& out_view);
 
 // MATCH
 

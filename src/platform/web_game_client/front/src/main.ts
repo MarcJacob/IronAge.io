@@ -7,9 +7,14 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
 import { init_render, draw } from './render.js';
-import { init_input, get_last_mouse_world_location } from './input.js';
+import { init_input } from './input.js';
 import { init_debug_panel, update_debug_panel } from './debug.js';
-import { FRONTEND_CAMERA } from './camera.js';
+import { FRONTEND_CAMERA, init_camera_system } from './camera.js';
+
+// Game / Client state
+
+let IN_A_MATCH: boolean = false;
+// ...
 
 function websocket_url() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -27,25 +32,18 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
     {
         console.log("Joined match.");
 
-        const initialRenderState = Backend.read_render_state();
-        const worldSize = initialRenderState.world_size;
+        // Perform the first render state update on the backend.
+        Backend.update_render_state();
 
-        // Init camera world size and center on world center.
-        FRONTEND_CAMERA.set_world_size(worldSize.width, worldSize.height);
-        FRONTEND_CAMERA.set_view_center({ x: worldSize.width / 2, y: worldSize.height / 2 });
-
+        // Reveal game canvas
         canvas.hidden = false;
-
-        // Register major game-related tick events with core.
-        Core.register_frame_callback((delta_time_s) => {
-            Backend.tick(delta_time_s);
-            const renderState = Backend.read_render_state();
-            draw(renderState);
-            update_debug_panel(renderState, get_last_mouse_world_location());
-        });
 
         // Automatically set focus on the foreground canvas.
         canvas.focus();
+
+        // Broadcast to event handlers and flag app as In A Match.
+        Core.broadcast_on_match_joined();
+        IN_A_MATCH = true;
     }
 
     // The backend may have built a reply (e.g. pending input) in response to the message just processed.
@@ -55,6 +53,16 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
 }
 
 // ENTRY POINT
+
+
+function tick(dt: number)
+{
+    if (IN_A_MATCH)
+    {
+        Backend.tick_web_client(dt);
+        Backend.update_render_state();
+    }
+}
 
 // Start routine for the webpage.
 async function start()
@@ -68,6 +76,9 @@ async function start()
     }
     if (!Backend.start()) return;
 
+    // Register our own tick function.
+    Core.register_frame_callback(tick);
+
     // Drives per-frame callbacks: camera input, render/draw, later interpolation.
     Core.start_frame_loop();
 
@@ -76,6 +87,7 @@ async function start()
     const canvas = document.getElementById("game_canvas_foreground") as HTMLCanvasElement;
     init_render(canvas);
     init_input(canvas);
+    init_camera_system();
 
     // Initialize debug panel / text container.
     init_debug_panel(document.getElementById("debug_entity_states") as HTMLElement);
