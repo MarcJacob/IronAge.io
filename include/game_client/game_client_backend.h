@@ -120,6 +120,7 @@ enum class INPUT_EVENT_TYPE : ui16
 	VIEWPORT_CONTROL,
 	SET_TARGET_LOC,
 	FOUND_SETTLEMENT,
+	SPAWN_ARMY,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -151,6 +152,13 @@ struct input_event_payload_found_settlement
 	entity_guid army; // Army to found the settlement with.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_found_settlement);
+
+// Has a settlement spawn an army from its population.
+struct input_event_payload_spawn_army
+{
+	entity_guid settlement; // Settlement to spawn the army from.
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_spawn_army);
 
 #pragma pack(pop)
 

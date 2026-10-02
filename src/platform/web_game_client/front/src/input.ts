@@ -54,15 +54,18 @@ export function get_mouse_world_location(): { x: number, y: number } | null
 
 // Returns the GUID of the entity under the given page position, or null if none.
 // Works in viewport space (tiles from the viewport's bottom-left), like entity positions: an entity covers a square of
-// size_viewport tiles centered on its location, same as draw_entity. If several overlap, the one whose center is nearest wins.
+// size_viewport tiles centered on its location, same as draw_entity. If several overlap, the one whose center is nearest wins,
+// except when the currently selected entity is among them: then the next one in render-list order after it (wrapping) wins,
+// so repeated clicks on a stack cycle through all of it. A lone selected entity stays selected.
 export function pick_entity_at(clientX: number, clientY: number): number | null
 {
     if (Backend.LAST_RENDER_STATE === null) return null;
 
     const viewportCoords = Render.page_to_viewport(clientX, clientY);
 
-    let bestGuid: number | null = null;
-    let bestDistSq = Infinity;
+    const hitGuids: number[] = []; // In render-list order.
+    let nearestGuid: number | null = null;
+    let nearestDistSq = Infinity;
     for (let i = 0; i < Backend.LAST_RENDER_STATE.entity_count; i++)
     {
         const entity = Backend.LAST_RENDER_STATE.entity_states[i];
@@ -71,12 +74,16 @@ export function pick_entity_at(clientX: number, clientY: number): number | null
         const halfSize = entity.size_viewport / 2;
         if (Math.abs(dx) > halfSize || Math.abs(dy) > halfSize) continue;
 
-        if (dx * dx + dy * dy < bestDistSq) {
-            bestDistSq = dx * dx + dy * dy;
-            bestGuid = entity.guid;
+        hitGuids.push(entity.guid);
+        if (dx * dx + dy * dy < nearestDistSq) {
+            nearestDistSq = dx * dx + dy * dy;
+            nearestGuid = entity.guid;
         }
     }
-    return bestGuid;
+
+    const selectedHitIndex = SELECTED_ENTITY_GUID === null ? -1 : hitGuids.indexOf(SELECTED_ENTITY_GUID);
+    if (selectedHitIndex === -1) return nearestGuid;
+    return hitGuids[(selectedHitIndex + 1) % hitGuids.length];
 }
 
 export function get_selected_entity_view(): Backend.EntityView | null
@@ -109,6 +116,15 @@ export function send_found_settlement(army_guid: number): void
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, army_guid, true);
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.FOUND_SETTLEMENT);
+}
+
+// Orders the given settlement to spawn an army from its population.
+export function send_spawn_army(settlement_guid: number): void
+{
+    // Layout of input_event_payload_spawn_army (game_client_backend.h): ui32 settlement guid.
+    const view = Backend.ClientInput.begin_input_event();
+    view.setUint32(0, settlement_guid, true);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_ARMY);
 }
 
 // EVENT HANDLERS

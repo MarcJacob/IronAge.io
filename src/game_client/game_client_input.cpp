@@ -33,6 +33,16 @@ void game_client_input_found_settlement(game_client& backend, entity_guid army)
 	payload->army = army;
 }
 
+void game_client_input_spawn_army(game_client& backend, entity_guid settlement)
+{
+	if (backend.local_match == nullptr) return;
+
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_spawn_army>(MATCH_COMMAND_TYPE::SPAWN_ARMY);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->settlement = settlement;
+}
+
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
 {
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
@@ -63,6 +73,12 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	{
 		auto& payload = *(input_event_payload_found_settlement*)payload_bytes;
 		game_client_input_found_settlement(backend, payload.army);
+		return true;
+	}
+	case INPUT_EVENT_TYPE::SPAWN_ARMY:
+	{
+		auto& payload = *(input_event_payload_spawn_army*)payload_bytes;
+		game_client_input_spawn_army(backend, payload.settlement);
 		return true;
 	}
 	default:

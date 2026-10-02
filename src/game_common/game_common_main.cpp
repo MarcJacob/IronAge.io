@@ -248,6 +248,28 @@ void match_destroy_army(game_match& match, entity_guid army)
 	armies.active_count--;
 }
 
+void match_destroy_settlement(game_match& match, entity_guid settlement)
+{
+	ASSERT(match_entity_is_valid(match, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	world_entity_settlements& settlements = match.world->entities.settlements;
+
+	// Same pattern as destroyed armies: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
+	settlements.guids[settlement.get_index()] = INVALID_ENTITY_GUID;
+	settlements.active_count--;
+}
+
+void match_settlement_decrease_population(game_match& match, entity_guid settlement, ui32 amount)
+{
+	ASSERT(match_entity_is_valid(match, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	ui32& population = match.world->entities.settlements.populations[settlement.get_index()];
+
+	population = amount < population ? population - amount : 0;
+	if (population == 0)
+	{
+		match_destroy_settlement(match, settlement);
+	}
+}
+
 world_location world_get_entity_location(game_match& match, entity_guid entity)
 {
 	ENTITY_TYPE type = entity.get_type();
@@ -430,6 +452,18 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 	world_entity_caravans& caravans = world.entities.caravans;
 	world_entity_armies& armies = world.entities.armies;
 
+	// Temp: Settlements have a 1% chance per tick to grow by 5% of their population (at least 1).
+	for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
+
+		if (match.main_rand_gen.next_range(0.f, 1.f) < 0.01f)
+		{
+			ui32 growth = settlements.populations[settlementIndex] * 5 / 100;
+			settlements.populations[settlementIndex] += growth > 0 ? growth : 1;
+		}
+	}
+
 	// Temp: Randomly spawn caravans at settlements.
 	for (ui32 settlementIndex = 0; settlementIndex < world.entities.settlements.max_count; settlementIndex++)
 	{
@@ -438,10 +472,14 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 		// Randomly spawn caravan if there are more settlements on the map.
 		if (settlements.active_count > 1 && match.main_rand_gen.next_range(0.f, 1.f) < 0.001f)
 		{
-			ui16 destRandIndex = match.main_rand_gen.next_range<ui16>(0, world.entities.settlements.active_count);
-			while (destRandIndex == settlementIndex || !settlements.guids[destRandIndex].is_valid())
+			// Pick a random active settlement other than this one. Slots can be empty now that settlements get destroyed.
+			ui16 destRandOrdinal = match.main_rand_gen.next_range<ui16>(0, settlements.active_count - 1) % (settlements.active_count - 1);
+			ui16 destRandIndex = 0;
+			for (;; destRandIndex++)
 			{
-				destRandIndex = (destRandIndex + 1) % world.entities.settlements.active_count;
+				if (destRandIndex == settlementIndex || !settlements.guids[destRandIndex].is_valid()) continue;
+				if (destRandOrdinal == 0) break;
+				destRandOrdinal--;
 			}
 
 			world_entity_caravans::single newCaravan = {
@@ -462,6 +500,14 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
 	{
 		if (!caravans.guids[caravanIndex].is_valid()) continue;
+
+		// Despawn caravans whose destination settlement was destroyed.
+		if (!match_entity_is_valid(match, caravans.dest_settlements[caravanIndex]))
+		{
+			caravans.guids[caravanIndex] = INVALID_ENTITY_GUID;
+			caravans.active_count--;
+			continue;
+		}
 
 		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
 caravans.movements[caravanIndex].move_target = destLoc;
@@ -509,7 +555,10 @@ caravans.movements[caravanIndex].move_target = destLoc;
 
 			// Increase local wealth in origin and destination town.
 			settlements.local_wealth[caravans.dest_settlements[caravanIndex].get_index()]++;
-			settlements.local_wealth[caravans.origin_settlements[caravanIndex].get_index()]++;
+			if (match_entity_is_valid(match, caravans.origin_settlements[caravanIndex]))
+			{
+				settlements.local_wealth[caravans.origin_settlements[caravanIndex].get_index()]++;
+			}
 		}
 	}
 }

@@ -26,18 +26,26 @@ mechanics only; no game-design rules in this unit.
 
 ## Tasks
 
-- [ ] `FOUND_SETTLEMENT { army guid }` command in game_common: validity (valid
-  guid, army, owned by sender), apply (spawn settlement, destroy army).
-  Needs an entity destroy path for armies if none exists.
-- [ ] UI scaffold: place for buttons / panels, separate from the game canvas
-  (DOM overlay, like the debug panel); pointer-events pass through except on
-  widgets.
-- [ ] Player-facing selected-entity panel in the overlay (replaces the debug
-  side panel).
-- [ ] "Found settlement" button: shown / enabled only when an army owned by the
-  local player is selected; sends the command via the input event path.
+- [x] `FOUND_SETTLEMENT { army guid }` command in game_common: validity (valid
+  guid, army, owned by sender, free settlement slot), apply (spawn settlement,
+  destroy army via `match_destroy_army`).
+- [x] Input path: `INPUT_EVENT_TYPE::FOUND_SETTLEMENT` (payload `{entity_guid}`),
+  `send_found_settlement(army_guid)` in `input.ts`; canvas handlers ignore
+  events not targeting the canvas.
+- [x] UI scaffold: `game_ui.ts` + `#game_hud` overlay (pointer-events none,
+  widgets auto); local player id in `main.ts`.
+- [x] Player-facing selected-entity panel in the HUD (debug side panel removed).
+- [x] "Found settlement" button: shown only when an army owned by the local
+  player is selected.
+- [x] Canvas fills the window, no scrolling, uniform tile scale (camera view
+  height is the zoom value; width = height * canvas aspect); HUD CSS follows
+  the container. Frontend-only: the TS camera owns the world rectangle sent
+  to the backend.
 - [ ] Button: settlement spawns an army from its population.
 
 ## Progress
 
 - 2026-10-02: unit created.
+- 2026-10-03: all above verified working by Marc. Found settlement spawns
+  with zeroed wealth / tier / trade attractivity / area influence (no defaults
+  function exists yet).

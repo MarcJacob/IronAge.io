@@ -1,5 +1,8 @@
 # BACKLOG: Viewport aspect ratio awareness
 
+RESOLVED 2026-10-03 (ui_first_commands work unit): the TS camera owns the world
+rectangle and builds it from the canvas aspect ratio; safe to delete.
+
 Input date: 2026-10-01
 
 ## Item
