@@ -238,6 +238,16 @@ entity_guid match_spawn_army(game_match& match, const world_entity_armies::singl
 	return newID;
 }
 
+void match_destroy_army(game_match& match, entity_guid army)
+{
+	ASSERT(match_entity_is_valid(match, army) && army.get_type() == ENTITY_TYPE::ARMY);
+	world_entity_armies& armies = match.world->entities.armies;
+
+	// Same pattern as despawned caravans: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
+	armies.guids[army.get_index()] = INVALID_ENTITY_GUID;
+	armies.active_count--;
+}
+
 world_location world_get_entity_location(game_match& match, entity_guid entity)
 {
 	ENTITY_TYPE type = entity.get_type();

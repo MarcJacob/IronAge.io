@@ -1,6 +1,7 @@
 // Main implementation file for match input command functions.
 
 #include "game_common/match/commands.h"
+#include "game_common_internals.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
@@ -11,8 +12,16 @@ bool command_set_entity_move_target_validity_check(const game_match& match, matc
 {
 	if (!match_entity_is_valid(match, command.entity)) return false;
 
-	ENTITY_TYPE entityType = command.entity.get_type();
+	// Check that target coordinates are inside the world.
+	if (command.move_target.x < 0 
+		|| command.move_target.x > match.world->terrain.size_tiles.x
+		|| command.move_target.y < 0 
+		|| command.move_target.y > match.world->terrain.size_tiles.y)
+	{
+		return false;
+	}
 
+	ENTITY_TYPE entityType = command.entity.get_type();
 	switch (entityType)
 	{
 		// With valid types, just need to check that player can control them.
@@ -44,6 +53,43 @@ void command_set_entity_move_target_apply(game_match& match, match_player_id pla
 
 }
 
+// FOUND SETTLEMENT
+
+bool command_found_settlement_validity_check(const game_match& match, match_player_id player, const command_data_found_settlement& command)
+{
+	if (!match_entity_is_valid(match, command.army)) return false;
+	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
+	if (match.world->entities.armies.owners[command.army.get_index()] != player) return false;
+
+	// The army is kept if there is no room for the settlement.
+	const world_entity_settlements& settlements = match.world->entities.settlements;
+	return settlements.active_count < settlements.max_count;
+}
+
+// Spawns a settlement at the army's location with its owner and total manpower as population, then destroys the army.
+void command_found_settlement_apply(game_match& match, match_player_id player, const command_data_found_settlement& command)
+{
+	// Checked again: earlier commands in the same tick may have destroyed this army or filled the last settlement slot.
+	if (!match_entity_is_valid(match, command.army)) return;
+	if (command.army.get_type() != ENTITY_TYPE::ARMY) return;
+
+	const world_entity_settlements& settlements = match.world->entities.settlements;
+	if (settlements.active_count >= settlements.max_count) return;
+
+	ui16 armyIndex = command.army.get_index();
+	const world_entity_armies& armies = match.world->entities.armies;
+	const world_entity_armies::comp& composition = armies.compositions[armyIndex];
+
+	world_entity_settlements::single newSettlement = {};
+	newSettlement.owner = armies.owners[armyIndex];
+	newSettlement.location = armies.locations[armyIndex];
+	newSettlement.population = (ui32)composition.levies + composition.archers + composition.men_at_arms
+		+ composition.horsemen + composition.knights;
+
+	match_spawn_settlement(match, newSettlement);
+	match_destroy_army(match, command.army);
+}
+
 // ENTITY SET ATTACK TARGET
 
 bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
@@ -68,6 +114,8 @@ bool match_command_validity_check(const game_match& match, match_player_id playe
 	{
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_data_set_entity_move_target>());
+		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
+			return command_found_settlement_validity_check(match, player, command.get_command_data<command_data_found_settlement>());
 		default:
 			ASSERT_MSG(0, "No validity check logic associated with command type.");
 			return false;
@@ -82,6 +130,9 @@ inline void match_command_apply(game_match& match, match_player_id player, const
 	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 		command_set_entity_move_target_apply(match, player,
 			command.get_command_data<command_data_set_entity_move_target>());
+		break;
+	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
+		command_found_settlement_apply(match, player, command.get_command_data<command_data_found_settlement>());
 		break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
@@ -130,6 +181,10 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 			isValid = command_set_entity_move_target_validity_check(target_match, player_id,
 				commandHeader.get_command_data<command_data_set_entity_move_target>());
+			break;
+		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
+			isValid = command_found_settlement_validity_check(target_match, player_id,
+				commandHeader.get_command_data<command_data_found_settlement>());
 			break;
 		default:
 			// Only assert if the command type IS valid but not handled.

@@ -49,8 +49,14 @@ panning, by building a proper camera/viewport and input system.
     guid held in frontend state, shown in the debug panel only. Left-click
     selects, right-click = move target via `mouse_button_action` (to be
     replaced by contextual input later). No highlight drawn yet.
-- [ ] UI scaffold: place for buttons / panels, separate from the game
-  canvas (DOM overlay, like the debug panel).
+- [x] Right-click move target (location only): `SET_TARGET_LOC` payload =
+  `{entity_guid, i32 x, i32 y}` (12 bytes); backend converts to world loc and
+  queues `SET_ENTITY_MOVE_TARGET`; server validates (valid guid, army, owner).
+  Verified working 2026-10-02.
+- [x] Selection indicator: green outline via `is_selected` param in
+  `render.ts` draw functions. Verified.
+- [x] Selected entity side panel (`name = value` rows, right side, hidden
+  when no selection; `index.html`/`style.css`/`debug.ts`). Verified.
 - [x] Smooth rendering: jitter traced to `client_render_state`'s viewport
   fields being rounded to whole world tiles (`i32`/`ui16`) every frame -
   changed to `float` end to end (backend struct, `backend.ts` offsets) -

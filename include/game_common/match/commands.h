@@ -18,6 +18,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 {
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
 	SET_ENTITY_ATTACK_TARGET, // Orders an entity to attack another entity if able.
+	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
 
 	TYPE_COUNT,
 };
@@ -56,6 +57,20 @@ bool command_set_entity_attack_target_validity_check(const game_match& match, ma
 // APPLY
 void command_set_entity_attack_target_apply(game_match& match, match_player_id player,
 	const command_data_set_entity_move_target& command);
+
+// FOUND SETTLEMENT
+struct command_data_found_settlement
+{
+	entity_guid army;
+};
+
+// VALIDITY CHECK
+bool command_found_settlement_validity_check(const game_match& match, match_player_id player,
+	const command_data_found_settlement& command);
+
+// APPLY
+void command_found_settlement_apply(game_match& match, match_player_id player,
+	const command_data_found_settlement& command);
 
 // Header & command size mapping definitions.
 
@@ -139,6 +154,8 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_set_entity_move_target);
 	case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
 		return sizeof(command_data_set_entity_attack_target);
+	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
+		return sizeof(command_data_found_settlement);
 	default:
 		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
 		return 0;

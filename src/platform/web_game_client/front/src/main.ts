@@ -8,12 +8,20 @@ import * as Backend from "./backend.js"
 
 import { init_render, draw } from './render.js';
 import { init_input } from './input.js';
-import { init_debug_panel, update_debug_panel } from './debug.js';
 import { FRONTEND_CAMERA, init_camera_system } from './camera.js';
+import { init_game_ui, update_game_ui } from './game_ui.js';
 
 // Game / Client state
 
 let IN_A_MATCH: boolean = false;
+
+// ID of the player this client controls. Null until a match is joined.
+let LOCAL_PLAYER_ID: number | null = null;
+// Note: game_ui.ts imports this file (circular). Only call this inside per-frame functions, never at module load.
+export function get_local_player_id(): number | null
+{
+    return LOCAL_PLAYER_ID;
+}
 // ...
 
 function websocket_url() {
@@ -34,6 +42,9 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
 
         // Perform the first render state update on the backend.
         Backend.update_render_state();
+
+        // The local player's id only reaches the frontend through the render state.
+        if (Backend.LAST_RENDER_STATE !== null) LOCAL_PLAYER_ID = Backend.LAST_RENDER_STATE.controlled_player_id;
 
         // Reveal game canvas
         canvas.hidden = false;
@@ -61,6 +72,7 @@ function tick(dt: number)
     {
         Backend.tick_web_client(dt);
         Backend.update_render_state();
+        update_game_ui();
     }
 }
 
@@ -89,9 +101,8 @@ async function start()
     init_input(canvas);
     init_camera_system();
 
-    // Initialize debug panel / text container.
-    init_debug_panel(document.getElementById("debug_entity_states") as HTMLElement,
-        document.getElementById("selected_entity_panel") as HTMLElement);
+    // Initialize in-match HUD.
+    init_game_ui();
 
     // Initialize websocket conneciton.
     const socket = new WebSocket(websocket_url());

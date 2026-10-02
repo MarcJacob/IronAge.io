@@ -23,6 +23,16 @@ void game_client_input_set_target_loc(game_client& backend, entity_guid entity, 
 	payload->move_target = { (ui16)(worldX + 0.5f), (ui16)(worldY + 0.5f) };
 }
 
+void game_client_input_found_settlement(game_client& backend, entity_guid army)
+{
+	if (backend.local_match == nullptr) return;
+
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_found_settlement>(MATCH_COMMAND_TYPE::FOUND_SETTLEMENT);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->army = army;
+}
+
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
 {
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
@@ -47,6 +57,12 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	{
 		auto& payload = *(input_event_payload_set_target_loc*)payload_bytes;
 		game_client_input_set_target_loc(backend, payload.entity, payload.x, payload.y);
+		return true;
+	}
+	case INPUT_EVENT_TYPE::FOUND_SETTLEMENT:
+	{
+		auto& payload = *(input_event_payload_found_settlement*)payload_bytes;
+		game_client_input_found_settlement(backend, payload.army);
 		return true;
 	}
 	default:

@@ -7,18 +7,17 @@
 </head>
 <body>
     <div id="canvas_container">
-        <canvas id="game_canvas_foreground" width="1200" height="800" tabindex="1" hidden>
+        <canvas id="game_canvas_foreground" tabindex="1" hidden>
         </canvas>
-    </div>
 
-    <div id="debug_panel">
-        <h3>Render state</h3>
-        <pre id="debug_entity_states"></pre>
+        <div id="game_hud">
+            <div id="game_hud_selected_panel" hidden>
+                <pre id="game_hud_selected_text"></pre>
+                <button id="game_hud_found_settlement" hidden>Found settlement</button>
+            </div>
+        </div>
     </div>
-
-    <pre id="selected_entity_panel" hidden></pre>
 
     <script type="module" src="src/main.js"></script>
-    <script type="module" src="src/websocket_tests.js"></script>
 </body>
 </html>

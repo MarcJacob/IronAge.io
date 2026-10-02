@@ -22,6 +22,7 @@ export enum INPUT_EVENT_TYPE
 {
     VIEWPORT_CONTROL = 0,
     SET_TARGET_LOC = 1,
+    FOUND_SETTLEMENT = 2,
 };
 
 // Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.

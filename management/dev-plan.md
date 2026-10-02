@@ -15,10 +15,11 @@ Detailed design / progress for in-flight, coherent task groups lives in
 index. Update the entry here when a unit starts / finishes.
 
 - [DONE] TypeScript migration - `work_units/typescript_migration_2026-09-27.md`
-- [WIP] Client input & camera prep - `work_units/client_input_2026-09-27.md`
+- [DONE] Client input & camera prep - `work_units/client_input_2026-09-27.md`
 - [DONE] Game Client / Platform split - `work_units/game_client_platform_split_2026-09-29.md`
 - [DONE] World entities & settlement rendering - `work_units/world_entities_2026-10-01.md`
 - [DONE] Deterministic random generation - `work_units/random_generation_2026-10-02.md`
+- [WIP] UI & first commands - `work_units/ui_first_commands_2026-10-02.md`
 
 ## Development Phases
 

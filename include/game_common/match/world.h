@@ -101,11 +101,9 @@ static inline entity_guid entity_guid_new(ENTITY_TYPE type, ui16 index, ui16 ext
 	if (type < ENTITY_TYPE::MICRO_TYPES_START)
 	{
 		ASSERT(index <= 0xFFFF);
-		ASSERT(extra <= 0xFF);
 		return { (ui32)type | ((ui32)(index & 0xFFF) << 8) | ((ui32)(extra & 0xFFF) << 20) };
 	}
 	ASSERT(index <= 0xFFF);
-	ASSERT(extra <= 0xFFF);
 	return { (ui32)type | ((ui32)index << 8) | ((ui32)(extra & 0xFF) << 24) };
 }
 

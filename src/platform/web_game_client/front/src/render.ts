@@ -190,12 +190,28 @@ export function draw(render_state: Backend.RenderState | null)
     }
 }
 
+// Matches the canvas's pixel size to its container's, and tells the camera. The container (not the canvas) is measured since
+// the canvas can be hidden before a match is joined.
+function resize_canvas()
+{
+    const container = canvas.parentElement as HTMLElement;
+    const width = Math.max(1, container.clientWidth);
+    const height = Math.max(1, container.clientHeight);
+
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    FRONTEND_CAMERA.set_canvas_size(width, height);
+}
+
 export function init_render(canvas_element : HTMLCanvasElement) {
     canvas = canvas_element;
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
     tintCanvas = document.createElement('canvas');
     tintCtx = tintCanvas.getContext('2d') as CanvasRenderingContext2D;
-    FRONTEND_CAMERA.set_canvas_size(canvas.width, canvas.height);
+
+    // Canvas pixel size follows its container (1 canvas pixel = 1 CSS pixel, devicePixelRatio is ignored).
+    resize_canvas();
+    window.addEventListener('resize', resize_canvas);
 
     // LOAD RENDER RESOURCES
     console.log("Loading render resources...");

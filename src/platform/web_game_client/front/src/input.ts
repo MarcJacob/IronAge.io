@@ -102,6 +102,15 @@ function send_set_target_loc(clientX: number, clientY: number)
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SET_TARGET_LOC);
 }
 
+// Orders the given army to found a settlement at its location.
+export function send_found_settlement(army_guid: number): void
+{
+    // Layout of input_event_payload_found_settlement (game_client_backend.h): ui32 army guid.
+    const view = Backend.ClientInput.begin_input_event();
+    view.setUint32(0, army_guid, true);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.FOUND_SETTLEMENT);
+}
+
 // EVENT HANDLERS
 
 // What a mouse button press does.
@@ -160,11 +169,14 @@ export function init_input(canvas_element: HTMLCanvasElement)
 {
     // Register front-end canvas input events
 
-    // Mouse
-    canvas_element.addEventListener('click', on_pointer_click);
-    canvas_element.addEventListener('contextmenu', on_context_menu);
-    canvas_element.addEventListener('mousemove', on_mouse_move);
-    canvas_element.addEventListener('wheel', on_mouse_wheel, { passive: false });
+    // Mouse. Only events targeting the canvas itself count, so HUD widgets overlaid on it don't pan / zoom / select / order.
+    const canvas_only = <E extends Event>(handler: (event: E) => void) =>
+        (event: E) => { if (event.target === canvas_element) handler(event); };
+
+    canvas_element.addEventListener('click', canvas_only(on_pointer_click));
+    canvas_element.addEventListener('contextmenu', canvas_only(on_context_menu));
+    canvas_element.addEventListener('mousemove', canvas_only(on_mouse_move));
+    canvas_element.addEventListener('wheel', canvas_only(on_mouse_wheel), { passive: false });
 
     // Keyboard
     const movementKeyCodes = new Set(['KeyA', 'KeyD', 'KeyS', 'KeyW', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp']);

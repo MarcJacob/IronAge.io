@@ -22,8 +22,9 @@ export interface CameraFraction
     y: number;
 }
 
-const MIN_VIEW_LARGEST_SPAN = 50;
-const MAX_VIEW_LARGEST_SPAN = 1000;
+// The view's height in world tiles is what zoom controls; its width follows from the canvas aspect ratio (square tiles).
+const MIN_VIEW_HEIGHT = 50;
+const MAX_VIEW_HEIGHT = 1000;
 const ZOOM_EASE_RATE = 12;
 const PAN_SPEED_FRACTION = 0.5;
 const CAMERA_CENTER_WORLD_MARGIN = 1000;
@@ -34,8 +35,8 @@ export class Camera
     private canvasHeight = 1;
 
     private center: CameraPoint = { x: 0, y: 0 };
-    private currentLargestSpan = MAX_VIEW_LARGEST_SPAN;
-    private targetLargestSpan = MAX_VIEW_LARGEST_SPAN;
+    private currentViewHeight = MAX_VIEW_HEIGHT;
+    private targetViewHeight = MAX_VIEW_HEIGHT;
 
     private zoomAnchor: { world: CameraPoint, fraction: CameraFraction } | null = null;
     private worldSize: CameraPoint | null = null;
@@ -44,6 +45,9 @@ export class Camera
     {
         this.canvasWidth = Math.max(1, width);
         this.canvasHeight = Math.max(1, height);
+
+        // The center is kept as is on resize, only re-clamped.
+        this.clamp_center();
     }
 
     set_view_center(world: CameraPoint): void
@@ -60,20 +64,20 @@ export class Camera
         this.worldSize = { x: width, y: height };
 
         // Start with the world dimension corresponding to the smaller canvas axis filling that axis.
-        // This avoids opening small worlds at the full 1000-tile zoom-out span.
+        // This avoids opening small worlds at the full 1000-tile zoom-out height.
         const smallestCanvasIsWidth = this.canvasWidth <= this.canvasHeight;
-        const initialSpan = smallestCanvasIsWidth
+        const initialHeight = smallestCanvasIsWidth
             ? width * this.canvasHeight / this.canvasWidth
-            : height * this.canvasWidth / this.canvasHeight;
-        this.currentLargestSpan = this.clamp_span(initialSpan);
-        this.targetLargestSpan = this.currentLargestSpan;
+            : height;
+        this.currentViewHeight = this.clamp_view_height(initialHeight);
+        this.targetViewHeight = this.currentViewHeight;
     }
 
     pan(direction: CameraPoint, deltaTime: number): void
     {
         if (direction.x === 0 && direction.y === 0) return;
 
-        const movement = this.currentLargestSpan * PAN_SPEED_FRACTION * Math.max(0, deltaTime);
+        const movement = this.currentViewHeight * PAN_SPEED_FRACTION * Math.max(0, deltaTime);
         this.center.x += direction.x * movement;
         this.center.y += direction.y * movement;
         this.clamp_center();
@@ -86,14 +90,14 @@ export class Camera
         const world = this.world_at_fraction(clampedFraction);
         const zoomFactor = Math.exp(wheelDelta * 0.001);
 
-        this.targetLargestSpan = this.clamp_span(this.targetLargestSpan * zoomFactor);
+        this.targetViewHeight = this.clamp_view_height(this.targetViewHeight * zoomFactor);
         this.zoomAnchor = { world, fraction: clampedFraction };
     }
 
     update(deltaTime: number): void
     {
         const interpolation = 1 - Math.exp(-ZOOM_EASE_RATE * Math.max(0, deltaTime));
-        this.currentLargestSpan += (this.targetLargestSpan - this.currentLargestSpan) * interpolation;
+        this.currentViewHeight += (this.targetViewHeight - this.currentViewHeight) * interpolation;
 
         if (this.zoomAnchor !== null)
         {
@@ -102,9 +106,9 @@ export class Camera
             this.center.y = this.zoomAnchor.world.y + size.y * (0.5 - this.zoomAnchor.fraction.y);
             this.clamp_center();
 
-            if (Math.abs(this.currentLargestSpan - this.targetLargestSpan) < 0.01)
+            if (Math.abs(this.currentViewHeight - this.targetViewHeight) < 0.01)
             {
-                this.currentLargestSpan = this.targetLargestSpan;
+                this.currentViewHeight = this.targetViewHeight;
                 this.zoomAnchor = null;
             }
         }
@@ -147,16 +151,15 @@ export class Camera
 
     private viewport_size(): CameraPoint
     {
-        const largestCanvasDimension = Math.max(this.canvasWidth, this.canvasHeight);
         return {
-            x: this.currentLargestSpan * this.canvasWidth / largestCanvasDimension,
-            y: this.currentLargestSpan * this.canvasHeight / largestCanvasDimension,
+            x: this.currentViewHeight * this.canvasWidth / this.canvasHeight,
+            y: this.currentViewHeight,
         };
     }
 
-    private clamp_span(span: number): number
+    private clamp_view_height(viewHeight: number): number
     {
-        return Math.min(MAX_VIEW_LARGEST_SPAN, Math.max(MIN_VIEW_LARGEST_SPAN, span));
+        return Math.min(MAX_VIEW_HEIGHT, Math.max(MIN_VIEW_HEIGHT, viewHeight));
     }
 
     private clamp_fraction(fraction: CameraFraction): CameraFraction

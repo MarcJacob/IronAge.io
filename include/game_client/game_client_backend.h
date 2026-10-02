@@ -119,6 +119,7 @@ enum class INPUT_EVENT_TYPE : ui16
 {
 	VIEWPORT_CONTROL,
 	SET_TARGET_LOC,
+	FOUND_SETTLEMENT,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -143,6 +144,13 @@ struct input_event_payload_set_target_loc
 	i32 x, y; // Cursor position in viewport space: whole world tiles from the viewport's bottom-left corner.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_set_target_loc);
+
+// Turns an army into a settlement at its location.
+struct input_event_payload_found_settlement
+{
+	entity_guid army; // Army to found the settlement with.
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_found_settlement);
 
 #pragma pack(pop)
 

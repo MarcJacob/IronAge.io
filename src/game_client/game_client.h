@@ -23,6 +23,9 @@ void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, v
 // (whole world tiles from the viewport's bottom-left corner). The location is clamped inside the world.
 void game_client_input_set_target_loc(game_client& backend, entity_guid entity, int viewport_x, int viewport_y);
 
+// Queues a command to turn an army into a settlement at its location.
+void game_client_input_found_settlement(game_client& backend, entity_guid army);
+
 // Applies current viewport input state onto the render viewport.
 void game_client_apply_viewport_input(game_client& backend, float delta_time);
 
