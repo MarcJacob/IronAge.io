@@ -16,6 +16,9 @@ void match_destroy_army(game_match& match, entity_guid army);
 // Spawns a new army with the provided start state and returns its GUID. There must be a free army slot.
 entity_guid match_spawn_army(game_match& match, const world_entity_armies::single& start_state);
 
+// Spawns a new caravan with the provided start state and returns its GUID. There must be a free caravan slot.
+entity_guid match_spawn_caravan(game_match& match, const world_entity_caravans::single& start_state);
+
 // Destroys a settlement: frees its slot and clears its stored GUID, so the old GUID stops being valid.
 // The entity must be a valid settlement. Other entities referencing it are NOT updated.
 void match_destroy_settlement(game_match& match, entity_guid settlement);

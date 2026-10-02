@@ -12,6 +12,9 @@ unclear.
 The /work_units/ folder contains all current work units file which are then moved to /archive/ on completion.
 While a work unit is ongoing, it also appears in the main dev plan file.
 
+The /artisan_skills/ folder holds one file per content pipeline: a step-by-step recipe an artisan agent follows
+to derive new content (e.g. a new command) from existing precedents.
+
 The /backlog/ folder holds one file per backlog item, indexed from dev-plan.md's Backlog section.
 
 ## AI Agent use

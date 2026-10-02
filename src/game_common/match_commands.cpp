@@ -131,6 +131,60 @@ void command_spawn_army_apply(game_match& match, match_player_id player, const c
 	match_settlement_decrease_population(match, command.settlement, SPAWN_ARMY_POPULATION_COST);
 }
 
+// SPAWN CARAVAN
+
+constexpr ui32 SPAWN_CARAVAN_WEALTH_COST = 20;
+
+bool command_spawn_caravan_validity_check(const game_match& match, match_player_id player, const command_data_spawn_caravan& command)
+{
+	if (!match_entity_is_valid(match, command.settlement)) return false;
+	if (command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
+
+	ui16 settlementIndex = command.settlement.get_index();
+	const world_entity_settlements& settlements = match.world->entities.settlements;
+	if (settlements.owners[settlementIndex] != player) return false;
+	if (settlements.local_wealth[settlementIndex] < SPAWN_CARAVAN_WEALTH_COST) return false;
+
+	// A destination needs another settlement to exist.
+	if (settlements.active_count < 2) return false;
+
+	const world_entity_caravans& caravans = match.world->entities.caravans;
+	return caravans.active_count < caravans.max_count;
+}
+
+// Takes wealth out of the settlement and spawns a caravan at its location, headed to a random other settlement.
+void command_spawn_caravan_apply(game_match& match, match_player_id player, const command_data_spawn_caravan& command)
+{
+	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last caravan slot.
+	if (!command_spawn_caravan_validity_check(match, player, command)) return;
+
+	ui16 settlementIndex = command.settlement.get_index();
+	world_entity_settlements& settlements = match.world->entities.settlements;
+
+	// Pick a random active settlement other than this one.
+	ui16 destRandOrdinal = match.main_rand_gen.next_range<ui16>(0, settlements.active_count - 1) % (settlements.active_count - 1);
+	ui16 destRandIndex = 0;
+	for (;; destRandIndex++)
+	{
+		if (destRandIndex == settlementIndex || !settlements.guids[destRandIndex].is_valid()) continue;
+		if (destRandOrdinal == 0) break;
+		destRandOrdinal--;
+	}
+
+	world_entity_caravans::single newCaravan = {
+		.location = settlements.locations[settlementIndex],
+		.movement =
+		{
+			.travel_speed = 10,
+			.move_target = settlements.locations[destRandIndex],
+		},
+		.origin_settlement = command.settlement,
+		.dest_settlement = settlements.guids[destRandIndex],
+	};
+	match_spawn_caravan(match, newCaravan);
+	settlements.local_wealth[settlementIndex] -= SPAWN_CARAVAN_WEALTH_COST;
+}
+
 // ENTITY SET ATTACK TARGET
 
 bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_attack_target& command)
@@ -183,6 +237,8 @@ bool match_command_validity_check(const game_match& match, match_player_id playe
 			return command_found_settlement_validity_check(match, player, command.get_command_data<command_data_found_settlement>());
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 			return command_spawn_army_validity_check(match, player, command.get_command_data<command_data_spawn_army>());
+		case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
+			return command_spawn_caravan_validity_check(match, player, command.get_command_data<command_data_spawn_caravan>());
 		default:
 			ASSERT_MSG(0, "No validity check logic associated with command type.");
 			return false;
@@ -207,6 +263,9 @@ inline void match_command_apply(game_match& match, match_player_id player, const
 		break;
 	case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 		command_spawn_army_apply(match, player, command.get_command_data<command_data_spawn_army>());
+		break;
+	case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
+		command_spawn_caravan_apply(match, player, command.get_command_data<command_data_spawn_caravan>());
 		break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
@@ -267,6 +326,10 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 			isValid = command_spawn_army_validity_check(target_match, player_id,
 				commandHeader.get_command_data<command_data_spawn_army>());
+			break;
+		case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
+			isValid = command_spawn_caravan_validity_check(target_match, player_id,
+				commandHeader.get_command_data<command_data_spawn_caravan>());
 			break;
 		default:
 			// Only assert if the command type IS valid but not handled.

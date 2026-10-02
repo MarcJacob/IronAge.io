@@ -130,6 +130,15 @@ export function send_spawn_army(settlement_guid: number): void
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_ARMY);
 }
 
+// Orders the given settlement to spawn a caravan from its local wealth.
+export function send_spawn_caravan(settlement_guid: number): void
+{
+    // Layout of input_event_payload_spawn_caravan (game_client_backend.h): ui32 settlement guid.
+    const view = Backend.ClientInput.begin_input_event();
+    view.setUint32(0, settlement_guid, true);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_CARAVAN);
+}
+
 // Orders the given army to chase and attack the given entity.
 export function send_attack_target(attacker_guid: number, target_guid: number): void
 {

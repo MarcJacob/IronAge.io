@@ -43,6 +43,16 @@ void game_client_input_spawn_army(game_client& backend, entity_guid settlement)
 	payload->settlement = settlement;
 }
 
+void game_client_input_spawn_caravan(game_client& backend, entity_guid settlement)
+{
+	if (backend.local_match == nullptr) return;
+
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_spawn_caravan>(MATCH_COMMAND_TYPE::SPAWN_CARAVAN);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->settlement = settlement;
+}
+
 void game_client_input_attack_target(game_client& backend, entity_guid attacker_entity, entity_guid target_entity)
 {
 	if (backend.local_match == nullptr) return;
@@ -96,6 +106,12 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	{
 		auto& payload = *(input_event_payload_attack_target*)payload_bytes;
 		game_client_input_attack_target(backend, payload.attacker_entity, payload.target_entity);
+		return true;
+	}
+	case INPUT_EVENT_TYPE::SPAWN_CARAVAN:
+	{
+		auto& payload = *(input_event_payload_spawn_caravan*)payload_bytes;
+		game_client_input_spawn_caravan(backend, payload.settlement);
 		return true;
 	}
 	default:

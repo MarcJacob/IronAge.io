@@ -3,16 +3,20 @@
 // DOM is only touched when the text / visibility actually changed.
 
 import * as Backend from "./backend.js"
-import { get_selected_entity_guid, get_selected_entity_view, send_found_settlement, send_spawn_army } from "./input.js"
+import { get_selected_entity_guid, get_selected_entity_view, send_found_settlement, send_spawn_army, send_spawn_caravan } from "./input.js"
 import { get_local_player_id } from "./main.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
 let foundSettlementButton: HTMLElement | null = null;
 let spawnArmyButton: HTMLElement | null = null;
+let spawnCaravanButton: HTMLElement | null = null;
 
 // Minimum settlement population to offer spawning an army (test-grade).
 const SPAWN_ARMY_MIN_POPULATION = 100;
+
+// Minimum settlement local wealth to offer spawning a caravan (mirrors SPAWN_CARAVAN_WEALTH_COST in match_commands.cpp).
+const SPAWN_CARAVAN_MIN_WEALTH = 20;
 
 export function init_game_ui(): void
 {
@@ -29,6 +33,12 @@ export function init_game_ui(): void
     spawnArmyButton.addEventListener('click', () => {
         const guid = get_selected_entity_guid();
         if (guid !== null) send_spawn_army(guid);
+    });
+
+    spawnCaravanButton = document.getElementById("game_hud_spawn_caravan") as HTMLElement;
+    spawnCaravanButton.addEventListener('click', () => {
+        const guid = get_selected_entity_guid();
+        if (guid !== null) send_spawn_caravan(guid);
     });
 }
 
@@ -64,7 +74,7 @@ function entity_view_text(view: Backend.EntityView): string
 // Per-frame refresh. Call once the match is running.
 export function update_game_ui(): void
 {
-    if (selectedPanelElement === null || selectedTextElement === null || foundSettlementButton === null || spawnArmyButton === null) return;
+    if (selectedPanelElement === null || selectedTextElement === null || foundSettlementButton === null || spawnArmyButton === null || spawnCaravanButton === null) return;
 
     // Re-query the selected entity every frame so its values stay live.
     const view = get_selected_entity_view();
@@ -81,4 +91,8 @@ export function update_game_ui(): void
     const canSpawnArmy = view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === get_local_player_id()
         && view.settlement !== undefined && view.settlement.population >= SPAWN_ARMY_MIN_POPULATION;
     set_hidden(spawnArmyButton, !canSpawnArmy);
+
+    const canSpawnCaravan = view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === get_local_player_id()
+        && view.settlement !== undefined && view.settlement.local_wealth >= SPAWN_CARAVAN_MIN_WEALTH;
+    set_hidden(spawnCaravanButton, !canSpawnCaravan);
 }

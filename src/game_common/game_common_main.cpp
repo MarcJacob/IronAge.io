@@ -714,12 +714,18 @@ caravans.movements[caravanIndex].move_target = destLoc;
 			caravans.guids[caravanIndex] = INVALID_ENTITY_GUID;
 			caravans.active_count--;
 
-			// Increase local wealth in origin and destination town.
-			settlements.local_wealth[caravans.dest_settlements[caravanIndex].get_index()]++;
-			if (match_entity_is_valid(match, caravans.origin_settlements[caravanIndex]))
-			{
-				settlements.local_wealth[caravans.origin_settlements[caravanIndex].get_index()]++;
-			}
+			// Both origin and destination town earn 20 + distance in tiles + destination wealth / 10 + origin wealth / 20, read before either is increased.
+			// A destroyed origin counts as 0 distance and 0 wealth, and earns nothing.
+			ui16 destIndex = caravans.dest_settlements[caravanIndex].get_index();
+			bool originValid = match_entity_is_valid(match, caravans.origin_settlements[caravanIndex]);
+			ui16 originIndex = originValid ? caravans.origin_settlements[caravanIndex].get_index() : 0;
+
+			ui32 distanceTiles = originValid ? (ui32)ia_sqrt((ui32)world_location_dist_squared(settlements.locations[originIndex], destLoc)) : 0;
+			ui32 originWealth = originValid ? settlements.local_wealth[originIndex] : 0;
+			ui32 earnings = 20 + distanceTiles + settlements.local_wealth[destIndex] / 10 + originWealth / 20;
+
+			settlements.local_wealth[destIndex] += earnings;
+			if (originValid) settlements.local_wealth[originIndex] += earnings;
 		}
 	}
 }

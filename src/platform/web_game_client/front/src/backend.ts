@@ -25,6 +25,7 @@ export enum INPUT_EVENT_TYPE
     FOUND_SETTLEMENT = 2,
     SPAWN_ARMY = 3,
     ATTACK_TARGET = 4,
+    SPAWN_CARAVAN = 5,
 };
 
 // Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
