@@ -72,36 +72,46 @@ enum ENTITY_TYPE : ui8
 
 	Note: The ID 0 is considered "empty" or "invalid".
 */
-union entity_guid
+/*
+	Bit layout of the single ui32:
+	- MACRO: bits 0-7 type, bits 8-19 index (up to 4096 active entities per type), bits 20-31 extra.
+	- MICRO: bits 0-7 type, bits 8-23 index (up to 65536 active entities per type), bits 24-31 extra.
+	Extra is based on something unpredictable like time of creation.
+*/
+struct entity_guid
 {
-	ui32 guid;
-	struct
-	{
-		ENTITY_TYPE _type;
-		union
-		{
-			struct
-			{
-				ui16 _index : 12; // Up to 4098 active macro entities at a time, per type.
-				ui16 _extra : 12; // Based on something unpredictable like time of creation.
-			} _macro;
-			struct
-			{
-				ui16 _index; // Up to 65635 active micro entities at a time per type.
-				ui8 _extra; // Based on something unpredictable like time of creation.
-			} _micro;
-		};
-	};
+	ui32 _value;
 
-	inline bool is_valid() const { return guid != 0; }
+	inline bool is_valid() const { return _value != 0; }
+
+	inline ENTITY_TYPE get_type() const { return (ENTITY_TYPE)(_value & 0xFF); }
+	inline ui16 get_index() const { return is_macro() ? (_value >> 8) & 0xFFF : (_value >> 8) & 0xFFFF; }
+	inline ui16 get_extra() const { return is_macro() ? (_value >> 20) & 0xFFF : (_value >> 24) & 0xFF; }
+
+	inline bool is_macro() const { return get_type() < ENTITY_TYPE::MICRO_TYPES_START; }
 };
+static_assert(sizeof(entity_guid) == 4, "Entity GUID structure layout broken, it must be exactly 4 bytes.");
 
 // Invalid / non-existent entity value. Note that non-zero values may still reference an entity that is not valid, in which case that is because it doesn't exist anymore.
 constexpr entity_guid INVALID_ENTITY_GUID = { 0 };
 
+// Builds a entity GUID from its parts.
+static inline entity_guid entity_guid_new(ENTITY_TYPE type, ui16 index, ui16 extra)
+{
+	if (type < ENTITY_TYPE::MICRO_TYPES_START)
+	{
+		ASSERT(index <= 0xFFFF);
+		ASSERT(extra <= 0xFF);
+		return { (ui32)type | ((ui32)(index & 0xFFF) << 8) | ((ui32)(extra & 0xFFF) << 20) };
+	}
+	ASSERT(index <= 0xFFF);
+	ASSERT(extra <= 0xFFF);
+	return { (ui32)type | ((ui32)index << 8) | ((ui32)(extra & 0xFF) << 24) };
+}
+
 bool operator==(const entity_guid& guid_a, const entity_guid& guid_b)
 {
-	return guid_a.guid == guid_b.guid;
+	return guid_a._value == guid_b._value; // Whole value, so _extra is compared too.
 }
 
 // Reused entity sub-components
@@ -221,5 +231,17 @@ struct match_world_state
 // Memory is allocated for the full terrain tile info, and pre-allocated for a reasonable number of each entity type given the size of the world.
 // TODO(Marc): Profile system so worlds can be exactly configured (image-based terrain generation, exact max entity counts...).
 match_world_state* world_state_init(mem_arena& memory, world_dimensions size_regions);
+
+struct game_match;
+
+// Returns true if the GUID is non-zero, its index is in range, and the GUID stored at that slot is identical to it.
+// If the entity was destroyed and its slot reused, the stored GUID will (almost always) differ in its _extra field, and this returns false.
+bool match_entity_is_valid(const game_match& match, entity_guid entity);
+
+// Per-type queries: if entity is a valid entity of the matching type, fills out_state with its current state and returns true.
+// Otherwise returns false and leaves out_state untouched.
+bool query_entity_state_settlement(const game_match& match, entity_guid entity, world_entity_settlements::single& out_state);
+bool query_entity_state_caravan(const game_match& match, entity_guid entity, world_entity_caravans::single& out_state);
+bool query_entity_state_army(const game_match& match, entity_guid entity, world_entity_armies::single& out_state);
 
 #endif // MATCH_WORLD_INCLUDED

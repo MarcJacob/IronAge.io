@@ -72,6 +72,7 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::SETTLEMENT;
 			outEntity.owner = settlements.owners[settlementIndex];
+			outEntity.guid = settlements.guids[settlementIndex];
 			outEntity.viewport_location = { settlementLoc.x - bottomLeft.x, settlementLoc.y - bottomLeft.y };
 			outEntity.size_viewport = SETTLEMENT_RENDER_SIZE;
 
@@ -89,9 +90,10 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 
 			// Lookup caravan owner through its origin settlement.
 			// TODO(Marc): Make this a function.
-			match_player_id owner = settlements.owners[caravans.origin_settlements[caravanIndex]._macro._index];
+			match_player_id owner = settlements.owners[caravans.origin_settlements[caravanIndex].get_index()];
 
 			outEntity.owner = owner;
+			outEntity.guid = caravans.guids[caravanIndex];
 			outEntity.viewport_location = { caravanLoc.x - bottomLeft.x, caravanLoc.y - bottomLeft.y };
 			outEntity.size_viewport = CARAVAN_RENDER_SIZE;
 
@@ -107,6 +109,7 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::ARMY;
 			outEntity.owner = armies.owners[armyIndex];
+			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = { armyLoc.x - bottomLeft.x, armyLoc.y - bottomLeft.y };
 			outEntity.size_viewport = ARMY_RENDER_SIZE;
 

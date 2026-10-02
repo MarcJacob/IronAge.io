@@ -24,7 +24,24 @@ panning, by building a proper camera/viewport and input system.
   drains the whole queue into the `CLIENT_TICK` message and resets it - see
   Progress for the `match_command_sequence`/wire-format work this rode on.
 - [ ] Selection state: client-local "currently selected entity", no new
-  network message yet.
+  network message yet. Design (2026-10-02):
+  - Hit-testing and the "currently selected" value stay frontend-local (JS
+    already has render-list positions for drawing).
+  - `render_entity` gains a `guid` field so the frontend can name what it
+    hit-tested against.
+  - `game_common`/match code gets per-type query functions
+    (`query_entity_state_settlement/caravan/army(match, guid) -> single`),
+    validating the GUID's type + liveness and returning the same `::single`
+    view struct used for spawn start-state - usable from server, client and
+    tests, not just this feature.
+  - `game_client_backend` calls the relevant query function on request;
+    the wasm platform layer owns when to ask and how to marshal the
+    result to JS, since that request/response flow is the platform-specific
+    part, not the data access itself.
+  - Side effect to pick up opportunistically, not required for this task:
+    `command_set_entity_move_target_validity_check`/`_apply` index straight
+    into `armies.owners[...]` by hand - could go through
+    `query_entity_state_army` instead once it exists.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
   canvas (DOM overlay, like the debug panel).
 - [x] Smooth rendering: jitter traced to `client_render_state`'s viewport

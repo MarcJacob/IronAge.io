@@ -21,10 +21,12 @@ struct render_entity
 {
 	ENTITY_TYPE entity_type; // Type of entity being rendered.
 	match_player_id owner; // ID of owner player if any.
+	entity_guid guid; // GUID of the entity, so the frontend can name what it hit-tested.
 
 	vec2f viewport_location; // Location of center of entity.
 	ui8 size_viewport; // Square size of the entity in viewport space.
 };
+static_assert(sizeof(render_entity) == 16, "render_entity layout is read by backend.ts at fixed offsets (stride 16).");
 
 // Render state exposed to the frontend.
 struct client_render_state

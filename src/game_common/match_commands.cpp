@@ -9,13 +9,15 @@
 // Example of command sanity check function.
 bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
-	ENTITY_TYPE entityType = command.entity._type;
+	if (!match_entity_is_valid(match, command.entity)) return false;
+
+	ENTITY_TYPE entityType = command.entity.get_type();
 
 	switch (entityType)
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		return match.world->entities.armies.owners[command.entity._micro._index] == player;
+		return match.world->entities.armies.owners[command.entity.get_index()] == player;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
 		return false;
@@ -25,13 +27,15 @@ bool command_set_entity_move_target_validity_check(const game_match& match, matc
 // Example of a command apply function.
 void command_set_entity_move_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
 {
-	ENTITY_TYPE entityType = command.entity._type;
+	if (!match_entity_is_valid(match, command.entity)) return;
+
+	ENTITY_TYPE entityType = command.entity.get_type();
 
 	switch (entityType)
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		match.world->entities.armies.movements[command.entity._micro._index].move_target = command.move_target;
+		match.world->entities.armies.movements[command.entity.get_index()].move_target = command.move_target;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
 		break;
