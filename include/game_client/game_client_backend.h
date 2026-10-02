@@ -136,9 +136,11 @@ struct input_event_payload_viewport_control
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_viewport_control);
 
+// Orders an entity to move to the location under the cursor.
 struct input_event_payload_set_target_loc
 {
-	i32 x, y;
+	entity_guid entity; // Entity to order.
+	i32 x, y; // Cursor position in viewport space: whole world tiles from the viewport's bottom-left corner.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_set_target_loc);
 

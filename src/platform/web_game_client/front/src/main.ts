@@ -90,7 +90,8 @@ async function start()
     init_camera_system();
 
     // Initialize debug panel / text container.
-    init_debug_panel(document.getElementById("debug_entity_states") as HTMLElement);
+    init_debug_panel(document.getElementById("debug_entity_states") as HTMLElement,
+        document.getElementById("selected_entity_panel") as HTMLElement);
 
     // Initialize websocket conneciton.
     const socket = new WebSocket(websocket_url());

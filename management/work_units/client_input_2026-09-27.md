@@ -23,7 +23,7 @@ panning, by building a proper camera/viewport and input system.
   `SET_ENTITY_MOVE_TARGET` command onto it, `game_client_output_client_tick_message`
   drains the whole queue into the `CLIENT_TICK` message and resets it - see
   Progress for the `match_command_sequence`/wire-format work this rode on.
-- [ ] Selection state: client-local "currently selected entity", no new
+- [x] Selection state: client-local "currently selected entity", no new
   network message yet. Design (2026-10-02):
   - Hit-testing and the "currently selected" value stay frontend-local (JS
     already has render-list positions for drawing).
@@ -42,8 +42,13 @@ panning, by building a proper camera/viewport and input system.
     `match_entity_is_valid(match, guid)` (type + index + full-guid compare
     against stored guid), `query_entity_state_*(match, guid, single&) -> bool`,
     command validity check/apply use `match_entity_is_valid` (not the full query).
-  - Step 2 [ ]: `game_client_backend` query wrapper, wasm export,
-    `backend.ts` marshaling, JS hit-testing + selected state.
+  - Step 2 [x] (2026-10-02, committed b5b139d): `client_query_entity(guid)`
+    wasm export -> `game_client_query_entity` -> packed `entity_full_view`
+    (38 bytes: core + per-type union; separate from the `::single` views).
+    `backend.ts` `query_entity(guid)`, `render.ts` `pick_entity_at`, selected
+    guid held in frontend state, shown in the debug panel only. Left-click
+    selects, right-click = move target via `mouse_button_action` (to be
+    replaced by contextual input later). No highlight drawn yet.
 - [ ] UI scaffold: place for buttons / panels, separate from the game
   canvas (DOM overlay, like the debug panel).
 - [x] Smooth rendering: jitter traced to `client_render_state`'s viewport

@@ -7,15 +7,20 @@
 static constexpr float VIEWPORT_PAN_SPEED_FRACTION = 0.5f; // Fraction of current viewport size crossed per second, at full pan input.
 static constexpr float VIEWPORT_ZOOM_EASE_RATE = 3.0f; // How fast zoom_level eases toward its target, per second.
 
-void game_client_input_set_target_loc(game_client& backend, int x, int y)
+void game_client_input_set_target_loc(game_client& backend, entity_guid entity, int viewport_x, int viewport_y)
 {
-	return;
+	if (backend.local_match == nullptr) return;
 
-	//auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
-	//if (payload == nullptr) return; // Queue full - drop the command.
+	// Viewport space -> world location, rounded to a tile and clamped inside the world.
+	const client_viewport_state& viewport = backend.player_viewport;
+	float worldX = ia_max(0.0f, ia_min(viewport.view_rect_min.x + (float)viewport_x, (float)viewport.world_size.x - 1.0f));
+	float worldY = ia_max(0.0f, ia_min(viewport.view_rect_min.y + (float)viewport_y, (float)viewport.world_size.y - 1.0f));
 
-	//payload->target_entity = backend.controlled_player_id;
-	//payload->new_target = { (ui16)x, (ui16)y };
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->entity = entity;
+	payload->move_target = { (ui16)(worldX + 0.5f), (ui16)(worldY + 0.5f) };
 }
 
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
@@ -41,7 +46,7 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	case INPUT_EVENT_TYPE::SET_TARGET_LOC:
 	{
 		auto& payload = *(input_event_payload_set_target_loc*)payload_bytes;
-		game_client_input_set_target_loc(backend, payload.x, payload.y);
+		game_client_input_set_target_loc(backend, payload.entity, payload.x, payload.y);
 		return true;
 	}
 	default:

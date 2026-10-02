@@ -90,12 +90,15 @@ export function get_selected_entity_view(): Backend.EntityView | null
 // Sets target location / entity for currently selected entity.
 function send_set_target_loc(clientX: number, clientY: number)
 {
-    const worldLocation = Render.page_to_world(clientX, clientY);
+    if (SELECTED_ENTITY_GUID === null) return;
 
-    // Layout of input_event_payload_set_target_loc (game_client_backend.h): i32 x, i32 y.
+    const viewportLocation = Render.page_to_viewport(clientX, clientY);
+
+    // Layout of input_event_payload_set_target_loc (game_client_backend.h): ui32 entity guid, i32 x, i32 y (viewport space, whole tiles).
     const view = Backend.ClientInput.begin_input_event();
-    view.setInt32(0, worldLocation.x, true);
-    view.setInt32(4, worldLocation.y, true);
+    view.setUint32(0, SELECTED_ENTITY_GUID, true);
+    view.setInt32(4, Math.round(viewportLocation.x), true);
+    view.setInt32(8, Math.round(viewportLocation.y), true);
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SET_TARGET_LOC);
 }
 

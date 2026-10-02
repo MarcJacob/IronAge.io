@@ -5,6 +5,7 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import { FRONTEND_CAMERA } from "./camera.js"
+import { get_selected_entity_guid } from "./input.js"
 
 let canvas: HTMLCanvasElement;
 
@@ -61,7 +62,7 @@ let RENDER_PARAMS =
 	viewportBottomLeftY : 0,
 }
 
-function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, scale:number, owned_by_local_player: boolean = false)
+function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, scale:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     const w = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
     const h = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
@@ -89,33 +90,41 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
 
     ctx.drawImage(tintCanvas, drawX, drawY, w, h);
 
+    // Selection indicator: green outline around the image, constant width in screen pixels.
+    if (is_selected)
+    {
+        const padding = 4;
+        ctx.strokeStyle = '#0c0';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(drawX - padding, drawY - padding, w + 2 * padding, h + 2 * padding);
+    }
 }
 
 // Draws a settlement entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
+function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, scale, owned_by_local_player);
+    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
 }
 
 // Draws a caravan entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_caravan(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
+function draw_entity_caravan(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, scale, owned_by_local_player);
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_army(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false)
+function draw_entity_army(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, scale, owned_by_local_player);
+    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
 }
 
 // Fills the world's projected area white, leaving the out-of-world canvas area transparent/dark.
@@ -159,21 +168,24 @@ export function draw(render_state: Backend.RenderState | null)
     draw_world_background();
     draw_world_border();
 
+    const selectedGuid = get_selected_entity_guid();
+
     for (let i = 0; i < render_state.entity_count; i++)
     {
         const entity = render_state.entity_states[i];
+        const isSelected = selectedGuid !== null && entity.guid === selectedGuid;
 
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
             draw_entity_settlement(entity.viewport_x, entity.viewport_y, entity.size_viewport,
-                entity.owner === render_state.controlled_player_id);
+                entity.owner === render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type == Backend.ENTITY_TYPE.CARAVAN) {
             draw_entity_caravan(entity.viewport_x, entity.viewport_y, entity.size_viewport,
-                entity.owner == render_state.controlled_player_id);
+                entity.owner == render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
             draw_entity_army(entity.viewport_x, entity.viewport_y, entity.size_viewport,
-                entity.owner == render_state.controlled_player_id);
+                entity.owner == render_state.controlled_player_id, isSelected);
         }
     }
 }

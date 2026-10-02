@@ -19,8 +19,9 @@ struct game_client;
 // Sets current viewport control input state.
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max);
 
-// Queues a command to set the controlled player's entity target location.
-void game_client_input_set_target_loc(game_client& backend, int x, int y);
+// Queues a command to move an entity to the world location under the cursor, given in viewport space
+// (whole world tiles from the viewport's bottom-left corner). The location is clamped inside the world.
+void game_client_input_set_target_loc(game_client& backend, entity_guid entity, int viewport_x, int viewport_y);
 
 // Applies current viewport input state onto the render viewport.
 void game_client_apply_viewport_input(game_client& backend, float delta_time);

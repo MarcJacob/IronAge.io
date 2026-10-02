@@ -36,6 +36,7 @@ void command_set_entity_move_target_apply(game_match& match, match_player_id pla
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
 		match.world->entities.armies.movements[command.entity.get_index()].move_target = command.move_target;
+		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
 		break;

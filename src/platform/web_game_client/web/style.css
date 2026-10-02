@@ -23,6 +23,25 @@ body {
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 
+/* Selected entity side panel. Never intercepts canvas mouse input. */
+#selected_entity_panel {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    margin: 0;
+    padding: 8px;
+    max-width: 30vw;
+    background: rgba(255, 255, 255, 0.9);
+    color: #1d2128;
+    border: 1px solid #c7cbd1;
+    font-family: monospace;
+    pointer-events: none;
+}
+
+#selected_entity_panel[hidden] {
+    display: none;
+}
+
 #debug_panel {
     box-sizing: border-box;
     width: 100%;
