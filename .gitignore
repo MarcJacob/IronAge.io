@@ -20,3 +20,7 @@ CLAUDE.md
 # Ignore VS stuff.
 
 /.vs/
+
+# Ignore all .local.* files
+
+*.local.*
