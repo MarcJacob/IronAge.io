@@ -45,6 +45,8 @@ void command_set_entity_move_target_apply(game_match& match, match_player_id pla
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
 		match.world->entities.armies.movements[command.entity.get_index()].move_target = command.move_target;
+		// A new move order overrides any attack the army was committed to.
+		match.world->entities.armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
 		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -131,15 +133,37 @@ void command_spawn_army_apply(game_match& match, match_player_id player, const c
 
 // ENTITY SET ATTACK TARGET
 
-bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player, const command_data_set_entity_attack_target& command)
 {
-	// TODO(Marc): Find entity ID, determine if it can attack, and if it is controllable by this player.
-	return false;
+	if (!match_entity_is_valid(match, command.attacker_entity)) return false;
+	if (command.attacker_entity.get_type() != ENTITY_TYPE::ARMY) return false;
+	if (match.world->entities.armies.owners[command.attacker_entity.get_index()] != player) return false;
+
+	if (!match_entity_is_valid(match, command.target_entity)) return false;
+
+	// Targets owned by the sender can't be attacked (see match_caravan_is_owned_by for caravans).
+	ui16 targetIndex = command.target_entity.get_index();
+	const match_world_state::entities_store& entities = match.world->entities;
+	switch (command.target_entity.get_type())
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		return entities.settlements.owners[targetIndex] != player;
+	case ENTITY_TYPE::ARMY:
+		return entities.armies.owners[targetIndex] != player;
+	case ENTITY_TYPE::CARAVAN:
+		return !match_caravan_is_owned_by(match, command.target_entity, player);
+	default:
+		return false;
+	}
 }
 
-void command_set_entity_attack_target_apply(game_match& match, match_player_id player, const command_data_set_entity_move_target& command)
+// Commits the army to chasing the target. The chase and its resolution are handled by the match tick.
+void command_set_entity_attack_target_apply(game_match& match, match_player_id player, const command_data_set_entity_attack_target& command)
 {
-	// TODO(Marc): Find entity from ID in the command and set its attack target if possible.
+	// Checked again: earlier commands in the same tick may have destroyed the attacker or the target.
+	if (!command_set_entity_attack_target_validity_check(match, player, command)) return;
+
+	match.world->entities.armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
 }
 
 // END COMMAND FUNCTION IMPLEMENTATIONS
@@ -153,6 +177,8 @@ bool match_command_validity_check(const game_match& match, match_player_id playe
 	{
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 			return command_set_entity_move_target_validity_check(match, player, command.get_command_data<command_data_set_entity_move_target>());
+		case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
+			return command_set_entity_attack_target_validity_check(match, player, command.get_command_data<command_data_set_entity_attack_target>());
 		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 			return command_found_settlement_validity_check(match, player, command.get_command_data<command_data_found_settlement>());
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
@@ -171,6 +197,10 @@ inline void match_command_apply(game_match& match, match_player_id player, const
 	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 		command_set_entity_move_target_apply(match, player,
 			command.get_command_data<command_data_set_entity_move_target>());
+		break;
+	case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
+		command_set_entity_attack_target_apply(match, player,
+			command.get_command_data<command_data_set_entity_attack_target>());
 		break;
 	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 		command_found_settlement_apply(match, player, command.get_command_data<command_data_found_settlement>());
@@ -225,6 +255,10 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
 			isValid = command_set_entity_move_target_validity_check(target_match, player_id,
 				commandHeader.get_command_data<command_data_set_entity_move_target>());
+			break;
+		case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
+			isValid = command_set_entity_attack_target_validity_check(target_match, player_id,
+				commandHeader.get_command_data<command_data_set_entity_attack_target>());
 			break;
 		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 			isValid = command_found_settlement_validity_check(target_match, player_id,

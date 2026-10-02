@@ -43,6 +43,17 @@ void game_client_input_spawn_army(game_client& backend, entity_guid settlement)
 	payload->settlement = settlement;
 }
 
+void game_client_input_attack_target(game_client& backend, entity_guid attacker_entity, entity_guid target_entity)
+{
+	if (backend.local_match == nullptr) return;
+
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_attack_target>(MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->attacker_entity = attacker_entity;
+	payload->target_entity = target_entity;
+}
+
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
 {
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
@@ -79,6 +90,12 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	{
 		auto& payload = *(input_event_payload_spawn_army*)payload_bytes;
 		game_client_input_spawn_army(backend, payload.settlement);
+		return true;
+	}
+	case INPUT_EVENT_TYPE::ATTACK_TARGET:
+	{
+		auto& payload = *(input_event_payload_attack_target*)payload_bytes;
+		game_client_input_attack_target(backend, payload.attacker_entity, payload.target_entity);
 		return true;
 	}
 	default:

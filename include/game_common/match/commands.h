@@ -17,7 +17,7 @@
 enum class MATCH_COMMAND_TYPE : ui8
 {
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
-	SET_ENTITY_ATTACK_TARGET, // Orders an entity to attack another entity if able.
+	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
 	SPAWN_ARMY, // Spawns an army of levies from a settlement's population.
 
@@ -53,11 +53,11 @@ struct command_data_set_entity_attack_target
 
 // VALIDITY CHECK
 bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player,
-	const command_data_set_entity_move_target& command);
+	const command_data_set_entity_attack_target& command);
 
 // APPLY
 void command_set_entity_attack_target_apply(game_match& match, match_player_id player,
-	const command_data_set_entity_move_target& command);
+	const command_data_set_entity_attack_target& command);
 
 // FOUND SETTLEMENT
 struct command_data_found_settlement

@@ -121,6 +121,7 @@ enum class INPUT_EVENT_TYPE : ui16
 	SET_TARGET_LOC,
 	FOUND_SETTLEMENT,
 	SPAWN_ARMY,
+	ATTACK_TARGET,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -159,6 +160,14 @@ struct input_event_payload_spawn_army
 	entity_guid settlement; // Settlement to spawn the army from.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_spawn_army);
+
+// Orders an army to chase and attack another entity.
+struct input_event_payload_attack_target
+{
+	entity_guid attacker_entity; // Army to order.
+	entity_guid target_entity; // Entity to attack.
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_attack_target);
 
 #pragma pack(pop)
 

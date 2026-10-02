@@ -25,6 +25,7 @@ void game_client_input_set_target_loc(game_client& backend, entity_guid entity, 
 
 // Queues a command to turn an army into a settlement at its location.
 void game_client_input_found_settlement(game_client& backend, entity_guid army);
+void game_client_input_attack_target(game_client& backend, entity_guid attacker_entity, entity_guid target_entity);
 
 // Queues a command to have a settlement spawn an army from its population.
 void game_client_input_spawn_army(game_client& backend, entity_guid settlement);

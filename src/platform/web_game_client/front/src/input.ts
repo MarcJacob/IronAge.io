@@ -4,6 +4,7 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
 import { FRONTEND_CAMERA } from "./camera.js"
+import { get_local_player_id } from "./main.js"
 
 // Input sources (updated on events, used on tick)
 const KB_HELD_KEYS = new Set<string>();
@@ -57,7 +58,8 @@ export function get_mouse_world_location(): { x: number, y: number } | null
 // size_viewport tiles centered on its location, same as draw_entity. If several overlap, the one whose center is nearest wins,
 // except when the currently selected entity is among them: then the next one in render-list order after it (wrapping) wins,
 // so repeated clicks on a stack cycle through all of it. A lone selected entity stays selected.
-export function pick_entity_at(clientX: number, clientY: number): number | null
+// If exclude_owner is given, entities owned by that player are ignored.
+export function pick_entity_at(clientX: number, clientY: number, exclude_owner: number | null = null): number | null
 {
     if (Backend.LAST_RENDER_STATE === null) return null;
 
@@ -69,6 +71,7 @@ export function pick_entity_at(clientX: number, clientY: number): number | null
     for (let i = 0; i < Backend.LAST_RENDER_STATE.entity_count; i++)
     {
         const entity = Backend.LAST_RENDER_STATE.entity_states[i];
+        if (exclude_owner !== null && entity.owner === exclude_owner) continue;
         const dx = viewportCoords.x - entity.viewport_x;
         const dy = viewportCoords.y - entity.viewport_y;
         const halfSize = entity.size_viewport / 2;
@@ -127,6 +130,35 @@ export function send_spawn_army(settlement_guid: number): void
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_ARMY);
 }
 
+// Orders the given army to chase and attack the given entity.
+export function send_attack_target(attacker_guid: number, target_guid: number): void
+{
+    // Layout of input_event_payload_attack_target (game_client_backend.h): ui32 attacker guid, ui32 target guid.
+    const view = Backend.ClientInput.begin_input_event();
+    view.setUint32(0, attacker_guid, true);
+    view.setUint32(4, target_guid, true);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.ATTACK_TARGET);
+}
+
+// Right-click order: attack the entity not owned by the local player under the cursor if the selection is a local army
+// and there is one, otherwise move.
+function send_context_order(clientX: number, clientY: number)
+{
+    const localPlayerId = get_local_player_id();
+    const selected = get_selected_entity_view();
+    if (selected !== null && localPlayerId !== null
+        && selected.entity_type === Backend.ENTITY_TYPE.ARMY && selected.owner === localPlayerId)
+    {
+        const targetGuid = pick_entity_at(clientX, clientY, localPlayerId);
+        if (targetGuid !== null)
+        {
+            send_attack_target(selected.guid, targetGuid);
+            return;
+        }
+    }
+    send_set_target_loc(clientX, clientY);
+}
+
 // EVENT HANDLERS
 
 // What a mouse button press does.
@@ -166,7 +198,7 @@ function on_pointer_click(clickEvent: MouseEvent)
 function on_context_menu(menuEvent: MouseEvent)
 {
     menuEvent.preventDefault();
-    do_mouse_action(MOUSE_ACTION.SET_MOVE_TARGET, menuEvent.clientX, menuEvent.clientY);
+    send_context_order(menuEvent.clientX, menuEvent.clientY);
 }
 
 function on_mouse_move(moveEvent: MouseEvent)

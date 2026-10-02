@@ -349,6 +349,16 @@ bool query_entity_state_caravan(const game_match& match, entity_guid entity, wor
 	return true;
 }
 
+bool match_caravan_is_owned_by(const game_match& match, entity_guid caravan, match_player_id player)
+{
+	world_entity_caravans::single state;
+	if (!query_entity_state_caravan(match, caravan, state)) return false;
+
+	world_entity_settlements::single settlement;
+	if (query_entity_state_settlement(match, state.origin_settlement, settlement) && settlement.owner == player) return true;
+	return query_entity_state_settlement(match, state.dest_settlement, settlement) && settlement.owner == player;
+}
+
 bool query_entity_state_army(const game_match& match, entity_guid entity, world_entity_armies::single& out_state)
 {
 	if (entity.get_type() != ENTITY_TYPE::ARMY || !match_entity_is_valid(match, entity)) return false;
@@ -422,6 +432,124 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	}
 
 	return true;
+}
+
+// ATTACK RESOLUTION HELPERS
+
+// An army reaches its attack target when within this many tiles of it.
+constexpr i32 ATTACK_REACH_TILES = 5;
+
+// Squared distance between two world locations, in integer math.
+static inline i32 world_location_dist_squared(world_location a, world_location b)
+{
+	i32 dx = (i32)a.x - (i32)b.x;
+	i32 dy = (i32)a.y - (i32)b.y;
+	return dx * dx + dy * dy;
+}
+
+static inline ui64 army_total_manpower(const world_entity_armies::comp& composition)
+{
+	return (ui64)composition.levies + composition.archers + composition.men_at_arms + composition.horsemen + composition.knights;
+}
+
+template<typename Count>
+static inline void army_take_manpower(Count& count, ui64& remaining)
+{
+	ui64 taken = remaining < count ? remaining : count;
+	count = (Count)(count - taken);
+	remaining -= taken;
+}
+
+// Removes manpower from an army, cheapest units first.
+static inline void army_remove_manpower(world_entity_armies::comp& composition, ui64 amount)
+{
+	army_take_manpower(composition.levies, amount);
+	army_take_manpower(composition.archers, amount);
+	army_take_manpower(composition.men_at_arms, amount);
+	army_take_manpower(composition.horsemen, amount);
+	army_take_manpower(composition.knights, amount);
+}
+
+// Effective manpower of an army for a fight, in hundredths: manpower x a random 50% to 150% advantage.
+static inline ui64 army_roll_effective_manpower(game_match& match, ui64 manpower)
+{
+	ui32 advantagePercent = match.main_rand_gen.next_range<ui32>(50, 151);
+	if (advantagePercent > 150) advantagePercent = 150; // The range function may land on its max.
+	return manpower * advantagePercent;
+}
+
+// Resolves an attack of an army that reached its target. The attacker is destroyed here if it loses.
+static void match_resolve_attack(game_match& match, entity_guid attacker, entity_guid target)
+{
+	world_entity_settlements& settlements = match.world->entities.settlements;
+	world_entity_caravans& caravans = match.world->entities.caravans;
+	world_entity_armies& armies = match.world->entities.armies;
+
+	ui16 attackerIndex = attacker.get_index();
+	ui16 targetIndex = target.get_index();
+	match_player_id attackerOwner = armies.owners[attackerIndex];
+
+	switch (target.get_type())
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		settlements.owners[targetIndex] = attackerOwner;
+		break;
+	case ENTITY_TYPE::CARAVAN:
+	{
+		// The caravan is redirected to the closest settlement of the attacker. Without one, it is left alone.
+		i32 bestDist = 0;
+		entity_guid bestSettlement = INVALID_ENTITY_GUID;
+		for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+		{
+			if (!settlements.guids[settlementIndex].is_valid() || settlements.owners[settlementIndex] != attackerOwner) continue;
+
+			i32 dist = world_location_dist_squared(caravans.locations[targetIndex], settlements.locations[settlementIndex]);
+			if (!bestSettlement.is_valid() || dist < bestDist)
+			{
+				bestDist = dist;
+				bestSettlement = settlements.guids[settlementIndex];
+			}
+		}
+		if (bestSettlement.is_valid()) caravans.dest_settlements[targetIndex] = bestSettlement;
+		break;
+	}
+	case ENTITY_TYPE::ARMY:
+	{
+		ui64 attackerManpower = army_total_manpower(armies.compositions[attackerIndex]);
+		ui64 defenderManpower = army_total_manpower(armies.compositions[targetIndex]);
+
+		// Roll attacker first, then defender. Manpower is assumed to stay under ~1e8 so the loss computation below can't overflow.
+		ui64 attackerEffective = army_roll_effective_manpower(match, attackerManpower);
+		ui64 defenderEffective = army_roll_effective_manpower(match, defenderManpower);
+
+		if (attackerEffective == defenderEffective)
+		{
+			match_destroy_army(match, attacker);
+			match_destroy_army(match, target);
+		}
+		else
+		{
+			// The winner, whichever side, loses winner_manpower x (loser_eff / winner_eff), rounded up so a fight always costs something.
+			// The ratio is below 1 here, but the loss is still capped at the winner's manpower.
+			bool attackerWins = attackerEffective > defenderEffective;
+			entity_guid winner = attackerWins ? attacker : target;
+			entity_guid loser = attackerWins ? target : attacker;
+			ui64 winnerManpower = attackerWins ? attackerManpower : defenderManpower;
+			ui64 winnerEffective = attackerWins ? attackerEffective : defenderEffective;
+			ui64 loserEffective = attackerWins ? defenderEffective : attackerEffective;
+
+			ui64 loss = (winnerManpower * loserEffective + winnerEffective - 1) / winnerEffective;
+			if (loss > winnerManpower) loss = winnerManpower;
+
+			match_destroy_army(match, loser);
+			army_remove_manpower(armies.compositions[winner.get_index()], loss);
+			if (loss == winnerManpower) match_destroy_army(match, winner);
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 // Advances time in a match's world simulation. Requires the aggregated inputs / commands to apply into the tick.
@@ -513,6 +641,22 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 caravans.movements[caravanIndex].move_target = destLoc;
 	}
 
+	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
+
+		if (match_entity_is_valid(match, armies.action_targets[armyIndex]))
+		{
+			armies.movements[armyIndex].move_target = world_get_entity_location(match, armies.action_targets[armyIndex]);
+		}
+		else
+		{
+			armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+			armies.movements[armyIndex].move_target = armies.locations[armyIndex];
+		}
+	}
+
 	// TEMP: Move armies and caravans towards their destination.
 	auto process_entity_movement = [&](const world_entity_movement& movement, world_location& location)
 		{
@@ -537,6 +681,23 @@ caravans.movements[caravanIndex].move_target = destLoc;
 		if (!armies.guids[armyIndex].is_valid()) continue;
 
 		process_entity_movement(armies.movements[armyIndex], armies.locations[armyIndex]);
+	}
+
+	// Armies that got close enough to their attack target resolve the attack, which ends the chase.
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
+
+		// An earlier resolution this tick may have destroyed the target.
+		entity_guid target = armies.action_targets[armyIndex];
+		if (!match_entity_is_valid(match, target)) continue; // Handled by the chase code next tick.
+
+		if (world_location_dist_squared(armies.locations[armyIndex], world_get_entity_location(match, target))
+			> ATTACK_REACH_TILES * ATTACK_REACH_TILES) continue;
+
+		armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+		armies.movements[armyIndex].move_target = armies.locations[armyIndex];
+		match_resolve_attack(match, armies.guids[armyIndex], target);
 	}
 
 	// Once caravans reach close enough to their destination, despawn them and increase origin & destination local wealth.

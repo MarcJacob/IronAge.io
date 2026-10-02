@@ -242,4 +242,8 @@ bool query_entity_state_settlement(const game_match& match, entity_guid entity, 
 bool query_entity_state_caravan(const game_match& match, entity_guid entity, world_entity_caravans::single& out_state);
 bool query_entity_state_army(const game_match& match, entity_guid entity, world_entity_armies::single& out_state);
 
+// Caravans have no owner of their own: a caravan is "ours" if its origin OR destination settlement (if it still exists) is owned by the player.
+// Returns false if the caravan itself is not valid.
+bool match_caravan_is_owned_by(const game_match& match, entity_guid caravan, match_player_id player);
+
 #endif // MATCH_WORLD_INCLUDED

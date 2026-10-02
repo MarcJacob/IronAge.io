@@ -88,9 +88,9 @@ void game_client_rebuild_render_state(client_render_state& render_state, mem_are
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::CARAVAN;
 
-			// Lookup caravan owner through its origin settlement.
-			// TODO(Marc): Make this a function.
-			match_player_id owner = settlements.owners[caravans.origin_settlements[caravanIndex].get_index()];
+			// Caravans are only "ours" (origin or destination owned by the controlled player) or not.
+			match_player_id owner = match_caravan_is_owned_by(match, caravans.guids[caravanIndex], controlled_player_id)
+				? controlled_player_id : INVALID_MATCH_PLAYER_ID;
 
 			outEntity.owner = owner;
 			outEntity.guid = caravans.guids[caravanIndex];
