@@ -41,11 +41,22 @@ mechanics only; no game-design rules in this unit.
   height is the zoom value; width = height * canvas aspect); HUD CSS follows
   the container. Frontend-only: the TS camera owns the world rectangle sent
   to the backend.
-- [ ] Button: settlement spawns an army from its population.
+- [x] `SPAWN_ARMY { settlement guid }` command (cost 100 population -> army of
+  100 levies, same location / owner) + "Spawn army" HUD button (owned
+  settlement, population >= 100); `send_spawn_army` in `input.ts`.
+- [x] `match_settlement_decrease_population` (saturating; destroys the
+  settlement at 0 via `match_destroy_settlement`).
+- [x] Test-only population growth: 1% chance per tick per settlement, +5%
+  (min 1). Throwaway mechanic.
+- [x] Caravan code hardened against destroyed settlements (destination pick
+  no longer assumes dense slots; caravans despawn if destination is gone).
+- [x] Selection cycles through entities stacked under the cursor
+  (`pick_entity_at` in `input.ts`: next hit in render-list order after the
+  selected one).
 
 ## Progress
 
 - 2026-10-02: unit created.
-- 2026-10-03: all above verified working by Marc. Found settlement spawns
+- 2026-10-03: unit complete, all verified working by Marc. Found settlement spawns
   with zeroed wealth / tier / trade attractivity / area influence (no defaults
   function exists yet).

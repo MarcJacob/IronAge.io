@@ -16,5 +16,5 @@ simulation itself stays fixed-timestep.
 ## Why
 
 Ties into the known "jitter at high zoom" issue tracked in
-`work_units/client_input_2026-09-27.md` - may turn out to be the actual fix for it,
+`archive/client_input_2026-09-27.md` - may turn out to be the actual fix for it,
 not just a polish item.

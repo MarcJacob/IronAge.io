@@ -14,12 +14,7 @@ Detailed design / progress for in-flight, coherent task groups lives in
 `management/work_units/<name>_<start-date>.md`, keeping this file a high-level
 index. Update the entry here when a unit starts / finishes.
 
-- [DONE] TypeScript migration - `work_units/typescript_migration_2026-09-27.md`
-- [DONE] Client input & camera prep - `work_units/client_input_2026-09-27.md`
-- [DONE] Game Client / Platform split - `work_units/game_client_platform_split_2026-09-29.md`
-- [DONE] World entities & settlement rendering - `work_units/world_entities_2026-10-01.md`
-- [DONE] Deterministic random generation - `work_units/random_generation_2026-10-02.md`
-- [WIP] UI & first commands - `work_units/ui_first_commands_2026-10-02.md`
+None. Finished units are moved to `management/archive/`.
 
 ## Development Phases
 
@@ -76,10 +71,15 @@ work to a line or two.
    sequence, but haven't been re-specified against the architecture above yet. Revisit
    phase by phase in a future pass.
    - [DONE] 2026-10-01/02: world entity storage, spawning, and rendering for
-     settlements/armies/caravans - `work_units/world_entities_2026-10-01.md`.
+     settlements/armies/caravans.
      Real world-simulation mechanics (growth, caravan trade, combat) remain
      unstarted beyond placeholder test code; a future work unit should pick
      that up.
+   - [DONE] 2026-09/10 supporting work (details in `archive/`): TypeScript
+     frontend migration, game client / platform split, deterministic random
+     generation, client input & camera (selection, move orders, entity query),
+     in-match HUD (`game_ui`), window-fit canvas, and test-only commands
+     (found settlement, spawn army) and population growth.
 
 ## Backlog
 
