@@ -17,7 +17,8 @@ index. Update the entry here when a unit starts / finishes.
 - [DONE] TypeScript migration - `work_units/typescript_migration_2026-09-27.md`
 - [WIP] Client input & camera prep - `work_units/client_input_2026-09-27.md`
 - [DONE] Game Client / Platform split - `work_units/game_client_platform_split_2026-09-29.md`
-- [WIP] World entities & settlement rendering - `work_units/world_entities_2026-10-01.md`
+- [DONE] World entities & settlement rendering - `work_units/world_entities_2026-10-01.md`
+- [DONE] Deterministic random generation - `work_units/random_generation_2026-10-02.md`
 
 ## Development Phases
 
@@ -73,8 +74,11 @@ work to a line or two.
    persistence & master server, ops & hardening) still look like roughly the right
    sequence, but haven't been re-specified against the architecture above yet. Revisit
    phase by phase in a future pass.
-   - [WIP] Started 2026-10-01: world entity storage (settlements/armies/caravans),
-     spawning, and first settlement rendering - `work_units/world_entities_2026-10-01.md`.
+   - [DONE] 2026-10-01/02: world entity storage, spawning, and rendering for
+     settlements/armies/caravans - `work_units/world_entities_2026-10-01.md`.
+     Real world-simulation mechanics (growth, caravan trade, combat) remain
+     unstarted beyond placeholder test code; a future work unit should pick
+     that up.
 
 ## Backlog
 

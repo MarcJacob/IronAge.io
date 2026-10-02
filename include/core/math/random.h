@@ -36,7 +36,7 @@ static inline ui64 ia_xorshift_i64(ui64& state = ::XORSHIFT_STATIC_STATE_64)
 template<typename Numeric>
 static inline Numeric ia_xorshift_range_f32(Numeric min, Numeric max, ui32& state = ::XORSHIFT_STATIC_STATE_32)
 {
-	float alpha = ia_xorshift_i32() / (float)0xFFFFFFFFu;
+	float alpha = ia_xorshift_i32(state) / (float)0xFFFFFFFFu;
 	return min + (max - min) * alpha;
 }
 
@@ -44,7 +44,7 @@ static inline Numeric ia_xorshift_range_f32(Numeric min, Numeric max, ui32& stat
 template<typename Numeric>
 static inline Numeric ia_xorshift_range_f64(Numeric min, Numeric max, ui64& state = ::XORSHIFT_STATIC_STATE_64)
 {
-	double alpha = ia_xorshift_i64() / (double)0xFFFFFFFFFFFFFFFFu;
+	double alpha = ia_xorshift_i64(state) / (double)0xFFFFFFFFFFFFFFFFu;
 	return min + (max - min) * alpha;
 }
 
@@ -82,7 +82,7 @@ struct rand_generator_32
 
 	template<typename Numeric>
 	inline Numeric next() {
-		static_assert(sizeof(Numeric) <= 32, "Cannot generate a random value of this size with this generator. Use a _64 generator or larger as needed.");
+		static_assert(sizeof(Numeric) <= 4, "Cannot generate a random value of larger size than 4 bytes with this generator.");
 		return (Numeric)ia_xorshift_i32(_state);
 	}
 
@@ -90,7 +90,7 @@ struct rand_generator_32
 	// Accepts any value of size 64 or lower (with extra zeroes
 	template<typename Numeric>
 	inline Numeric next_range(Numeric min, Numeric max) {
-		static_assert(sizeof(Numeric) <= 32, "Cannot generate a random value of this size with this generator. Use a _64 generator or larger as needed.");
+		static_assert(sizeof(Numeric) <= 4, "Cannot generate a random value of larger size than 4 bytes with this generator.");
 		return ia_xorshift_range_i32<Numeric>(min, max, _state);
 	}
 
@@ -98,7 +98,7 @@ struct rand_generator_32
 	template<typename Numeric>
 	inline vec2<Numeric> next_vec2(vec2<Numeric> min, vec2<Numeric> max)
 	{
-		static_assert(sizeof(Numeric) <= 32, "Cannot generate a random value of larger size than 4 bytes with this generator.");
+		static_assert(sizeof(Numeric) <= 4, "Cannot generate a random value of larger size than 4 bytes with this generator.");
 		vec2<Numeric> rand = {
 			ia_xorshift_range_i32<Numeric>(min.x, max.x, _state),
 			ia_xorshift_range_i32<Numeric>(min.y, max.y, _state),
@@ -111,7 +111,7 @@ struct rand_generator_32
 	template<typename Numeric>
 	inline vec2<Numeric> next_vec2(vec2<Numeric> max)
 	{
-		static_assert(sizeof(Numeric) <= 32, "Cannot generate a random value of larger size than 4 bytes with this generator.");
+		static_assert(sizeof(Numeric) <= 4, "Cannot generate a random value of larger size than 4 bytes with this generator.");
 		vec2<Numeric> rand = {
 			(Numeric)ia_xorshift_range_i32(0.f, (float)max.x, _state),
 			(Numeric)ia_xorshift_range_i32(0.f, (float)max.y, _state),
