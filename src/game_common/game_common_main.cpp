@@ -307,6 +307,7 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	out_match = {};
 	out_match.start_params = &params;
 	out_match.memory = &match_mem;
+	out_match.main_rand_gen = rand_generator_create_32(params.random_seed);
 
 	out_match.start_time = start_time;
 
@@ -375,26 +376,24 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 	{
 		if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-		// Every 500 ticks, spawn a caravan. TODO: Do this at random, with higher chance with lower total caravan count and local wealth.
-		if (settlements.active_count > 1 && (match.tick + settlementIndex * 10) % 500 == 0)
+		// Randomly spawn caravan if there are more settlements on the map.
+		if (settlements.active_count > 1 && match.main_rand_gen.next_range(0.f, 1.f) < 0.001f)
 		{
-			int destIndex = match.tick * 1000 % (settlements.max_count / (settlementIndex + 1));
-			while (destIndex == settlementIndex || !settlements.guids[destIndex].is_valid())
+			ui16 destRandIndex = match.main_rand_gen.next_range<ui16>(0, world.entities.settlements.active_count);
+			while (destRandIndex == settlementIndex || !settlements.guids[destRandIndex].is_valid())
 			{
-				destIndex = (destIndex + 1) % settlements.max_count;
+				destRandIndex = (destRandIndex + 1) % world.entities.settlements.active_count;
 			}
-
-			entity_guid destGUID = settlements.guids[destIndex];
 
 			world_entity_caravans::single newCaravan = {
 				.location = settlements.locations[settlementIndex],
 				.movement =
 				{
 					.travel_speed = 10,
-					.move_target = settlements.locations[destIndex],
+					.move_target = settlements.locations[destRandIndex],
 				},
 				.origin_settlement = settlements.guids[settlementIndex],
-				.dest_settlement = destGUID,
+				.dest_settlement = settlements.guids[destRandIndex],
 			};
 			match_spawn_caravan(match, newCaravan);
 		}

@@ -17,6 +17,8 @@ struct game_match_start_params
 	ui16 player_count; // Number of players present in the match (including all types of players).
 	ui8 tick_rate; // Number of ticks per second.
 
+	ui32 random_seed; // Drives every random element of the match simulation. The same seed and same input commands will lead to the same outcome.
+
 	ui16 start_settlement_count; // Number of settlements at the start of the game. Find their states in extra data.
 
 	// Extra Data. Layout:

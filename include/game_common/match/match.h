@@ -23,6 +23,8 @@ struct game_match
 
 	ui32 tick; // Next tick to be computed.
 	match_world_state* world; // Observable world state associated to this match, recomputed on each tick.
+
+	rand_generator_32 main_rand_gen; // Main random generator structure for this match.
 };
 
 

@@ -10,6 +10,8 @@
 
 #define MATCH_TEST_SCENARIO_TICKS (2000)
 
+rand_generator_32 TEST_RAND_GEN = { 200 };
+
 game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 {
 	game_match_start_params* params_ptr = memory.alloc<game_match_start_params>();
@@ -17,6 +19,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 
 	game_match_start_params& params = *params_ptr;
 	params.tick_rate = 20;
+	params.random_seed = TEST_RAND_GEN.next<ui32>();
 	params.player_count = 8;
 	params.world_size_regions = { 4, 4 };
 
@@ -38,7 +41,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory)
 		startSettlement = { 0 };
 
 		startSettlement.owner = player;
-		startSettlement.location = ia_rand_vec({ 100.f, 100.f }, params.world_size_regions * world_terrain::REGION_SIZE - vec2i{100, 100});
+		startSettlement.location = TEST_RAND_GEN.next_vec2({ 100.f, 100.f }, params.world_size_regions * world_terrain::REGION_SIZE - vec2i{100, 100});
 		startSettlement.population = 100;
 		startSettlement.local_wealth = 100;
 		startSettlement.tier = 1;

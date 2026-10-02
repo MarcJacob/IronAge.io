@@ -252,7 +252,7 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 // Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
 static void game_server_tick_match_slot_lobby(game_server& server, ui8 slotIndex, ui8 connectionCount)
 {
-	if (connectionCount < 1) return; // Wait until a player connects.
+	if (connectionCount < 2) return; // Wait until a player connects.
 
 	game_server_start_match_slot(server, slotIndex);
 }
@@ -495,7 +495,15 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	newServer->logf("sqrt(900.f) = %f", ia_sqrt(900.f));
 	newServer->logf("sqrt(10000.f) = %f", ia_sqrt(10000.f));
 
-	newServer->logf("rand(1.f, 2.f) = %f", ia_rand_range(1.f, 2.f));
+	newServer->logf("xorshift_range_f32(1.f, 2.f) = % f", ia_xorshift_range_f32(1.f, 2.f));
+
+	newServer->log("With generator structure...");
+	rand_generator_32 gen = rand_generator_create_32(100);
+
+	for (ui8 i = 0; i < 10; i++)
+	{
+		newServer->logf("%d = %d", i, gen.next_range(0, 1000));
+	}
 
 #endif
 
