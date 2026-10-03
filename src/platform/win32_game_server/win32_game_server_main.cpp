@@ -133,7 +133,7 @@ void win32_stderr(LOG_TYPE type, const char* buffer)
 
 void win32_stderr(LOG_TYPE type, const ia_string_view& string)
 {
-	EnterCriticalSection(&CS_WIN32_STDOUT);
+	EnterCriticalSection(&CS_WIN32_STDERR);
 
 	char printScratch[256];
 	ui32 index = 0;
@@ -144,10 +144,10 @@ void win32_stderr(LOG_TYPE type, const ia_string_view& string)
 		index += copySize;
 
 		printScratch[copySize] = '\0';
-		win32_print_colored(stdout, GetStdHandle(STD_ERROR_HANDLE), type, printScratch);
+		win32_print_colored(stderr, GetStdHandle(STD_ERROR_HANDLE), type, printScratch);
 	}
 
-	LeaveCriticalSection(&CS_WIN32_STDOUT);
+	LeaveCriticalSection(&CS_WIN32_STDERR);
 }
 
 // Sends a finished buffer to the end point matching its type.
@@ -222,21 +222,31 @@ void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia
 }
 
 // The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
-// Builds <resources dir>/<filename> in out_path. Returns false if it doesn't fit.
+// Builds <resources dir>/<rel_path> into write_mem, followed by a null terminator right after the string's last character (not counted in its length),
+// so the result can be handed to platform calls as a C string through its _str.
+// Returns an empty string if the path and its terminator don't fit.
 static ia_string win32_resource_path(const ia_string_view& rel_path, mem_arena& write_mem)
 {
+	// sizeof(DIR) counts the terminator, which stands in for the '/' after the folder. The terminator of the whole path then needs 1 more byte.
+	if (sizeof(GAME_SERVER_RESOURCES_DIR) + rel_path.length >= write_mem.mem_size - write_mem.allocated_count) return {};
+
 	ia_string_builder pathBuilder(&write_mem);
 	pathBuilder.push_back(GAME_SERVER_RESOURCES_DIR);
 	pathBuilder.push_back('/');
 	pathBuilder.push_back(rel_path);
 
+	pathBuilder.string._str[pathBuilder.string.length] = '\0';
 	return pathBuilder.string;
 }
 
 // Strips the resource folder from a path, turning it from absolute to relative by replacing it with "./".
+// Fatal if the path doesn't start with the resources folder, as the server must be able to ingest every resource file.
 static void win32_strip_resources_path(game_server_platform::resource_file_path& path)
 {
 	static constexpr ui32 GAME_SERVER_RESOURCES_PATH_LEN = sizeof(GAME_SERVER_RESOURCES_DIR);
+	ASSERT_MSG(path.length >= GAME_SERVER_RESOURCES_PATH_LEN && ia_string_starts_with(path, GAME_SERVER_RESOURCES_DIR),
+		"Resource file path \"%.*s\" is not located in the resources folder.", (int)path.length, path._str);
+
 	ia_string_chop_left(path, GAME_SERVER_RESOURCES_PATH_LEN - 2);
 	path._str[0] = '.';
 	path._str[1] = '/';
@@ -244,14 +254,11 @@ static void win32_strip_resources_path(game_server_platform::resource_file_path&
 
 ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size)
 {
-	if (path_relative.length > MAX_PATH) return 0; // Path too long.
-
 	static_mem_arena<MAX_PATH + 1> pathMem;
 	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
+	if (absolutePath.is_empty()) return 0; // Path too long.
 
-	// Interpret pathMem as a c string directly.
-	char* path = (char*)pathMem.mem_start;
-	path[absolutePath.length] = '\0';
+	const char* path = absolutePath._str;
 
 	FILE* file = nullptr;
 	if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
@@ -278,14 +285,11 @@ ui64 win32_read_resource_file(game_server_platform& platform, const game_server_
 
 bool win32_write_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, const ui8* data, ui64 size)
 {
-	if (path_relative.length > MAX_PATH) return 0; // Path too long.
-
 	static_mem_arena<MAX_PATH + 1> pathMem;
 	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
-	pathMem.alloc<char>(); // Extra zeroed allocation to add a null terminator.
+	if (absolutePath.is_empty()) return false; // Path too long.
 
-	// Interpret pathMem as a c string directly.
-	const char* path = (const char*)pathMem.mem_start;
+	const char* path = absolutePath._str;
 
 	FILE* file = nullptr;
 	if (fopen_s(&file, path, "wb") != 0 || file == nullptr)
@@ -305,8 +309,12 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 
 	if (start_index >= max_index) return 0;
 
-	// Only accept paths that end with a wildcard and aren't too long.
-	if (search_path.is_empty() || search_path.length >= game_server_platform::RESOURCE_FILE_PATH_MAX_LEN || !ia_string_ends_with(search_path, "*"))
+	// A path too long to be listed is fatal, as the server must be able to ingest every resource file.
+	ASSERT_MSG(search_path.length < game_server_platform::RESOURCE_FILE_PATH_MAX_LEN,
+		"Resource search path \"%.*s\" is too long (max is %d).", (int)search_path.length, search_path.view_str, (int)game_server_platform::RESOURCE_FILE_PATH_MAX_LEN - 1);
+
+	// Only accept paths that end with a wildcard.
+	if (search_path.is_empty() || !ia_string_ends_with(search_path, "*"))
 	{
 		return 0;
 	}
@@ -326,19 +334,26 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 	// Copy search path into a buffer where the search character is stripped.
 	path[search_path.length - 1] = '\0';
 
+	ia_string_view folderPart(path, search_path.length - 1); // Search path without the wildcard.
+
 	ui16 index = start_index;
 	do
 	{
 		// Ignore self and up ref.
 		if (findData.cFileName[0] == '.') continue;
 
+		ia_string_view fileName(findData.cFileName);
+
 		// Determine if the next file found is a directory or a file. Call recursively on sub-directories.
 		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
 			game_server_platform::resource_file_path folderPath = {};
-			ia_string_append(folderPath, path, true);
-			ia_string_append(folderPath, findData.cFileName, true);
+			ia_string_append(folderPath, folderPart, true);
+			ia_string_append(folderPath, fileName, true);
 			ia_string_append(folderPath, "/*", true);
+
+			ASSERT_MSG(folderPath.length == folderPart.length + fileName.length + 2,
+				"Resource folder \"%.*s\" in \"%.*s\" has a path too long for a resource file path.", (int)fileName.length, fileName.view_str, (int)folderPart.length, folderPart.view_str);
 
 			ui8 writtenCount = win32_list_files_recursive(folderPath, out_paths, index, max_index);
 			index += writtenCount;
@@ -347,8 +362,11 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 		{
 			// Make sure the path is pushed from the beginning of the string.
 			out_paths[index].length = 0;
-			ia_string_append(out_paths[index], path, true);
-			ia_string_append(out_paths[index], findData.cFileName, true);
+			ia_string_append(out_paths[index], folderPart, true);
+			ia_string_append(out_paths[index], fileName, true);
+
+			ASSERT_MSG(out_paths[index].length == folderPart.length + fileName.length,
+				"Resource file \"%.*s\" in \"%.*s\" has a path too long for a resource file path.", (int)fileName.length, fileName.view_str, (int)folderPart.length, folderPart.view_str);
 
 			index++;
 		}
@@ -362,14 +380,15 @@ ui16 win32_list_resource_files(game_server_platform& platform, const game_server
 {
 	// TODO(Marc): Support for long paths.
 
-	if (path_relative.length > MAX_PATH) return 0; // Path too long.
+	ASSERT(out_paths != nullptr && max_path_count >= 1);
 
 	static_mem_arena<MAX_PATH + 1> pathMem;
-	ia_string absolutePath = win32_resource_path(path_relative._str, pathMem);
+	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
+	if (absolutePath.is_empty()) return 0; // Path too long.
 
 	ui16 writtenPaths = win32_list_files_recursive(absolutePath, out_paths, 0, max_path_count);
 
-	// Strip resource path from every found file path, and ensure it is null-terminated.
+	// Strip resource path from every found file path.
 	for (ui16 fileIndex = 0; fileIndex < writtenPaths; fileIndex++)
 	{
 		win32_strip_resources_path(out_paths[fileIndex]);
@@ -467,13 +486,6 @@ int main(int argc, char** argv)
 	// Init logging critical sections.
 	InitializeCriticalSection(&CS_WIN32_STDOUT);
 	InitializeCriticalSection(&CS_WIN32_STDERR);
-
-	// TEST: Format test.
-
-	static_mem_arena<1024> msgMem;
-
-	ia_string formatted = ia_string_format("This is my own formatted string. I've never written a formatter before. Hopefully it works very well. 2 + 2 = %ud", &msgMem, 4);
-	win32_stdout(LOG_TYPE::LOG_SUCCESS, formatted);
 
 	win32_log("", "Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
 

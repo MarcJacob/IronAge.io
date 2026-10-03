@@ -4,6 +4,7 @@
 #define CORE_MEMORY_INCLUDED
 
 #include "std_types.h"
+#include "assert.h"
 
 #define BYTES(x) (x ## ULL)
 #define KiB(x) (BYTES(x) * 1024)
@@ -12,9 +13,9 @@
 
 #define RAW_ALLOC_DEFAULT_ALIGN (4) // Default alignment of non-typed memory allocations.
 
-void ia_memcpy(void* dest, const void* src, ui64 size);
-void ia_memzero(void* dest, ui64 size);
-void ia_memset(void* dest, ui8 val, ui64 size);
+static void ia_memcpy(void* dest, const void* src, ui64 size);
+static void ia_memzero(void* dest, ui64 size);
+static void ia_memset(void* dest, ui8 val, ui64 size);
 
 // Simple Arena allocator taking ownership over a piece of memory, holding a function pointer determining its allocation strategy.
 // It is not possible to de-allocate from an arena, it can only be cleared.
@@ -115,7 +116,7 @@ static inline ui8* mem_arena_get_next_alloc(const mem_arena& arena)
 }
 
 // TODO(Marc): Optimize this.
-void ia_memcpy(void* dest, const void* src, ui64 size)
+static void ia_memcpy(void* dest, const void* src, ui64 size)
 {
 	if (size == 0) return;
 
@@ -131,7 +132,7 @@ void ia_memcpy(void* dest, const void* src, ui64 size)
 }
 
 // TODO(Marc): optimize this.
-void ia_memzero(void* dest,  ui64 size)
+static void ia_memzero(void* dest,  ui64 size)
 {
 	if (size == 0) return;
 
@@ -152,7 +153,7 @@ void ia_memzero(void* dest,  ui64 size)
 }
 
 // TODO(Marc): optimize this.
-void ia_memset(void* dest, ui8 val, ui64 size)
+static void ia_memset(void* dest, ui8 val, ui64 size)
 {
 	if (size == 0) return;
 
@@ -173,7 +174,7 @@ void ia_memset(void* dest, ui8 val, ui64 size)
 }
 
 // TODO(Marc): optimize this.
-void ia_memmove(void* dest, const void* src, ui64 size)
+static void ia_memmove(void* dest, const void* src, ui64 size)
 {
 	if (size == 0 || dest == src) return;
 
@@ -203,6 +204,10 @@ struct static_mem_arena : public mem_arena
 		mem_arena temp = mem_arena_create(_mem_static, Size);
 		*(mem_arena*)this = temp; // Move properties from temporary "standard" arena created over own memory.
 	}
+
+	// Copying would leave the copy's mem_start pointing into the original's memory.
+	static_mem_arena(const static_mem_arena&) = delete;
+	static_mem_arena& operator=(const static_mem_arena&) = delete;
 };
 
 // These exist for the compiler to call when there's no libc to provide them (freestanding builds).

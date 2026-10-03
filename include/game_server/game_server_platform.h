@@ -27,7 +27,7 @@ struct game_server_platform
 	// PLATFORM LOGGING
 
 	typedef void (*log_fn)(game_server_platform& platform, LOG_TYPE type, const ia_string_view& string);
-	// Platform function: Takes in a log type and a null-terminated string and transfers it to the platform's log output for that type.
+	// Platform function: Takes in a log type and a string view and transfers it to the platform's log output for that type.
 	log_fn log_func;
 	void log(LOG_TYPE type, const ia_string_view& string) {
 		log_func(*this, type, string);
@@ -35,7 +35,7 @@ struct game_server_platform
 	inline void log(const ia_string_view& string) { log(LOG_NORMAL, string); }
 
 	typedef void (*logf_fn)(game_server_platform& platform, LOG_TYPE type, const ia_string_view& format, ...);
-	// Platform function: Takes in a log type, a null-terminated format string and format parameters and transfers it to the platform's log output for that type.
+	// Platform function: Takes in a log type, a format string view and format parameters and transfers it to the platform's log output for that type.
 	logf_fn logf_func;
 	template<typename... args_types>
 	void logf(LOG_TYPE type, const ia_string_view& format, args_types... args) {
@@ -110,7 +110,7 @@ struct game_server_platform
 	// PLATFORM FILES
 
 	static constexpr ui16 RESOURCE_FILE_PATH_MAX_LEN = 256;
-	using resource_file_path = ia_static_string<RESOURCE_FILE_PATH_MAX_LEN>; // Simple container for a reasonably-sized resource file path. Assumed to be null-terminated. TODO(Marc): String overhaul !!
+	using resource_file_path = ia_static_string<RESOURCE_FILE_PATH_MAX_LEN>; // Simple container for a reasonably-sized resource file path. Sized, NOT necessarily null-terminated.
 
 	typedef ui64 (*read_resource_file_fn)(game_server_platform& platform, const resource_file_path& path, ui8* read_buff, ui64 buff_size);
 	// Platform function: Synchronously reads / loads in an entire file's contents into the target buffer, if it is large enough.
@@ -135,7 +135,7 @@ struct game_server_platform
 	// Platform function: Synchronously searches for files under the given resource-relative path, and writes them as a list of resource_file_path in the target memory.
 	// Returns the number of files found.
 	// The path is relative to the "server resources storage", whatever that means for the host platform, and must end with a wildcard search character (e.g. "*").
-	// The search is recursive. Output paths are relative to the resources storage, in the form "./<folder>/<file>", and null-terminated.
+	// The search is recursive. Output paths are relative to the resources storage, in the form "./<folder>/<file>".
 	// Files and folders whose name starts with a dot are skipped.
 	// Paths are limited to RESOURCE_FILE_PATH_MAX_LEN - 1 characters (one byte is kept for the null terminator).
 	list_resource_files_fn list_resource_files_func;

@@ -1,4 +1,4 @@
-# BACKLOG: Web server auto-reload of changed preloaded files
+# Web server auto-reload of changed preloaded files
 
 Input date: 2026-09-20
 

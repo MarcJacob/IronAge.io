@@ -1,4 +1,4 @@
-# BACKLOG: Blit canvas for expensive-to-compute pixel content
+# Blit canvas for expensive-to-compute pixel content
 
 Input date: 2026-09-26
 

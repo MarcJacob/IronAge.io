@@ -1,4 +1,4 @@
-# BACKLOG: Build system revamp
+# Build system revamp
 
 Input date: 2026-10-03
 

@@ -1,4 +1,4 @@
-# BACKLOG: Dev iteration loop
+# Dev iteration loop
 
 Input date: 2026-10-03
 

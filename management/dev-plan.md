@@ -20,8 +20,7 @@ when it finishes.
 - `work_units/server_dev_mode_2026-10-03.md`
 - `work_units/build_system_revamp_2026-10-03.md`
 - `work_units/dev_iteration_loop_2026-10-03.md`
-- `work_units/string_pass_2026-10-03.md`
-- `work_units/logging_string_view_format_2026-09-25.md`
+- `work_units/string_pass_2026-10-03.md` [DONE]
 - `work_units/blit_canvas_2026-09-26.md`
 - `work_units/village_influence_2026-10-03.md`
 - `work_units/game_server_match_lifecycle_2026-10-03.md`
@@ -85,11 +84,9 @@ work to a line or two.
    - [DONE] Server resource discovery: platform call listing resource files, web server
      loading serveable files from the discovered list.
    Sequence:
-   - [WIP] String pass (`string_pass`): proper string toolset (views, arena-backed
+   - [DONE] String pass (`string_pass`): proper string toolset (views, arena-backed
      utilities, string builder, static arena) used across the code; C strings only for
      constant strings and direct platform calls that require them.
-     - Log `string_view`s directly, as format and as a string param
-       (`logging_string_view_format`).
      - Platform resource paths not null-terminated.
    - Server dev mode: admin-authenticated dev messages (first action: reload resources).
      (`server_dev_mode`)

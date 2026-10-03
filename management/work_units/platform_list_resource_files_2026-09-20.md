@@ -1,4 +1,4 @@
-# BACKLOG: Platform call to list files in a resources folder
+# Platform call to list files in a resources folder
 
 Input date: 2026-09-20
 

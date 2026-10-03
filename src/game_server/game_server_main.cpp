@@ -494,17 +494,6 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 #ifndef NDEBUG
 	TEST_COMMAND_SIZES_CHECK();
 	TEST_MESSAGE_TYPE_SIZES_CHECK();
-
-	// Math tests !!
-
-	newServer->log("With generator structure...");
-	rand_generator_32 gen = rand_generator_create_32(100);
-
-	for (ui8 i = 0; i < 10; i++)
-	{
-		newServer->logf(LOG_NORMAL, "%ud = %d", i, gen.next_range<i32>(0, 1000));
-	}
-
 #endif
 
 	// Initialize Web Server.

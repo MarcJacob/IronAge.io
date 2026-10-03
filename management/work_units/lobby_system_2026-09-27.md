@@ -1,4 +1,4 @@
-# BACKLOG: Lobby system
+# Lobby system
 
 Input date: 2026-09-27
 

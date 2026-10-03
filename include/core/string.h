@@ -54,6 +54,7 @@ struct ia_string
 	}
 
 	inline bool is_empty() const { return length == 0; }
+	inline const char& operator[](ui32 index) const { ASSERT(index < length); return _str[index]; }
 };
 
 // Variant of the N-length ia_string in static format, useful for structures and such.
@@ -63,12 +64,13 @@ struct ia_static_string
 	char _str[Capacity];
 	ui32 length;
 
-	inline ia_static_string() 
+	inline ia_static_string()
 	{
+		ia_memzero(_str, Capacity);
 		length = 0;
 	}
 
-	// Since we know where their memory is, static strings can 
+	// Since we know where their memory is, static strings can
 
 	inline ia_static_string(const ia_string_view& str)
 	{
@@ -77,7 +79,7 @@ struct ia_static_string
 
 	inline ia_static_string& operator=(const ia_string_view& str)
 	{
-		ASSERT(str.length < Capacity);
+		ASSERT(str.length <= Capacity);
 
 		length = str.length;
 		ia_memcpy(_str, str.view_str, length);
@@ -89,15 +91,7 @@ struct ia_static_string
 		return *this;
 	}
 
-	inline ia_static_string(const char* c_str) : ia_static_string()
-	{
-		length = ia_str_len(c_str);
-		ia_memcpy(_str, c_str, length);
-		if (Capacity > length)
-		{
-			ia_memset(_str + length, 0, Capacity - length);
-		}
-	}
+	inline ia_static_string(const char* c_str) : ia_static_string(ia_string_view(c_str)) {}
 
 	inline operator ia_string()
 	{
@@ -112,9 +106,11 @@ struct ia_static_string
 	{
 		return ia_string_view(_str, length);
 	}
+
+	inline const char& operator[](ui32 index) const { ASSERT(index < length); return _str[index]; }
 };
 
-// Initializes a new string into a memory arena from an existing C string.
+// Initializes a new string into a memory arena from an existing string view.
 // If min_capacity is specified, will allocate enough memory regardless of how long the source string is.
 // Returns whether string was successfully allocated and initialized.
 static bool ia_string_new(mem_arena& memory, const ia_string_view& src_string, ia_string& out_string, ui32 min_capacity = 0)
@@ -145,7 +141,7 @@ static bool ia_string_new(mem_arena& memory, const ia_string_view& src_string, i
 
 // Replaces the contents of an existing string with the contents of the source. The source string must be
 // equal in size or smaller than target capacity (no reallocation).
-// Safe to call if source is view ing the modified string itself, so long as scratch memory is passed.
+// Safe to call if source is viewing the modified string itself, so long as scratch memory is passed.
 static void ia_string_replace(ia_string& string, const ia_string_view& src_string, mem_arena* scratch_mem_ptr = nullptr)
 {
 	bool sourceViewsTarget = (src_string.view_str + src_string.length) > string._str 
@@ -244,7 +240,7 @@ static ui32 ia_string_append(ia_string& string, const ia_string_view& chars, boo
 		if (must_full_push)
 			return 0;
 
-		pushLen = string.length - string._capacity;
+		pushLen = string._capacity - string.length;
 		newLen = string._capacity;
 	}
 
@@ -278,7 +274,7 @@ struct ia_string_builder
 
 	mem_arena* _mem;
 
-	ia_string_builder(mem_arena* arena, ui32 start_capacity = 0) : _mem(arena) 
+	ia_string_builder(mem_arena* arena, ui32 start_capacity = 0) : _mem(arena)
 	{
 		ASSERT(_mem != nullptr);
 		ia_string_new(*_mem, "", string, start_capacity);
@@ -388,7 +384,7 @@ struct ia_string_builder
 	}
 
 	// Removes characters from the beginning of the string.
-	// If shrink_capacity is true, st ring capacity is set to exactly enough for the new length.
+	// If shrink_capacity is true, string capacity is set to exactly enough for the new length.
 	inline void chop_left(ui32 char_count, bool shrink_capacity = false)
 	{
 		ASSERT(_mem != nullptr);
@@ -418,10 +414,7 @@ struct ia_string_builder
 			string._capacity = string.length;
 		}
 	}
-};	// No component name.
-	// NOTE: logf("format", "string arg") is indistinguishable from logf("component", "format"), and the component overload wins.
-	// If the first format argument is a string, use the explicit "" component (or a type) instead.
-
+};
 
 // Builds a string representation of the passed value in the specified base (from 2 to 16) into the memory.
 // The string is returned in ia_string format.
@@ -430,15 +423,16 @@ static ia_string ia_string_from_integer(mem_arena& memory, Numeric val, ui8 base
 {
 	ia_string_builder builder(&memory, 8); // Start builder with reasonable memory given the value and base.
 
-	bool isNegative = val < 0;
+	// Work on the unsigned magnitude. The sign is checked without comparing to 0 so unsigned types don't trip a tautological compare.
+	bool isNegative = val != 0 && !(val > 0);
+	ui64 magnitude = isNegative ? 0 - (ui64)val : (ui64)val;
 
 	// Build the string in reverse order, then reverse it.
 	do
 	{
-		Numeric digit = val % base;
-		builder.push_back(ia_digit_to_char(digit));
-		val = val / base;
-	} while (val > 0);
+		builder.push_back(ia_digit_to_char((ui8)(magnitude % base)));
+		magnitude /= base;
+	} while (magnitude > 0);
 
 	if (isNegative)
 	{
@@ -482,10 +476,11 @@ static bool operator==(const ia_string_view& str_a, const char* str_b)
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
 
-		if ((str_a[i] != str_b[i]) 
-			|| (str_b[i] == '\0' && i != (str_a.length - 1))) return false;
+		// Stop at str_b's terminator so we never read past it.
+		if (str_b[i] == '\0' || str_a[i] != str_b[i]) return false;
 	}
 
+	// Every character of str_b up to str_a.length was non-null, so this index is within str_b.
 	return str_b[str_a.length] == '\0';
 }
 
@@ -519,7 +514,7 @@ static bool operator==(const ia_string_view& str_a, const ia_string_view& str_b)
 	return true;
 }
 
-// Check equality between a string and a null-terminated string, with optional case-sensitivity.
+// Check equality between two strings, with optional case-sensitivity.
 static bool ia_string_equal(const ia_string_view& str, const ia_string_view& comp_str, bool case_sensitive = true)
 {
 	if (str.length != comp_str.length) return false;
@@ -537,14 +532,14 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 			if (comp_char >= 'a' && comp_char <= 'z') comp_char += TO_UPPER_OFFSET;
 		}
 
-		if ((str_char != comp_char) || (comp_char == '\0' && i != (str.length - 1))) return false;
+		if (str_char != comp_char) return false;
 	}
 
 	return true;
 
 }
 
-// Checks whether the string contains the specified null-terminated string.
+// Checks whether the string contains the specified string.
 static bool ia_string_contains(const ia_string_view& str, const ia_string_view& contained, bool case_sensitive = true)
 {
 	if (contained.is_empty()) return true;
@@ -584,7 +579,6 @@ static bool ia_string_contains(const ia_string_view& str, const ia_string_view& 
 // Returns whether string starts with chars.
 static bool ia_string_starts_with(const ia_string_view& string, const ia_string_view& chars)
 {
-	ASSERT(string.view_str != nullptr && chars.view_str != nullptr);
 	if (string.length < chars.length) return false;
 	if (chars.length == 0) return true;
 
@@ -599,7 +593,6 @@ static bool ia_string_starts_with(const ia_string_view& string, const ia_string_
 // Returns whether string ends with chars.
 static bool ia_string_ends_with(const ia_string_view& string, const ia_string_view& chars)
 {
-	ASSERT(string.view_str != nullptr && chars.view_str != nullptr);
 	if (string.length < chars.length) return false;
 	if (chars.length == 0) return true;
 
@@ -617,9 +610,9 @@ static ia_string_view ia_string_get_word(const ia_string_view& str, ui32 max_len
 {
 	if (str.is_empty()) return {};
 
-	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
+	ui32 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
 
-	ui16 readCount = 0;
+	ui32 readCount = 0;
 	bool nextCharValid = true;
 	while((max_len == 0 || readCount < max_len) && readCount < str.length)
 	{
@@ -674,7 +667,7 @@ static ia_string ia_string_format_v(const ia_string_view& format, mem_arena* wri
 	ui32 readCursor = 0;
 	while (readCursor < format.length)
 	{
-		ia_string_view toNextSpecial = ia_string_get_until(format.view_str + readCursor, '%');
+		ia_string_view toNextSpecial = ia_string_get_until(ia_string_view(format.view_str + readCursor, format.length - readCursor), '%');
 		readCursor += toNextSpecial.length;
 
 		result.push_back(toNextSpecial);

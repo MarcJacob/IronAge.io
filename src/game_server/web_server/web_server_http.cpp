@@ -557,7 +557,7 @@ void web_server_http_progress_response(game_server& server, web_server_client& w
 	bool stalled = false;
 
 	// Try to send more data over.
-	while (web_client.http.response.head.sent < web_client.http.response.head.size)
+	while (!stalled && web_client.http.response.head.sent < web_client.http.response.head.size)
 	{
 		ui32 chunkSize = ia_min(HTTP_SEND_CHUNK_SIZE, web_client.http.response.head.size - web_client.http.response.head.sent);
 

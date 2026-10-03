@@ -61,15 +61,15 @@ static char ia_digit_to_char(ui8 digit)
 	ASSERT(digit < 16);
 
 	// 0 - 9
-	if (digit >= 0 && digit <= 9)
+	if (digit <= 9)
 	{
 		return '0' + digit;
 	}
 
 	// A - F
-	if (digit >= 10 && digit <= 15)
+	if (digit <= 15)
 	{
-		return 'A' + digit;
+		return 'A' + (digit - 10);
 	}
 
 	return '\0';

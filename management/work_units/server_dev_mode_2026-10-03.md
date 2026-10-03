@@ -1,4 +1,4 @@
-# BACKLOG: Server dev mode
+# Server dev mode
 
 Input date: 2026-10-03
 
@@ -17,8 +17,14 @@ monitoring / dev actions. First action: reload the server's resource files.
   supersede automatic reload).
 - Related: `platform_list_resource_files_2026-09-20.md` (discovery is needed
   for a meaningful reload).
-- Open design: how a connection authenticates as Administrator, and the
-  dev message set.
+- Open design:
+  - How a connection authenticates as Administrator.
+  - The dev message set.
+  - How dev mode is accessed: turned on remotely, by launch parameter, or both.
+  - How commands are sent, in dev mode or for administration generally:
+    - Game messages from a game client once it has been elevated.
+    - Possibly also an HTTP request (e.g. a curl command) so tooling can tell
+      the server to reload its resources remotely.
 
 ## Why
 

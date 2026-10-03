@@ -145,21 +145,21 @@ void web_server_reload_files(game_server& server)
 			// Not located in web root.
 			continue;
 		}
-		ASSERT_MSG(web.file_count < WEB_SERVER_MAX_FILES, "Too many web files to serve (max is %d), at \"%s\".", WEB_SERVER_MAX_FILES, serverFile._str);
+		ASSERT_MSG(web.file_count < WEB_SERVER_MAX_FILES, "Too many web files to serve (max is %d), at \"%.*s\".", WEB_SERVER_MAX_FILES, (int)serverFile.length, serverFile._str);
 
 		http_file& file = web.files[web.file_count];
 		ui64 fileSize = platform.read_resource_file(serverFile, nullptr, 0);
-		ASSERT_MSG(fileSize > 0, "Web file \"%s\" not found or empty.", serverFile._str);
+		ASSERT_MSG(fileSize > 0, "Web file \"%.*s\" not found or empty.", (int)serverFile.length, serverFile._str);
 
 		totalSize += fileSize;
-		ASSERT_MSG(totalSize <= WEB_SERVER_TOTAL_FILE_DATA_MEM, "Web files exceed the %llu bytes budget at \"%s\".", 
-			WEB_SERVER_TOTAL_FILE_DATA_MEM, serverFile._str);
+		ASSERT_MSG(totalSize <= WEB_SERVER_TOTAL_FILE_DATA_MEM, "Web files exceed the %llu bytes budget at \"%.*s\".",
+			WEB_SERVER_TOTAL_FILE_DATA_MEM, (int)serverFile.length, serverFile._str);
 
 		file.data = web.file_data_memory.alloc<ui8>(fileSize);
-		ASSERT_MSG(file.data != nullptr, "Not enough server memory to load web file \"%s\".", serverFile._str);
+		ASSERT_MSG(file.data != nullptr, "Not enough server memory to load web file \"%.*s\".", (int)serverFile.length, serverFile._str);
 
 		ui64 readSize = platform.read_resource_file(serverFile, file.data, fileSize);
-		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%s\".", serverFile._str);
+		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%.*s\".", (int)serverFile.length, serverFile._str);
 
 		file.resource_name = { serverFile._str + server.init_params.web_root.length, serverFile.length - server.init_params.web_root.length };
 		file.size = (ui32)fileSize;
