@@ -70,6 +70,12 @@ static float ia_sqrt(Numeric val, ui8 precision_level = 8)
 	return minResult; // Arbitrarily return lower bound of range.
 }
 
+template<typename Numeric>
+static inline Numeric ia_abs(Numeric val)
+{
+	return val - (2 * val * (val < 0));
+}
+
 
 #endif // NUMERICAL_INCLUDED
 

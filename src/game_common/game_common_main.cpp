@@ -420,7 +420,7 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 			.owner = settlementStartState.owner,
 			.location = startLoc,
 			.movement = {
-				.travel_speed = 10,
+				.travel_speed = 50,
 				.move_target = startLoc,
 			},
 			.composition = {
@@ -614,7 +614,7 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 				.location = settlements.locations[settlementIndex],
 				.movement =
 				{
-					.travel_speed = 10,
+					.travel_speed = 40,
 					.move_target = settlements.locations[destRandIndex],
 				},
 				.origin_settlement = settlements.guids[settlementIndex],
@@ -638,7 +638,7 @@ void match_tick(game_match& match, const match_tick_commands& commands)
 		}
 
 		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
-caravans.movements[caravanIndex].move_target = destLoc;
+		caravans.movements[caravanIndex].move_target = destLoc;
 	}
 
 	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
@@ -658,15 +658,56 @@ caravans.movements[caravanIndex].move_target = destLoc;
 	}
 
 	// TEMP: Move armies and caravans towards their destination.
-	auto process_entity_movement = [&](const world_entity_movement& movement, world_location& location)
+	auto process_entity_movement = [&](world_entity_movement& movement, world_location& location)
 		{
-			// Ignore move speed. Manhattan movement.
-			// TODO: Actual movement algorithm using fractional tile locations for precise movement.
+			if (movement.move_target == location) return;
 
-			if (location.x > movement.move_target.x) location.x--;
-			else if (location.x < movement.move_target.x) location.x++;
-			if (location.y > movement.move_target.y) location.y--;
-			else if (location.y < movement.move_target.y) location.y++;
+			vec2<i32> travelVec = (vec2<i32>)(movement.move_target) - location;
+
+			// Figure out a distribution over the 0, 256 range of both axis representing an absolute travel direction.
+			// The relative values of the axis will determine which will get more of the movement.
+			vec2<ui8> travelDir;
+			if (travelVec.y == 0) travelDir = { 255, 0 };
+			else if (travelVec.x == 0) travelDir = { 0, 255 };
+			else
+			{
+				ui16 travelAbsX = ia_abs(travelVec.x), travelAbsY = ia_abs(travelVec.y);
+				if (travelAbsX == travelAbsY) travelDir = { 127, 127 };
+				// Get a reasonably accurate measure of how much larger one is compared to the other and use it to determine distribution.
+				if (travelAbsX > travelAbsY)
+				{
+					ui32 xMult = travelAbsX * 1000 / travelAbsY;
+					ui8 parts = 255 * 1000 / (xMult + 1000);
+					travelDir.x = 255 - parts;
+					travelDir.y = parts;
+				}
+				else
+				{
+					ui32 yMult = travelAbsY * 1000 / travelAbsX;
+					ui8 parts = 255 * 1000 / (yMult + 1000);
+					travelDir.y = 255 - parts;
+					travelDir.x = parts;
+				}
+			}
+
+			// Turn the travel vector into a signs vector.
+			travelVec = { (travelVec.x >= 0) ? 1 : -1, (travelVec.y >= 0) ? 1 : -1 };
+
+			// With absolute travel vector, we can determine where to apply the movement value of the entity.
+			i16 xTravel = travelDir.x * 1000 / 255 * movement.travel_speed / 100;
+			i16 yTravel = travelDir.y * 1000 / 255 * movement.travel_speed / 100;
+			
+			i16 newFracX = movement.fractional_loc.x + (i16)xTravel * travelVec.x;
+			i16 newFracY = movement.fractional_loc.y + (i16)yTravel * travelVec.y;
+
+			while (newFracX > 100 && location.x < movement.move_target.x) { location.x++; newFracX -= 200; }
+			while (newFracX < -100 && location.x > movement.move_target.x) { location.x--; newFracX += 200; }
+
+			while (newFracY > 100 && location.y < movement.move_target.y) { location.y++; newFracY -= 200; }
+			while (newFracY < -100 && location.y > movement.move_target.y) { location.y--; newFracY += 200; }
+
+			movement.fractional_loc.x = newFracX * (location.x != movement.move_target.x);
+			movement.fractional_loc.y = newFracY * (location.y != movement.move_target.y);
 		};
 
 	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)

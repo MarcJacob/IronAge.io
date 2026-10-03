@@ -116,8 +116,8 @@ bool operator==(const entity_guid& guid_a, const entity_guid& guid_b)
 
 struct world_entity_movement
 {
-	ui8 travel_speed; // Speed in tiles per second.
-	ui8 fractional_loc; // Normalized distance from logical location tile center as the entity travels. At 0, dead center. At 1, at tile edge.
+	ui8 travel_speed; // Speed in tenth of tile per tick.
+	vec2<i8> fractional_loc; // "In-tile location" of the entity. Affects movement.
 	world_location move_target; // Location the entity is moving towards.
 };
 

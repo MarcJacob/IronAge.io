@@ -122,7 +122,7 @@ void command_spawn_army_apply(game_match& match, match_player_id player, const c
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owners[settlementIndex];
 	newArmy.location = settlements.locations[settlementIndex];
-	newArmy.movement.travel_speed = 10;
+	newArmy.movement.travel_speed = 50;
 	newArmy.movement.move_target = newArmy.location;
 	newArmy.composition.levies = SPAWN_ARMY_POPULATION_COST;
 
@@ -175,7 +175,7 @@ void command_spawn_caravan_apply(game_match& match, match_player_id player, cons
 		.location = settlements.locations[settlementIndex],
 		.movement =
 		{
-			.travel_speed = 10,
+			.travel_speed = 40,
 			.move_target = settlements.locations[destRandIndex],
 		},
 		.origin_settlement = command.settlement,

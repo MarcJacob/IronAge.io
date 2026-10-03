@@ -10,7 +10,7 @@
 
 #define MATCH_TEST_SCENARIO_TICKS (2000)
 
-game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 seed)
+game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 seed = 200, ui16 player_count = 1)
 {
 	game_match_start_params* params_ptr = memory.alloc<game_match_start_params>();
 	ASSERT(params_ptr != nullptr);
@@ -18,7 +18,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 
 	game_match_start_params& params = *params_ptr;
 	params.tick_rate = 20;
 	params.random_seed = seed;
-	params.player_count = 8;
+	params.player_count = player_count;
 	params.world_size_regions = { 4, 4 };
 
 	// Initialize player entity start locations.
