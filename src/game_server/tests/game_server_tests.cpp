@@ -34,7 +34,7 @@ void game_server_test_mode_tick(game_server& server)
 	game_match* scenario_match = match_run_test_scenario(scenario_memory);
 	ASSERT(scenario_match != nullptr);
 
-	if (server.init_params.test_scenario_dump_filename == nullptr)
+	if (server.init_params.test_scenario_dump_filename.is_empty())
 	{
 		server.log("TEST", LOG_NORMAL, "No dump file specified. Going straight to shutdown.");
 		platform.shutdown(0);

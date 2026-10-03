@@ -31,11 +31,13 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 	va_end(va);
 
 	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
+	OutputDebugString(assert_msg_buff);
 
 	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
 	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
 
 	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
+	OutputDebugString(assert_msg_buff);
 
 	__debugbreak();
 	raise(SIGABRT);
@@ -279,7 +281,7 @@ bool win32_write_resource_file(game_server_platform& platform, const game_server
 	if (path_relative.length > MAX_PATH) return 0; // Path too long.
 
 	static_mem_arena<MAX_PATH + 1> pathMem;
-	ia_string absolutePath = win32_resource_path(path_relative._str, pathMem);
+	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
 	pathMem.alloc<char>(); // Extra zeroed allocation to add a null terminator.
 
 	// Interpret pathMem as a c string directly.

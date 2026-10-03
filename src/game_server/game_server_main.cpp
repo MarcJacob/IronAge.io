@@ -439,7 +439,7 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
 
 	// Check init params.
-	if (init_params.web_root == nullptr || ia_str_len(init_params.web_root) == 0)
+	if (init_params.web_root.is_empty())
 	{
 		platform.log(LOG_ERROR, "Web Server requires a valid web root folder, relative to the platform resources path. Aborting.");
 		return nullptr;
@@ -469,8 +469,6 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	newServer->log("Discovered resource files:");
 	for (ui8 resourceFileIndex = 0; resourceFileIndex < newServer->resource_file_count; resourceFileIndex++)
 	{
-		// TODO(Marc): We need functions that take in string views instead of const char*...
-		// But here we know the platform must have returned a null-terminated path so it's fine.
 		newServer->logf(LOG_NORMAL, "%s", (ia_string_view)newServer->resource_files[resourceFileIndex]);
 	}
 

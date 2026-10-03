@@ -56,8 +56,8 @@ void win32_logf(const char* component, const char* format, ...);
 
 // Platform-interface versions of logging, for the game server platform structure.
 // These only reroute the message (unprefixed) to the end points.
-void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg);
-void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...);
+void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const ia_string_view& msg);
+void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia_string_view& msg, ...);
 
 // Reads in an entire file from a resources-folder-relative path, or gets its size if read_buff is null.
 ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size);

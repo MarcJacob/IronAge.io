@@ -21,7 +21,7 @@ bool http_request_find_header_field(const http_request& request, const ia_string
 
 struct http_supported_method
 {
-	const char* method_name;
+	const ia_string_view method_name;
 	http_request::METHOD supported_method;
 };
 
@@ -42,7 +42,7 @@ static const ui8 SUPPORTED_METHOD_COUNT = sizeof(HTTP_SUPPORTED_METHODS) / sizeo
 
 bool web_server_http_recognize_request(const ui8* bytes, ui32 byte_count)
 {
-	ia_string_view methodName = ia_string_get_word_n((char*)bytes, byte_count);
+	ia_string_view methodName = ia_string_get_word(ia_string_view((char*)bytes, byte_count));
 
 	for (ui8 methodIndex = 0; methodIndex < SUPPORTED_METHOD_COUNT; methodIndex++)
 	{
@@ -58,7 +58,7 @@ bool web_server_http_recognize_request(const ui8* bytes, ui32 byte_count)
 }
 
 void web_server_http_serve_content(game_server& server, web_server_client& web_client,
-	const char* status, const ia_string_view& content_type, const ui8* content, ui32 content_size)
+	const ia_string_view& status, const ia_string_view& content_type, const ui8* content, ui32 content_size)
 {
 	ASSERT(web_client.is_websocket() == false);
 	http_client& client = web_client.http;
@@ -109,7 +109,7 @@ void web_server_http_send_response_status(game_server& server, web_server_client
 	// Build response head section.
 	client.response.head.str.length = 0; // TODO(Marc): String reset function.
 
-	static_mem_arena<256> headMem;
+	static_mem_arena<HTTP_RESPONSE_HEAD_BUFFER_SIZE> headMem;
 	ia_string_builder headBuilder(&headMem);
 
 	static_mem_arena<64> formatScratch;
@@ -218,7 +218,7 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 		ia_string_view originHost = originField.value;
 		for (ui32 charIndex = 0; charIndex + 3 <= originHost.length; charIndex++)
 		{
-			if (originHost.view_str[charIndex] == ':' && originHost.view_str[charIndex + 1] == '/' && originHost.view_str[charIndex + 2] == '/')
+			if (originHost[charIndex] == ':' && originHost[charIndex + 1] == '/' && originHost[charIndex + 2] == '/')
 			{
 				originHost.view_str += charIndex + 3;
 				originHost.length -= charIndex + 3;
@@ -227,15 +227,14 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 		}
 		if (originHost.length > 0)
 		{
-			originHost = ia_string_get_until(originHost.view_str, '/', originHost.length);
+			originHost = ia_string_get_until(originHost, '/', originHost.length);
 		}
 
 		if (!ia_string_equal(originHost, hostField.value, false))
 		{
-			server.logf("WEB SERVER", LOG_WARNING, "Refusing Websocket upgrade from client %d: Origin \"%.*s\" doesn't match Host \"%.*s\".",
+			server.logf("WEB SERVER", LOG_WARNING, "Refusing Websocket upgrade from client %d: Origin \"%s\" doesn't match Host \"%s\".",
 				web_client.client_handle.value,
-				(i32)originField.value.length, originField.value.view_str,
-				(i32)hostField.value.length, hostField.value.view_str);
+				 originField.value, hostField.value);
 
 			web_server_http_send_response_status(server, web_client, "403 Forbidden", true);
 			return false;
@@ -498,7 +497,7 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 		http_request::header_field& field = out_request.header.fields[out_request.header.field_count++];
 
 		// Name
-		field.name = ia_string_get_word_n(requestBytes + readBytes, head_end_index - readBytes, 0, "-_.");
+		field.name = ia_string_get_word(ia_string_view(requestBytes + readBytes, head_end_index - readBytes), 0, "-_.");
 		if (field.name.length == 0
 			|| readBytes + field.name.length == head_end_index
 			|| requestBytes[readBytes + field.name.length] != ':')
@@ -520,15 +519,15 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 
 		// Trim field value's leading and trailing whitespaces & tabs.
 		while (field.value.length > 0
-			&& (field.value.view_str[0] == ' '
-				|| field.value.view_str[0] == '\t'))
+			&& (field.value[0] == ' '
+				|| field.value[0] == '\t'))
 		{
 			field.value.view_str++;
 			field.value.length--;
 		}
 		while (field.value.length > 0
-			&& (field.value.view_str[field.value.length - 1] == ' '
-				|| field.value.view_str[field.value.length - 1] == '\t'))
+			&& (field.value[field.value.length - 1] == ' '
+				|| field.value[field.value.length - 1] == '\t'))
 		{
 			field.value.length--;
 		}

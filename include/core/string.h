@@ -12,12 +12,12 @@
 
 // Need to get va_list intrinsics depending on compiler.
 // TODO(Marc): It'd probably be useful to get more explicit macros about which compiler is in use or even which specific project we're compiling at some point.
-#ifdef _MSC_VER
-#include "stdarg.h"
-#elif __clang__ || __GNUC__
+#if __clang__ || __GNUC__
 #define va_list __builtin_va_list
 #define va_start __builtin_va_start
 #define va_end __builtin_va_end
+#elif _MSC_VER
+#include "stdarg.h"
 #endif
 
 // N-length view of a non-owned character string.
@@ -32,6 +32,8 @@ struct ia_string_view
 	inline ia_string_view() : view_str(nullptr), length(0) {}
 
 	inline bool is_empty() const { return length == 0; }
+
+	inline const char& operator[](ui32 index) const { ASSERT(index < length); return view_str[index]; }
 };
 
 // N-length string structure that manages a length of char-interpreted memory.
@@ -143,7 +145,7 @@ static bool ia_string_new(mem_arena& memory, const ia_string_view& src_string, i
 
 // Replaces the contents of an existing string with the contents of the source. The source string must be
 // equal in size or smaller than target capacity (no reallocation).
-// Safe to call if source is viewing the modified string itself, so long as scratch memory is passed.
+// Safe to call if source is view ing the modified string itself, so long as scratch memory is passed.
 static void ia_string_replace(ia_string& string, const ia_string_view& src_string, mem_arena* scratch_mem_ptr = nullptr)
 {
 	bool sourceViewsTarget = (src_string.view_str + src_string.length) > string._str 
@@ -386,7 +388,7 @@ struct ia_string_builder
 	}
 
 	// Removes characters from the beginning of the string.
-	// If shrink_capacity is true, string capacity is set to exactly enough for the new length.
+	// If shrink_capacity is true, st ring capacity is set to exactly enough for the new length.
 	inline void chop_left(ui32 char_count, bool shrink_capacity = false)
 	{
 		ASSERT(_mem != nullptr);
@@ -428,6 +430,8 @@ static ia_string ia_string_from_integer(mem_arena& memory, Numeric val, ui8 base
 {
 	ia_string_builder builder(&memory, 8); // Start builder with reasonable memory given the value and base.
 
+	bool isNegative = val < 0;
+
 	// Build the string in reverse order, then reverse it.
 	do
 	{
@@ -435,6 +439,11 @@ static ia_string ia_string_from_integer(mem_arena& memory, Numeric val, ui8 base
 		builder.push_back(ia_digit_to_char(digit));
 		val = val / base;
 	} while (val > 0);
+
+	if (isNegative)
+	{
+		builder.push_back('-');
+	}
 
 	ia_str_reverse(builder.string._str, builder.string._str + builder.string.length - 1);
 
@@ -473,7 +482,7 @@ static bool operator==(const ia_string_view& str_a, const char* str_b)
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
 
-		if ((str_a.view_str[i] != str_b[i]) 
+		if ((str_a[i] != str_b[i]) 
 			|| (str_b[i] == '\0' && i != (str_a.length - 1))) return false;
 	}
 
@@ -504,7 +513,7 @@ static bool operator==(const ia_string_view& str_a, const ia_string_view& str_b)
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
 
-		if (str_a.view_str[i] != str_b.view_str[i]) return false;
+		if (str_a[i] != str_b[i]) return false;
 	}
 
 	return true;
@@ -518,8 +527,8 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 
 	for (int i = 0; i < str.length; i++)
 	{
-		char str_char = str.view_str[i];
-		char comp_char = comp_str.view_str[i];
+		char str_char = str[i];
+		char comp_char = comp_str[i];
 
 		if (!case_sensitive)
 		{
@@ -536,14 +545,11 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 }
 
 // Checks whether the string contains the specified null-terminated string.
-static bool ia_string_contains(const ia_string_view& str, const char* contained, bool case_sensitive = true)
+static bool ia_string_contains(const ia_string_view& str, const ia_string_view& contained, bool case_sensitive = true)
 {
-	ASSERT(contained != nullptr);
+	if (contained.is_empty()) return true;
 
-	char firstChar = contained[0];
-	if (firstChar == '\0') return true;
-
-	ui32 contained_len = ia_str_len(contained);
+	ui32 contained_len = contained.length;
 	if (contained_len > str.length) return false;
 	
 	ui32 scanIndex = 0;
@@ -552,7 +558,7 @@ static bool ia_string_contains(const ia_string_view& str, const char* contained,
 		ui32 match_len = 0;
 		for (match_len = 0; match_len < contained_len; match_len++)
 		{	
-			char str_char = str.view_str[scanIndex + match_len];
+			char str_char = str[scanIndex + match_len];
 			char comp_char = contained[match_len];
 
 			if (!case_sensitive)
@@ -584,7 +590,7 @@ static bool ia_string_starts_with(const ia_string_view& string, const ia_string_
 
 	for (ui32 i = 0; i < chars.length; i++)
 	{
-		if (string.view_str[i] != chars.view_str[i]) return false;
+		if (string[i] != chars[i]) return false;
 	}
 
 	return true;
@@ -599,7 +605,7 @@ static bool ia_string_ends_with(const ia_string_view& string, const ia_string_vi
 
 	for (ui32 i = 0; i < chars.length; i++)
 	{
-		if (string.view_str[string.length - chars.length + i] != chars.view_str[i]) return false;
+		if (string[string.length - chars.length + i] != chars[i]) return false;
 	}
 
 	return true;
@@ -607,16 +613,15 @@ static bool ia_string_ends_with(const ia_string_view& string, const ia_string_vi
 
 // Returns a string view over the next "word" in the specified string, up to specified maximum length (ignored if 0)
 // By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_string_get_word_n(const char* str, ui32 str_len, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
+static ia_string_view ia_string_get_word(const ia_string_view& str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
 {
-	ASSERT(str != nullptr);
-	if (str_len == 0) return ia_string_view(str, 0);
+	if (str.is_empty()) return {};
 
 	ui8 specialCharCount = allowed_special_chars != nullptr ? ia_str_len(allowed_special_chars) : 0;
 
 	ui16 readCount = 0;
 	bool nextCharValid = true;
-	while((max_len == 0 || readCount < max_len) && readCount < str_len)
+	while((max_len == 0 || readCount < max_len) && readCount < str.length)
 	{
 		char nextChar = str[readCount];
 
@@ -633,36 +638,22 @@ static ia_string_view ia_string_get_word_n(const char* str, ui32 str_len, ui32 m
 		readCount++;
 	}
 
-	return ia_string_view(str, readCount);
-}
-
-// Returns a string view over the next "word" in the specified null-terminated string, up to specified maximum length (ignored if 0)
-// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_string_get_word(const char* str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
-{
-	return ia_string_get_word_n(str, ia_str_len(str), max_len, allowed_special_chars);
-}
-
-// Returns a string view over the next "word" in the specified string view, up to specified maximum length (ignored if 0)
-// By default, accepted characters only include alphanumerics. Other characters can be allowed by adding them to the null-terminated special chars string.
-static ia_string_view ia_string_get_word(const ia_string_view& str, ui32 max_len = 0, const char* allowed_special_chars = nullptr)
-{
-	return ia_string_get_word_n(str.view_str, str.length, max_len, allowed_special_chars);
+	return ia_string_view(str.view_str, readCount);
 }
 
 // Returns a string view over every next character until string terminator or end_char is reached.
 // Does NOT include the end character.
-static ia_string_view ia_string_get_until(const char* str, char end_char, ui32 max_len = 0)
+static ia_string_view ia_string_get_until(const ia_string_view& str, char end_char, ui32 max_len = 0)
 {
-	ASSERT(str != nullptr);
+	if (str.is_empty()) return {};
 
 	ui32 len = 0;
-	while (str[len] != '\0' && str[len] != end_char && (max_len == 0 || len < max_len))
+	while (len < str.length && str[len] != end_char && (max_len == 0 || len < max_len))
 	{
 		len++;
 	}
 
-	return ia_string_view(str, len);
+	return ia_string_view(str.view_str, len);
 }
 
 // Creates a new string made up of the format string and the formatted parameters.
@@ -692,12 +683,26 @@ static ia_string ia_string_format_v(const ia_string_view& format, mem_arena* wri
 		ia_string_view fromSpecial = format;
 		ia_string_chop_left(fromSpecial, readCursor);
 
+		if (ia_string_starts_with(fromSpecial, "%llu"))
+		{
+			static_mem_arena<256> scratch;
+
+			// Unsigned Integer decimal.
+			ui64 val = *(ui64*)((ui8*)va_args + vaCursor);
+			vaCursor += 8;
+
+			ia_string str = ia_string_from_integer(scratch, val, 10);
+
+			result.push_back(str);
+			readCursor += 4;
+			continue;
+		}
 		if (ia_string_starts_with(fromSpecial, "%d") || ia_string_starts_with(fromSpecial, "%i"))
 		{
 			static_mem_arena<256> scratch;
 
 			// Signed Integer decimal.
-			i32 val = *(i32*)(va_args + vaCursor);
+			i32 val = *(i32*)((ui8*)va_args + vaCursor);
 			vaCursor += 8;
 
 			ia_string str = ia_string_from_integer(scratch, val, 10);
@@ -711,7 +716,21 @@ static ia_string ia_string_format_v(const ia_string_view& format, mem_arena* wri
 			static_mem_arena<256> scratch;
 
 			// Unsigned Integer decimal.
-			ui32 val = *(ui32*)(va_args + vaCursor);
+			ui32 val = *(ui32*)((ui8*)va_args + vaCursor);
+			vaCursor += 8;
+
+			ia_string str = ia_string_from_integer(scratch, val, 10);
+
+			result.push_back(str);
+			readCursor += 2 + ia_string_starts_with(fromSpecial, "%ud"); // Skip extra character if the long variation was used.
+			continue;
+		}
+		if (ia_string_starts_with(fromSpecial, "%hu"))
+		{
+			static_mem_arena<256> scratch;
+
+			// Unsigned Integer decimal.
+			ui16 val = *(ui16*)((ui8*)va_args + vaCursor);
 			vaCursor += 8;
 
 			ia_string str = ia_string_from_integer(scratch, val, 10);
@@ -720,24 +739,18 @@ static ia_string ia_string_format_v(const ia_string_view& format, mem_arena* wri
 			readCursor += 3;
 			continue;
 		}
-		if (ia_string_starts_with(fromSpecial, "%f"))
+		/*if (ia_string_starts_with(fromSpecial, "%f")) // TODO(Marc)
 		{
 			static_mem_arena<256> scratch;
 
 			// Unsigned Integer decimal.
-			float val = *(float*)(va_args + vaCursor);
+			float val = *(float*)((ui8*)va_args + vaCursor);
 			vaCursor += 8;
-
-			ia_string str = ia_string_from_float(scratch, val, 8);
-
-			result.push_back(str);
-			readCursor += 2;
-			continue;
-		}
+		}*/
 		if (ia_string_starts_with(fromSpecial, "%s"))
 		{
 			// String view.
-			ia_string_view* val = *(ia_string_view**)(va_args + vaCursor);
+			ia_string_view* val = *(ia_string_view**)((ui8*)va_args + vaCursor);
 			vaCursor += 8;
 
 			result.push_back(*val);
@@ -747,7 +760,7 @@ static ia_string ia_string_format_v(const ia_string_view& format, mem_arena* wri
 		if (ia_string_starts_with(fromSpecial, "%cs"))
 		{
 			// Null-terminated string.
-			const char* val = *(const char**)(va_args + vaCursor);
+			const char* val = *(const char**)((ui8*)va_args + vaCursor);
 			vaCursor += sizeof(val);
 
 			result.push_back(val);

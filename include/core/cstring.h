@@ -81,7 +81,7 @@ static void ia_str_reverse(char* start, char* end)
 {
 	ASSERT(start != nullptr && end != nullptr);
 
-	ui32 charCount = (iptr)end - (iptr)start;
+	ui32 charCount = (iptr)end - (iptr)start + 1;
 	ASSERT(charCount < 65536);
 
 	for (ui16 i = 0; i < charCount / 2; i++)

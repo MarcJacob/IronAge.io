@@ -23,7 +23,8 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 
 	target_compile_options(IronAgeIO_WebClient PRIVATE
 	   --target=wasm32-unknown-unknown 
-	   -ffreestanding -fno-exceptions -fno-rtti -fvisibility=hidden -ffp-contract=off)
+	   -ffreestanding -fno-exceptions -fno-rtti -fvisibility=hidden -ffp-contract=off
+		-Wno-varargs)
 
 	target_link_options(IronAgeIO_WebClient PRIVATE
 	    --target=wasm32-unknown-unknown 

@@ -20,12 +20,12 @@ struct game_server_init_params
 	ui8 match_slot_count;
 	ui16 max_client_count;
 
-	const char* web_root; // Folder holding the web client bundle to serve over HTTP, relative to the platform resources folder. 
-						  // Must be in the format "./<path>/" (leading "./" and trailing "/"), matching the paths returned by the platform's list_resource_files.
+	ia_string_view web_root; // Folder holding the web client bundle to serve over HTTP, relative to the platform resources folder. 
+									// Must be in the format "./<path>/" (leading "./" and trailing "/"), matching the paths returned by the platform's list_resource_files.
 
 	// Test mode parameters.
 	bool run_test_scenario; // If set to true, the server will start, run a match scenario on its first tick, dump it to a specific file then shutdown.
-	const char* test_scenario_dump_filename; // If set to run test scenario, this indicates what file to dump the match data into once done.
+	ia_string_view test_scenario_dump_filename; // If set to run test scenario, this indicates what file to dump the match data into once done.
 };
 
 struct game_server
@@ -70,10 +70,10 @@ struct game_server
 
 		platform->log(type, logBuilder.string);
 	}
-	inline void log(const char* component, const char* msg) { log(component, LOG_NORMAL, msg); }
+	inline void log(const ia_string_view& component, const ia_string_view& msg) { log(component, LOG_NORMAL, msg); }
 	// No component name.
-	inline void log(LOG_TYPE type, const char* msg) { log("", type, msg); }
-	inline void log(const char* msg) { log("", LOG_NORMAL, msg); }
+	inline void log(LOG_TYPE type, const ia_string_view& msg) { log("", type, msg); }
+	inline void log(const ia_string_view& msg) { log("", LOG_NORMAL, msg); }
 
 	template<typename... args_types>
 	inline void logf(const ia_string_view& component, LOG_TYPE type, const ia_string_view& format, args_types... args)

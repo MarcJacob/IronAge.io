@@ -62,9 +62,9 @@ bool web_server_try_accept_client(game_server& server, game_server_client& clien
 	return false;
 }
 
-static const char* http_get_content_type(const ia_string_view& path)
+static ia_string_view http_get_content_type(const ia_string_view& path)
 {
-	struct content_type { const char* extension; const char* type; };
+	struct content_type { const ia_string_view extension; const ia_string_view type; };
 
 	// NOTE(Marc): Should move this out of the function on the next tidy-up pass.
 	static const content_type SUPPORTED_CONTENT_TYPES[] = {
@@ -96,11 +96,10 @@ const http_file* web_server_find_file(web_server& web, const ia_string_view& tar
 	// Name asked for: everything after the '/', up to any query string or fragment. Empty means the site root.
 
 	// Strip away query section.
-	ia_string_view targetName = ia_string_get_until(target.view_str, '?', target.length);
+	ia_string_view targetName = ia_string_get_until(target, '?', target.length);
 
 	// Strip away start '/'.
-	targetName.view_str++;
-	targetName.length--;
+	ia_string_chop_left(targetName, 1);
 	if (targetName.length == 0)
 	{
 		targetName = "index.html";
@@ -127,8 +126,6 @@ void web_server_reload_files(game_server& server)
 
 	game_server_platform& platform = *server.platform;
 	web_server& web = *server.web;
-
-	const ui8 webRootLength = ia_str_len(server.init_params.web_root);
 
 	// Clear existing files.
 	for (ui32 fileIndex = 0; fileIndex < web.file_count; fileIndex++)
@@ -164,7 +161,7 @@ void web_server_reload_files(game_server& server)
 		ui64 readSize = platform.read_resource_file(serverFile, file.data, fileSize);
 		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%s\".", serverFile._str);
 
-		file.resource_name = { serverFile._str + webRootLength, serverFile.length - webRootLength };
+		file.resource_name = { serverFile._str + server.init_params.web_root.length, serverFile.length - server.init_params.web_root.length };
 		file.size = (ui32)fileSize;
 		file.content_type = http_get_content_type(file.resource_name);
 
@@ -172,7 +169,7 @@ void web_server_reload_files(game_server& server)
 		web.file_count++;
 	}
 
-	ASSERT_MSG(web.file_count > 0, "No resource file found under web root \"%s\".", server.init_params.web_root);
+	ASSERT_MSG(web.file_count > 0, "No resource file found under specified web root.");
 }
 
 web_server* web_server_init(game_server& server)
