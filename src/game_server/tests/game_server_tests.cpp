@@ -27,7 +27,7 @@ void game_server_test_mode_tick(game_server& server)
 	server.log("TEST", LOG_NORMAL, "Running in test scenario mode.\nRunning test scenario match...");
 
 	// Alloc & build test scenario params.
-	game_match_start_params* scenario_params = match_test_scenario_get_params(server.main_memory);
+	game_match_start_params* scenario_params = match_test_scenario_get_params(server.main_memory, server.uptime_ms * 100);
 	ASSERT(scenario_params != nullptr);
 
 	mem_arena scenario_memory = mem_arena_create_sub(server.main_memory, match_get_required_mem(*scenario_params));
