@@ -58,7 +58,7 @@ bool web_server_http_recognize_request(const ui8* bytes, ui32 byte_count)
 }
 
 void web_server_http_serve_content(game_server& server, web_server_client& web_client,
-	const char* status, const char* content_type, const ui8* content, ui32 content_size)
+	const char* status, const ia_string_view& content_type, const ui8* content, ui32 content_size)
 {
 	ASSERT(web_client.is_websocket() == false);
 	http_client& client = web_client.http;
@@ -66,29 +66,23 @@ void web_server_http_serve_content(game_server& server, web_server_client& web_c
 	ui32 head_write_pos = 0;
 
 	// Build response head section.
-	client.response.head.str.length = 0; // TODO(Marc): String reset function.
-	head_write_pos += ia_string_push(client.response.head.str, "HTTP/1.1 ");
-	head_write_pos += ia_string_push(client.response.head.str, status);
-	head_write_pos += ia_string_push(client.response.head.str, "\r\nContent-Type: ");
-	head_write_pos += ia_string_push(client.response.head.str, content_type);
-	head_write_pos += ia_string_push(client.response.head.str, "\r\nContent-Length: ");
 
-	char bodySizeStrBuff[32] = {0}; // TODO(Marc): Fiiiiiiiiiiiiiiiiiiiine I guess I'll make a proper string format function. Eventually.
-	{
-		ui32 appendCount = 0;
-		ia_str_append_ui64(bodySizeStrBuff, sizeof(bodySizeStrBuff) - 1, appendCount, content_size);
-	}
-	head_write_pos += ia_string_push(client.response.head.str, bodySizeStrBuff);
-	head_write_pos += ia_string_push(client.response.head.str, "\r\nCache-Control: no-cache\r\n\r\n"); // Dev server: always re-fetch after a redeploy.
+	static_mem_arena<HTTP_RESPONSE_HEAD_BUFFER_SIZE> headMem;
+	ia_string_builder headBuilder(&headMem);
+
+	headBuilder.push_back_format("HTTP/1.1 %s\r\n", status);
+	headBuilder.push_back_format("Content-Type: %s\r\n", content_type);
+	headBuilder.push_back_format("Content-Length: %ud\r\n", content_size);
+	headBuilder.push_back_format("Cache-Control: no-cache\r\n\r\n"); // Dev server: always re-fetch after a redeploy.
 
 	// Flag the http client as being responded to with the appropriate head & body sizes.
 	// TODO(Marc): A lot of the time, we won't be sending anything to the client. It may be worth having staging memory for response buffers that is not linked to specific clients.
-	web_client.last_send_progress_ms = server.uptime_ms;
-
 	client.response.in_flight = true;
+	client.response.head.str = headBuilder.string;
+	client.response.head.size = headBuilder.string.length;
 
 	client.response.head.sent = 0;
-	client.response.head.size = head_write_pos;
+	web_client.last_send_progress_ms = server.uptime_ms;
 
 	if (content != nullptr && content_size > 0)
 	{
@@ -105,7 +99,7 @@ void web_server_http_serve_content(game_server& server, web_server_client& web_c
 }
 
 void web_server_http_send_response_status(game_server& server, web_server_client& web_client,
-	const char* status_msg, bool drop_client)
+	const ia_string_view& status_msg, bool drop_client)
 {
 	ASSERT(web_client.is_websocket() == false);
 	http_client& client = web_client.http;
@@ -115,28 +109,32 @@ void web_server_http_send_response_status(game_server& server, web_server_client
 	// Build response head section.
 	client.response.head.str.length = 0; // TODO(Marc): String reset function.
 
-	ui32 head_write_pos = 0;
-	head_write_pos += ia_string_push(client.response.head.str, "HTTP/1.1 ");
-	head_write_pos += ia_string_push(client.response.head.str, status_msg);
-	head_write_pos += ia_string_push(client.response.head.str, "\r\n");
+	static_mem_arena<256> headMem;
+	ia_string_builder headBuilder(&headMem);
+
+	static_mem_arena<64> formatScratch;
+	ia_string format = ia_string_format("HTTP/1.1 %s\r\n", &formatScratch, status_msg);
+
+	headBuilder.push_back(format);
 
 	if (drop_client)
 	{
 		web_client.in_drop = true;
-		head_write_pos += ia_string_push(client.response.head.str, "Connection: Close\r\n");
+		headBuilder.push_back("Connection: Close\r\n");
 	}
 	else
 	{
-		head_write_pos += ia_string_push(client.response.head.str, "Content-Type: text/plain charset=utf-8\r\n");
-		head_write_pos += ia_string_push(client.response.head.str, "Content-Length: 0\r\n");
+		headBuilder.push_back("Content-Type: text/plain charset=utf-8\r\n");
+		headBuilder.push_back("Content-Length: 0\r\n");
 	}
 
-	head_write_pos += ia_string_push(client.response.head.str, "\r\n");
+	headBuilder.push_back("\r\n");
 
 	web_client.last_activity_ms = server.uptime_ms;
 
 	client.response.head.sent = 0;
-	client.response.head.size = head_write_pos;
+	client.response.head.str = headBuilder.string;
+	client.response.head.size = headBuilder.string.length;
 	client.response.body.buff = nullptr;
 	client.response.body.sent = 0;
 	client.response.body.size = 0;
@@ -284,14 +282,14 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 
 	// Send response.
 
-	ia_static_string<256> response_str = {};
-	ia_string_push(response_str, "HTTP/1.1 101 Switching Protocols\r\n");
-	ia_string_push(response_str, "Upgrade: websocket\r\n");
-	ia_string_push(response_str, "Connection: Upgrade\r\n");
-	ia_string_push(response_str, "Sec-Websocket-Accept: ");
-	ia_string_push(response_str, response_key_buff);
-	ia_string_push(response_str, "\r\n\r\n");
-	// Let's just assume that the response_str has trailing zeroes so it can be used as a C string directly.
+	static_mem_arena<256> response_mem;
+	ia_string_builder responseBuilder(&response_mem);
+	responseBuilder.push_back("HTTP/1.1 101 Switching Protocols\r\n");
+	responseBuilder.push_back("Upgrade: websocket\r\n");
+	responseBuilder.push_back("Connection: Upgrade\r\n");
+	responseBuilder.push_back("Sec-Websocket-Accept: ");
+	responseBuilder.push_back(response_key_buff);
+	responseBuilder.push_back("\r\n\r\n");
 
 	// Build & send custom response head section.
 	{
@@ -300,7 +298,7 @@ static bool web_server_http_handle_request_upgrade_websocket(game_server& server
 		client.response.head.str.length = 0; // TODO(Marc): String reset function.
 
 		ui32 response_size = 0;
-		response_size += ia_string_push(client.response.head.str, response_str._str);
+		response_size += ia_string_append(client.response.head.str, responseBuilder.string);
 
 		web_client.last_activity_ms = server.uptime_ms;
 

@@ -53,7 +53,7 @@ bool web_server_try_accept_client(game_server& server, game_server_client& clien
 		client.type = game_server_client::TYPE::NON_GAME_CLIENT;
 		client.connection_context = &newClient;
 
-		server.logf("WEB SERVER", "Accepted client %d as an HTTP client.", client.handle.value);
+		server.logf("WEB SERVER", LOG_SUCCESS, "Accepted client %d as an HTTP client.", client.handle.value);
 
 		return true;
 	}
@@ -62,39 +62,27 @@ bool web_server_try_accept_client(game_server& server, game_server_client& clien
 	return false;
 }
 
-static const char* http_get_content_type(const char* path)
+static const char* http_get_content_type(const ia_string_view& path)
 {
 	struct content_type { const char* extension; const char* type; };
 
 	// NOTE(Marc): Should move this out of the function on the next tidy-up pass.
 	static const content_type SUPPORTED_CONTENT_TYPES[] = {
-		{ "html", "text/html; charset=utf-8" },
-		{ "js", "text/javascript; charset=utf-8" },
-		{ "css", "text/css; charset=utf-8" },
-		{ "wasm", "application/wasm" },
-		{ "txt", "text/plain; charset=utf-8" },
-		{ "ico", "image/x-icon"},
-		{ "svg", "image/svg+xml"},
+		{ ".html", "text/html; charset=utf-8" },
+		{ ".js", "text/javascript; charset=utf-8" },
+		{ ".css", "text/css; charset=utf-8" },
+		{ ".wasm", "application/wasm" },
+		{ ".txt", "text/plain; charset=utf-8" },
+		{ ".ico", "image/x-icon"},
+		{ ".svg", "image/svg+xml"},
 	};
 	static constexpr ui8 SUPPORTED_CONTENT_TYPE_COUNT = sizeof(SUPPORTED_CONTENT_TYPES) / sizeof(content_type);
 
-	// Find the extension start address of the last path segment.
-	// Stays null if the path ends with '/'.
-	const char* extension = nullptr;
-	for (const char* c = path; *c != '\0'; c++)
+	// Match the found extension against our supported content types.
+	for (ui32 typeIndex = 0; typeIndex < SUPPORTED_CONTENT_TYPE_COUNT; typeIndex++)
 	{
-		if (*c == '/') extension = nullptr;
-		else if (*c == '.') extension = c + 1;
-	}
-
-	if (extension != nullptr)
-	{
-		// Match the found extension against our supported content types.
-		for (ui32 typeIndex = 0; typeIndex < SUPPORTED_CONTENT_TYPE_COUNT; typeIndex++)
-		{
-			if (ia_str_equal(extension, SUPPORTED_CONTENT_TYPES[typeIndex].extension))
-				return SUPPORTED_CONTENT_TYPES[typeIndex].type;
-		}
+		if (ia_string_ends_with(path, SUPPORTED_CONTENT_TYPES[typeIndex].extension))
+			return SUPPORTED_CONTENT_TYPES[typeIndex].type;
 	}
 
 	return "application/octet-stream"; // If no extension is found, treat the file as a byte stream.
@@ -155,7 +143,7 @@ void web_server_reload_files(game_server& server)
 	for (ui32 fileIndex = 0; fileIndex < server.resource_file_count; fileIndex++)
 	{
 		const game_server_platform::resource_file_path& serverFile = server.resource_files[fileIndex];
-		if (!ia_str_expect(serverFile._str, server.init_params.web_root))
+		if (!ia_string_starts_with(serverFile, server.init_params.web_root))
 		{
 			// Not located in web root.
 			continue;
@@ -178,9 +166,9 @@ void web_server_reload_files(game_server& server)
 
 		file.resource_name = { serverFile._str + webRootLength, serverFile.length - webRootLength };
 		file.size = (ui32)fileSize;
-		file.content_type = http_get_content_type(file.resource_name.view_str);
+		file.content_type = http_get_content_type(file.resource_name);
 
-		server.logf("WEB SERVER", "Loaded \"%s\" (%llu bytes).", file.resource_name.view_str, fileSize);
+		server.logf("WEB SERVER", LOG_SUCCESS, "Loaded \"%s\" (%ud bytes).", file.resource_name, fileSize);
 		web.file_count++;
 	}
 

@@ -26,23 +26,23 @@ struct game_server_platform
 
 	// PLATFORM LOGGING
 
-	typedef void (*log_fn)(game_server_platform& platform, LOG_TYPE type, const char*);
+	typedef void (*log_fn)(game_server_platform& platform, LOG_TYPE type, const ia_string_view& string);
 	// Platform function: Takes in a log type and a null-terminated string and transfers it to the platform's log output for that type.
 	log_fn log_func;
-	void log(LOG_TYPE type, const char* msg) {
-		log_func(*this, type, msg);
+	void log(LOG_TYPE type, const ia_string_view& string) {
+		log_func(*this, type, string);
 	}
-	inline void log(const char* msg) { log(LOG_NORMAL, msg); }
+	inline void log(const ia_string_view& string) { log(LOG_NORMAL, string); }
 
-	typedef void (*logf_fn)(game_server_platform& platform, LOG_TYPE type, const char*, ...);
+	typedef void (*logf_fn)(game_server_platform& platform, LOG_TYPE type, const ia_string_view& format, ...);
 	// Platform function: Takes in a log type, a null-terminated format string and format parameters and transfers it to the platform's log output for that type.
 	logf_fn logf_func;
 	template<typename... args_types>
-	void logf(LOG_TYPE type, const char* format, args_types... args) {
+	void logf(LOG_TYPE type, const ia_string_view& format, args_types... args) {
 		logf_func(*this, type, format, args...);
 	}
 	template<typename... args_types>
-	inline void logf(const char* format, args_types... args) { logf(LOG_NORMAL, format, args...); }
+	inline void logf(const ia_string_view& format, args_types... args) { logf(LOG_NORMAL, format, args...); }
 
 	// PLATFORM NET
 

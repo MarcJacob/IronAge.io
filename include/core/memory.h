@@ -3,7 +3,7 @@
 #ifndef CORE_MEMORY_INCLUDED
 #define CORE_MEMORY_INCLUDED
 
-#include "core.h"
+#include "std_types.h"
 
 #define BYTES(x) (x ## ULL)
 #define KiB(x) (BYTES(x) * 1024)
@@ -12,90 +12,77 @@
 
 #define RAW_ALLOC_DEFAULT_ALIGN (4) // Default alignment of non-typed memory allocations.
 
+void ia_memcpy(void* dest, const void* src, ui64 size);
+void ia_memzero(void* dest, ui64 size);
+void ia_memset(void* dest, ui8 val, ui64 size);
+
 // Simple Arena allocator taking ownership over a piece of memory, holding a function pointer determining its allocation strategy.
-// It is not possible to de-allocate from an arena. Simply discard it and reuse the memory.
+// It is not possible to de-allocate from an arena, it can only be cleared.
+// Structure itself contains the core usage functions. Construction and more functionality for querying or other special operations can be found outside.
+// TODO(Marc): Add dynamic growth as required, using a paging system (address space remains static, extra memory is committable) on platforms that support it.
 struct mem_arena
 {
 	ui8* mem_start; // Start of managed memory. May not be fully contiguous depending on allocation strategy.
 	ui64 mem_size; // Size of managed memory.
 	ui64 allocated_count; // Number of allocated bytes in total.
 
-	using alloc_func_fn = void* (*)(mem_arena& arena, ui64 size, ui32 align);
-	// Defines an allocation strategy function for a memory arena allocator.
-	alloc_func_fn _alloc_func;
-
-	// Shortand for calling the internal allocation function.
-	// Returns nullptr if allocation failed.
+	// Allocates the given number of bytes, with a specifiable alignment value (4 by default).
+	// Returns nullptr if allocation failed. Does NOT zero-out memory.
 	inline void* alloc(ui64 size, ui32 align = RAW_ALLOC_DEFAULT_ALIGN) 
 	{ 
-		ASSERT(_alloc_func != nullptr); 
-		return _alloc_func(*this, size, align);
+		ASSERT(size > 0);
+		ASSERT(mem_start != nullptr && mem_size > 0);
+
+		// Simple stack allocation base on allocated_count.
+		ui8* alloc_start = mem_start + allocated_count;
+
+		// Advance to alignment boundary.
+		ui32 align_advance = ((iptr)alloc_start) % align;
+		if (align_advance > 0)
+		{
+			align_advance = align - align_advance;
+			alloc_start += align_advance;
+			size += align_advance;
+		}
+
+		if (mem_size - allocated_count < size)
+		{
+			// Out of memory.
+			return nullptr;
+		}
+		
+		allocated_count += size;
+		return alloc_start;
 	}
 
-	// Shorthand for calling the internal allocation function, with size computed from size of item type * item count, and correct alignment.
-	// Returns nullptr if allocation failed.
+	// Shorthand for calling the allocation function, with size computed from size of item type * item count, and correct alignment.
+	// Returns nullptr if allocation failed. By default zeroes-out memory.
 	template<typename Type>
-	inline Type* alloc(ui64 item_count = 1) 
+	inline Type* alloc(ui64 item_count = 1, bool zero_mem = true) 
 	{ 
-		ASSERT(_alloc_func != nullptr && item_count > 0); 
-		return (Type*)_alloc_func(*this, sizeof(Type) * item_count, alignof(Type));
-	}
+		ASSERT(item_count > 0); 
+		Type* allocation = (Type*)alloc(sizeof(Type) * item_count, alignof(Type));
+		if (allocation == nullptr)
+		{
+			return nullptr;
+		}
 
-	using clear_fn = void(*)(mem_arena& arena);
-	// Defines how the arena clears itself back to an empty state.
-	clear_fn _clear_func;
+		if (zero_mem)
+		{
+			ia_memzero(allocation, sizeof(Type) * item_count);
+		}
+
+		return allocation;
+	}
 
 	inline void clear() 
-	{
-		ASSERT(_clear_func != nullptr);
-		_clear_func(*this);
-	}
+	{	
+		ASSERT(mem_start != nullptr && mem_size > 0);
 
+		// Reset number of allocated bytes.
+		allocated_count = 0;
+	}
 };
-
-void ia_memcpy(void* dest, const void* src, ui64 size);
-void ia_memzero(void* dest, ui64 size);
-void ia_memset(void* dest, ui8 val, ui64 size);
-
-// Default allocation strategy given to a new arena. Assumes owned memory is contiguous, pre-allocated and non-extendable.
-// Can be replaced by any valid function within a specific arena, allowing varying allocation strategies (for example, the ability to grow).
-// TODO(Marc): Create alternative strategies. 
-static void* mem_arena_alloc_default(mem_arena& arena, ui64 size, ui32 align)
-{
-	ASSERT(arena.mem_start != nullptr && arena.mem_size > 0);
-
-	// Simple stack allocation base on allocated_count.
-	ui8* alloc_start = arena.mem_start + arena.allocated_count;
-
-	// Advance to alignment boundary.
-	ui32 align_advance = (((iptr)alloc_start) % align) % align;
-	if (align_advance > 0)
-	{
-		align_advance = align - align_advance;
-		alloc_start += align_advance;
-		size += align_advance;
-	}
-
-	if (arena.mem_size - arena.allocated_count < size)
-	{
-		// Out of memory.
-		return nullptr;
-	}
-
-	arena.allocated_count += size;
-	return alloc_start;
-}
-
-// Default clear function given to a new arena. Assumes owned memory is contiguous, pre-allocated and non-extendable / shrinkable.
-// Can be replaced by any valid function within a specific arena, and should obviously be consistent with allocation strategy.
-static void mem_arena_clear_default(mem_arena& arena)
-{
-	ASSERT(arena.mem_start != nullptr && arena.mem_size > 0);
-
-	// Reset number of allocated bytes and clear allocated memory to 0.
-	ia_memzero(arena.mem_start, arena.allocated_count);
-	arena.allocated_count = 0;
-}
 
 static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 {
@@ -105,12 +92,6 @@ static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 	newArena.mem_start = owned_mem;
 	newArena.mem_size = owned_mem_size;
 	
-	newArena._alloc_func = mem_arena_alloc_default;
-	newArena._clear_func = mem_arena_clear_default;
-
-	// Zero out all owned memory.
-	ia_memzero(owned_mem, owned_mem_size);
-
 	return newArena;
 }
 
@@ -124,6 +105,13 @@ static inline mem_arena mem_arena_create_sub(mem_arena& parent, ui64 owned_mem_s
 	ASSERT_MSG(memStart != nullptr, "Child arena of size %llu could not fit in parent arena of size %llu with %lld remaining bytes.", owned_mem_size, parent.mem_size, parent.mem_size - parent.allocated_count);
 
 	return mem_arena_create(memStart, owned_mem_size);
+}
+
+// Returns the address of the next allocatable byte in the arena memory. Returns nullptr if full.
+static inline ui8* mem_arena_get_next_alloc(const mem_arena& arena)
+{
+	ASSERT(arena.mem_start != nullptr && arena.mem_size > 0);
+	return arena.mem_start + arena.allocated_count;
 }
 
 // TODO(Marc): Optimize this.
@@ -203,6 +191,19 @@ void ia_memmove(void* dest, const void* src, ui64 size)
 		for (ui64 i = size; i > 0; i--) destMem[i - 1] = srcMem[i - 1];
 	}
 }
+
+// Static variant of the mem arena which contains its own memory statically.
+template<ui64 Size>
+struct static_mem_arena : public mem_arena
+{
+	ui8 _mem_static[Size];
+
+	inline static_mem_arena() 
+	{
+		mem_arena temp = mem_arena_create(_mem_static, Size);
+		*(mem_arena*)this = temp; // Move properties from temporary "standard" arena created over own memory.
+	}
+};
 
 // These exist for the compiler to call when there's no libc to provide them (freestanding builds).
 // Use the ia_ versions above in source code.

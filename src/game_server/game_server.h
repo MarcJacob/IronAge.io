@@ -58,15 +58,17 @@ struct game_server
 
 	static constexpr ui32 LOG_BUFF_SIZE = 1024;
 
-	inline void log(const char* component, LOG_TYPE type, const char* msg)
+	inline void log(const ia_string_view& component, LOG_TYPE type, const ia_string_view& msg)
 	{
-		char buff[LOG_BUFF_SIZE];
-		ui32 count = 0;
-		ia_str_prefix(buff, LOG_BUFF_SIZE - 1, count, "GAME SERVER", component);
-		ia_str_append(buff, LOG_BUFF_SIZE - 1, count, msg);
-		buff[count] = '\0';
+		static_mem_arena<LOG_BUFF_SIZE> logMem;
+		ia_string_builder logBuilder(&logMem);
 
-		platform->log(type, buff);
+		logBuilder.push_back("GAME SERVER");
+		if (!component.is_empty()) logBuilder.push_back_format(" (%s)", component);
+		logBuilder.push_back(": ");
+		logBuilder.push_back(msg);
+
+		platform->log(type, logBuilder.string);
 	}
 	inline void log(const char* component, const char* msg) { log(component, LOG_NORMAL, msg); }
 	// No component name.
@@ -74,25 +76,21 @@ struct game_server
 	inline void log(const char* msg) { log("", LOG_NORMAL, msg); }
 
 	template<typename... args_types>
-	inline void logf(const char* component, LOG_TYPE type, const char* format, args_types... args)
+	inline void logf(const ia_string_view& component, LOG_TYPE type, const ia_string_view& format, args_types... args)
 	{
-		char buff[LOG_BUFF_SIZE];
-		ui32 count = 0;
-		ia_str_prefix(buff, LOG_BUFF_SIZE - 1, count, "GAME SERVER", component);
-		ia_str_append(buff, LOG_BUFF_SIZE - 1, count, format);
-		buff[count] = '\0';
+		static_mem_arena<LOG_BUFF_SIZE> logMem;
+		ia_string_builder logBuilder(&logMem);
 
-		platform->logf(type, buff, args...);
+		logBuilder.push_back("GAME SERVER");
+		if (!component.is_empty()) logBuilder.push_back_format(" (%s)", component);
+		logBuilder.push_back(": ");
+		logBuilder.push_back_format(format, args...);
+
+		platform->log(type, logBuilder.string);
 	}
+
 	template<typename... args_types>
-	inline void logf(const char* component, const char* format, args_types... args) { logf(component, LOG_NORMAL, format, args...); }
-	// No component name.
-	// NOTE: logf("format", "string arg") is indistinguishable from logf("component", "format"), and the component overload wins.
-	// If the first format argument is a string, use the explicit "" component (or a type) instead.
-	template<typename... args_types>
-	inline void logf(LOG_TYPE type, const char* format, args_types... args) { logf("", type, format, args...); }
-	template<typename... args_types>
-	inline void logf(const char* format, args_types... args) { logf("", LOG_NORMAL, format, args...); }
+	inline void logf(LOG_TYPE type, const ia_string_view& format, args_types... args) { logf("", type, format, args...); }
 };
 
 #endif // GAME_SERVER_INCLUDED

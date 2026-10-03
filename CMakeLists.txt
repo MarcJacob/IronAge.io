@@ -7,6 +7,7 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 	# WEB CLIENT
 	add_executable(IronAgeIO_WebClient
 		src/platform/web_game_client/wasm_client_main.cpp)
+
 	target_include_directories(IronAgeIO_WebClient PRIVATE ${CMAKE_SOURCE_DIR}/include/)
 	set_target_properties(IronAgeIO_WebClient PROPERTIES SUFFIX ".wasm")
 
@@ -16,6 +17,9 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "wasm32")
 		COMMAND ${DEPLOY_WEB_CLIENT_SCRIPT} $<SHELL_PATH:$<TARGET_FILE:IronAgeIO_WebClient>>)
 
 	# Compiler & Linker options for wasm32 build.
+
+	# Use clang++
+	set_target_properties(IronAgeIO_WebClient PROPERTIES CMAKE_CXX_COMPILER clang++)
 
 	target_compile_options(IronAgeIO_WebClient PRIVATE
 	   --target=wasm32-unknown-unknown 
@@ -32,7 +36,11 @@ else()
 	target_compile_options(IronAgeIO_GameServer PRIVATE
 		$<$<CXX_COMPILER_ID:Clang>:-ffp-contract=off>
 		$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>
-		-fno-exceptions -fno-rtti)
+		-fno-exceptions -fno-rtti
+		-Wno-varargs)
+
+	# Use clang++
+	set_target_properties(IronAgeIO_GameServer PROPERTIES CMAKE_CXX_COMPILER clang++)
 
 	# Server resources folder, absolute. Override at configure time (-DGAME_SERVER_RESOURCES_DIR=...) for deployments.
 	set(GAME_SERVER_RESOURCES_DIR "${CMAKE_SOURCE_DIR}/game_server_resources" CACHE PATH "Folder the Game Server reads / writes its resources from.")

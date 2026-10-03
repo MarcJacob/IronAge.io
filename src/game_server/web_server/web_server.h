@@ -132,7 +132,7 @@ struct web_server_client
 struct http_file
 {
 	ia_string_view resource_name; // Directly views into the resource file paths in main server.
-	const char* content_type;
+	ia_string_view content_type;
 	ui8* data;
 	ui32 size;
 };

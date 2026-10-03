@@ -39,7 +39,7 @@ bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 s
 		return false;
 	}
 
-	server.logf("MATCH", "Initializing server match slot index %d.", slot_index);
+	server.logf("MATCH", LOG_NORMAL, "Initializing server match slot index %d.", slot_index);
 
 	slot = {};
 	slot.state = MATCH_SLOT_STATE::WAITING;
@@ -60,7 +60,7 @@ bool game_server_open_lobby(game_server& server, ui8 slot_index)
 		return false;
 	}
 
-	server.logf("MATCH", "Opening lobby in match slot %d.", slot_index);
+	server.logf("MATCH", LOG_NORMAL, "Opening lobby in match slot %d.", slot_index);
 
 	slot.state = MATCH_SLOT_STATE::IN_LOBBY;
 
@@ -83,7 +83,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 		return false;
 	}
 
-	server.logf("MATCH", "Starting match in match slot %d.", slot_index);
+	server.logf("MATCH", LOG_NORMAL, "Starting match in match slot %d.", slot_index);
 
 	// Create match.
 
@@ -168,7 +168,7 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index)
 		return false;
 	}
 
-	server.logf("MATCH", "Ending match in match slot %d.", slot_index);
+	server.logf("MATCH", LOG_NORMAL, "Ending match in match slot %d.", slot_index);
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ENDED;
 
@@ -188,7 +188,7 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 		return false;
 	}
 
-	server.logf("MATCH", "Resetting server match slot index %d.", slot_index);
+	server.logf("MATCH", LOG_NORMAL, "Resetting server match slot index %d.", slot_index);
 
 	// Zero out the slot and set it back to waiting. Conserve only its memory.
 
@@ -466,18 +466,18 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	newServer->resource_file_count = platform.list_resource_files("*", newServer->resource_files, MAX_RESOURCE_FILE_COUNT);
 
 	// TEST: List all discovered resource files.
-	newServer->logf("GAME SERVER", LOG_TYPE::LOG_NORMAL, "Discovered resource files:");
+	newServer->log("Discovered resource files:");
 	for (ui8 resourceFileIndex = 0; resourceFileIndex < newServer->resource_file_count; resourceFileIndex++)
 	{
 		// TODO(Marc): We need functions that take in string views instead of const char*...
 		// But here we know the platform must have returned a null-terminated path so it's fine.
-		newServer->logf("GAME SERVER", LOG_TYPE::LOG_NORMAL, "%s", newServer->resource_files[resourceFileIndex]._str);
+		newServer->logf(LOG_NORMAL, "%s", (ia_string_view)newServer->resource_files[resourceFileIndex]);
 	}
 
 	// Initialize clients table subsystem.
 	if (init_params.max_client_count == 0)
 	{
-		newServer->logf(LOG_TYPE::LOG_ERROR, "Game server set to start with 0 supported client connections. This is currently not supported. Aborting.");
+		newServer->logf(LOG_ERROR, "Game server set to start with 0 supported client connections. This is currently not supported. Aborting.");
 		return nullptr;
 	}
 	clients_table_init(*newServer, init_params.max_client_count);
@@ -499,20 +499,12 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 
 	// Math tests !!
 
-	newServer->logf("sqrt(2.f) = %f", ia_sqrt(2.f));
-	newServer->logf("sqrt(16.f) = %f", ia_sqrt(16.f));
-	newServer->logf("sqrt(64.f) = %f", ia_sqrt(64.f));
-	newServer->logf("sqrt(900.f) = %f", ia_sqrt(900.f));
-	newServer->logf("sqrt(10000.f) = %f", ia_sqrt(10000.f));
-
-	newServer->logf("xorshift_range_f32(1.f, 2.f) = % f", ia_xorshift_range_f32(1.f, 2.f));
-
 	newServer->log("With generator structure...");
 	rand_generator_32 gen = rand_generator_create_32(100);
 
 	for (ui8 i = 0; i < 10; i++)
 	{
-		newServer->logf("%d = %d", i, gen.next_range(0, 1000));
+		newServer->logf(LOG_NORMAL, "%ud = %d", i, gen.next_range<i32>(0, 1000));
 	}
 
 #endif
