@@ -444,11 +444,6 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 		platform.log(LOG_ERROR, "Web Server requires a valid web root folder, relative to the platform resources path. Aborting.");
 		return nullptr;
 	}
-	if (init_params.web_files == nullptr || init_params.web_file_count == 0)
-	{
-		platform.log(LOG_ERROR, "Web Server requires at least one file to serve. Aborting.");
-		return nullptr;
-	}
 	if (init_params.match_slot_count == 0)
 	{
 		platform.log(LOG_ERROR, "Game Server requires at least one match slot to function. Aborting.");
@@ -463,6 +458,21 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Create main arena allocator for the server. 
 	// It will be split into various static "Sections" that each hold the data needed by a feature of the server.
 	newServer->main_memory = mem_arena_create(memory + sizeof(game_server), memory_size - sizeof(game_server));
+
+	// Discover and pre-load all resource files.
+	static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
+	newServer->resource_files = newServer->main_memory.alloc<game_server_platform::resource_file_path>(MAX_RESOURCE_FILE_COUNT);
+	ASSERT_MSG(newServer->resource_files != nullptr, "Not enough server memory for the resource files list.");
+	newServer->resource_file_count = platform.list_resource_files("*", newServer->resource_files, MAX_RESOURCE_FILE_COUNT);
+
+	// TEST: List all discovered resource files.
+	newServer->logf("GAME SERVER", LOG_TYPE::LOG_NORMAL, "Discovered resource files:");
+	for (ui8 resourceFileIndex = 0; resourceFileIndex < newServer->resource_file_count; resourceFileIndex++)
+	{
+		// TODO(Marc): We need functions that take in string views instead of const char*...
+		// But here we know the platform must have returned a null-terminated path so it's fine.
+		newServer->logf("GAME SERVER", LOG_TYPE::LOG_NORMAL, "%s", newServer->resource_files[resourceFileIndex]._str);
+	}
 
 	// Initialize clients table subsystem.
 	if (init_params.max_client_count == 0)
@@ -510,7 +520,7 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// Initialize Web Server.
 
 	newServer->web = web_server_init(*newServer);
-	web_server_load_files(*newServer);
+	web_server_reload_files(*newServer);
 
 	// Setup event handler for Web server to clean resources tied to non-game-clients losing connection.
 	clients_table_register_event_handler_client_connection_lost(*newServer->client_table, web_server_on_client_disconnected);

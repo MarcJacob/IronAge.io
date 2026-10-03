@@ -59,10 +59,13 @@ void win32_logf(const char* component, const char* format, ...);
 void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const char* msg);
 void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const char* msg, ...);
 
-// Reads in an entire file, or gets its size of read_buff is null.
-ui64 win32_read_file(game_server_platform& platform, const char* filename, ui8* read_buff, ui64 buff_size);
-// Write a file, overwriting whatever was there if anything.
-bool win32_write_file(game_server_platform& platform, const char* filename, const ui8* data, ui64 size);
+// Reads in an entire file from a resources-folder-relative path, or gets its size if read_buff is null.
+ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size);
+// Write a file from a resources-folder-relative path, overwriting whatever was there if anything.
+bool win32_write_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, const ui8* data, ui64 size);
+// Lists all files under a resources-folder-relative path recursively.
+// The path must end with a wildcard search character.
+ui16 win32_list_resource_files(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, game_server_platform::resource_file_path* out_paths, ui8 max_paths);
 
 // Networking
 

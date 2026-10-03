@@ -12,14 +12,6 @@
 #include "web_server_http.cpp"
 #include "web_server_websocket.cpp"
 
-web_server* web_server_init(game_server& server)
-{
-	web_server* web = server.main_memory.alloc<web_server>();
-	ASSERT_MSG(web != nullptr, "Not enough server memory for the Web server.");
-
-	return web;
-}
-
 void web_server_on_client_disconnected(game_server& server, game_server_client& client)
 {
 	if (client.connection_context == nullptr) return;
@@ -108,51 +100,6 @@ static const char* http_get_content_type(const char* path)
 	return "application/octet-stream"; // If no extension is found, treat the file as a byte stream.
 }
 
-void web_server_load_files(game_server& server)
-{
-	game_server_platform& platform = *server.platform;
-	web_server& web = *server.web;
-	const game_server_init_params& params = server.init_params;
-
-	ASSERT_MSG(params.web_file_count <= WEB_SERVER_MAX_FILES, "Too many web files to serve (%d, max is %d).", params.web_file_count, WEB_SERVER_MAX_FILES);
-
-	ui64 totalSize = 0;
-	for (ui32 fileIndex = 0; fileIndex < params.web_file_count; fileIndex++)
-	{
-		http_file& file = web.files[fileIndex];
-		file.name = params.web_files[fileIndex];
-
-		// Build the platform path: <web_root>/<target_name>
-		char filePath[HTTP_PATH_BUFFER_SIZE * 2];
-		ui32 pathLen = 0;
-		bool pathFits = ia_str_append(filePath, sizeof(filePath) - 1, pathLen, params.web_root)
-			&& ia_str_append(filePath, sizeof(filePath) - 1, pathLen, "/")
-			&& ia_str_append(filePath, sizeof(filePath) - 1, pathLen, file.name);
-
-		ASSERT_MSG(pathFits, "Web file path too long: %s", file.name);
-		filePath[pathLen] = '\0';
-
-		ui64 fileSize = platform.read_resource_file(filePath, nullptr, 0);
-		ASSERT_MSG(fileSize > 0, "Web file \"%s\" not found or empty.", filePath);
-
-		totalSize += fileSize;
-		ASSERT_MSG(totalSize <= WEB_SERVER_MAX_FILES_TOTAL_SIZE, "Web files exceed the %llu bytes budget at \"%s\".", WEB_SERVER_MAX_FILES_TOTAL_SIZE, filePath);
-
-		file.data = server.main_memory.alloc<ui8>(fileSize);
-		ASSERT_MSG(file.data != nullptr, "Not enough server memory to load web file \"%s\".", filePath);
-
-		ui64 readSize = platform.read_resource_file(filePath, file.data, fileSize);
-		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%s\".", filePath);
-
-		file.size = (ui32)fileSize;
-		file.content_type = http_get_content_type(file.name);
-
-		server.logf("WEB SERVER", "Loaded \"%s\" (%llu bytes).", file.name, fileSize);
-	}
-
-	web.file_count = params.web_file_count;
-}
-
 const http_file* web_server_find_file(web_server& web, const ia_string_view& target)
 {
 	if (target.length == 0) return nullptr;
@@ -176,11 +123,81 @@ const http_file* web_server_find_file(web_server& web, const ia_string_view& tar
 	{
 		const http_file& file = web.files[fileIndex];
 
-		if (targetName == file.name)
+		if (targetName == file.resource_name)
 			return &file;
 	}
 
 	return nullptr;
+}
+
+void web_server_reload_files(game_server& server)
+{
+	// TODO(Marc): When implementing actual runtime reload, it needs to be done while we have the guarantee that no files are currently being server.
+	// During that time, we can just stop reacting to GET requests or even any request at all. Reloading the files should never take that long or happen that often,
+	// or happen in critical circumstances, so it can be kept very simple. The reload flag preventing this collision can be made atomic for good measure.
+	ASSERT(server.web->file_count == 0); // Temp assert so I don't forget the todo above.
+
+	game_server_platform& platform = *server.platform;
+	web_server& web = *server.web;
+
+	const ui8 webRootLength = ia_str_len(server.init_params.web_root);
+
+	// Clear existing files.
+	for (ui32 fileIndex = 0; fileIndex < web.file_count; fileIndex++)
+	{
+		http_file& file = web.files[fileIndex];
+		file = {};
+	}
+	web.file_count = 0;
+	web.file_data_memory.clear();
+
+	ui64 totalSize = 0;
+	for (ui32 fileIndex = 0; fileIndex < server.resource_file_count; fileIndex++)
+	{
+		const game_server_platform::resource_file_path& serverFile = server.resource_files[fileIndex];
+		if (!ia_str_expect(serverFile._str, server.init_params.web_root))
+		{
+			// Not located in web root.
+			continue;
+		}
+		ASSERT_MSG(web.file_count < WEB_SERVER_MAX_FILES, "Too many web files to serve (max is %d), at \"%s\".", WEB_SERVER_MAX_FILES, serverFile._str);
+
+		http_file& file = web.files[web.file_count];
+		ui64 fileSize = platform.read_resource_file(serverFile, nullptr, 0);
+		ASSERT_MSG(fileSize > 0, "Web file \"%s\" not found or empty.", serverFile._str);
+
+		totalSize += fileSize;
+		ASSERT_MSG(totalSize <= WEB_SERVER_TOTAL_FILE_DATA_MEM, "Web files exceed the %llu bytes budget at \"%s\".", 
+			WEB_SERVER_TOTAL_FILE_DATA_MEM, serverFile._str);
+
+		file.data = web.file_data_memory.alloc<ui8>(fileSize);
+		ASSERT_MSG(file.data != nullptr, "Not enough server memory to load web file \"%s\".", serverFile._str);
+
+		ui64 readSize = platform.read_resource_file(serverFile, file.data, fileSize);
+		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%s\".", serverFile._str);
+
+		file.resource_name = { serverFile._str + webRootLength, serverFile.length - webRootLength };
+		file.size = (ui32)fileSize;
+		file.content_type = http_get_content_type(file.resource_name.view_str);
+
+		server.logf("WEB SERVER", "Loaded \"%s\" (%llu bytes).", file.resource_name.view_str, fileSize);
+		web.file_count++;
+	}
+
+	ASSERT_MSG(web.file_count > 0, "No resource file found under web root \"%s\".", server.init_params.web_root);
+}
+
+web_server* web_server_init(game_server& server)
+{
+	// Allocate web server itself directly in main server memory, then allocate memory for self + sub-allocate it to specific parts.
+
+	web_server* web = server.main_memory.alloc<web_server>();
+	ASSERT_MSG(web != nullptr, "Not enough server memory for the Web server.");
+
+	web->memory = mem_arena_create_sub(server.main_memory, WEB_SERVER_TOTAL_MEM);
+	web->file_data_memory = mem_arena_create_sub(web->memory, WEB_SERVER_TOTAL_FILE_DATA_MEM);
+
+	return web;
 }
 
 void web_server_tick(game_server& server)

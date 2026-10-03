@@ -87,7 +87,7 @@ static bool ia_str_append_ui64(char* buff, ui32 buff_size, ui32& append_count, u
 	return true;
 }
 
-// Checks the given char string, returning true if its next characters corresond to the expected string.
+// Checks the given char string, returning true if its next characters correspond to the expected string.
 static bool ia_str_expect(const char* str, const char* expected)
 {
 	ASSERT(str != nullptr && expected != nullptr);
@@ -130,7 +130,7 @@ struct ia_string
 	ui32 _capacity;
 	char* _str;
 
-	operator ia_string_view()
+	inline operator ia_string_view()
 	{
 		return ia_string_view(_str, length);
 	}
@@ -141,10 +141,22 @@ struct ia_string
 template<ui32 Capacity>
 struct ia_static_string
 {
-	char _str[Capacity];
+	char _str[Capacity]; // If null terminated just add an extra byte at the end that is effectively untouchable.
 	ui32 length;
 
-	operator ia_string()
+	ia_static_string() = default;
+
+	inline ia_static_string(const char* c_str) 
+	{
+		length = ia_str_len(c_str);
+		ia_memcpy(_str, c_str, length);
+		if (Capacity > length)
+		{
+			ia_memset(_str + length, 0, Capacity - length);
+		}
+	}
+
+	inline operator ia_string()
 	{
 		return ia_string{
 			.length = length,
@@ -153,7 +165,7 @@ struct ia_static_string
 		};
 	}
 
-	operator ia_string_view()
+	inline operator ia_string_view()
 	{
 		return ia_string_view(_str, length);
 	}

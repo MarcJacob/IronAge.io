@@ -181,15 +181,35 @@ void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ch
 
 // The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
 // Builds <resources dir>/<filename> in out_path. Returns false if it doesn't fit.
-static bool win32_resource_path(const char* filename, char* out_path, size_t out_size)
+static bool win32_resource_path(const char* filename, char* out_path, ui64 out_size)
 {
+	// Length is checked by hand because sprintf_s aborts through the CRT invalid parameter handler on overflow.
+	if (strlen(GAME_SERVER_RESOURCES_DIR) + 1 + strlen(filename) + 1 > out_size) return false;
+
 	return sprintf_s(out_path, out_size, "%s/%s", GAME_SERVER_RESOURCES_DIR, filename) > 0;
 }
 
-ui64 win32_read_file(game_server_platform& platform, const char* filename, ui8* read_buff, ui64 buff_size)
+// Strips the resource folder from a path, turning it from absolute to relative by replacing it with "./".
+static void win32_strip_resources_path(game_server_platform::resource_file_path& path)
+{
+	static constexpr ui32 GAME_SERVER_RESOURCES_PATH_LEN = sizeof(GAME_SERVER_RESOURCES_DIR); // Includes the null terminator, which stands in for the "/" after the folder.
+
+	// TODO(Marc): This is laaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaazy. Need a major string handling overhaul to we can just call a chop left function.
+	ASSERT(path.length >= GAME_SERVER_RESOURCES_PATH_LEN);
+
+	// The jankiest string code I've ever written. Moves the non-resources-path part of the string back onto the beginning (leaving room for "./").
+	ia_memcpy(path._str + 2, path._str + GAME_SERVER_RESOURCES_PATH_LEN, path.length - GAME_SERVER_RESOURCES_PATH_LEN);
+	path.length = path.length - GAME_SERVER_RESOURCES_PATH_LEN + 2;
+
+	// Set the first two characters to "./".
+	path._str[0] = '.';
+	path._str[1] = '/';
+}
+
+ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size)
 {
 	char path[MAX_PATH];
-	if (!win32_resource_path(filename, path, sizeof(path)))
+	if (!win32_resource_path(path_relative._str, path, sizeof(path)))
 	{
 		return 0;
 	}
@@ -217,10 +237,10 @@ ui64 win32_read_file(game_server_platform& platform, const char* filename, ui8* 
 	return readCount == (size_t)fileSize ? (ui64)fileSize : 0;
 }
 
-bool win32_write_file(game_server_platform& platform, const char* filename, const ui8* data, ui64 size)
+bool win32_write_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, const ui8* data, ui64 size)
 {
 	char path[MAX_PATH];
-	if (!win32_resource_path(filename, path, sizeof(path)))
+	if (!win32_resource_path(path_relative._str, path, sizeof(path)))
 	{
 		return false;
 	}
@@ -235,6 +255,89 @@ bool win32_write_file(game_server_platform& platform, const char* filename, cons
 	fclose(file);
 
 	return written == size;
+}
+
+ui8 win32_list_files_recursive(const char* search_path, game_server_platform::resource_file_path* out_paths, ui8 start_index, ui8 max_index)
+{
+	ASSERT(search_path != nullptr);
+	ASSERT(out_paths != nullptr);
+
+	if (start_index >= max_index) return 0;
+
+	// Only accept paths that end with a wildcard and aren't too long.
+	ui16 searchPathLen = strlen(search_path);
+	if (searchPathLen < game_server_platform::RESOURCE_FILE_PATH_MAX_LEN && search_path[searchPathLen - 1] != '*')
+	{
+		return 0;
+	}
+
+	WIN32_FIND_DATAA findData = {};
+	HANDLE findHandle = FindFirstFile(search_path, &findData);
+
+	if (findHandle == INVALID_HANDLE_VALUE)
+	{
+		return 0;
+	}
+
+	// Copy search path into a buffer where the search character is stripped.
+	char path_part[game_server_platform::RESOURCE_FILE_PATH_MAX_LEN];
+	ia_memcpy(path_part, search_path, searchPathLen);
+	path_part[searchPathLen - 1] = '\0'; // Strip wildcard.
+
+	ui16 index = start_index;
+	do
+	{
+		// Ignore self and up ref.
+		if (findData.cFileName[0] == '.') continue;
+
+		// Determine if the next file found is a directory or a file. Call recursively on sub-directories.
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			game_server_platform::resource_file_path folderPath = {};
+			ia_string_push(folderPath, path_part, true);
+			ia_string_push(folderPath, findData.cFileName, true);
+			ia_string_push(folderPath, "/*", true);
+
+			ui8 writtenCount = win32_list_files_recursive(folderPath._str, out_paths, index, max_index);
+			index += writtenCount;
+		}
+		else
+		{
+			// Make sure the path is pushed from the beginning of the string.
+			out_paths[index].length = 0;
+			ia_string_push(out_paths[index], path_part, true);
+			ia_string_push(out_paths[index], findData.cFileName, true);
+
+			index++;
+		}
+	} while (index < max_index && FindNextFile(findHandle, &findData));
+
+	FindClose(findHandle);
+	return index - start_index;
+}
+
+ui16 win32_list_resource_files(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, game_server_platform::resource_file_path* out_paths, ui8 max_path_count)
+{
+	// TODO(Marc): Support for long paths.
+
+	ASSERT(out_paths != nullptr && max_path_count >= 1);
+
+	char searchPath[game_server_platform::RESOURCE_FILE_PATH_MAX_LEN];
+	if (!win32_resource_path(path_relative._str, searchPath, sizeof(searchPath)))
+	{
+		return 0;
+	}
+
+	ui16 writtenPaths = win32_list_files_recursive(searchPath, out_paths, 0, max_path_count);
+
+	// Strip resource path from every found file path, and ensure it is null-terminated.
+	for (ui16 fileIndex = 0; fileIndex < writtenPaths; fileIndex++)
+	{
+		win32_strip_resources_path(out_paths[fileIndex]);
+		out_paths[fileIndex]._str[out_paths[fileIndex].length] = '\0';
+	}
+
+	return writtenPaths;
 }
 
 // BEGIN PROGRAM ENTRY
@@ -277,8 +380,9 @@ void win32_platform_init()
 	WIN32_PLATFORM.net_receive_bytes_func = win32_net_receive_bytes;
 	WIN32_PLATFORM.net_close_connection_func = win32_net_close_connection;
 
-	WIN32_PLATFORM.read_resource_file_func = win32_read_file;
-	WIN32_PLATFORM.write_resource_file_func = win32_write_file;
+	WIN32_PLATFORM.read_resource_file_func = win32_read_resource_file;
+	WIN32_PLATFORM.write_resource_file_func = win32_write_resource_file;
+	WIN32_PLATFORM.list_resource_files_func = win32_list_resource_files;
 
 	WIN32_PLATFORM.net_component = win32_net_start(); // Start networking capabilities.
 	ASSERT_MSG(WIN32_PLATFORM.net_component != nullptr, "Win32: Failed to start Net Component.");
@@ -337,49 +441,16 @@ int main(int argc, char** argv)
 	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	ASSERT_MSG(game_server_mem != nullptr, "Failed to allocate Game Server memory. Error code = %d", GetLastError());
 
-	// Files of the web client bundle the game server will preload and serve over HTTP, relative to the web root.
-	// TODO(Marc): Add a platform call to list available files in resources folder, so the server can just discover all available files.
-	static const char* const WEB_FILES[] = {
-
-		// HTML & CSS 
-		"index.html",
-		"style.css",
-
-		// JS Sources
-		"src/core.js",
-		"src/main.js",
-		"src/backend.js",
-		"src/render.js",
-		"src/input.js",
-		"src/game_ui.js",
-		"src/camera.js",
-
-		// Client WASM backend
-		"IronAgeIO_WebClient.wasm",
-
-		// Art
-		"favicon.ico",
-		"art/entity_settlement.svg",
-		"art/entity_caravan.svg",
-		"art/entity_army.svg",
-
-		// Tests
-		"src/websocket_tests.js",
-		"determinism_test.html"
-	};
-	static constexpr ui8 WEB_FILE_COUNT = sizeof(WEB_FILES) / sizeof(WEB_FILES[0]);
-
 	// TODO(Marc): Read command line / config file for those !
 	game_server_init_params server_init_params = {
 
 		.match_slot_count = 4,
 		.max_client_count = 1024,
+
+		.web_root = "./web_root/",
+
 		.run_test_scenario = false,
 		.test_scenario_dump_filename = "snapshot_native.bin",
-
-		.web_root = "web_root",
-		.web_files = WEB_FILES,
-		.web_file_count = WEB_FILE_COUNT,
 	};
 
 	win32_logf("", "Initializing Game Server...\n");

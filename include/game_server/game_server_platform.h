@@ -109,23 +109,38 @@ struct game_server_platform
 
 	// PLATFORM FILES
 
-	typedef ui64 (*read_file_fn)(game_server_platform& platform, const char* filename, ui8* read_buff, ui64 buff_size);
+	static constexpr ui16 RESOURCE_FILE_PATH_MAX_LEN = 256;
+	using resource_file_path = ia_static_string<RESOURCE_FILE_PATH_MAX_LEN>; // Simple container for a reasonably-sized resource file path. Assumed to be null-terminated. TODO(Marc): String overhaul !!
+
+	typedef ui64 (*read_resource_file_fn)(game_server_platform& platform, const resource_file_path& path, ui8* read_buff, ui64 buff_size);
 	// Platform function: Synchronously reads / loads in an entire file's contents into the target buffer, if it is large enough.
 	// If read_buff is null, performs a "dry run" and returns the file size.
 	// Returns the number of bytes read, 0 if the file does not exist / is inaccessible, or the buffer is too small.
 	// The file is located in the "server resources storage", whatever that means for the host platform.
-	read_file_fn read_resource_file_func;
-	ui64 read_resource_file(const char* filename, ui8* read_buff, ui64 buff_size) {
-		return read_resource_file_func(*this, filename, read_buff, buff_size);
+	read_resource_file_fn read_resource_file_func;
+	ui64 read_resource_file(const resource_file_path& path, ui8* read_buff, ui64 buff_size) {
+		return read_resource_file_func(*this, path, read_buff, buff_size);
 	}
 
-	typedef bool (*write_file_fn)(game_server_platform& platform, const char* filename, const ui8* data, ui64 size);
+	typedef bool (*write_resource_file_fn)(game_server_platform& platform, const resource_file_path& path, const ui8* data, ui64 size);
 	// Platform function: Synchronously writes the buffer to a file with the given name, creating it or overwriting it.
 	// Returns whether the write was successful.
 	// The file is located in the "server resources storage", whatever that means for the host platform.
-	write_file_fn write_resource_file_func;
-	bool write_resource_file(const char* filename, const ui8* data, ui64 size) {
-		return write_resource_file_func(*this, filename, data, size);
+	write_resource_file_fn write_resource_file_func;
+	bool write_resource_file(const resource_file_path& path, const ui8* data, ui64 size) {
+		return write_resource_file_func(*this, path, data, size);
+	}
+
+	typedef ui16 (*list_resource_files_fn)(game_server_platform& platform, const resource_file_path& path_relative, resource_file_path* out_paths, ui8 max_path_count);
+	// Platform function: Synchronously searches for files under the given resource-relative path, and writes them as a list of resource_file_path in the target memory.
+	// Returns the number of files found.
+	// The path is relative to the "server resources storage", whatever that means for the host platform, and must end with a wildcard search character (e.g. "*").
+	// The search is recursive. Output paths are relative to the resources storage, in the form "./<folder>/<file>", and null-terminated.
+	// Files and folders whose name starts with a dot are skipped.
+	// Paths are limited to RESOURCE_FILE_PATH_MAX_LEN - 1 characters (one byte is kept for the null terminator).
+	list_resource_files_fn list_resource_files_func;
+	ui16 list_resource_files(const resource_file_path& path_relative, resource_file_path* out_paths, ui8 max_path_count) {
+		return list_resource_files_func(*this, path_relative, out_paths, max_path_count);
 	}
 };
 

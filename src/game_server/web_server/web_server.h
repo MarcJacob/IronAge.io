@@ -12,10 +12,11 @@
 // Static configuration of Web Server.
 // TODO(Marc): Add to runtime configuration system. Substructure of game server initialization ?
 
-static constexpr ui16 WEB_SERVER_MAX_CLIENTS = 64;
+static constexpr ui64 WEB_SERVER_TOTAL_MEM = MiB(128);
+static constexpr ui64 WEB_SERVER_TOTAL_FILE_DATA_MEM = MiB(96);
 
-static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Files that can be preloaded for serving.
-static constexpr ui64 WEB_SERVER_MAX_FILES_TOTAL_SIZE = MiB(32); // Budget for all preloaded files together.
+static constexpr ui16 WEB_SERVER_MAX_CLIENTS = 64;
+static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Max number of files that can be preloaded for serving.
 
 static constexpr ui32 WEB_CLIENT_RECEPTION_BUFFER_SIZE = 2048;
 static constexpr time_ms HTTP_CLIENT_TIMEOUT_MS = 2000; // HTTP connection with no request / activity for this long gets closed.
@@ -130,7 +131,7 @@ struct web_server_client
 // A file preloaded in server memory at init, served as-is to requests for its target_name.
 struct http_file
 {
-	const char* name; // Name relative to web_root, as given in the init params (which must outlive the server).
+	ia_string_view resource_name; // Directly views into the resource file paths in main server.
 	const char* content_type;
 	ui8* data;
 	ui32 size;
@@ -145,8 +146,11 @@ struct web_server
 	// Later we may want to have a shared memory pool for the two somehow. Unioning them might work.
 	web_server_client clients[WEB_SERVER_MAX_CLIENTS];
 
-	// Resources this server can serve.
+	// General-purpose memory allocated to the web server.
+	struct mem_arena memory;
 
+	// Resources this server can serve.
+	struct mem_arena file_data_memory; // Memory where file data is stored.
 	http_file files[WEB_SERVER_MAX_FILES];
 	ui32 file_count;
 };
@@ -189,10 +193,6 @@ struct http_request
 
 // BEGIN WEB SERVER MAIN FILE FUNCTIONS (web_server.cpp)
 
-web_server* web_server_init(game_server& server);
-
-// Loads every file listed in the init params into server memory, from web_root. Fatal if any of them can't be loaded.
-void web_server_load_files(game_server& server);
 
 // Finds the preloaded file a request target ("/", "/src/main.js?x=1") asks for. Returns null if there is none.
 const http_file* web_server_find_file(web_server& web, const ia_string_view& target);
@@ -205,6 +205,14 @@ void web_server_on_client_disconnected(game_server& server, game_server_client& 
 // Returns whether the client was accepted. Bytes must fit the HTTP request buffer.
 bool web_server_try_accept_client(game_server& server, game_server_client& client, const ui8* bytes, ui32 byte_count);
 
+// Initializes web server.
+web_server* web_server_init(game_server& server);
+
+// (Re)Loads every resource file located in the resource folder/web root path specified in parameters. Fatal if any of them can't be loaded.
+// The files are found via the game server's current Resource Files buffer, so it needs to be up-to-date with what is on platform.
+void web_server_reload_files(game_server& server);
+
+// Ticks web server.
 void web_server_tick(game_server& server);
 
 // END WEB SERVER MAIN FILE FUNCTIONS

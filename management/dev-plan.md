@@ -12,9 +12,18 @@ cross-component testing loop from early on.
 
 Detailed design / progress for in-flight, coherent task groups lives in
 `management/work_units/<name>_<start-date>.md`, keeping this file a high-level
-index. Update the entry here when a unit starts / finishes.
+index. Add an entry here when a unit starts, flag it `[DONE]` at the end of the line
+when it finishes.
 
-None. Finished units are moved to `management/archive/`.
+- `work_units/platform_list_resource_files_2026-09-20.md` [DONE]
+- `work_units/web_server_file_auto_reload_2026-09-20.md`
+- `work_units/server_dev_mode_2026-10-03.md`
+- `work_units/build_system_revamp_2026-10-03.md`
+- `work_units/dev_iteration_loop_2026-10-03.md`
+- `work_units/string_pass_2026-10-03.md`
+- `work_units/logging_string_view_format_2026-09-25.md`
+
+Finished units are moved to `management/archive/` after a time.
 
 ## Development Phases
 
@@ -65,7 +74,25 @@ work to a line or two.
        agree on layout byte-for-byte; sizes are unconditional even in debug builds.
      - No input log, no catch-up / bundling, no tick staleness gating yet - see Backlog.
 
-2. **World & settlements simulation** through **11. Ops & hardening** - phases from the
+2. **Dev infrastructure & cleanup** - overhauls to speed up iteration before main game
+   development. Backlog files in `management/backlog/` hold the details.
+   - [DONE] Server resource discovery: platform call listing resource files, web server
+     loading serveable files from the discovered list.
+   - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
+     change; TODO in web server). (`web_server_file_auto_reload`)
+   - Server dev mode: admin-authenticated dev messages (first action: reload resources).
+     (`server_dev_mode`)
+   - Build system revamp: off CMake, Game Common as a static library, server as a
+     hot-reloadable dynamic library. (`build_system_revamp`)
+   - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.
+     (`dev_iteration_loop`)
+   - String pass: proper string toolset used across the code; C strings only for
+     constant strings and direct platform calls that require them.
+     - Log `string_view`s directly, as format and as a string param
+       (`logging_string_view_format`).
+     - Platform resource paths not null-terminated.
+
+3. **World & settlements simulation** through **12. Ops & hardening** - phases from the
    previous plan version (world/settlements, trade, war, diplomacy, victory & scoring,
    persistence & master server, ops & hardening) still look like roughly the right
    sequence, but haven't been re-specified against the architecture above yet. Revisit

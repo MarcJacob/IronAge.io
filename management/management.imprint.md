@@ -9,13 +9,24 @@ architecture for the project. It should be kept up to date as architecture decis
 made or phases of work complete, and consulted whenever the shape of upcoming work is
 unclear.
 
-The /work_units/ folder contains all current work units file which are then moved to /archive/ on completion.
-While a work unit is ongoing, it also appears in the main dev plan file.
+The /backlog/ folder holds one file per backlog item.
+
+The /work_units/ folder contains all current work unit files, indexed from dev-plan.md's Active Work Units section.
+
+The /archive/ folder holds finished work units.
 
 The /artisan_skills/ folder holds one file per content pipeline: a step-by-step recipe an artisan agent follows
 to derive new content (e.g. a new command) from existing precedents.
 
-The /backlog/ folder holds one file per backlog item, indexed from dev-plan.md's Backlog section.
+## Work unit lifecycle
+
+1. Backlog: the item is a file in /backlog/.
+2. Start: when work begins on it, move the file to /work_units/ and reference it in dev-plan.md's Active Work Units.
+   New work units that did not come from the backlog start here directly.
+3. Ongoing: progress and decisions are recorded in the file.
+4. Complete: record the outcome in the file, mark it complete in the plan. It stays in /work_units/ for a time.
+5. After a time, move it to /archive/ and update the plan's reference.
+Backlog items are moved, never deleted.
 
 ## AI Agent use
 
