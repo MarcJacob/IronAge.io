@@ -25,6 +25,18 @@ strings and direct platform calls that require them.
 - Open design: the exact toolset (builder / formatter API), and where
   null-terminated conversion for platform calls lives.
 
+## Decisions (2026-10-03)
+
+- First unit of phase 2; everything else in the phase follows it.
+- Goals: simplify logging and file management; related functions take string
+  views wherever possible.
+- Utility functions on views/strings: chop left / right, append left / right,
+  and similar. They allocate from a memory arena.
+- New "static" memory arena: declared in a function, usable immediately over
+  the static / stack memory it occupies (no pre-allocated block to point into).
+- Candidate: string builder structure holding the arena reference, so multiple
+  / nested operations are easier to write. To be designed.
+
 ## Why
 
 Removes null-terminator assumptions and C-string handling bugs, and keeps

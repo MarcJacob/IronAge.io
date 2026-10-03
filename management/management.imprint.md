@@ -24,8 +24,9 @@ to derive new content (e.g. a new command) from existing precedents.
 2. Start: when work begins on it, move the file to /work_units/ and reference it in dev-plan.md's Active Work Units.
    New work units that did not come from the backlog start here directly.
 3. Ongoing: progress and decisions are recorded in the file.
-4. Complete: record the outcome in the file, mark it complete in the plan. It stays in /work_units/ for a time.
-5. After a time, move it to /archive/ and update the plan's reference.
+4. Complete: record the outcome in the file and flag its plan entry [DONE] (flag at the end of the line).
+   It stays in /work_units/.
+5. It stays [DONE] until someone decides it can be archived, then move it to /archive/ and update the plan's reference.
 Backlog items are moved, never deleted.
 
 ## AI Agent use

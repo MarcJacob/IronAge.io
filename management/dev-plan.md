@@ -22,12 +22,18 @@ when it finishes.
 - `work_units/dev_iteration_loop_2026-10-03.md`
 - `work_units/string_pass_2026-10-03.md`
 - `work_units/logging_string_view_format_2026-09-25.md`
+- `work_units/blit_canvas_2026-09-26.md`
+- `work_units/village_influence_2026-10-03.md`
+- `work_units/game_server_match_lifecycle_2026-10-03.md`
+- `work_units/lobby_system_2026-09-27.md`
+- `work_units/start_location_choice_2026-10-03.md`
+- `work_units/settlement_econ_tick_2026-10-03.md`
 
 Finished units are moved to `management/archive/` after a time.
 
 ## Development Phases
 
-High-level sequencing, not a scope commitment. Mark `[WIP]`/`[DONE]`/`[NEXT]`; keep finished
+High-level sequencing, not a scope commitment. Mark `[WIP]`/`[DONE]`; keep finished
 work to a line or two.
 
 1. **Architecture Skeleton** - thin end-to-end slice, no real game rules yet. Expected
@@ -78,25 +84,37 @@ work to a line or two.
    development. Backlog files in `management/backlog/` hold the details.
    - [DONE] Server resource discovery: platform call listing resource files, web server
      loading serveable files from the discovered list.
-   - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
-     change; TODO in web server). (`web_server_file_auto_reload`)
-   - Server dev mode: admin-authenticated dev messages (first action: reload resources).
-     (`server_dev_mode`)
-   - Build system revamp: off CMake, Game Common as a static library, server as a
-     hot-reloadable dynamic library. (`build_system_revamp`)
-   - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.
-     (`dev_iteration_loop`)
-   - String pass: proper string toolset used across the code; C strings only for
+   Sequence:
+   - [WIP] String pass (`string_pass`): proper string toolset (views, arena-backed
+     utilities, string builder, static arena) used across the code; C strings only for
      constant strings and direct platform calls that require them.
      - Log `string_view`s directly, as format and as a string param
        (`logging_string_view_format`).
      - Platform resource paths not null-terminated.
+   - Server dev mode: admin-authenticated dev messages (first action: reload resources).
+     (`server_dev_mode`)
+   - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
+     change; TODO in web server). (`web_server_file_auto_reload`)
+   - Build system revamp: off CMake, Game Common as a static library, server as a
+     hot-reloadable dynamic library. (`build_system_revamp`)
+   - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.
+     (`dev_iteration_loop`)
 
 3. **World & settlements simulation** through **12. Ops & hardening** - phases from the
    previous plan version (world/settlements, trade, war, diplomacy, victory & scoring,
    persistence & master server, ops & hardening) still look like roughly the right
    sequence, but haven't been re-specified against the architecture above yet. Revisit
    phase by phase in a future pass.
+   Phase 3 sequence:
+   - Blit canvas: earliest terrain bitmap generated client-side (wasm) from terrain
+     tiles, blitted efficiently to the page. (`blit_canvas`)
+   - Village influence over terrain: tile ownership coloring, dark border.
+     (`village_influence`)
+   - Game server match lifecycle: open lobby, placement phase, match start / end,
+     server stays up across matches. (`game_server_match_lifecycle`, with
+     `lobby_system`, `start_location_choice`)
+   - Standard settlement econ tick: population growth / shrinkage incl. land
+     exploitation from influence. (`settlement_econ_tick`)
    - [DONE] 2026-10-01/02: world entity storage, spawning, and rendering for
      settlements/armies/caravans.
      Real world-simulation mechanics (growth, caravan trade, combat) remain
