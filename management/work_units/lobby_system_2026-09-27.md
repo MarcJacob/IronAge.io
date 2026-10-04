@@ -4,17 +4,12 @@ Input date: 2026-09-27
 
 ## Item
 
-Lobby system: player list, ready-up, synchronized match start, replacing the
-2-connection headcount start.
+Player list, per-player ready state, synchronized match start, replacing the
+2-connection headcount start of slot 0.
 
-## Description
+Extension of the lobby -> start behavior in
+`game_server_match_lifecycle_2026-10-03.md`; kept as its own unit.
 
-Replace the current "match slot 0 starts once 2 clients are connected, no
-player list / ready-up" placeholder with a real lobby: visible player list,
-per-player ready state, and a synchronized match start once everyone's ready.
+## Next step
 
-## Why
-
-The headcount-based start is a temporary stand-in from the wire protocol v0
-bring-up phase - not a real lobby experience, and doesn't generalize past
-exactly 2 players.
+Not started.

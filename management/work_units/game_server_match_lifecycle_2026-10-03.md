@@ -18,7 +18,7 @@ ends, the slot is reclaimed.
   2-connection headcount start).
 - Match start: placement phase, see `start_location_choice_2026-10-03.md`.
 - Match end and slot reclaim: arena reset, clients returned to the lobby.
-- Folds in `lobby_system_2026-09-27.md` (player list, ready-up).
+- Extended by `lobby_system_2026-09-27.md` (player list, ready-up), a separate unit.
 
 ## Open design
 

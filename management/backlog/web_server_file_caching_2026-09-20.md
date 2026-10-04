@@ -4,17 +4,9 @@ Input date: 2026-09-20
 
 ## Item
 
-Web server: keep frequently-used files always loaded ("cached"), load
-rarely-requested or large ones on demand.
-
-## Description
-
-Split servable files into an always-preloaded tier (small, frequently
-requested) and an on-demand tier (large or rarely requested, loaded from disk
-per request instead of held in memory).
+Always-preloaded tier for small, frequently requested files; on-demand tier
+(read from disk per request) for large or rarely requested ones.
 
 ## Why
 
-Current web server preloads every servable file up front regardless of size
-or request frequency - fine today's small file set, but won't scale once
-larger or rarely-used assets are added.
+Every servable file is preloaded today; won't scale with larger assets.

@@ -4,20 +4,12 @@ Input date: 2026-09-27
 
 ## Item
 
-Catch-up / late join: tick bundles, per-client send cursor, `JOIN_REJECTED`,
-ring-buffer log eviction for long matches.
-
-## Description
-
-Let a client join (or reconnect to) a match already in progress and catch up
-via `SERVER_TICK_BUNDLE` (already declared in `game_messages.h` but unused),
-tracking a per-client send cursor into the match's tick history. Needs
-`JOIN_REJECTED` for when catch-up isn't possible, and ring-buffer eviction of
-old tick history so long-running matches don't grow that log unbounded.
+Join or reconnect mid-match: `SERVER_TICK_BUNDLE` (declared in `game_messages.h`,
+unused), per-client send cursor into tick history, `JOIN_REJECTED`, ring-buffer
+eviction of old history.
 
 ## Why
 
-Currently a client can only join at tick 0 - there's no way to join or
-reconnect mid-match. Builds on the per-match input log from
-`server_input_validation_recording_2026-09-27.md` and persistent client
-identity from `persistent_client_identity_2026-09-24.md`.
+Clients can only join at tick 0 today. Builds on
+`server_input_validation_recording_2026-09-27.md` (input log) and
+`persistent_client_identity_2026-09-24.md`.

@@ -4,30 +4,17 @@ Input date: 2026-09-20
 
 ## Item
 
-Platform call to list the files in a folder relative to resources, so the
-server discovers the files under `web_root` instead of taking a list in the
-init params.
+Platform call listing files in a folder relative to `GAME_SERVER_RESOURCES_DIR`,
+so the server discovers `web_root` files instead of taking a list in init params.
 
-## Description
+## Decisions
 
-Add a platform-level directory listing call (relative to
-`GAME_SERVER_RESOURCES_DIR`), so the web server can discover which files to
-preload under `web_root` on its own instead of being handed an explicit file
-list at init time.
+- `./` leading convention for resource-relative paths; `web_root` is `./<path>/`.
+- List call is recursive, with a trailing `*` search path.
+- Failures (truncation, missing folder, zero files) are fatal for now.
 
-## Why
+## Status
 
-Removes the need to manually keep an init-time file list in sync with
-whatever actually lives under `web_root` - currently a manual/error-prone
-step whenever a file is added or removed.
-
-## Outcome (2026-10-03)
-
-- Implemented by Marc, reviewed by a builder; review fixes applied.
-- Decisions: `./` leading convention for resource-relative paths; `web_root`
-  is `./<path>/`; list call is recursive with a trailing `*` search path;
-  failures (truncation, missing folder, zero files) are fatal for now.
-- Not done: lister rewrite (`win32_list_files_recursive` fixes), left for the
-  string pass (`string_pass_2026-10-03.md`). Live reload is a separate
-  unit (`web_server_file_auto_reload_2026-09-20.md`).
-- Complete. [DONE]
+Complete. [DONE]
+- Lister rewrite was left to the string pass (done).
+- Live reload: `web_server_file_auto_reload_2026-09-20.md`.

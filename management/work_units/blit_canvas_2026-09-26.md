@@ -1,20 +1,18 @@
-# Blit canvas for expensive-to-compute pixel content
+# Blit canvas
 
 Input date: 2026-09-26
 
 ## Item
 
-Blit canvas for expensive-to-compute pixel content; pure-JS rendering is
-sufficient for now.
+Second canvas layer written from WASM as a raw pixel buffer and blitted to
+screen, for content too expensive to draw through the JS 2D canvas API (e.g.
+terrain / fog of war).
 
-## Description
+## Decisions
 
-A second canvas layer, written to from WASM as a raw pixel buffer and blitted
-to screen, for content too expensive to draw tile-by-tile through the JS 2D
-canvas API (e.g. large-scale terrain/fog-of-war rendering).
+- Pure-JS rendering is sufficient for now; needed once a workload exceeds it.
+  Phase 3 terrain bitmap is the expected first use.
 
-## Why
+## Next step
 
-Deferred since project inception - current JS canvas rendering handles
-everything built so far. Only becomes necessary once a rendering workload
-shows up that JS canvas drawing can't handle at acceptable performance.
+Not started.
