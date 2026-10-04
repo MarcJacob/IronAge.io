@@ -14,7 +14,10 @@
 #include <signal.h>
 
 static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
-static const char* GAME_SERVER_RESOURCES_DIR = "./game_server_resources/";
+static ia_string_view GAME_SERVER_RESOURCES_DIR = {};   // Filled in from first parameter. 
+                                                        // @TODO(Marc): Just a temporary adaptation,
+                                                        // CMake was providing a full absolute path I'd rather not put in a script,
+                                                        // and it doesn't handle being a relative path very well right now.
 
 // Assertion functions.
 
@@ -229,7 +232,7 @@ void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia
 static ia_string win32_resource_path(const ia_string_view& rel_path, mem_arena& write_mem)
 {
 	// sizeof(DIR) counts the terminator, which stands in for the '/' after the folder. The terminator of the whole path then needs 1 more byte.
-	if (sizeof(GAME_SERVER_RESOURCES_DIR) + rel_path.length >= write_mem.mem_size - write_mem.allocated_count) return {};
+	if (GAME_SERVER_RESOURCES_DIR.length + rel_path.length >= write_mem.mem_size - write_mem.allocated_count) return {};
 
 	ia_string_builder pathBuilder(&write_mem);
 	pathBuilder.push_back(GAME_SERVER_RESOURCES_DIR);
@@ -244,11 +247,10 @@ static ia_string win32_resource_path(const ia_string_view& rel_path, mem_arena& 
 // Fatal if the path doesn't start with the resources folder, as the server must be able to ingest every resource file.
 static void win32_strip_resources_path(game_server_platform::resource_file_path& path)
 {
-	static constexpr ui32 GAME_SERVER_RESOURCES_PATH_LEN = sizeof(GAME_SERVER_RESOURCES_DIR);
-	ASSERT_MSG(path.length >= GAME_SERVER_RESOURCES_PATH_LEN && ia_string_starts_with(path, GAME_SERVER_RESOURCES_DIR),
+	ASSERT_MSG(path.length >= GAME_SERVER_RESOURCES_DIR.length && ia_string_starts_with(path, GAME_SERVER_RESOURCES_DIR),
 		"Resource file path \"%.*s\" is not located in the resources folder.", (int)path.length, path._str);
 
-	ia_string_chop_left(path, GAME_SERVER_RESOURCES_PATH_LEN - 2);
+	ia_string_chop_left(path, GAME_SERVER_RESOURCES_DIR.length - 1);
 	path._str[0] = '.';
 	path._str[1] = '/';
 }
@@ -476,8 +478,8 @@ void win32_platform_shutdown()
 
 // Main entry point.
 int main(int argc, char** argv)
-{
-	// Register console signal handling.
+{	
+    // Register console signal handling.
 	if (!SetConsoleCtrlHandler(win32_console_ctrl_handler, TRUE))
 	{
 		win32_logf("", LOG_WARNING, "Failed to register console control handler. Error code = %d", GetLastError());
@@ -489,6 +491,21 @@ int main(int argc, char** argv)
 	InitializeCriticalSection(&CS_WIN32_STDERR);
 
 	win32_log("", "Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
+
+    char RESOURCES_DIR_ABSOLUTE[MAX_PATH];
+    if (argc > 1)
+    {
+        GetFullPathName(argv[1], sizeof(RESOURCES_DIR_ABSOLUTE) - 1, RESOURCES_DIR_ABSOLUTE, NULL);
+    }
+    else
+    {
+        const char* RESOURCES_DIR_DEFAULT = "./game_server_resources/";
+
+        GetFullPathName(RESOURCES_DIR_DEFAULT, sizeof(RESOURCES_DIR_ABSOLUTE) - 1, RESOURCES_DIR_ABSOLUTE, NULL);
+    }
+    win32_logf("", "Server resources DIR path = %s", RESOURCES_DIR_ABSOLUTE); // @TODO(Marc): Check that directory exists.
+
+    GAME_SERVER_RESOURCES_DIR = RESOURCES_DIR_ABSOLUTE; // The buffer will outlive any usage of this variable.
 
 	// Initialize win32 platform structure.
 

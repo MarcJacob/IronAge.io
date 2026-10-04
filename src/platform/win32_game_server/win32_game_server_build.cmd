@@ -3,19 +3,32 @@
 
 @echo off
 
-goto :skip
 if not defined IRONAGE_DEV_SETUP (
     echo IronAge Dev Environment was not setup.
     exit /b 1
 )
 
-:skip
+setlocal
+
+set "SCRIPT_FOLDER=%~dp0"
+set "OUTPUT=%PROJECT_ROOT%build\Win32_Game_Server\win32_game_server.exe"
+
+if not "%~1"=="" (
+    set "OUTPUT_FOLDER=%~1"
+    echo Using build output path = %OUTPUT%
+) else echo Using default build output path = %OUTPUT%
+
 :: Run build.
+
+:: Include folders
+
+set "INCLUDES="
+set "INCLUDES=%INCLUDES% -I%PROJECT_ROOT%/include/"
 
 :: Compilation flags
 
-set "INCLUDES="
-set "INCLUDES=%INCLUDES% -I../../../include/"
+set "COMPILER_FLAGS="
+set "COMPILER_FLAGS=%COMPILER_FLAGS% --debug
 
 :: Warnings policy: all are enabled with some exceptions,
 :: all are considered errors.
@@ -29,4 +42,29 @@ set "WARNINGS=%WARNINGS% -Wno-missing-field-initializers" :: Disable missing fie
 set "LIBRARIES="
 set "LIBRARIES=%LIBRARIES% -lws2_32.lib"
 
-clang++ win32_game_server_main.cpp %INCLUDES% %WARNINGS% %LIBRARIES%
+:: Get output folder and create it if it doesn't exist.
+for %%i in ("%OUTPUT%") do set "OUTPUT_DIR=%%~dpi"
+if not exist %OUTPUT_DIR% mkdir %OUTPUT_DIR% || (
+    endlocal
+    exit /b 1
+)
+
+set "OUTPUT=-o%OUTPUT%"
+
+clang++ "%SCRIPT_FOLDER%win32_game_server_main.cpp"^
+%COMPILER_FLAGS%^
+%INCLUDES% ^
+%WARNINGS% ^
+%LIBRARIES% ^
+%OUTPUT%
+
+endLocal
+
+if errorLevel 1 (
+    echo Win32 Game Server build ended with errors.
+    exit /b %errorLevel%
+)
+
+echo Win32 Game Server build successful.
+
+exit /b 0
