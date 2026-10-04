@@ -507,7 +507,8 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 	// TEMP(Marc): Until we have a full working match slot lifecycle with join request messages from clients, just set slot 0 to lobby and redirect all players there.	
 	{
 		// .. Get parameters from test scenario.
-		newServer->match_slots[0].match_params = match_test_scenario_get_params(newServer->match_slots[0].slot_memory, (ui32)&newServer, 2);
+		newServer->match_slots[0].match_params = match_test_scenario_get_params(
+                newServer->match_slots[0].slot_memory, (ui32)(iptr)&newServer, 2);
 		game_server_open_lobby(*newServer, 0);
 	}
 

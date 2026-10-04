@@ -448,7 +448,7 @@ static ia_string ia_string_from_integer(mem_arena& memory, Numeric val, ui8 base
 // precision is the number of digits of the fractional part to print.
 // The string is returned in ia_string format.
 // TODO(Marc): Currently does not print digits in the fractional part, so clearly not very useful.
-static ia_string ia_string_from_float(mem_arena& memory, float val, ui8 precision)
+static ia_string ia_string_from_float(mem_arena& memory, float val /*, ui8 precision*/)
 {
 	ia_string_builder builder(&memory, 8); // Start builder with reasonable memory given the value and base.
 
@@ -471,7 +471,7 @@ static bool operator==(const ia_string_view& str_a, const char* str_b)
 {
 	ASSERT(str_b != nullptr);
 
-	for (int i = 0; i < str_a.length; i++)
+	for (ui32 i = 0; i < str_a.length; i++)
 	{
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
@@ -503,7 +503,7 @@ static bool operator==(const ia_string_view& str_a, const ia_string_view& str_b)
 {
 	if (str_a.length != str_b.length) return false;
 
-	for (int i = 0; i < str_a.length; i++)
+	for (ui32 i = 0; i < str_a.length; i++)
 	{
 		// TODO(Marc): Optimize with multi-byte comparison if string comparisons ever end up being a performance pain point,
 		// although I assume the compiler is probably already doing it for us.
@@ -520,7 +520,7 @@ static bool ia_string_equal(const ia_string_view& str, const ia_string_view& com
 	if (str.length != comp_str.length) return false;
 	if (case_sensitive) return str == comp_str;
 
-	for (int i = 0; i < str.length; i++)
+	for (ui32 i = 0; i < str.length; i++)
 	{
 		char str_char = str[i];
 		char comp_char = comp_str[i];
@@ -622,7 +622,7 @@ static ia_string_view ia_string_get_word(const ia_string_view& str, ui32 max_len
 			||	(nextChar >= 'A' && nextChar <= 'Z')
 			|| (nextChar >= '0' && nextChar <= '9');
 
-		for (int i = 0; !nextCharValid && i < specialCharCount; i++)
+		for (ui32 i = 0; !nextCharValid && i < specialCharCount; i++)
 		{
 			nextCharValid = (nextChar == allowed_special_chars[i]);
 		}

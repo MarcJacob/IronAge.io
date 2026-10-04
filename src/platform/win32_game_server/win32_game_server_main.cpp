@@ -14,6 +14,7 @@
 #include <signal.h>
 
 static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
+static const char* GAME_SERVER_RESOURCES_DIR = "./game_server_resources/";
 
 // Assertion functions.
 

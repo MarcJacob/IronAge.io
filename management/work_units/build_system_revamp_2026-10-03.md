@@ -14,19 +14,12 @@ Replace CMake with a simpler build and restructure outputs:
 
 ## Decisions
 
-- Reverses the earlier decision to defer the CMake -> .bat move.
-- Multi-file architecture change; outside the current phase sequencing.
-
-## Decision: full script-based build (2026-10-04)
-
-Drops CMake entirely; `.bat`/script per component, each calling its compiler
-directly. Reverses the earlier "defer CMake -> .bat move" note - simplicity
-won out over CMake's VS-integration and portability advantages.
-Follow-on, outside this work unit's scope: move primary editing to VIM, keep
-VS (or another tool) only as a debugger.
-
-## Decisions
-
+- Full script-based build: drops CMake entirely, `.cmd` script per component
+  calling its compiler directly. Reverses the earlier "defer CMake -> .bat
+  move" note - simplicity won out over CMake's VS-integration/portability.
+  Multi-file architecture change; outside the current phase sequencing.
+  Follow-on, outside this unit's scope: move primary editing to VIM, keep VS
+  (or another tool) only as a debugger.
 - GameCommon compiles once per target architecture (win32, wasm32 - not
   literally one object reused on both, different ABIs), as a static library.
 - Script layout: no build scripts in `game_common`, `game_server` or
@@ -67,12 +60,21 @@ VS (or another tool) only as a debugger.
 - No platform `#ifdef`s inside GameCommon - it doesn't special-case win32 vs
   wasm today, which is favorable for the split.
 
+## Progress
+
+- [WIP] Increment 1 (script-based build of today's two executables):
+  `scripts/` folder created, `dev_env_setup.cmd` in place (repo-root
+  detection, path variables). Plan laid out in `scripts/scripts.imprint.md`:
+  `*_build.cmd` per project, `deploy_web_client.cmd`, `full_rebuild.cmd`
+  (root driver, also triggers deploy), `full_ship.cmd` (release + archive,
+  not started).
+
 ## Next step
 
-Not started. Suggested increments:
-1. Replace CMake with `.bat` scripts producing today's same two executables
-   (no DLL/static-lib split yet) - proves the script build works.
-2. Split GameCommon into its own static library, linked into both.
+1. [WIP] Replace CMake with `.cmd` scripts producing today's same two
+   executables (no DLL/static-lib split yet) - proves the script build works.
+2. Split GameCommon compilation into each platform/app pair script per the
+   layout decided above.
 3. Turn the game server into a DLL exporting `game_server_init` / `_tick` /
    `_stop`; platform loads it via `LoadLibrary` + `GetProcAddress`.
 4. Platform-side hot-reload: detect new DLL, unload/reload, rebind the three

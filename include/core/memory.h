@@ -89,7 +89,7 @@ static inline mem_arena mem_arena_create(ui8* owned_mem, ui64 owned_mem_size)
 {
 	ASSERT(owned_mem != nullptr && owned_mem_size > 0);
 
-	mem_arena newArena = { 0 };
+	mem_arena newArena = {};
 	newArena.mem_start = owned_mem;
 	newArena.mem_size = owned_mem_size;
 	

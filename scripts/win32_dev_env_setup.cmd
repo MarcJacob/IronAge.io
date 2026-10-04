@@ -67,3 +67,5 @@ if not exist %SRC_GAME_COMMON% (
 )
 echo SRC_GAME_COMMON = "%SRC_GAME_COMMON%"
 
+:: Flag used in files that require the caller to have called this first.
+set "IRONAGE_DEV_SETUP=1"

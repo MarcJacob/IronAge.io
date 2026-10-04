@@ -36,7 +36,7 @@ Non-exhaustive list of guidelines for AI Agents:
 
 This is the IronAge.io project, an idea I just had that can be summarized as a variation on the Openfront.io browser game (https://openfront.io).
 
-Early design document can be found in design_doc.md
+Early design document can be found in management/design_doc.md
 
 Work management resources are available in the management folder, while code exists in src/ and include/.
 

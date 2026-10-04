@@ -24,3 +24,6 @@ CLAUDE.md
 # Ignore all .local.* files
 
 *.local.*
+
+# Ignore all folders starting with .
+/.*/
