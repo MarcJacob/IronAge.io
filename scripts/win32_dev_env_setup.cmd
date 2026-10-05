@@ -2,7 +2,6 @@
 :: Called by most, if not all, Win32 scripts in the project.
 
 @echo off
-:: @TODO
 
 echo Loading IronAge.IO project dev env variables.
 
@@ -43,12 +42,18 @@ if "~%1"=="-verbose" echo APP_BUILD_WIN32_GAME_SERVER = "%APP_BUILD_WIN32_GAME_S
 
 :: Web Game Client main WASM source file.
 
-set "APP_SRC_WEB_GAME_CLIENT=%PROJECT_ROOT%src\platform\web_game_client\wasm_client_main.cpp"
+set "APP_SRC_WEB_GAME_CLIENT=%PROJECT_ROOT%src\platform\web_game_client\web_game_client_main.cpp"
+set "APP_BUILD_WEB_GAME_CLIENT=%PROJECT_ROOT%src\platform\web_game_client\web_game_client_build.cmd"
 if not exist %APP_SRC_WEB_GAME_CLIENT% (
     echo Error: Web Game Client main source file not found !
     exit /b 6
 )
+if not exist %APP_BUILD_WEB_GAME_CLIENT% (
+    echo Error: Web Game Client build file not found !
+    exit /b 6
+)
 if "~%1"=="-verbose" echo APP_SRC_WEB_GAME_CLIENT = "%APP_SRC_WEB_GAME_CLIENT%"
+if "~%1"=="-verbose" echo APP_BUILD_WEB_GAME_CLIENT = "%APP_BUILD_WEB_GAME_CLIENT%"
 
 :: PLATFORM INDEPENDENT CODE - Pure libraries made to be added to one of the apps.
 :: Depending on the app they can be unity-compiled already in the source code, or expected
@@ -83,3 +88,5 @@ if "~%1"=="-verbose" echo SRC_GAME_COMMON = "%SRC_GAME_COMMON%"
 
 :: Flag used in files that require the caller to have called this first.
 set "IRONAGE_DEV_SETUP=1"
+
+echo IronAge.IO project dev environment setup successful.

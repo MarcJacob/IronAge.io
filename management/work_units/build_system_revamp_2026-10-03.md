@@ -62,20 +62,20 @@ Replace CMake with a simpler build and restructure outputs:
 
 ## Progress
 
-- [WIP] Increment 1 (script-based build of today's two executables):
-  `scripts/` folder created, `dev_env_setup.cmd` in place (repo-root
-  detection, path variables). Plan laid out in `scripts/scripts.imprint.md`:
-  `*_build.cmd` per project, `deploy_web_client.cmd`, `full_rebuild.cmd`
-  (root driver, also triggers deploy), `full_ship.cmd` (release + archive,
-  not started).
+- [DONE] Increment 1 (script-based build of today's two executables):
+  `scripts/` folder, `dev_env_setup.cmd`, `win32_build_all.cmd`,
+  `win32_launch_server.cmd`, `web_game_client_build.cmd`. CMake and
+  `deploy_web_client.bat` removed. Full build + iteration works for both
+  server and web client.
+  - Side change: game server resources folder path is now a launch
+    parameter (default: `game_server_resources/` under working directory).
+  - `full_ship.cmd` (deploy step) not started.
 
 ## Next step
 
-1. [WIP] Replace CMake with `.cmd` scripts producing today's same two
-   executables (no DLL/static-lib split yet) - proves the script build works.
-2. Split GameCommon compilation into each platform/app pair script per the
+1. Split GameCommon compilation into each platform/app pair script per the
    layout decided above.
-3. Turn the game server into a DLL exporting `game_server_init` / `_tick` /
+2. Turn the game server into a DLL exporting `game_server_init` / `_tick` /
    `_stop`; platform loads it via `LoadLibrary` + `GetProcAddress`.
-4. Platform-side hot-reload: detect new DLL, unload/reload, rebind the three
+3. Platform-side hot-reload: detect new DLL, unload/reload, rebind the three
    function pointers, keep passing the same memory block.

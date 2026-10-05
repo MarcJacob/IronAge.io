@@ -5,7 +5,7 @@
 // handed a pointer.
 
 #include "game_client/game_client_backend.h"
-#include "wasm_client.h"
+#include "web_game_client.h"
 
 static ui8 INPUT_EVENT_BUFFER[INPUT_EVENT_MAX_PAYLOAD_SIZE];
 

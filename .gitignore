@@ -4,9 +4,10 @@
 /build/
 /game_server_resources/
 
-# Web client TypeScript build: node_modules, and web/src/ (generated from front/*.ts).
+# Web client TypeScript build: node_modules, and generated sources. 
 /src/platform/web_game_client/front/node_modules/
-/src/platform/web_game_client/web/src/
+/src/platform/web_game_client/web/**/*.js
+/src/platform/web_game_client/web/**/*.wasm
 
 # Ignore AI Harness stuff.
 
@@ -17,6 +18,12 @@ CLAUDE.md
 
 /.kiro/
 
+# Ignore clangd stuff
+
+.clangd
+compile_flags.txt
+compile_commands.json
+
 # Ignore VS stuff.
 
 /.vs/
@@ -25,5 +32,6 @@ CLAUDE.md
 
 *.local.*
 
-# Ignore all folders starting with .
+# Ignore all folders starting with '.'
+
 /.*/

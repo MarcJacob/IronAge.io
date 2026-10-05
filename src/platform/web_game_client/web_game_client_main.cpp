@@ -6,14 +6,14 @@
 #include "core.h"
 
 #include "game_client/game_client_backend.h"
-#include "wasm_client.h"
+#include "web_game_client.h"
 
 // Unity-compile the client backend.
 #include "../../game_client/game_client_main.cpp"
 
 // Unity-compile components of the WASM platform code.
-#include "wasm_client_input.cpp"
-#include "wasm_client_query.cpp"
+#include "web_game_client_input.cpp"
+#include "web_game_client_query.cpp"
 
 web_client_state WEB_CLIENT;
 

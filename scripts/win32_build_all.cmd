@@ -1,6 +1,11 @@
 :: Complete build pass for the Win32 platform, including the Web Game Client.
 
-call "./win32_dev_env_setup.cmd"
+@echo off
+
+if not defined IRONAGE_DEV_SETUP (
+    call "%~dp0win32_dev_env_setup.cmd" || exit /b 1
+    set "PAUSE_ON_END=1"
+)
 
 setlocal
 
@@ -23,9 +28,21 @@ if errorLevel 1 (
     exit /b %errorLevel%
 )
 
-echo Full build successful.
+echo Building Web Game Client...
+call "%APP_BUILD_WEB_GAME_CLIENT%"
 
+if errorLevel 1 (
+    echo Error building Web Game Client. Aborting...
+    pause
+    endlocal
+    exit /b %errorLevel%
+)
+
+echo Full build successful.
 endlocal
 
-pause
+if "%PAUSE_ON_END%"=="1" (
+    pause
+)
+
 exit /b 0

@@ -3,7 +3,7 @@
 // at the offset / size given by the two getters below. On failure the buffer content is stale and must not be read.
 
 #include "game_client/game_client_backend.h"
-#include "wasm_client.h"
+#include "web_game_client.h"
 
 static entity_full_view ENTITY_VIEW_BUFFER;
 
