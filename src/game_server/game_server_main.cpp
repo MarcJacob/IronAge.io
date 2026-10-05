@@ -2,6 +2,7 @@
 // Must be linked or compiled into whatever platform layer is used.
 
 // Main "chaining" of game server platform and game server internals.
+#include "core/assert.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -432,9 +433,42 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
 	}
 }
 
-// BEGIN GAME SERVER MAIN FUNCTIONS
+// BEGIN GAME SERVER PROGRAM FUNCTIONS
 
-game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
+#define GAME_SERVER_PROGRAM_EXPORT extern "C" __declspec(dllexport)
+
+// Implementation of global assertion handler declared in assert.h
+// Set by whoever loads the program.
+_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR = nullptr;
+
+GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size);
+GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms platform_time_ms);
+GAME_SERVER_PROGRAM_EXPORT void game_server_stop(game_server& server);
+
+GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, _ASSERTION_HANDLER* assertion_handler);
+GAME_SERVER_PROGRAM_EXPORT void game_server_on_program_unloaded();
+
+// Called by platform anytime the server program is loaded, independently of whether the server
+// has been initialized before.
+GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, _ASSERTION_HANDLER* assertion_handler)
+{
+    _ASSERTION_HANDLER_PTR = assertion_handler;
+
+    // Fill in program.
+    program.init_func = game_server_init;
+    program.tick_func = game_server_tick;
+    program.stop_func = game_server_stop;
+
+    program.on_unload_func = game_server_on_program_unloaded;
+}
+
+// Called right before the server program is unloaded, independently of whether the server is actually shutting down / has shut down.
+GAME_SERVER_PROGRAM_EXPORT void game_server_on_program_unloaded()
+{
+    // ...
+}
+
+GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
 {
 	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
 
@@ -461,7 +495,7 @@ game_server* game_server_init(game_server_platform& platform, game_server_init_p
 
 	// Discover and pre-load all resource files.
 	static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
-	newServer->resource_files = newServer->main_memory.alloc<game_server_platform::resource_file_path>(MAX_RESOURCE_FILE_COUNT);
+	newServer->resource_files = newServer->main_memory.alloc<game_server_resource_path>(MAX_RESOURCE_FILE_COUNT);
 	ASSERT_MSG(newServer->resource_files != nullptr, "Not enough server memory for the resource files list.");
 	newServer->resource_file_count = platform.list_resource_files("*", newServer->resource_files, MAX_RESOURCE_FILE_COUNT);
 
@@ -555,7 +589,7 @@ void game_server_query_closed_connections(game_server& server)
 	}
 }
 
-void game_server_tick(game_server& server, time_ms platform_time_ms)
+GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms platform_time_ms)
 {
 	ASSERT(server.platform != nullptr);
 	game_server_platform& platform = *server.platform;
@@ -602,7 +636,7 @@ void game_server_tick(game_server& server, time_ms platform_time_ms)
 	}
 }
 
-void game_server_stop(game_server& server)
+GAME_SERVER_PROGRAM_EXPORT void game_server_stop(game_server& server)
 {
 	server.log(LOG_WARNING, "Shutting down...");
 	// TODO(Marc): Shut down work / checks to be done here (gracefully end connections / matches).

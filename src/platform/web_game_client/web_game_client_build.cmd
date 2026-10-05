@@ -12,16 +12,11 @@ if not defined IRONAGE_DEV_SETUP (
 setlocal
 
 set "SCRIPT_FOLDER=%~dp0"
-set "OUTPUT=%PROJECT_ROOT%build\Win32_Game_Server\game_server_resources\web_root\IronAgeIO_WebClient.wasm"
-
-if not "%~1"=="" (
-    set "OUTPUT=%~dp1"
-    echo Using build output path = %OUTPUT%
-) else echo Using default output path = %OUTPUT%
-
-:: Extract WASM file name and output folder separately.
-for %%i in ("%OUTPUT%") do set "OUTPUT_FILENAME=%%~ni"
-for %%i in ("%OUTPUT%") do set "OUTPUT_DIR=%%~dpi"
+:: First parameter = output folder (the .wasm keeps a fixed file name).
+set "OUTPUT_FILENAME=IronAgeIO_WebClient"
+set "OUTPUT_DIR=%PROJECT_ROOT%build\Win32_Game_Server\game_server_resources\web_root\"
+if not "%~1"=="" set "OUTPUT_DIR=%~f1\"
+echo Using output folder = %OUTPUT_DIR%
 
 :: Run build.
 
@@ -44,9 +39,9 @@ set "COMPILER_FLAGS=%COMPILER_FLAGS% -nostdinc -nostdlibinc"
 :: all are considered errors.
 :: TODO(Marc): Common flags defined in dev env setup ?
 set "WARNINGS=-W -Werror"
-set "WARNINGS=%WARNINGS% -Wno-varargs" :: Disable varargs
-set "WARNINGS=%WARNINGS% -Wno-unused-parameter" :: Disable unused parameter.
-set "WARNINGS=%WARNINGS% -Wno-missing-field-initializers" :: Disable missing field initializers.
+set "WARNINGS=%WARNINGS% -Wno-varargs"
+set "WARNINGS=%WARNINGS% -Wno-unused-parameter"
+set "WARNINGS=%WARNINGS% -Wno-missing-field-initializers"
 
 :: Link flags
 
@@ -93,7 +88,7 @@ if errorLevel 1 (
 
 :: Perform copy
 echo Deploying client files to %OUTPUT_DIR%...
-robocopy %SCRIPT_FOLDER%/web/ %OUTPUT_DIR% /R:1 /W:1 /E /MIR /NJH /NJS /NP /NDL
+robocopy "%SCRIPT_FOLDER%web" "%OUTPUT_DIR%." /R:1 /W:1 /E /NJH /NJS /NP /NDL
 
 if errorLevel 8 (
     echo Web Game Client copy deployment to %OUTPUT_DIR% failed with error %errorLevel%.

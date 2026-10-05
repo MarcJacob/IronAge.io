@@ -13,6 +13,18 @@ of the C / C++ standard library. Any and all functions it calls must exist in th
 
 Any system must work with cross-machine determinism in mind: avoid randommess, or using data specific to the local machine.
 
+## Compilation flags
+
+Each platform / app pair compiles its own copy of the common code, so every pair must use compatible flags.
+The goal is to decrease the likelihood of non-determinism across the machines on the network.
+Flags below are given for clang++, the compiler used so far. Another compiler needs the equivalents.
+
+- -ffp-contract=off : no fused multiply-add, which would change float results on some targets.
+- no -ffast-math / -Ofast : they allow reordering and approximating float operations.
+- -ffreestanding -fno-builtin : no implicit libc calls (memcpy, memset...), see the guidelines above.
+- -fno-exceptions -fno-rtti
+- -fsigned-char : pin char signedness.
+
 ## Match system
 
 The common code holds the implementation of the match system on a low level, integrating the passage of time into the match's world simulation

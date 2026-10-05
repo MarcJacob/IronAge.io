@@ -14,7 +14,7 @@ echo Launching game server...
 
 set "GAME_SERVER_EXE_PATH=%PROJECT_ROOT%build\Win32_Game_Server\win32_game_server.exe"
 if not "%~1"=="" (
-    set "GAME_SERVER_EXE_PATH=%~1%"
+    set "GAME_SERVER_EXE_PATH=%~1"
     echo Using Game Server executable path = %GAME_SERVER_EXE_PATH%
 ) else echo Using default Win32 Game Server path = %GAME_SERVER_EXE_PATH%
 
@@ -28,8 +28,8 @@ for %%i in ("%GAME_SERVER_EXE_PATH%") do set "GAME_SERVER_DIR=%%~dpi"
 set "GAME_SERVER_RESOURCES_DIR=%GAME_SERVER_DIR%game_server_resources\"
 if not "%~2"=="" (
     set "GAME_SERVER_RESOURCES_DIR=%~2"
-    echo Using Resources path = %GAME_SERVER_RESOURCES%
-) else echo Using default Resources path = %GAME_SERVER_RESOURCES_DIR%"
+    echo Using Resources path = %GAME_SERVER_RESOURCES_DIR%
+) else echo Using default Resources path = %GAME_SERVER_RESOURCES_DIR%
 
 call %GAME_SERVER_EXE_PATH% %GAME_SERVER_RESOURCES_DIR%
 

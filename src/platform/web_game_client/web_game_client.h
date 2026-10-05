@@ -4,6 +4,7 @@
 #define WASM_CLIENT_INCLUDED
 
 // Only functions marked WASM_EXPORT are exported (build uses -fvisibility=hidden).
+#include "core/assert.h"
 #define WASM_EXPORT extern "C" __attribute__((visibility("default")))
 
 #include "core.h"
@@ -16,6 +17,8 @@ class game_client;
 // web_client_start() explicitly zeroes this via `WEB_CLIENT = {};` instead.
 struct web_client_state
 {
+    _ASSERTION_HANDLER assertion_handler;
+
 	mem_arena backend_memory;
 	game_client* backend;
 };

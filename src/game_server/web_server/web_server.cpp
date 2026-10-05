@@ -139,7 +139,7 @@ void web_server_reload_files(game_server& server)
 	ui64 totalSize = 0;
 	for (ui32 fileIndex = 0; fileIndex < server.resource_file_count; fileIndex++)
 	{
-		const game_server_platform::resource_file_path& serverFile = server.resource_files[fileIndex];
+		const game_server_resource_path& serverFile = server.resource_files[fileIndex];
 		if (!ia_string_starts_with(serverFile, server.init_params.web_root))
 		{
 			// Not located in web root.

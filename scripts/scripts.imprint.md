@@ -9,18 +9,17 @@ or even ignore the scripts entirely and setup alternative building methods (like
 ## Win32
 
 Win32 scripts:
-- **dev_env_setup.cmd**     = Adds a set of useful environment variables to the caller, specifically various paths to source and build locations.
+- **win32_dev_env_setup.cmd** = Adds a set of useful environment variables to the caller, specifically various paths to source and build locations.
                                 - You can assume that any batch script shipped with this project will be calling this.
                                 - @TODO: Send a message to any running local game server to have itself be reloaded (game server library AND resource files).
 
-- **deploy_web_client.cmd** = Fetches the contents of the web root within the web client sources and copies them to the *game_server_resources* folder for discovery by an active game server instance.
-                                - The output resources can of course be moved anywhere else.
+- ***_build.cmd**           = rebuilds the corresponding project only. These live next to the app's sources in *src/platform/*, not in this folder.
+                                - Called by win32_build_all and other building scripts.
+                                - The web client build also deploys the web root into the *game_server_resources* folder for discovery by an active game server instance.
 
-- ***_build.cmd**           = rebuilds the corresponding project only.
-                                - Called by full_rebuild and other building scripts.
+- **win32_build_all.cmd**   = rebuilds every single application in the project. Good for a first time build or when you've made changes to common code.
 
-- **full_rebuild.cmd**      = rebuilds every single application in the project. Good for a first time build or when you've made changes to common code.
-                                - Also triggers deploy_web_client
+- **win32_launch_server.cmd** = launches the built game server, optionally with a given executable and resources folder.
 
 - **full_ship.cmd**         = @TODO Triggers a full rebuild in release mode and packs everything together neatly in an archive at <Build Folder>/Ship.
 

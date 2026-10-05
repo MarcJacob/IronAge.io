@@ -4,29 +4,20 @@
 #define GAME_SERVER_INCLUDED
 
 #include "core.h"
-#include "game_common/match/match.h"
+#include "game_server/game_server_init_params.h"
+#include "game_server/game_server_resources.h"
+
+#include "game_server/game_server_platform.h" // @TODO(Marc): Remove as soon as possible ! The logging needs to move to external functions, as predicted in an earlier comment...
 
 // Main symbols file for the game server implementation.
 // Defines the actual game server structure and internals.
 
+struct game_server_platform;
+
 // Forward-declare game server components.
 struct web_server;
-
 struct match_slot;
 struct game_server_clients_table;
-
-struct game_server_init_params
-{
-	ui8 match_slot_count;
-	ui16 max_client_count;
-
-	ia_string_view web_root; // Folder holding the web client bundle to serve over HTTP, relative to the platform resources folder. 
-									// Must be in the format "./<path>/" (leading "./" and trailing "/"), matching the paths returned by the platform's list_resource_files.
-
-	// Test mode parameters.
-	bool run_test_scenario; // If set to true, the server will start, run a match scenario on its first tick, dump it to a specific file then shutdown.
-	ia_string_view test_scenario_dump_filename; // If set to run test scenario, this indicates what file to dump the match data into once done.
-};
 
 struct game_server
 {
@@ -35,7 +26,7 @@ struct game_server
 	game_server_init_params init_params;
 	mem_arena main_memory; // Main memory allocator for the server.
 
-	game_server_platform::resource_file_path* resource_files;
+	game_server_resource_path* resource_files;
 	ui16 resource_file_count;
 
 	bool shutdown_triggered; // Should the server shutdown as soon as possible ?

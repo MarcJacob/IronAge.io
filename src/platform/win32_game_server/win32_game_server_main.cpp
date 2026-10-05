@@ -1,16 +1,22 @@
 ﻿// win32_main.cpp : Defines the entry point for the Game Server application on the Win32 platform.
+
+// Include Win32 common headers.
+#include "core/assert.h"
+#include "core/memory.h"
+#include "core/string.h"
+#include "game_server/game_server_resources.h"
 #include "win32_game_server_platform.h"
 
-// Unity-compile with the server code.
-#include "../../game_server/game_server_main.cpp"
+// Include Game Server abstract platform.
+#include "game_server/game_server_platform.h"
 
 // Unity-compile the rest of the platform code.
 #include "win32_game_server_net.cpp"
 
 // Include standard library stuff.
+#include <minwindef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <signal.h>
 
 static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
@@ -50,14 +56,18 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 // Break into the debugger right here if one is attached, then raise SIGABRT.
 void ASSERT_EXIT_FUNC()
 {
+    OutputDebugString("Assertion triggered. Ending program...");
 	__debugbreak();
 	raise(SIGABRT);
 }
 
+// Implementation of global assertion handler symbol declared in assert.h.
+_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR = nullptr;
+
 void win32_shutdown(game_server_platform& platform, int code)
 {
 	auto& win32Platform = (win32_platform&)platform;
-	win32Platform.app.exitRequested = true;
+	win32Platform.exitRequested = true;
 }
 
 static constexpr ui32 WIN32_LOG_BUFF_SIZE = 1024;
@@ -245,7 +255,7 @@ static ia_string win32_resource_path(const ia_string_view& rel_path, mem_arena& 
 
 // Strips the resource folder from a path, turning it from absolute to relative by replacing it with "./".
 // Fatal if the path doesn't start with the resources folder, as the server must be able to ingest every resource file.
-static void win32_strip_resources_path(game_server_platform::resource_file_path& path)
+static void win32_strip_resources_path(game_server_resource_path& path)
 {
 	ASSERT_MSG(path.length >= GAME_SERVER_RESOURCES_DIR.length && ia_string_starts_with(path, GAME_SERVER_RESOURCES_DIR),
 		"Resource file path \"%.*s\" is not located in the resources folder.", (int)path.length, path._str);
@@ -255,7 +265,7 @@ static void win32_strip_resources_path(game_server_platform::resource_file_path&
 	path._str[1] = '/';
 }
 
-ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size)
+ui64 win32_read_resource_file(game_server_platform& platform, const game_server_resource_path& path_relative, ui8* read_buff, ui64 buff_size)
 {
 	static_mem_arena<MAX_PATH + 1> pathMem;
 	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
@@ -286,7 +296,7 @@ ui64 win32_read_resource_file(game_server_platform& platform, const game_server_
 	return readCount == (size_t)fileSize ? (ui64)fileSize : 0;
 }
 
-bool win32_write_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, const ui8* data, ui64 size)
+bool win32_write_resource_file(game_server_platform& platform, const game_server_resource_path& path_relative, const ui8* data, ui64 size)
 {
 	static_mem_arena<MAX_PATH + 1> pathMem;
 	ia_string absolutePath = win32_resource_path(path_relative, pathMem);
@@ -306,15 +316,15 @@ bool win32_write_resource_file(game_server_platform& platform, const game_server
 	return written == size;
 }
 
-ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_platform::resource_file_path* out_paths, ui8 start_index, ui8 max_index)
+ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_resource_path* out_paths, ui8 start_index, ui8 max_index)
 {
 	ASSERT(out_paths != nullptr);
 
 	if (start_index >= max_index) return 0;
 
 	// A path too long to be listed is fatal, as the server must be able to ingest every resource file.
-	ASSERT_MSG(search_path.length < game_server_platform::RESOURCE_FILE_PATH_MAX_LEN,
-		"Resource search path \"%.*s\" is too long (max is %d).", (int)search_path.length, search_path.view_str, (int)game_server_platform::RESOURCE_FILE_PATH_MAX_LEN - 1);
+	ASSERT_MSG(search_path.length < GAME_SERVER_RESOURCE_PATH_MAX_LEN,
+		"Resource search path \"%.*s\" is too long (max is %d).", (int)search_path.length, search_path.view_str, (int)GAME_SERVER_RESOURCE_PATH_MAX_LEN - 1);
 
 	// Only accept paths that end with a wildcard.
 	if (search_path.is_empty() || !ia_string_ends_with(search_path, "*"))
@@ -322,7 +332,7 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 		return 0;
 	}
 
-	char path[game_server_platform::RESOURCE_FILE_PATH_MAX_LEN];
+	char path[GAME_SERVER_RESOURCE_PATH_MAX_LEN];
 	memcpy(path, search_path.view_str, search_path.length);
 	path[search_path.length] = '\0';
 
@@ -350,7 +360,7 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 		// Determine if the next file found is a directory or a file. Call recursively on sub-directories.
 		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 		{
-			game_server_platform::resource_file_path folderPath = {};
+			game_server_resource_path folderPath = {};
 			ia_string_append(folderPath, folderPart, true);
 			ia_string_append(folderPath, fileName, true);
 			ia_string_append(folderPath, "/*", true);
@@ -379,7 +389,7 @@ ui8 win32_list_files_recursive(const ia_string_view& search_path, game_server_pl
 	return index - start_index;
 }
 
-ui16 win32_list_resource_files(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, game_server_platform::resource_file_path* out_paths, ui8 max_path_count)
+ui16 win32_list_resource_files(game_server_platform& platform, const game_server_resource_path& path_relative, game_server_resource_path* out_paths, ui8 max_path_count)
 {
 	// TODO(Marc): Support for long paths.
 
@@ -403,6 +413,7 @@ ui16 win32_list_resource_files(game_server_platform& platform, const game_server
 // BEGIN PROGRAM ENTRY
 
 static win32_platform WIN32_PLATFORM;  // Static memory storage of the main platform object.
+static game_server_program SERVER_PROGRAM; // Static memory storage of the server program running on this platform.
 
 // Program / Console signal handler.
 static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
@@ -456,10 +467,10 @@ void win32_platform_shutdown()
 {
 	ASSERT(WIN32_PLATFORM.initialized);
 
-	if (WIN32_PLATFORM.app.gameServer != nullptr)
+	if (SERVER_PROGRAM.is_running)
 	{
 		win32_log("", "Shutting down Game Server.");
-		game_server_stop(*WIN32_PLATFORM.app.gameServer);
+		SERVER_PROGRAM.stop();
 	}
 
 	win32_log("", "Platform shutting down...");
@@ -479,12 +490,18 @@ void win32_platform_shutdown()
 // Main entry point.
 int main(int argc, char** argv)
 {	
+    // Declare & Build the Assertions Handler.
+    _ASSERTION_HANDLER WIN32_ASSERTION_HANDLER = {
+        ASSERT_EXIT_FUNC,
+        ASSERT_MSG_FUNC,
+    };
+    _ASSERTION_HANDLER_PTR = &WIN32_ASSERTION_HANDLER;
+
     // Register console signal handling.
 	if (!SetConsoleCtrlHandler(win32_console_ctrl_handler, TRUE))
 	{
 		win32_logf("", LOG_WARNING, "Failed to register console control handler. Error code = %d", GetLastError());
 	}
-
 
 	// Init logging critical sections.
 	InitializeCriticalSection(&CS_WIN32_STDOUT);
@@ -529,10 +546,39 @@ int main(int argc, char** argv)
 		.test_scenario_dump_filename = "snapshot_native.bin",
 	};
 
-	win32_logf("", "Initializing Game Server...\n");
+	win32_logf("Win32", "Initializing Game Server...\n");
 
-	WIN32_PLATFORM.app.gameServer = game_server_init(WIN32_PLATFORM, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
-	if (WIN32_PLATFORM.app.gameServer == nullptr)
+    // Load Game Server dll. It is expected to live next to the executable.
+    DWORD execFileNameLen = GetModuleFileName(NULL, WIN32_PLATFORM.exec_filename, sizeof(WIN32_PLATFORM.exec_filename));
+    ASSERT(execFileNameLen > 0);
+
+    ia_string_view modulePath = WIN32_PLATFORM.exec_filename;
+    ia_string_chop_right_until(modulePath, '\\', false);
+
+    static_mem_arena<512> scratchMem;
+    ia_string_builder modulePathBuilder(&scratchMem);
+
+    modulePathBuilder.push_back(modulePath);
+
+    modulePathBuilder.push_back('\0');
+    win32_logf("Win32", "Loading Game Server code from folder %s.", modulePathBuilder.string._str);
+    modulePathBuilder.chop_right(1);
+
+    modulePathBuilder.push_back("game_server.dll");
+    modulePathBuilder.push_back('\0');
+
+    win32_logf("Win32", "Loading Game Server code from dll %s.", modulePathBuilder.string._str);
+    HMODULE serverModule = LoadLibrary(modulePathBuilder.string._str);
+    ASSERT_MSG(serverModule != NULL, "Failed to load Game Server DLL module.");
+
+    // Provide the Server Program structure with the load function and let it do the rest.
+    SERVER_PROGRAM.load_program_func = (game_server_program::load_program_fn)GetProcAddress(serverModule, "game_server_load_program");
+    ASSERT_MSG(SERVER_PROGRAM.load_program_func != nullptr, "Failed to load game_server_load_program from Game Server DLL.");
+
+    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR);
+
+	SERVER_PROGRAM.is_running = SERVER_PROGRAM.init(WIN32_PLATFORM, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
+	if (!SERVER_PROGRAM.is_running)
 	{
 		win32_log("", LOG_TYPE::LOG_ERROR, "Failed to initialize Game Server. Aborting...");
 		win32_platform_shutdown();
@@ -552,7 +598,7 @@ int main(int argc, char** argv)
 
 	ui64 start_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart);
 
-	while (!WIN32_PLATFORM.app.exitRequested)
+	while (!WIN32_PLATFORM.exitRequested)
 	{
 		// Run main update of Net component.
 		if (WIN32_PLATFORM.net_component->active)
@@ -572,7 +618,7 @@ int main(int argc, char** argv)
 		// Measure time since game server initialization in milliseconds.
 		ui64 time_ms = (current_counter.QuadPart * 1000 / counter_frequency.QuadPart) - start_ms;
 
-		game_server_tick(*WIN32_PLATFORM.app.gameServer, time_ms);
+		SERVER_PROGRAM.tick(time_ms);
 	}
 
 	win32_platform_shutdown();

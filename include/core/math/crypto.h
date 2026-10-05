@@ -39,9 +39,6 @@ struct sha1_result
 
 // Performs a SHA-1 hash on the passed arbitrary data.
 // Data == nullptr or input_size == 0 return the default SHA-1 value.
-static sha1_result ia_sha1(const ui8* data, ui64 data_size);
-// Define HASH_FUNC_DEFAULT_IMPLEMENTATION to get the default implementation of hash functions, or write your own.
-#ifdef HASH_FUNC_DEFAULT_IMPLEMENTATION
 static sha1_result ia_sha1(const ui8* data, ui64 data_size)
 {
 	ASSERT(data_size < (~(ui64)0) / 8); // Make sure data size is lower than an 8th of the max 64 bits value. This should be plenty for any real data.
@@ -176,7 +173,6 @@ static sha1_result ia_sha1(const ui8* data, ui64 data_size)
 
 	return res;
 }
-#endif
 
 // Encodes arbitrary data to base 64 characters which are placed in the out buffer.
 // Returns number of characters returned.
@@ -264,6 +260,5 @@ static ui32 ia_base64_encode(const ui8* input, ui32 input_size, char* out, ui32 
 
 	return segCount * 4;
 }
-
 
 #endif // CRYPTO_INCLUDED

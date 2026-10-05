@@ -177,53 +177,85 @@ static void ia_string_replace(ia_string& string, const ia_string_view& src_strin
 }
 
 // Removes the specified number of characters from the string, starting from the first.
-static void ia_string_chop_left(ia_string& string, ui32 chop_count)
+// Returns number of chopped characters.
+static ui32 ia_string_chop_left(ia_string& string, ui32 chop_count)
 {
 	ui32 chopCount = ia_min(chop_count, string.length);
 	ia_memcpy(string._str, string._str + chopCount, string.length - chopCount);
 	string.length -= chopCount;
+
+    return chopCount;
 }
 
 // "Workaround" for chop right logic to also work on static strings.
 template<ui32 Capacity>
-static void ia_string_chop_left(ia_static_string<Capacity>& string, ui32 chop_count)
+static ui32 ia_string_chop_left(ia_static_string<Capacity>& string, ui32 chop_count)
 {
 	ia_string choppable = string;
-	ia_string_chop_left(choppable, chop_count);
+	ui32 res = ia_string_chop_left(choppable, chop_count);
 
 	string.length = choppable.length;
+    return res;
 }
 
 // Removes the specified number of characters from the string view, starting from the last.
-static void ia_string_chop_right(ia_string& string, ui32 chop_count)
+static ui32 ia_string_chop_right(ia_string& string, ui32 chop_count)
 {
 	ui32 chopCount = ia_min(chop_count, string.length);
 	string.length -= chopCount;
+
+    return chopCount;
 }
 
 // "Workaround" for chop right logic to also work on static strings.
 template<ui32 Capacity>
-static void ia_string_chop_right(ia_static_string<Capacity>& string, ui32 chop_count)
+static ui32 ia_string_chop_right(ia_static_string<Capacity>& string, ui32 chop_count)
 {
 	ia_string choppable = string;
-	ia_string_chop_right(choppable, chop_count);
+	ui32 res = ia_string_chop_right(choppable, chop_count);
 
 	string.length = choppable.length;
+
+    return res;
 }
 
 // Removes the specified number of characters from the string view, starting from the first.
-static void ia_string_chop_left(ia_string_view& view, ui32 chop_count)
+static ui32 ia_string_chop_left(ia_string_view& view, ui32 chop_count)
 {
 	ui32 chopCount = ia_min(chop_count, view.length);
 	view.view_str += chopCount;
 	view.length -= chopCount;
+
+    return chopCount;
+}
+
+// Chops left on the string view until the specified character is encountered.
+// If the character is not present in the string, no characters are chopped.
+static ui32 ia_string_chop_left_until(ia_string_view& view, char until_char, bool chop_char = true)
+{
+    ui32 index = 0;
+    while(index < view.length && view[index] != until_char) index++;
+
+    return ia_string_chop_left(view, index + chop_char);
 }
 
 // Removes the specified number of characters from the string view, starting from the last.
-static void ia_string_chop_right(ia_string_view& view, ui32 chop_count)
+static ui32 ia_string_chop_right(ia_string_view& view, ui32 chop_count)
 {
 	ui32 chopCount = ia_min(chop_count, view.length);
 	view.length -= chopCount;
+
+    return chopCount;
+}
+
+// Chops right on the string view until the specified character is encountered.
+// If the character is not present in the string, no characters are chopped.
+static ui32 ia_string_chop_right_until(ia_string_view& view, char until_char, bool chop_char = true)
+{
+    ui32 index = view.length - 1;
+    while(index > 0 && view[index] != until_char) index--;
+
+    return ia_string_chop_right(view, view.length - 1 - index + chop_char);
 }
 
 // Adds new characters to an existing string. The string must have the required capacity.

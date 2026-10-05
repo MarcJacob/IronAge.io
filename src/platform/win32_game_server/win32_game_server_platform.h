@@ -22,17 +22,12 @@ struct win32_net_component;
 // Win32-specific extension of the game server platform. Anything available in there is available to all platform functions handed to the server.
 struct win32_platform : public game_server_platform
 {
-	bool initialized;
+	bool initialized; 
+    volatile bool exitRequested; // Set to true when the application wants to cleanly exit.
 
-	// Shared global application state.
-	struct app_state
-	{
-		// (Forward-declared) Pointer to game server structure.
-		game_server* gameServer;
+    char exec_filename[512];
 
-		// Set to true when the application wants to cleanly exit.
-		volatile bool exitRequested;
-	} app;
+    // Components
 
 	win32_net_component* net_component; // Component in charge of managing & routing all network activity.
 };
@@ -60,12 +55,12 @@ void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const ia_
 void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia_string_view& msg, ...);
 
 // Reads in an entire file from a resources-folder-relative path, or gets its size if read_buff is null.
-ui64 win32_read_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, ui8* read_buff, ui64 buff_size);
+ui64 win32_read_resource_file(game_server_platform& platform, const game_server_resource_path& path_relative, ui8* read_buff, ui64 buff_size);
 // Write a file from a resources-folder-relative path, overwriting whatever was there if anything.
-bool win32_write_resource_file(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, const ui8* data, ui64 size);
+bool win32_write_resource_file(game_server_platform& platform, const game_server_resource_path& path_relative, const ui8* data, ui64 size);
 // Lists all files under a resources-folder-relative path recursively.
 // The path must end with a wildcard search character.
-ui16 win32_list_resource_files(game_server_platform& platform, const game_server_platform::resource_file_path& path_relative, game_server_platform::resource_file_path* out_paths, ui8 max_paths);
+ui16 win32_list_resource_files(game_server_platform& platform, const game_server_resource_path& path_relative, game_server_resource_path* out_paths, ui8 max_paths);
 
 // Networking
 

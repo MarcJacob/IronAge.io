@@ -5,6 +5,7 @@
 
 #include "core.h"
 
+#include "core/assert.h"
 #include "game_client/game_client_backend.h"
 #include "web_game_client.h"
 
@@ -16,13 +17,23 @@
 #include "web_game_client_query.cpp"
 
 web_client_state WEB_CLIENT;
+_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;
 
 static constexpr ui64 CLIENT_MEMORY_SIZE = MiB(128);
 ui8 CLIENT_MEMORY_BLOCK[CLIENT_MEMORY_SIZE];
 
+
+// Platform implementation of the core assertion functions: no way to report a message here, so just trap.
+void ASSERT_EXIT_FUNC() { __builtin_trap(); }
+void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...) { __builtin_trap(); }
 WASM_EXPORT bool web_client_start()
 {
 	WEB_CLIENT = {};
+
+    // Define assertion handler.
+    WEB_CLIENT.assertion_handler.ASSERT_EXIT_FUNC = ASSERT_EXIT_FUNC;
+    WEB_CLIENT.assertion_handler.ASSERT_MSG_FUNC = ASSERT_MSG_FUNC;
+    _ASSERTION_HANDLER_PTR = &WEB_CLIENT.assertion_handler;
 
 	// Initialize backend.
 	WEB_CLIENT.backend_memory = mem_arena_create(CLIENT_MEMORY_BLOCK, CLIENT_MEMORY_SIZE);
@@ -79,7 +90,3 @@ WASM_EXPORT ui32 client_get_net_output_message_size()
 	ASSERT(WEB_CLIENT.backend != nullptr);
 	return game_client_get_net_msg_output_size(*WEB_CLIENT.backend);
 }
-
-// Platform implementation of the core assertion functions: no way to report a message here, so just trap.
-void ASSERT_EXIT_FUNC() { __builtin_trap(); }
-void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...) { __builtin_trap(); }

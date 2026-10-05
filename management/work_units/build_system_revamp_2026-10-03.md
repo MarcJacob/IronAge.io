@@ -34,6 +34,8 @@ Replace CMake with a simpler build and restructure outputs:
   documenting the required flags, a top-level build README, and/or a helper
   script in `game_common` that returns default flags for a given
   compiler/linker (returns config only, builds nothing - stays pure).
+  Decided: imprint in `game_common` documenting the required flags (no
+  helper script).
 - Root: one driver script builds every platform/app pair + deploy + (later)
   live-reload notify. A `build_env.bat` locates the repo root (via `.git`)
   and exports shared path/output-root env vars; per-call specifics (toolchain
@@ -71,11 +73,40 @@ Replace CMake with a simpler build and restructure outputs:
     parameter (default: `game_server_resources/` under working directory).
   - `full_ship.cmd` (deploy step) not started.
 
+- [DONE] Game server DLL: build script, platform loads it and runs
+  (no hot-reload yet). GameCommon compiled in the DLL; imprint flags not yet
+  applied (see Next step 0).
+  - Assertions: `assertion_handler` struct of function pointers in
+    `assert.h` + global pointer; macros call through it (null-check fallback
+    to trap). Each module fills it in; server does so in `OnLoad` (called by
+    the platform on every load). Handler functions live in platform code.
+
 ## Next step
 
-1. Split GameCommon compilation into each platform/app pair script per the
-   layout decided above.
-2. Turn the game server into a DLL exporting `game_server_init` / `_tick` /
-   `_stop`; platform loads it via `LoadLibrary` + `GetProcAddress`.
-3. Platform-side hot-reload: detect new DLL, unload/reload, rebind the three
-   function pointers, keep passing the same memory block.
+0. Fix review findings (DLL split review done):
+   - DLL build script lacks imprint flags (`-ffp-contract=off`,
+     `-ffreestanding`, `-fno-builtin`, `-fsigned-char`); web script lacks
+     `-ffp-contract=off`, `-fno-builtin`, `-fsigned-char`.
+   - `assert.h`: no null-handler check (despite decision above); pointer
+     declared `extern` then `static` in modules; `game_server_platform.h`
+     `on_unload` sets `_is_loaded = true`.
+   - [DONE] Build script bugs (DLL failure propagation, `OUTPUT_FOLDER` arg
+     now a real output folder, web script filename/robocopy, launch/env
+     script typos, `scripts.imprint.md` list). Awaiting hand check.
+   - Remaining script issues: missing closing quote in
+     `win32_game_server_build.cmd:36` (`COMPILER_FLAGS ... --debug`);
+     unquoted `if not exist %OUTPUT_DIR%` breaks on paths with spaces.
+   - Stale outputs to delete: `web/game_client.wasm`,
+     `build/web_client_debug/`.
+   - Pointers into DLL stored in the block (dangle on reload): client
+     send/peek/consume funcs (`game_server_clients.h`), disconnect handlers
+     table, `http_file.content_type` view of DLL `.rdata`.
+   - Naming of `_ASSERTION_HANDLER` struct/members vs snake_case convention.
+1. Platform-side hot-reload: detect new DLL (recommended: poll timestamp),
+   copy before load, unload/reload, rebind the three function pointers (and
+   `OnLoad`), keep passing the same memory block. Re-init fallback on layout
+   change left out of this step (not yet decided).
+   Open: DLL copy/PDB naming scheme (build to fixed name, platform copies to
+   numbered name, unique PDB); fix for dangling pointers (re-register in
+   `OnLoad` vs indices/enums); layout-change detection.
+2. Audit web client build script flags against the `game_common` imprint.

@@ -16,11 +16,11 @@ exit /b 0
 :: Set major path variables.
 
 set "PROJECT_ROOT=%~dp0..\"
-if "~%1"=="-verbose" echo PROJECT_ROOT = "%PROJECT_ROOT%"
+if "%~1"=="-verbose" echo PROJECT_ROOT = "%PROJECT_ROOT%"
 call :clean_path PROJECT_ROOT %PROJECT_ROOT%
 
 set "SCRIPTS_DIR=%PROJECT_ROOT%Scripts\"
-if "~%1"=="-verbose" echo SCRIPTS_DIR = "%SCRIPTS_DIR%"
+if "%~1"=="-verbose" echo SCRIPTS_DIR = "%SCRIPTS_DIR%"
 
 :: APPS - Base main files to compile to get a specific app on a specific platform.
 :: Check specific app requirements to see what they need to be linked with and when.
@@ -37,8 +37,8 @@ if not exist %APP_BUILD_WIN32_GAME_SERVER% (
     echo Error: Win32 Game Server build file not found !
     exit /b 6
 )
-if "~%1"=="-verbose" echo APP_SRC_WIN32_GAME_SERVER = "%APP_SRC_WIN32_GAME_SERVER%"
-if "~%1"=="-verbose" echo APP_BUILD_WIN32_GAME_SERVER = "%APP_BUILD_WIN32_GAME_SERVER%"
+if "%~1"=="-verbose" echo APP_SRC_WIN32_GAME_SERVER = "%APP_SRC_WIN32_GAME_SERVER%"
+if "%~1"=="-verbose" echo APP_BUILD_WIN32_GAME_SERVER = "%APP_BUILD_WIN32_GAME_SERVER%"
 
 :: Web Game Client main WASM source file.
 
@@ -52,8 +52,8 @@ if not exist %APP_BUILD_WEB_GAME_CLIENT% (
     echo Error: Web Game Client build file not found !
     exit /b 6
 )
-if "~%1"=="-verbose" echo APP_SRC_WEB_GAME_CLIENT = "%APP_SRC_WEB_GAME_CLIENT%"
-if "~%1"=="-verbose" echo APP_BUILD_WEB_GAME_CLIENT = "%APP_BUILD_WEB_GAME_CLIENT%"
+if "%~1"=="-verbose" echo APP_SRC_WEB_GAME_CLIENT = "%APP_SRC_WEB_GAME_CLIENT%"
+if "%~1"=="-verbose" echo APP_BUILD_WEB_GAME_CLIENT = "%APP_BUILD_WEB_GAME_CLIENT%"
 
 :: PLATFORM INDEPENDENT CODE - Pure libraries made to be added to one of the apps.
 :: Depending on the app they can be unity-compiled already in the source code, or expected
@@ -66,7 +66,7 @@ if not exist %SRC_GAME_SERVER_COMMON% (
     echo Error: Game Server Common main source file not found !
     exit /b 6
 )
-if "~%1"=="-verbose" echo SRC_GAME_SERVER_COMMON = "%SRC_GAME_SERVER_COMMON%"
+if "%~1"=="-verbose" echo SRC_GAME_SERVER_COMMON = "%SRC_GAME_SERVER_COMMON%"
 
 :: Game Client backend platform independent code main source file.
 
@@ -75,7 +75,7 @@ if not exist %SRC_GAME_CLIENT_COMMON% (
     echo Error: Game Client Common main source file not found !
     exit /b 6
 )
-if "~%1"=="-verbose" echo SRC_GAME_CLIENT_COMMON = "%SRC_GAME_CLIENT_COMMON%"
+if "%~1"=="-verbose" echo SRC_GAME_CLIENT_COMMON = "%SRC_GAME_CLIENT_COMMON%"
 
 :: Game Common main source file (required by all game apps).
 
@@ -84,7 +84,7 @@ if not exist %SRC_GAME_COMMON% (
     echo Error: Game Common main source file not found !
     exit /b 6
 )
-if "~%1"=="-verbose" echo SRC_GAME_COMMON = "%SRC_GAME_COMMON%"
+if "%~1"=="-verbose" echo SRC_GAME_COMMON = "%SRC_GAME_COMMON%"
 
 :: Flag used in files that require the caller to have called this first.
 set "IRONAGE_DEV_SETUP=1"

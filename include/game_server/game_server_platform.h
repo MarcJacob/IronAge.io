@@ -1,10 +1,14 @@
 // Core include for the Game Server Main Lifecycle code.
 // Contains essential game server symbols and lifecycle functions for use by the platform to start and maintain a server app.
 
-#include "core.h"
 
 #ifndef GAME_SERVER_PLATFORM_INCLUDED
 #define GAME_SERVER_PLATFORM_INCLUDED
+
+#include "core.h"
+#include "core/assert.h"
+#include "game_server_init_params.h"
+#include "game_server_resources.h"
 
 // Platform capabilities handed to the server code so it can, non-exhaustively:
 // - Log messages
@@ -109,62 +113,120 @@ struct game_server_platform
 
 	// PLATFORM FILES
 
-	static constexpr ui16 RESOURCE_FILE_PATH_MAX_LEN = 256;
-	using resource_file_path = ia_static_string<RESOURCE_FILE_PATH_MAX_LEN>; // Simple container for a reasonably-sized resource file path. Sized, NOT necessarily null-terminated.
-
-	typedef ui64 (*read_resource_file_fn)(game_server_platform& platform, const resource_file_path& path, ui8* read_buff, ui64 buff_size);
+	typedef ui64 (*read_resource_file_fn)(game_server_platform& platform, const game_server_resource_path& path, ui8* read_buff, ui64 buff_size);
 	// Platform function: Synchronously reads / loads in an entire file's contents into the target buffer, if it is large enough.
 	// If read_buff is null, performs a "dry run" and returns the file size.
 	// Returns the number of bytes read, 0 if the file does not exist / is inaccessible, or the buffer is too small.
 	// The file is located in the "server resources storage", whatever that means for the host platform.
 	read_resource_file_fn read_resource_file_func;
-	ui64 read_resource_file(const resource_file_path& path, ui8* read_buff, ui64 buff_size) {
+	ui64 read_resource_file(const game_server_resource_path& path, ui8* read_buff, ui64 buff_size) {
 		return read_resource_file_func(*this, path, read_buff, buff_size);
 	}
 
-	typedef bool (*write_resource_file_fn)(game_server_platform& platform, const resource_file_path& path, const ui8* data, ui64 size);
+	typedef bool (*write_resource_file_fn)(game_server_platform& platform, const game_server_resource_path& path, const ui8* data, ui64 size);
 	// Platform function: Synchronously writes the buffer to a file with the given name, creating it or overwriting it.
 	// Returns whether the write was successful.
 	// The file is located in the "server resources storage", whatever that means for the host platform.
 	write_resource_file_fn write_resource_file_func;
-	bool write_resource_file(const resource_file_path& path, const ui8* data, ui64 size) {
+	bool write_resource_file(const game_server_resource_path& path, const ui8* data, ui64 size) {
 		return write_resource_file_func(*this, path, data, size);
 	}
 
-	typedef ui16 (*list_resource_files_fn)(game_server_platform& platform, const resource_file_path& path_relative, resource_file_path* out_paths, ui8 max_path_count);
-	// Platform function: Synchronously searches for files under the given resource-relative path, and writes them as a list of resource_file_path in the target memory.
+	typedef ui16 (*list_resource_files_fn)(game_server_platform& platform, const game_server_resource_path& path_relative, game_server_resource_path* out_paths, ui8 max_path_count);
+	// Platform function: Synchronously searches for files under the given resource-relative path, and writes them as a list of game_server_resource_path in the target memory.
 	// Returns the number of files found.
 	// The path is relative to the "server resources storage", whatever that means for the host platform, and must end with a wildcard search character (e.g. "*").
 	// The search is recursive. Output paths are relative to the resources storage, in the form "./<folder>/<file>".
 	// Files and folders whose name starts with a dot are skipped.
-	// Paths are limited to RESOURCE_FILE_PATH_MAX_LEN - 1 characters (one byte is kept for the null terminator).
+	// Paths are limited to game_server_resource_path_MAX_LEN - 1 characters (one byte is kept for the null terminator).
 	list_resource_files_fn list_resource_files_func;
-	ui16 list_resource_files(const resource_file_path& path_relative, resource_file_path* out_paths, ui8 max_path_count) {
+	ui16 list_resource_files(const game_server_resource_path& path_relative, game_server_resource_path* out_paths, ui8 max_path_count) {
 		return list_resource_files_func(*this, path_relative, out_paths, max_path_count);
 	}
 };
 
 
 struct game_server;
-struct game_server_init_params;
 
-/**
- * Initializes a new game server from the provided platform functions, giving it its memory footprint.
- * If successful, returns pointer to the initialized server structure. 
- * Update over time using game_server_tick.
- */
-game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size);
+// Game Server program, built from dynamically-loaded / assigned functions.
+// Held and built by the platform implementation.
+// If and when the server program ever gets reloaded independently of the platform, make sure to call on_load again.
+struct game_server_program
+{
+    // Pointer to game server implementation if init was successful.
+    game_server* _game_server_ptr;
 
-/**
- * Integrates the passage of time into the game server simulation, triggering the ticking of ongoing matches as needed.
- * The time parameter should be the total platform uptime since the server was started.
- */
-void game_server_tick(game_server& server, time_ms time_ms);
+    // Whether the program is currently loaded.
+    bool _is_loaded;
 
-/**
- * Called on platform shutdown, no matter the reason.
- * Used to allow the server time to perform cleanup operations before the platform shuts down its own functionality.
- */
-void game_server_stop(game_server& server);
+    // Control from the outside as a signal that this program is actively being ticked.
+    bool is_running;
 
+    /**
+     * General-purpose event func loaded from and called on the server module immediately after it gets (re)loaded.
+     * Must be called for the Game Server code to function properly, and to load the rest of the program's functions.
+     */
+    using load_program_fn = void (*)(game_server_program& program, _ASSERTION_HANDLER* assertion_handler);
+    load_program_fn load_program_func;
+    inline void load(_ASSERTION_HANDLER* assertion_handler) 
+    {
+        ASSERT(load_program_func != nullptr && assertion_handler != nullptr);
+        load_program_func(*this, assertion_handler);
+
+        // Check that the Game Server program has filled in all the other functions of the program.
+        ASSERT(    on_unload_func != nullptr
+                && init_func != nullptr
+                && tick_func != nullptr
+                && stop_func != nullptr);
+
+        _is_loaded = true;
+    }
+
+    /**
+     * Called when the server module is about to be unloaded.
+     * Unloads the program's functions.
+     */
+    void (*on_unload_func)();
+    inline void on_unload()
+    {
+        if (on_unload_func != nullptr) on_unload_func();
+        _is_loaded = true;
+    }
+
+    /**
+     * Initializes a new game server from the provided platform functions, giving it its memory footprint.
+     * If successful, returns pointer to the initialized server structure. 
+     * Update over time using game_server_tick.
+     */
+    game_server* (*init_func)(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size);
+    inline bool init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
+    {
+        ASSERT_MSG(init_func != nullptr, "No init function provided to Game Server Program. Was the server library loaded ?");
+
+        _game_server_ptr = init_func(platform, init_params, memory, memory_size);
+        return _game_server_ptr != nullptr;
+    }
+
+    /**
+     * Integrates the passage of time into the game server simulation, triggering the ticking of ongoing matches as needed.
+     * The time parameter should be the total platform uptime since the server was started.
+     */
+    void (*tick_func)(game_server& server, time_ms time_ms);
+    inline void tick(time_ms time_ms)
+    {
+        ASSERT(_game_server_ptr != nullptr && tick_func != nullptr);
+        tick_func(*_game_server_ptr, time_ms);
+    }
+
+    /**
+     * Called on platform shutdown, no matter the reason.
+     * Used to allow the server time to perform cleanup operations before the platform shuts down its own functionality.
+     */
+    void (*stop_func)(game_server& server);
+    inline void stop()
+    {
+        ASSERT(_game_server_ptr != nullptr && stop_func != nullptr);
+        stop_func(*_game_server_ptr);
+    }
+};
 #endif // GAME_SERVER_PLATFORM_INCLUDED
