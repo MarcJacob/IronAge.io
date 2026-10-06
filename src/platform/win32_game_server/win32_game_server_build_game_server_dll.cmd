@@ -26,9 +26,19 @@ set "INCLUDES=%INCLUDES% -I%PROJECT_ROOT%/include/"
 
 :: Compilation flags
 
+:: - -ffp-contract=off : no fused multiply-add, which would change float results on some targets.
+:: - no -ffast-math / -Ofast : they allow reordering and approximating float operations.
+:: - -ffreestanding -fno-builtin : no implicit libc calls (memcpy, memset...), see the guidelines above.
+:: - -fno-exceptions -fno-rtti
+:: - -fsigned-char : pin char signedness.
+
 set "COMPILER_FLAGS="
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -fno-exceptions"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -fno-rtti"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -ffp-contract=off"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -ffreestanding"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -fsigned-char"
+
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -nostdinc"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% --debug"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -shared"

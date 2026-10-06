@@ -190,7 +190,7 @@ struct game_server_program
     inline void on_unload()
     {
         if (on_unload_func != nullptr) on_unload_func();
-        _is_loaded = true;
+        _is_loaded = false;
     }
 
     /**
