@@ -99,7 +99,7 @@ const http_file* web_server_find_file(web_server& web, const ia_string_view& tar
 	ia_string_view targetName = ia_string_get_until(target, '?', target.length);
 
 	// Strip away start '/'.
-	ia_string_chop_left(targetName, 1);
+	ia_string_chop_right(targetName, 1);
 	if (targetName.length == 0)
 	{
 		targetName = "index.html";

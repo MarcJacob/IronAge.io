@@ -260,7 +260,7 @@ static void win32_strip_resources_path(game_server_resource_path& path)
 	ASSERT_MSG(path.length >= GAME_SERVER_RESOURCES_DIR.length && ia_string_starts_with(path, GAME_SERVER_RESOURCES_DIR),
 		"Resource file path \"%.*s\" is not located in the resources folder.", (int)path.length, path._str);
 
-	ia_string_chop_left(path, GAME_SERVER_RESOURCES_DIR.length - 1);
+	ia_string_chop_right(path, GAME_SERVER_RESOURCES_DIR.length - 1);
 	path._str[0] = '.';
 	path._str[1] = '/';
 }
@@ -553,7 +553,7 @@ int main(int argc, char** argv)
     ASSERT(execFileNameLen > 0);
 
     ia_string_view modulePath = WIN32_PLATFORM.exec_filename;
-    ia_string_chop_right_until(modulePath, '\\', false);
+    ia_string_chop_left_until(modulePath, '\\', false);
 
     static_mem_arena<512> scratchMem;
     ia_string_builder modulePathBuilder(&scratchMem);
@@ -562,7 +562,7 @@ int main(int argc, char** argv)
 
     modulePathBuilder.push_back('\0');
     win32_logf("Win32", "Loading Game Server code from folder %s.", modulePathBuilder.string._str);
-    modulePathBuilder.chop_right(1);
+    modulePathBuilder.chop_left(1);
 
     modulePathBuilder.push_back("game_server.dll");
     modulePathBuilder.push_back('\0');
