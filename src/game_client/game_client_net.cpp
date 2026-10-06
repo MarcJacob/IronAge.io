@@ -53,7 +53,7 @@ void game_client_output_client_tick_message(game_client& backend)
 
 	ia_memcpy(&payload.commands, &queuedSequence, queuedSequenceBytes);
 
-	backend.net_output_msg_size = sizeof(game_message_header) + header->payloadSize;
+	backend.net_output_msg_size = sizeof(game_message_header) + header->payload_size;
 
 	// Reset the queue: clear the arena and re-init the builder so the next input event has a fresh sequence ready.
 	backend.input.command_queue.clear();
@@ -65,7 +65,7 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 	if (message_size < sizeof(game_message_header)) return GAME_MESSAGE_TYPE::INVALID;
 
 	game_message_header* header = (game_message_header*)backend.net_msg_buffer;
-	if (message_size < sizeof(game_message_header) + header->payloadSize) return GAME_MESSAGE_TYPE::INVALID;
+	if (message_size < sizeof(game_message_header) + header->payload_size) return GAME_MESSAGE_TYPE::INVALID;
 
 	switch (header->message_type)
 	{

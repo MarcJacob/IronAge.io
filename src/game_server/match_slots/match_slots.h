@@ -3,7 +3,7 @@
 #ifndef MATCH_SLOTS_INCLUDED
 #define MATCH_SLOTS_INCLUDED
 
-#include "game_server_clients.h" // For game_server_client::client_handle.
+#include "../game_server_clients.h" // For game_server_client::client_handle.
 
 #include "game_common/match/AI_logic.h"
 
@@ -51,6 +51,7 @@ struct match_slot
 
 	match_player* players; // Array of match_params->player_count entries, indexed by player index. Allocated once match_params is known.
 
+
 	union
 	{
 		match_slot_lobby* lobby;	// Valid when the slot state is non MATCH_*
@@ -60,6 +61,9 @@ struct match_slot
 			game_match* match_ptr;
 			ui64 last_tick_time;
 
+            mem_arena next_tick_commands_memory;
+            match_tick_commands_builder next_tick_commands_builder;
+
 			ui16 ai_player_count; 
 			AI_player_state* ai_players;
 
@@ -67,30 +71,38 @@ struct match_slot
 	};
 };
 
+using match_slot_index = ui8;
+static constexpr match_slot_index INVALID_MATCH_SLOT_INDEX = ~0;
+
 // Game Server functionality
 
 struct game_server;
+
+// Attaches a client as the controller of a free player index in the slot. Writes the assigned index to out_player_index on success.
+bool game_server_slot_attach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
+
+// Handles a game message from the client. Returns whether the message was handled.
+bool game_server_match_slot_handle_message(game_server& server, game_server_client::client_handle client_handle, const game_message_header& msg);
+
+// SLOT LIFECYCLE FUNCTIONS
 
 // Initializes a new match slot in the server from a piece of memory to use and the slot index to initialize.
 // The slot must currently be uninitialized.
 // If successful, the passed memory arena is now owned by the slot itself. The one passed as param should be discarded.
 // MUST ONLY BE CALLED ONCE PER SLOT ! From there RESET the slot for re-use.
-bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 slot_index);
+bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, match_slot_index slot_index);
 
 // Opens a slot's lobby in order to start accepting prospective players.
-bool game_server_open_lobby(game_server& server, ui8 slot_index);
+bool game_server_open_lobby(game_server& server, match_slot_index slot_index);
 
 // Begins the match associated to the slot with the slot's current parameters.
-bool game_server_start_match_slot(game_server& server, ui8 slot_index);
+bool game_server_start_match_slot(game_server& server, match_slot_index slot_index);
 
 // Sets a match slot as having ended. During that time the match is no longer ticking but its state is still available
 // for score-keeping and reporting.
-bool game_server_end_match_slot(game_server& server, ui8 slot_index);
+bool game_server_end_match_slot(game_server& server, match_slot_index slot_index);
 
 // Resets a match slot to its cleaned state for re-use.
-bool game_server_reset_match_slot(game_server& server, ui8 slot_index);
-
-// Attaches a client as the controller of a free player index in the slot. Writes the assigned index to out_player_index on success.
-bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
+bool game_server_reset_match_slot(game_server& server, match_slot_index slot_index);
 
 #endif // MATCH_SLOTS_INCLUDED

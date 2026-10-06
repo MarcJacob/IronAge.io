@@ -7,6 +7,7 @@
 // As of now what I did is perform complete reviews as the AI generated code for each functionality, performed manual corrections by hand and by smaller prompt, then
 // went through it all again and added some comments.
 
+#include "core/memory.h"
 #include "web_server.h"
 #include "game_common/game_messages.h"
 
@@ -171,15 +172,17 @@ static void websocket_unmask_payload(ui8* payload, ui32 payload_size, const ui8*
 
 // END WEBSOCKET FRAMES
 
-// Appends a frame, as sent by the server (unmasked, never fragmented), to the client's sending buffer.
-// The frame is put together in full, contiguously, so it's handed to the platform in a single call and can never end up half sent.
-// Returns false, adding nothing, if it doesn't fit in the room left in the buffer.
-static bool web_server_websocket_queue_frame(web_server_client& web_client,
+// Frames the payload as sent by the server (unmasked, never fragmented) and sends it to the client in a single platform call.
+// Sends are all-or-nothing, so a frame can never end up half sent. Returns whether the platform took it.
+// The frame is only held in a temporary buffer for the duration of the call.
+static bool web_server_websocket_send_frame(game_server& server, web_server_client& web_client,
 	WEBSOCKET_OPCODE opcode, const ui8* payload, ui32 payload_size)
 {
-	websocket_client& websocket = web_client.websocket;
+	static constexpr ui32 MAX_FRAME_HEADER_SIZE = 10;
+	ASSERT_MSG(payload_size <= WEBSOCKET_SEND_BUFFER_SIZE, "Websocket payload of %d bytes can never fit a frame in the sending scratch buffer.", payload_size);
+	ui8 frame[MAX_FRAME_HEADER_SIZE + WEBSOCKET_SEND_BUFFER_SIZE];
 
-	ui8 header[10];
+	ui8* header = frame;
 	ui32 headerSize = 0;
 
 	header[headerSize++] = 0x80 | (ui8)opcode; // FIN + opcode. TODO(Marc): Support multi-part frames !
@@ -200,26 +203,22 @@ static bool web_server_websocket_queue_frame(web_server_client& web_client,
 		header[headerSize++] = 127;
 		for (ui8 byte = 0; byte < 8; byte++)
 		{
-			header[headerSize++] = (ui8)(((ui64)payload_size >> (52 - byte * 8)) & 0xFF);
+			header[headerSize++] = (ui8)(((ui64)payload_size >> (56 - byte * 8)) & 0xFF);
 		}
 	}
 
-	if (headerSize + payload_size > WEBSOCKET_SEND_BUFFER_SIZE - websocket.sending.size) return false;
+	if (payload_size > 0) ia_memcpy(frame + headerSize, payload, payload_size);
 
-	ia_memcpy(websocket.sending.buff + websocket.sending.size, header, headerSize);
-	ia_memcpy(websocket.sending.buff + websocket.sending.size + headerSize, payload, payload_size);
-	websocket.sending.size += headerSize + payload_size;
-
-	return true;
+	return game_server_client_send_net_bytes(server, web_client.client_handle, frame, headerSize + payload_size);
 }
 
-// Queues up a Close frame answering an invalid frame, with the result as its status code, and flags the client for dropping once it's been sent.
+// Sends a Close frame answering an invalid frame, with the result as its status code (best effort), and flags the client for dropping.
 static void web_server_websocket_close_client(game_server& server, web_server_client& web_client, WEBSOCKET_FRAME_PARSE_RESULT invalid_result)
 {
 	ASSERT(websocket_frame_parse_result_is_invalid(invalid_result));
 
 	ui8 payload[2] = { (ui8)((ui16)invalid_result >> 8), (ui8)((ui16)invalid_result & 0xFF) };
-	web_server_websocket_queue_frame(web_client, WEBSOCKET_OPCODE::CLOSE, payload, sizeof(payload));
+	web_server_websocket_send_frame(server, web_client, WEBSOCKET_OPCODE::CLOSE, payload, sizeof(payload));
 
 	web_client.in_drop = true;
 
@@ -227,68 +226,15 @@ static void web_server_websocket_close_client(game_server& server, web_server_cl
 }
 
 // Removes bytes from the reception buffer, shifting everything after them towards the start.
-static void web_server_websocket_remove_reception_bytes(websocket_client& websocket, ui32 offset, ui32 byte_count)
+static void web_server_websocket_remove_reception_bytes(websocket_client& websocket, ui32 byte_count)
 {
-	ASSERT(offset + byte_count <= websocket.reception.size);
+	ASSERT(byte_count <= websocket.reception.buffer.allocated_count);
 
 	// TODO(Marc): Redesign reception buffering. Making it a ring buffer could work.
-	ia_memcpy(websocket.reception.buff + offset, websocket.reception.buff + offset + byte_count, websocket.reception.size - offset - byte_count);
-	websocket.reception.size -= byte_count;
-}
+	ia_memcpy(websocket.reception.buffer.mem_start, (ui8*)websocket.reception.buffer.mem_start + byte_count,
+            websocket.reception.buffer.allocated_count - byte_count);
 
-bool web_server_websocket_client_send_message(const game_server_client& client, const game_message_header& message)
-{
-	ASSERT(client.connection_context != nullptr);
-	web_server_client& web_client = *(web_server_client*)client.connection_context;
-	ASSERT(web_client.is_websocket());
-
-	// Not taking any more messages once the client is on its way out.
-	if (web_client.in_drop) return false;
-
-	// The whole game message, header included, is the payload of a single binary frame. It's added to the sending buffer in full, along with the Websocket framing,
-	// and goes out to the platform on the next tick, together with anything else that was queued up.
-	ui32 messageSize = sizeof(game_message_header) + message.payloadSize;
-	ASSERT_MSG(messageSize + 4 <= WEBSOCKET_SEND_BUFFER_SIZE, "Game message of %d bytes can never fit a Websocket frame in the sending buffer.", messageSize);
-
-	// Returns false if there's no room left in the sending buffer right now. The message can be sent again once it has emptied.
-	return web_server_websocket_queue_frame(web_client, WEBSOCKET_OPCODE::BINARY, (const ui8*)&message, messageSize);
-}
-
-bool web_server_websocket_client_peek_message(const game_server_client& client, game_message_header*& out_message_ptr)
-{
-	ASSERT(client.connection_context != nullptr);
-	web_server_client& web_client = *(web_server_client*)client.connection_context;
-	ASSERT(web_client.is_websocket());
-
-	websocket_client& websocket = web_client.websocket;
-	if (websocket.reception.queued_size == 0) return false;
-
-	// Queued frames were already validated and unmasked when they were received. The first of them is at the start of the buffer:
-	// reading its header again gives us where its payload, which is the game message, starts.
-	websocket_frame frame;
-	WEBSOCKET_FRAME_PARSE_RESULT result = websocket_parse_frame(websocket.reception.buff, websocket.reception.queued_size, WEB_CLIENT_RECEPTION_BUFFER_SIZE, frame);
-	ASSERT(result == WEBSOCKET_FRAME_PARSE_RESULT::COMPLETE);
-
-	out_message_ptr = (game_message_header*)(websocket.reception.buff + frame.header_size);
-	return true;
-}
-
-void web_server_websocket_client_consume_message(const game_server_client& client)
-{
-	ASSERT(client.connection_context != nullptr);
-	web_server_client& web_client = *(web_server_client*)client.connection_context;
-	ASSERT(web_client.is_websocket());
-
-	websocket_client& websocket = web_client.websocket;
-	if (websocket.reception.queued_size == 0) return;
-
-	websocket_frame frame;
-	WEBSOCKET_FRAME_PARSE_RESULT result = websocket_parse_frame(websocket.reception.buff, websocket.reception.queued_size, WEB_CLIENT_RECEPTION_BUFFER_SIZE, frame);
-	ASSERT(result == WEBSOCKET_FRAME_PARSE_RESULT::COMPLETE);
-
-	// The frame is at the start of the buffer, so the queued frames after it and the yet-to-be-processed bytes all move up together.
-	web_server_websocket_remove_reception_bytes(websocket, 0, frame.total_size);
-	websocket.reception.queued_size -= frame.total_size;
+    websocket.reception.buffer.allocated_count -= byte_count;
 }
 
 void web_server_websocket_on_client_promotion(game_server& server, web_server_client& web_client)
@@ -299,35 +245,55 @@ void web_server_websocket_on_client_promotion(game_server& server, web_server_cl
 	web_client.last_activity_ms = server.uptime_ms;
 	web_client.last_send_progress_ms = server.uptime_ms;
 
-	// Reception buffer:
-	// Perform a "soft change" without resetting all of the underlying memory. Since the http reception buffer is at the same offset as the websocket reception buffer,
-	// the transfer of data between the two is automatic.
-	// Any bytes it holds are raw Websocket bytes received after the http request, and none of them have been processed yet.
-	web_client.websocket.reception.queued_size = 0;
+	// Reception buffer: the unprocessed buffer is aligned with the request buffer of the HTTP client, so the remaining bytes stay in place without a copy !
+	// The other arenas overlay HTTP client data (response), and must be initialized.
+	web_client.websocket.reception.processed_buffer.reset();
+	web_client.websocket.sending.buff.reset();
 
-	// Zero out the send buffer. The first ping is due one period from now.
-	web_client.websocket.sending = {};
+	// The first ping is due one period from now.
+	web_client.websocket.sending.blocked_since_ms = 0;
 	web_client.websocket.sending.last_ping_ms = server.uptime_ms;
 
-	// Promote game server client, assigning it the send, peek & consume functions to use.
-	game_server_promote_game_client(server, web_client.client_handle,
-		web_server_websocket_client_send_message, web_server_websocket_client_peek_message, web_server_websocket_client_consume_message);
-
+	// Promote game server client. We must provide it with the buffers in which decoded game messages will be put and from where we'll gather messages to send.
+    game_server_promote_game_client(server, web_client.client_handle, &web_client.websocket.reception.processed_buffer, &web_client.websocket.sending.buff);
+    //
 	// Done !
 }
 
-// Pushes the bytes waiting in the sending buffer to the platform. The platform takes them all or none, so whatever couldn't go through stays for the next tick.
+// Sends the game messages waiting in the sending buffer (raw, back to back), each framed as its own binary frame.
+// The platform takes a frame all or none: messages it took are removed from the buffer, the others stay for the next tick.
 void web_server_websocket_client_sending(game_server& server, web_server_client& web_client)
 {
 	websocket_client& websocket = web_client.websocket;
-	ASSERT(websocket.sending.size > 0);
+	ASSERT(websocket.sending.buff.allocated_count > 0);
 
-	if (game_server_client_send_net_bytes(server, web_client.client_handle, websocket.sending.buff, websocket.sending.size))
+	ui64 sentBytes = 0;
+	bool refused = false;
+	while (sentBytes < websocket.sending.buff.allocated_count)
 	{
-		websocket.sending.size = 0;
+		const game_message_header* message = (const game_message_header*)(websocket.sending.buff.mem_start + sentBytes);
+		ui32 messageSize = sizeof(game_message_header) + message->payload_size;
+		ASSERT(sentBytes + messageSize <= websocket.sending.buff.allocated_count);
+
+		if (!web_server_websocket_send_frame(server, web_client, WEBSOCKET_OPCODE::BINARY, (const ui8*)message, messageSize))
+		{
+			refused = true;
+			break;
+		}
+		sentBytes += messageSize;
+	}
+
+	// Remove sent messages, shifting the others to the start.
+	if (sentBytes > 0)
+	{
+		ia_memmove(websocket.sending.buff.mem_start, websocket.sending.buff.mem_start + sentBytes, websocket.sending.buff.allocated_count - sentBytes);
+		websocket.sending.buff.allocated_count -= sentBytes;
 		websocket.sending.blocked_since_ms = 0;
 	}
-	else if (websocket.sending.blocked_since_ms == 0)
+
+	if (!refused) return;
+
+	if (websocket.sending.blocked_since_ms == 0)
 	{
 		// First time the platform refuses the bytes: start measuring how long it keeps doing so.
 		websocket.sending.blocked_since_ms = server.uptime_ms;
@@ -348,28 +314,35 @@ void web_server_websocket_client_reception(game_server& server, web_server_clien
 	websocket_client& websocket = web_client.websocket;
 
 	// Fill reception buffer if anything is available platform-side.
-	if (websocket.reception.size < WEB_CLIENT_RECEPTION_BUFFER_SIZE)
+	if (websocket.reception.buffer.allocated_count < websocket.reception.buffer.mem_size)
 	{
-		ui32 receivedBytes = game_server_client_receive_net_bytes(server, web_client.client_handle,
-			websocket.reception.buff + websocket.reception.size, WEB_CLIENT_RECEPTION_BUFFER_SIZE - websocket.reception.size);
+        ui32 receptionSize = ia_min(WEBSOCKET_RECEPTION_CHUNK_SIZE,
+                websocket.reception.buffer.mem_size - websocket.reception.buffer.allocated_count);
+        void* receptionTarget = websocket.reception.buffer.alloc(receptionSize, 1);
 
-		if (receivedBytes > 0)
+		if (receptionTarget != nullptr)
 		{
-			websocket.reception.size += receivedBytes;
-			web_client.last_activity_ms = server.uptime_ms;
+			ui32 receivedBytes = game_server_client_receive_net_bytes(server, web_client.client_handle, (ui8*)receptionTarget, receptionSize);
+
+			// Give back the part of the allocation that wasn't filled.
+			websocket.reception.buffer.allocated_count -= receptionSize - receivedBytes;
+			if (receivedBytes > 0)
+			{
+				web_client.last_activity_ms = server.uptime_ms;
+			}
 		}
 	}
 
-	// Frames before queued_size are queued game messages. Processing picks up right after them.
-	while (!web_client.in_drop && websocket.reception.queued_size < websocket.reception.size)
+	bool processedBufferFull = false;
+	while (!web_client.in_drop && !processedBufferFull && websocket.reception.processed_buffer.allocated_count < websocket.reception.processed_buffer.mem_size - 32)
 	{
-		ui32 frameOffset = websocket.reception.queued_size;
-		ui8* frameBytes = websocket.reception.buff + frameOffset;
+		ui8* frameBytes = (ui8*)websocket.reception.buffer.mem_start;
 
 		websocket_frame frame;
 
 		// Parse frame structure so control code, close code, payload... can be determined.
-		WEBSOCKET_FRAME_PARSE_RESULT result = websocket_parse_frame(frameBytes, websocket.reception.size - frameOffset, WEB_CLIENT_RECEPTION_BUFFER_SIZE, frame);
+		WEBSOCKET_FRAME_PARSE_RESULT result = websocket_parse_frame(frameBytes, 
+                websocket.reception.buffer.allocated_count, websocket.reception.buffer.mem_size, frame);
 
 		if (result == WEBSOCKET_FRAME_PARSE_RESULT::INCOMPLETE) break; // Wait for the rest of the frame.
 
@@ -386,17 +359,17 @@ void web_server_websocket_client_reception(game_server& server, web_server_clien
 		{
 		case WEBSOCKET_OPCODE::PING:
 			// Answer with a pong repeating the ping's payload. If there's no room to send it right now, the ping is simply ignored.
-			web_server_websocket_queue_frame(web_client, WEBSOCKET_OPCODE::PONG, payload, frame.payload_size);
-			web_server_websocket_remove_reception_bytes(websocket, frameOffset, frame.total_size);
+			web_server_websocket_send_frame(server, web_client, WEBSOCKET_OPCODE::PONG, payload, frame.payload_size);
+			web_server_websocket_remove_reception_bytes(websocket, frame.total_size);
 			break;
 		case WEBSOCKET_OPCODE::PONG:
 			// Nothing to do: receiving it already counted as activity.
-			web_server_websocket_remove_reception_bytes(websocket, frameOffset, frame.total_size);
+			web_server_websocket_remove_reception_bytes(websocket, frame.total_size);
 			break;
 		case WEBSOCKET_OPCODE::CLOSE:
-			// Answer with a Close frame repeating the status code if there was one, then let the client be dropped once it's sent.
-			web_server_websocket_queue_frame(web_client, WEBSOCKET_OPCODE::CLOSE, payload, (frame.payload_size >= 2) ? 2 : 0);
-			web_server_websocket_remove_reception_bytes(websocket, frameOffset, frame.total_size);
+			// Answer with a Close frame repeating the status code if there was one, then let the client be dropped.
+			web_server_websocket_send_frame(server, web_client, WEBSOCKET_OPCODE::CLOSE, payload, (frame.payload_size >= 2) ? 2 : 0);
+			web_server_websocket_remove_reception_bytes(websocket, frame.total_size);
 			web_client.in_drop = true;
 			break;
 		case WEBSOCKET_OPCODE::BINARY:
@@ -408,17 +381,37 @@ void web_server_websocket_client_reception(game_server& server, web_server_clien
 				break;
 			}
 
-			// The frame payload is a game message: it must at least hold a message header, and the sizes must agree.
+			// A payload that could never fit the processed buffer is refused, no matter how empty it is.
+				if (frame.payload_size > websocket.reception.processed_buffer.mem_size)
+				{
+					web_server_websocket_close_client(server, web_client, WEBSOCKET_FRAME_PARSE_RESULT::INVALID_TOO_BIG);
+					break;
+				}
+
+				// The frame payload is a game message: it must at least hold a message header, and the sizes must agree.
 			game_message_header* message = (game_message_header*)payload;
 			if (frame.payload_size < sizeof(game_message_header)
-				|| sizeof(game_message_header) + message->payloadSize != frame.payload_size)
+				|| sizeof(game_message_header) + message->payload_size != frame.payload_size)
 			{
 				web_server_websocket_close_client(server, web_client, WEBSOCKET_FRAME_PARSE_RESULT::INVALID_PAYLOAD);
 				break;
 			}
 
-			// Valid game message: keep it in the buffer and move on to what follows.
-			websocket.reception.queued_size += frame.total_size;
+            // Game Message validated. Move it (unmasked payload only) to processed buffer.
+            void* allocation = websocket.reception.processed_buffer.alloc(frame.payload_size, 1);
+            if (allocation == nullptr)
+            {
+                // Websocket processed buffer is too full. Put the mask back (the frame will be unmasked again next time) and stop,
+                // before the state of either buffer gets modified.
+                websocket_unmask_payload(payload, frame.payload_size, frame.mask_key);
+                processedBufferFull = true;
+                break;
+            }
+
+            // Copy the message into processed buffer, and remove its frame entirely from reception buffer.
+            ia_memcpy(allocation, payload, frame.payload_size);
+            web_server_websocket_remove_reception_bytes(websocket, frame.total_size);
+
 			break;
 		}
 		case WEBSOCKET_OPCODE::TEXT:
@@ -440,19 +433,21 @@ void web_server_websocket_tick_client(game_server& server, web_server_client& cl
 	time_ms lastSignOfLife = ia_max(client.websocket.sending.last_ping_ms, client.last_activity_ms);
 	if (!client.in_drop
 		&& server.uptime_ms - lastSignOfLife >= WEBSOCKET_PING_PERIOD_MS
-		&& web_server_websocket_queue_frame(client, WEBSOCKET_OPCODE::PING, nullptr, 0))
+		&& web_server_websocket_send_frame(server, client, WEBSOCKET_OPCODE::PING, nullptr, 0))
 	{
 		client.websocket.sending.last_ping_ms = server.uptime_ms;
 	}
 
-	if (client.websocket.sending.size > 0)
+	if (client.in_drop)
 	{
-		web_server_websocket_client_sending(server, client);
-	}
-	else if (client.in_drop)
-	{
+		// Pending game messages are abandoned: nothing may follow a Close frame.
 		game_server_client_drop(server, client.client_handle);
 		return;
+	}
+
+	if (client.websocket.sending.buff.allocated_count > 0)
+	{
+		web_server_websocket_client_sending(server, client);
 	}
 
 	if (!client.in_drop)

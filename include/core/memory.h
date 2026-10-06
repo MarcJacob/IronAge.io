@@ -201,6 +201,12 @@ struct static_mem_arena : public mem_arena
 
 	inline static_mem_arena() 
 	{
+		reset();
+	}
+
+	// (Re)points the arena at its own memory and empties it.
+	inline void reset()
+	{
 		mem_arena temp = mem_arena_create(_mem_static, Size);
 		*(mem_arena*)this = temp; // Move properties from temporary "standard" arena created over own memory.
 	}

@@ -8,6 +8,7 @@
 
 #include "../game_server.h"
 #include "../game_server_clients.h"
+#include "core/memory.h"
 
 // Static configuration of Web Server.
 // TODO(Marc): Add to runtime configuration system. Substructure of game server initialization ?
@@ -19,6 +20,8 @@ static constexpr ui16 WEB_SERVER_MAX_CLIENTS = 64;
 static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Max number of files that can be preloaded for serving.
 
 static constexpr ui32 WEB_CLIENT_RECEPTION_BUFFER_SIZE = 2048;
+static constexpr ui32 WEBSOCKET_CLIENT_MESSAGES_RECEPTION_BUFFER_SIZE = 1024;
+
 static constexpr time_ms HTTP_CLIENT_TIMEOUT_MS = 2000; // HTTP connection with no request / activity for this long gets closed.
 static constexpr time_ms WEBSOCKET_CLIENT_TIMEOUT_MS = 6000; // Websocket connection that sent nothing (not even a pong) for this long gets closed.
 static constexpr time_ms WEBSOCKET_PING_PERIOD_MS = 2000; // A websocket client is sent a ping this often.
@@ -27,13 +30,16 @@ static constexpr time_ms WEBSOCKET_PING_PERIOD_MS = 2000; // A websocket client 
 static constexpr ui32 HTTP_CLIENT_MAX_REQUEST_TARGET_LEN = 256; // Maximum number of characters in a valid http request target name.
 static constexpr ui32 HTTP_RESPONSE_HEAD_BUFFER_SIZE = 256;
 
+static constexpr ui32 HTTP_RECEPTION_CHUNK_SIZE = 1024;
 static constexpr ui32 HTTP_SEND_CHUNK_SIZE = 4096;
 static constexpr ui32 HTTP_PATH_BUFFER_SIZE = 256;
 static constexpr time_ms HTTP_SEND_STALL_TIMEOUT_MS = 10000; // Response making no progress for this long gets its httpConnection closed.
 
-static constexpr ui32 WEBSOCKET_SEND_BUFFER_SIZE = 4098;
+static constexpr ui32 WEBSOCKET_RECEPTION_CHUNK_SIZE = 1024;
+static constexpr ui32 WEBSOCKET_SEND_BUFFER_SIZE = 4096;
 
 // BEGIN CLIENT STRUCTURES
+// @TODO(Marc): Rename those to "connections" instead as it makes a lot more sense with their actual role.
 
 // Upgraded client, recognized as a Game Client by the Game Server.
 // Holds the necessary data to appropriately encode / decode Websocket frames for reading by the general server network protocol code.
@@ -43,17 +49,14 @@ struct websocket_client
 	// Bytes reception buffer.
 	struct
 	{
-		ui8 buff[WEB_CLIENT_RECEPTION_BUFFER_SIZE]; // Reception buffer for this client.
-		ui32 size; // Number of received bytes awaiting processing.
-		ui32 queued_size; // Number of bytes, at the start of the buffer, making up complete, validated & unmasked data frames queued up for the game code to peek at & consume.
-						  // Bytes after that are yet to be processed.
+		static_mem_arena<WEB_CLIENT_RECEPTION_BUFFER_SIZE> buffer; // Reception buffer for unprocessed network bytes.
+        static_mem_arena<WEBSOCKET_CLIENT_MESSAGES_RECEPTION_BUFFER_SIZE> processed_buffer; // Processed Game Message bytes.
 	} reception; // NOTE(Marc): This must remain at the same offset as the equivalent buffer in http_client so it doesn't need a copy when upgrading a client !
 
 	// Bytes sending buffer.
 	struct
 	{
-		ui8 buff[WEBSOCKET_SEND_BUFFER_SIZE]; // Sending buffer for this client.
-		ui32 size; // Number of bytes awaiting dispatch to platform sending buffer.
+		static_mem_arena<WEBSOCKET_SEND_BUFFER_SIZE> buff; // Sending buffer for this client. Contains queued Game Messages.
 		time_ms blocked_since_ms; // Time at which the platform first refused the bytes currently awaiting dispatch. 0 if it has not refused them.
 		time_ms last_ping_ms; // Last time a ping was queued up for this client. A ping goes out once WEBSOCKET_PING_PERIOD_MS have gone by since this or since
 							  // the client last sent anything (web_server_client::last_activity_ms), whichever is more recent.
@@ -66,8 +69,7 @@ struct http_client
 	// Request reception buffer. The data is buffered and interpreted as characters.
 	struct
 	{
-		char buff[WEB_CLIENT_RECEPTION_BUFFER_SIZE]; // Reception buffer for this client. Acts as the upper limit for request sizes we can handle.
-		ui32 size; // Number of received bytes awaiting processing.
+        static_mem_arena<WEB_CLIENT_RECEPTION_BUFFER_SIZE> buffer;
 	} request;
 
 	struct response_struct
@@ -132,7 +134,18 @@ struct web_server_client
 struct http_file
 {
 	ia_string_view resource_name; // Directly views into the resource file paths in main server.
-	ia_string_view content_type;
+	enum class CONTENT_TYPE : ui8
+	{
+		OCTET_STREAM, // Fallback for unsupported extensions.
+		HTML,
+		JS,
+		CSS,
+		WASM,
+		TXT,
+		ICO,
+		SVG,
+	};
+	CONTENT_TYPE content_type;
 	ui8* data;
 	ui32 size;
 };
@@ -196,6 +209,9 @@ struct http_request
 
 // Finds the preloaded file a request target ("/", "/src/main.js?x=1") asks for. Returns null if there is none.
 const http_file* web_server_find_file(web_server& web, const ia_string_view& target);
+
+// Resolves a content type to its MIME string.
+ia_string_view web_server_get_content_type_string(http_file::CONTENT_TYPE type);
 
 // Event handler for game server clients disconnecting: gives back the web server client structures the disconnected client was using.
 void web_server_on_client_disconnected(game_server& server, game_server_client& client);

@@ -44,10 +44,13 @@ bool web_server_try_accept_client(game_server& server, game_server_client& clien
 		newClient.last_activity_ms = server.uptime_ms;
 
 		http_client& httpClient = newClient.http;
+		httpClient.request.buffer.reset();
 
 		// Take the bytes from the Unknown client reception buffer and use them as the first received Request bytes in the new HTTP client.
-		ia_memcpy(httpClient.request.buff, bytes, byte_count);
-		httpClient.request.size = byte_count;
+        void* moveAlloc = httpClient.request.buffer.alloc(byte_count, 1);
+        ASSERT(moveAlloc != nullptr);
+
+		ia_memcpy(moveAlloc, bytes, byte_count);
 
 		// Promote client connection to NON GAME CLIENT and set the Web Server Client structure as its context.
 		client.type = game_server_client::TYPE::NON_GAME_CLIENT;
@@ -62,21 +65,35 @@ bool web_server_try_accept_client(game_server& server, game_server_client& clien
 	return false;
 }
 
-static ia_string_view http_get_content_type(const ia_string_view& path)
+ia_string_view web_server_get_content_type_string(http_file::CONTENT_TYPE type)
 {
-	struct content_type { const ia_string_view extension; const ia_string_view type; };
+	switch (type)
+	{
+	case http_file::CONTENT_TYPE::HTML: return "text/html; charset=utf-8";
+	case http_file::CONTENT_TYPE::JS: return "text/javascript; charset=utf-8";
+	case http_file::CONTENT_TYPE::CSS: return "text/css; charset=utf-8";
+	case http_file::CONTENT_TYPE::WASM: return "application/wasm";
+	case http_file::CONTENT_TYPE::TXT: return "text/plain; charset=utf-8";
+	case http_file::CONTENT_TYPE::ICO: return "image/x-icon";
+	case http_file::CONTENT_TYPE::SVG: return "image/svg+xml";
+	default: return "application/octet-stream";
+	}
+}
 
-	// NOTE(Marc): Should move this out of the function on the next tidy-up pass.
-	static const content_type SUPPORTED_CONTENT_TYPES[] = {
-		{ ".html", "text/html; charset=utf-8" },
-		{ ".js", "text/javascript; charset=utf-8" },
-		{ ".css", "text/css; charset=utf-8" },
-		{ ".wasm", "application/wasm" },
-		{ ".txt", "text/plain; charset=utf-8" },
-		{ ".ico", "image/x-icon"},
-		{ ".svg", "image/svg+xml"},
+static http_file::CONTENT_TYPE http_get_content_type(const ia_string_view& path)
+{
+	struct content_type_extension { const ia_string_view extension; const http_file::CONTENT_TYPE type; };
+
+	static const content_type_extension SUPPORTED_CONTENT_TYPES[] = {
+		{ ".html", http_file::CONTENT_TYPE::HTML },
+		{ ".js", http_file::CONTENT_TYPE::JS },
+		{ ".css", http_file::CONTENT_TYPE::CSS },
+		{ ".wasm", http_file::CONTENT_TYPE::WASM },
+		{ ".txt", http_file::CONTENT_TYPE::TXT },
+		{ ".ico", http_file::CONTENT_TYPE::ICO },
+		{ ".svg", http_file::CONTENT_TYPE::SVG },
 	};
-	static constexpr ui8 SUPPORTED_CONTENT_TYPE_COUNT = sizeof(SUPPORTED_CONTENT_TYPES) / sizeof(content_type);
+	static constexpr ui8 SUPPORTED_CONTENT_TYPE_COUNT = sizeof(SUPPORTED_CONTENT_TYPES) / sizeof(content_type_extension);
 
 	// Match the found extension against our supported content types.
 	for (ui32 typeIndex = 0; typeIndex < SUPPORTED_CONTENT_TYPE_COUNT; typeIndex++)
@@ -85,7 +102,7 @@ static ia_string_view http_get_content_type(const ia_string_view& path)
 			return SUPPORTED_CONTENT_TYPES[typeIndex].type;
 	}
 
-	return "application/octet-stream"; // If no extension is found, treat the file as a byte stream.
+	return http_file::CONTENT_TYPE::OCTET_STREAM; // If no extension is found, treat the file as a byte stream.
 }
 
 const http_file* web_server_find_file(web_server& web, const ia_string_view& target)

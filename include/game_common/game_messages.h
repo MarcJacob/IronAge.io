@@ -30,14 +30,14 @@ struct game_message_header
 {
 	GAME_MESSAGE_TYPE message_type;
 
-	ui16 payloadSize;
+	ui16 payload_size;
 	ui8 _payload[];
 
 	// Get a typed reference to the beginning of the payload bytes.
 	// Asserts that the payload is at least large enough for the type of payload desired, but does NOT guarantee anything beyond that,
 	// specifically the validity of the values or the coherence of the size of the payload for dynamically-sized messages.
 	template<typename PayloadType>
-	inline PayloadType& get_payload_ref() { ASSERT(payloadSize >= sizeof(PayloadType)); return *(PayloadType*)_payload; }
+	inline PayloadType& get_payload_ref() const { ASSERT(payload_size >= sizeof(PayloadType)); return *(PayloadType*)_payload; }
 };
 
 // BEGIN GAME SERVER CORE MESSAGES
@@ -150,7 +150,7 @@ static game_message_header* build_game_message(GAME_MESSAGE_TYPE type, mem_arena
 	*header = {};
 
 	header->message_type = type;
-	header->payloadSize = get_message_type_payload_size(type) + extra_payload_size;
+	header->payload_size = get_message_type_payload_size(type) + extra_payload_size;
 
 	return header;
 }

@@ -32,7 +32,8 @@ set "INCLUDES=%INCLUDES% -I%PROJECT_ROOT%/include/"
 :: Compilation flags
 
 set "COMPILER_FLAGS="
-set "COMPILER_FLAGS=%COMPILER_FLAGS% --debug"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -g"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -O0"
 
 :: Warnings policy: all are enabled with some exceptions,
 :: all are considered errors.

@@ -4,23 +4,19 @@
 
 #include "game_server.h"
 #include "game_server/game_server_platform.h"
+#include "match_slots/match_slots.h"
 #include "game_server_clients.h"
 
 // BEGIN CLIENT TABLE SYSTEM IMPLEMENTATION
 
 static constexpr const char* CLIENTS_COMPONENT_NAME = "Clients";
 
+// Main clients table structure holding the state of all connected clients on the server.
 struct game_server_clients_table
 {
 	game_server_client* _client_buff; // Buffer of client data.
 	ui16 _client_count; // Number of connected clients.
 	ui16 _client_capacity; // Maximum of concurrent client connections.
-
-	// Event handlers
-
-	// Called when any non-UNKNOWN client gets disconnected.
-	on_client_disconnected_fn on_client_disconnected_handlers[8];
-	ui8 on_client_disconnected_handler_count;
 };
 
 // Initializes the clients table associated with the server.
@@ -79,23 +75,13 @@ game_server_client* clients_table_register_new_connection(game_server& server, g
 	return nullptr; // Failed to find room. Let the caller handle the consequences.
 }
 
-void clients_table_on_connection_lost(game_server& server, game_server_client::client_handle client_handle)
+void clients_table_remove_client(game_server& server, game_server_client::client_handle client_handle)
 {
 	ASSERT(server.client_table != nullptr);
 	game_server_clients_table& clientsTable = *server.client_table;	
 	
-	server.logf(CLIENTS_COMPONENT_NAME, LOG_TYPE::LOG_WARNING,
-		"Lost connection with client %d. Removing from active client connections...", client_handle.value);
-
-	// Free client after calling relevant event handler.
-
 	game_server_client& client = clientsTable._client_buff[client_handle._table_index];
 	if (client.handle.value != client_handle.value) return; // Stale handle.
-
-	for (ui8 i = 0; i < clientsTable.on_client_disconnected_handler_count; i++)
-	{
-		clientsTable.on_client_disconnected_handlers[i](server, client);
-	}
 
 	// Completely reset client data.
 	client = {};
@@ -104,12 +90,7 @@ void clients_table_on_connection_lost(game_server& server, game_server_client::c
 	clientsTable._client_count--;
 }
 
-void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, on_client_disconnected_fn handler)
-{
-	table.on_client_disconnected_handlers[table.on_client_disconnected_handler_count++] = handler;
-}
-
-const game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
+game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);
@@ -123,25 +104,24 @@ const game_server_client* game_server_get_client_data(game_server& server, game_
 	return nullptr; // Handle was stale or invalid.
 }
 
-void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle, 
-	client_send_game_msg_fn send_func,
-	client_peek_game_msg_fn peek_func,
-	client_consume_game_msg_fn consume_func)
+void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle, mem_arena* reception_buffer_ptr, mem_arena* send_buffer_ptr)
 {
 	ASSERT(server.client_table != nullptr);
 	ASSERT(handle._table_index < server.client_table->_client_capacity);
-	ASSERT(send_func != nullptr && peek_func != nullptr && consume_func != nullptr);;
 
 	game_server_clients_table& clientsTable = *server.client_table;	
 	game_server_client& client = clientsTable._client_buff[handle._table_index];
 
 	ASSERT(client.type != game_server_client::TYPE::GAME_CLIENT);
 
-	// Change client type and assign send, peek & consume functions.
+    // Change client type and reset its specific properties (the union member still holds the previous type's data).
 	client.type = game_server_client::TYPE::GAME_CLIENT;
-	client.game_client.send_game_message_func = send_func;
-	client.game_client.peek_game_message_func = peek_func;
-	client.game_client.consume_game_message_func = consume_func;
+    ia_memzero(&client.game_client, sizeof(client.game_client));
+    client.game_client.match_slot = INVALID_MATCH_SLOT_INDEX;
+    // ...
+
+    client.game_client.in_messages_buffer = reception_buffer_ptr;
+    client.game_client.out_messages_buffer = send_buffer_ptr;
 }
 
 bool game_server_client_send_net_bytes(game_server& server, game_server_client::client_handle handle, const ui8* msg, ui64 msg_size)
@@ -187,8 +167,6 @@ void game_server_client_drop(game_server& server, game_server_client::client_han
 	{
 		server.platform->net_close_connection((game_server_platform::net_connection_handle)client->connection_info.connection_handle);
 	}
-
-	clients_table_on_connection_lost(server, client->handle);
 }
 
 void game_server_client_for_each_of_type(game_server& server, game_server_client::TYPE type, void(*for_each_func)(game_server&, game_server_client&))

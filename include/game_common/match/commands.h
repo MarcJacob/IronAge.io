@@ -310,7 +310,7 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 // An example of how to use it can be found in the match test code.
 struct match_tick_commands_builder
 {
-	mem_arena* target_mem;
+	mem_arena* target_mem; // Memory the builder is building into.
 
 	match_tick_commands* _tick_commands_start;
 
@@ -328,7 +328,7 @@ struct match_tick_commands_builder
 
 		*_tick_commands_start = {};
 		return true;
-	}
+    }
 
 	// Writes player_id, then creates a new sequence builder right after it, pointing on the same memory. The new
 	// builder replaces the current one in the structure if any.

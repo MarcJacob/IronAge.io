@@ -7,6 +7,9 @@
 
 #include "core.h"
 
+// Include public backend interface / types.
+#include "game_client/game_client_backend.h"
+
 #include "game_common/match/match.h"
 #include "game_common/match/commands.h"
 

@@ -81,32 +81,33 @@ Replace CMake with a simpler build and restructure outputs:
     to trap). Each module fills it in; server does so in `OnLoad` (called by
     the platform on every load). Handler functions live in platform code.
 
+- [DONE] Review findings fixed (script bugs, imprint flags, assert null
+  check, `on_unload`). `_ASSERTION_HANDLER` name kept on purpose (global but
+  unsafe to access).
+- [DONE] Reload-resistance: block holds data only, no code pointers or views
+  into DLL `.rdata`; code is reached by dispatch. No registration layer unless
+  components become fully dynamic.
+  - Client messaging redesigned: connector (web server) pushes received
+    payloads into a per-client inbound buffer and frames / sends from an
+    outbound buffer of raw game messages; game clients have one shape, no
+    sub-type or pointers. `static_mem_arena::init()` added.
+  - Disconnect handlers table removed; `http_file.content_type` is an enum.
+  - Hand-tested: connect, match start, both players' inputs work.
+- Hot-reload: no layout-change detection / re-init fallback; a reload that
+  breaks layout may crash the server (reloads only happen with no external
+  connections).
+
 ## Next step
 
-0. Fix review findings (DLL split review done):
-   - DLL build script lacks imprint flags (`-ffp-contract=off`,
-     `-ffreestanding`, `-fno-builtin`, `-fsigned-char`); web script lacks
-     `-ffp-contract=off`, `-fno-builtin`, `-fsigned-char`.
-   - `assert.h`: no null-handler check (despite decision above); pointer
-     declared `extern` then `static` in modules; `game_server_platform.h`
-     `on_unload` sets `_is_loaded = true`.
-   - [DONE] Build script bugs (DLL failure propagation, `OUTPUT_FOLDER` arg
-     now a real output folder, web script filename/robocopy, launch/env
-     script typos, `scripts.imprint.md` list). Awaiting hand check.
-   - Remaining script issues: missing closing quote in
-     `win32_game_server_build.cmd:36` (`COMPILER_FLAGS ... --debug`);
-     unquoted `if not exist %OUTPUT_DIR%` breaks on paths with spaces.
-   - Stale outputs to delete: `web/game_client.wasm`,
-     `build/web_client_debug/`.
-   - Pointers into DLL stored in the block (dangle on reload): client
-     send/peek/consume funcs (`game_server_clients.h`), disconnect handlers
-     table, `http_file.content_type` view of DLL `.rdata`.
-   - Naming of `_ASSERTION_HANDLER` struct/members vs snake_case convention.
-1. Platform-side hot-reload: detect new DLL (recommended: poll timestamp),
-   copy before load, unload/reload, rebind the three function pointers (and
-   `OnLoad`), keep passing the same memory block. Re-init fallback on layout
-   change left out of this step (not yet decided).
-   Open: DLL copy/PDB naming scheme (build to fixed name, platform copies to
-   numbered name, unique PDB); fix for dangling pointers (re-register in
-   `OnLoad` vs indices/enums); layout-change detection.
+1. Platform-side hot-reload: poll DLL timestamp, copy to numbered name
+   before load, unique PDB per build, unload / reload, rebind the three
+   function pointers and `OnLoad`, keep passing the same block.
+   Decided (recommended, accepted in principle): build to fixed name, platform
+   copies to `game_server_<n>.dll`.
 2. Audit web client build script flags against the `game_common` imprint.
+3. Leftover small items: stale outputs to delete (`web/game_client.wasm`,
+   `build/web_client_debug/`); check unclosed quote / unquoted
+   `%OUTPUT_DIR%` in server build script is fixed; `last_send_progress_ms`
+   not set on the websocket 101 path; unsigned `tick - emit_tick` wrap in
+   client-tick handler (`game_server_match_slots.cpp:~19`); unchecked `alloc`
+   in `http_receive` (`web_server_http.cpp:~387`).

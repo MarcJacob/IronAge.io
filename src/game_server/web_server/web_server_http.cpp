@@ -154,10 +154,11 @@ static void web_server_http_handle_request_get_file(game_server& server, web_ser
 		return;
 	}
 
+	const ia_string_view contentType = web_server_get_content_type_string(targetFile->content_type);
 	if (request.method == http_request::METHOD::GET)
-		web_server_http_serve_content(server, web_client, "200 Ok", targetFile->content_type, targetFile->data, targetFile->size);
+		web_server_http_serve_content(server, web_client, "200 Ok", contentType, targetFile->data, targetFile->size);
 	if (request.method == http_request::METHOD::HEAD)
-		web_server_http_serve_content(server, web_client, "200 Ok", targetFile->content_type, nullptr, targetFile->size);
+		web_server_http_serve_content(server, web_client, "200 Ok", contentType, nullptr, targetFile->size);
 }
 
 // Handles a request to upgrade to the websocket protocol.
@@ -380,15 +381,19 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 	out_request = {};
 
 	// Check that we're not about to overflow request buffer size. TODO(Marc): Discard previous requests if needed ?
-	if (client.request.size < WEB_CLIENT_RECEPTION_BUFFER_SIZE - 1)
+	if (client.request.buffer.allocated_count < client.request.buffer.mem_size - 1)
 	{
+        ui32 receptionSize = ia_min(HTTP_RECEPTION_CHUNK_SIZE, client.request.buffer.mem_size - client.request.buffer.allocated_count);
+        void* receptionBuffer = client.request.buffer.alloc(receptionSize, 1);
+
 		// Receive bytes on the httpConnection and place them in the request buffer.
 		ui32 receivedBytes = game_server_client_receive_net_bytes(server, web_client.client_handle,
-			(ui8*)client.request.buff + client.request.size, WEB_CLIENT_RECEPTION_BUFFER_SIZE - client.request.size - 1);
+			(ui8*)receptionBuffer, receptionSize);
 
+		// Give back the part of the allocation that wasn't filled.
+		client.request.buffer.allocated_count -= receptionSize - receivedBytes;
 		if (receivedBytes > 0)
 		{
-			client.request.size += receivedBytes;
 			web_client.last_activity_ms = server.uptime_ms;
 		}
 	}
@@ -398,10 +403,10 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 
 	// Read header fields if any bytes are left.
 	bool foundHead = false;
-	if (client.request.size >= 4)
-	while (head_end_index < client.request.size - 3)
+	if (client.request.buffer.allocated_count >= 4)
+	while (head_end_index < client.request.buffer.allocated_count - 3)
 	{
-		if (ia_str_expect(client.request.buff + head_end_index, "\r\n\r\n"))
+		if (ia_str_expect((char*)client.request.buffer.mem_start + head_end_index, "\r\n\r\n"))
 		{
 			foundHead = true;
 			head_end_index += 4;
@@ -410,10 +415,10 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 		head_end_index++;
 	}
 
-	if (!foundHead)
+    if (!foundHead)
 	{
 		// No full head present in the request buffer. If the buffer is full, it never will be.
-		if (client.request.size >= WEB_CLIENT_RECEPTION_BUFFER_SIZE - 1)
+		if (client.request.buffer.allocated_count >= client.request.buffer.mem_size - 1)
 		{
 			web_server_http_send_response_status(server, web_client, "431 Request Header Fields Too Large", true);
 			server.logf("WEB SERVER", LOG_WARNING, "Client handle %d sent a request head larger than %d bytes. Closing client.",
@@ -426,7 +431,7 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
 
 	// Parse request from buffered characters.
 
-	char* requestBytes = client.request.buff;
+	char* requestBytes = (char*)client.request.buffer.mem_start;
 	ui32 readBytes = 0;
 
 	// Method
@@ -545,8 +550,8 @@ void web_server_http_dispose_request(game_server& server, web_server_client& web
 
 	// Left-shift remaining bytes in client request buffer to the left.
 	// TODO(Marc): Implement platform-independent ring buffer (not thread safe at first) so left shifting the memory isn't necessary.
-	ia_memcpy(web_client.http.request.buff, web_client.http.request.buff + request.total_size, web_client.http.request.size - request.total_size);
-	web_client.http.request.size -= request.total_size;
+	ia_memcpy(web_client.http.request.buffer.mem_start, web_client.http.request.buffer.mem_start + request.total_size, web_client.http.request.buffer.allocated_count - request.total_size);
+	web_client.http.request.buffer.allocated_count -= request.total_size;
 }
 
 void web_server_http_progress_response(game_server& server, web_server_client& web_client)

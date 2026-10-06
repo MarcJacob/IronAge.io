@@ -18,13 +18,16 @@ HTTP Clients are promoteable to Websocket clients on demand from the Client, whe
 
 Once a HTTP client gets upgraded to Websocket, we assume it does so for the purpose of being a Game Client through the Websocket protocol.
 
-The provided Send function takes in a game message (assumed to be smaller than the maximum Websocket frame size), frames it as required by Websocket and sends it.
+The Web Server is a connector: it never exposes functions to the game code. On promotion it hands the Game Server Client two buffers (see *game_server_clients.h*), and from then on only moves bytes between them and the network.
 
-Reception works through a "buffers split" strategy that relies on the fact we can immediately get rid and react to non-game messages like pings, closes...
-The reception buffer stays aware of not only how many bytes are waiting but also how many have been "queued" / processed from their websocket frame.
-The receive function on the client can then just reconstruct the processed websocket frame at the beginning of the buffer and obtain its payload location.
-The consume function can do the same thing to know how many bytes to consume.
+Reception: raw network bytes land in a reception buffer, and complete frames are parsed out of it. Control frames (ping, close...) are handled right away.
+Game messages (binary frames) are unmasked, validated and copied, payload only, into the inbound processed buffer, where the game code reads them back to back. Frames too large for it are refused.
+It could still be a nice improvement to turn the reception buffer into a ring buffer so we don't have to shift the bytes left on removal.
 
-It could still be a nice improvement to turn the buffer into a ring buffer so we don't have to shift the bytes left on consumption.
+Sending: the game code puts raw game messages back to back in the outbound buffer. Each tick the Web Server frames them one by one into a scratch buffer on the stack and hands them to the platform. Messages the platform refuses stay in the outbound buffer for the next tick.
+
+The arenas in the client block are initialized with their init function at promotion, since they overlay HTTP client data. The reception buffer is aligned with the HTTP request buffer
+so any bytes received after the upgrade request are handed over without a copy.
+The block only holds data (no function pointers or views into the DLL), so the Game Server code can be hot reloaded.
 
 Websocket clients are pinged regularly as a heartbeat / keep-alive mechanism, based on a ping clock or how long since they sent something to us.

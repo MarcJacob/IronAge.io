@@ -3,20 +3,15 @@
 #ifndef GAME_SERVER_CLIENTS_INCLUDED
 #define GAME_SERVER_CLIENTS_INCLUDED
 
-struct game_message_header;
+#include "core.h"
+
+#include "game_server/game_server_platform.h"
+
+#include "game_common/game_messages.h"
+
+struct game_server;
+struct game_server_platform;
 struct game_server_client;
-
-// Defines a function able to handle sending a game message towards a game server client. The client must be of type GAME_CLIENT.
-using client_send_game_msg_fn = bool(*)(const game_server_client& client, const game_message_header& message);
-
-// Defines a function able to peek at the next received game message from a game server client, if any. The client must be of type GAME_CLIENT.
-// Returns whether a message is available, in which case out_message_ptr will point to the actual data in memory making up the message.
-// It can be read as is or copied somewhere else, and stays valid, and the same, until the message is consumed.
-using client_peek_game_msg_fn = bool(*)(const game_server_client& client, game_message_header*& out_message_ptr);
-
-// Defines a function able to consume the game message currently at the front of a game server client's received messages, so that the next peek
-// gives the following one. Does nothing if there is no message. The client must be of type GAME_CLIENT.
-using client_consume_game_msg_fn = void(*)(const game_server_client& client);
 
 // Core data associated with a client connection on the game server.
 // Client connections cover ALL sorts of inward connections started from the outside, and can survive the loss of the platform connection.
@@ -68,54 +63,55 @@ struct game_server_client
 			ui64 traffic_size; // Total amount of bytes received from this client.
 		} unknown;
 
+        // 
 		struct
 		{
 			ui8 _empty;
 		} non_game_client;
 
+        // Holds client state when it has been promoted to a Game Client, able to send and receive game messages.
 		struct
 		{
-			// Assigned by server sub-component in charge of actual client connection.
-			client_send_game_msg_fn send_game_message_func;
-			// Assigned by server sub-component in charge of actual client connection.
-			client_peek_game_msg_fn peek_game_message_func;
-			// Assigned by server sub-component in charge of actual client connection.
-			client_consume_game_msg_fn consume_game_message_func;
+            // @TODO(Marc): Turn those into special Queue arenas that can be made thread-safe when connector components (IE Web Server) are made to run on a different thread.
+            mem_arena* in_messages_buffer; // Buffer inside which incoming game messages are put. Contains Game Messages back to back in reception order.
+            mem_arena* out_messages_buffer; // Buffer inside which outgoing game messages are put. Contains Game Messages back to back in emission order.
 
-			// Whether this client is currently attached to a match slot as a controlling player.
-			bool attached_to_match;
+		    ui16 match_slot; // The match slot this client has joined, if any (INVALID_MATCH_SLOT if none).
+            match_player_id player_index; // If in an ongoing match, index of the player controlled by this client.
 		} game_client;
 	};
 
 	// Sends message to this game client. Client must be of type GAME_CLIENT.
 	// Returns whether the message was successfully sent.
-	inline bool game_client_send_message(const game_message_header& msg) const
+	inline bool game_client_send_message(const game_message_header& msg)
 	{ 
 		ASSERT(type == TYPE::GAME_CLIENT);
-		ASSERT(game_client.send_game_message_func != nullptr);
+        ASSERT(game_client.out_messages_buffer != nullptr && game_client.out_messages_buffer->mem_size > 0);
+        
+        void* bufferTarget = game_client.out_messages_buffer->alloc(sizeof(game_message_header) + msg.payload_size, 1); // Alignment 1: messages sit back to back, no padding.
+        if (bufferTarget == nullptr) return false;
 
-		return game_client.send_game_message_func(*this, msg);
+        ia_memcpy(bufferTarget, &msg, sizeof(game_message_header) + msg.payload_size);
+        return true;
 	}
 
-	// Peeks at the next message received from this game client. Client must be of type GAME_CLIENT.
-	// Returns whether a message is available, in which case out_msg_ptr will point to it. The message stays the same until consumed.
-	inline bool game_client_peek_message(game_message_header*& out_msg_ptr) const
+    // Queries the game client for a pointer to its internal message reception buffer into which its connector component
+    // pushes game messages.
+	inline const void* game_client_get_messages_reception_buffer(ui64& out_received_bytes)
 	{
 		ASSERT(type == TYPE::GAME_CLIENT);
-		ASSERT(game_client.peek_game_message_func != nullptr);
+        ASSERT(game_client.in_messages_buffer != nullptr && game_client.in_messages_buffer->mem_size > 0);
 
-		return game_client.peek_game_message_func(*this, out_msg_ptr);
+        out_received_bytes = game_client.in_messages_buffer->allocated_count;
+        return game_client.in_messages_buffer->mem_start;
 	}
 
-	// Consumes the message last peeked, so the next peek returns the next message. Client must be of type GAME_CLIENT.
-	// Every peeked message MUST be consumed once done with.
-	inline void game_client_consume_message() const
-	{
-		ASSERT(type == TYPE::GAME_CLIENT);
-		ASSERT(game_client.consume_game_message_func != nullptr);
-
-		game_client.consume_game_message_func(*this);
-	}
+    // Empties out the game client's internal message reception buffer.
+    inline void game_client_clear_reception_buffer()
+    {
+        ASSERT(type == TYPE::GAME_CLIENT);
+        game_client.in_messages_buffer->clear();
+    }
 };
 
 struct game_server_clients_table;
@@ -132,23 +128,14 @@ void clients_table_init(game_server& server, ui16 max_client_count);
 // If successful, returns a pointer to the client structure now associated with this connection.
 game_server_client* clients_table_register_new_connection(game_server& server, game_server_platform::in_connection& connection_info);
 
-// Signals the table that a connection was lost or dropped.
-void clients_table_on_connection_lost(game_server& server, game_server_client::client_handle handle);
-
-// Registers an event handler to be called when any non-UNKNOWN client connection is lost.
-void clients_table_register_event_handler_client_connection_lost(game_server_clients_table& table, on_client_disconnected_fn handler);
-
 // Extensions to server functionality
 
 // Retrieves pointer to game server client data associated with the handle.
-const game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
+game_server_client* game_server_get_client_data(game_server& server, game_server_client::client_handle handle);
 
 // Promotes a client connection to GAME_CLIENT status, allowing it to take part in the game server / game messages messaging protocols.
-// Used by server sub-components. send_func, peek_func and consume_func must contain valid functions for the client to use to route messages in and out.
-void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle,
-	client_send_game_msg_fn send_func,
-	client_peek_game_msg_fn peek_func,
-	client_consume_game_msg_fn consume_func);
+// Whoever requests the promotion is in charge of providing appropriate reception & send buffers from which the server code and send & receive game messages.
+void game_server_promote_game_client(game_server& server, game_server_client::client_handle handle, mem_arena* reception_buffer_ptr, mem_arena* send_buffer_ptr);
 
 // Sends bytes along a client's associated platform network connection. To be used by server subcomponents.
 // Game Server / Game Client logic should use the Game Client equivalent.
@@ -158,7 +145,8 @@ bool game_server_client_send_net_bytes(game_server& server, game_server_client::
 // Game Server / Game Client logic should use the Game Client equivalent.
 ui32 game_server_client_receive_net_bytes(game_server& server, game_server_client::client_handle handle, ui8* buff, ui64 buff_size);
 
-// Unilaterally drops the platform connection associated with the client, and the client itself from the table.
+// Unilaterally drops the platform connection associated with the client.
+// The client stays in the table until its connection is entirely closed.
 void game_server_client_drop(game_server& server, game_server_client::client_handle handle);
 
 // Executes a function over every client of the given type.
