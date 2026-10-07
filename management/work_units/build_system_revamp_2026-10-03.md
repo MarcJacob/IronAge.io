@@ -97,17 +97,18 @@ Replace CMake with a simpler build and restructure outputs:
   breaks layout may crash the server (reloads only happen with no external
   connections).
 
-## Next step
+- [DONE] Platform-side hot-reload: build to fixed name, platform copies DLL
+  and PDB to `HOT_RELOAD_TEMP/game_server_<n>.*` (same stamp), unloads /
+  reloads, rebinds function pointers and `OnLoad`, same block. Hand-tested.
+- [DONE] Client / server build script flags audited against `game_common`
+  imprint (`-fno-builtin` was missing).
+- [DONE] Leftover small items (quoting, tick wrap guard, `alloc` check).
 
-1. Platform-side hot-reload: poll DLL timestamp, copy to numbered name
-   before load, unique PDB per build, unload / reload, rebind the three
-   function pointers and `OnLoad`, keep passing the same block.
-   Decided (recommended, accepted in principle): build to fixed name, platform
-   copies to `game_server_<n>.dll`.
-2. Audit web client build script flags against the `game_common` imprint.
-3. Leftover small items: stale outputs to delete (`web/game_client.wasm`,
-   `build/web_client_debug/`); check unclosed quote / unquoted
-   `%OUTPUT_DIR%` in server build script is fixed; `last_send_progress_ms`
-   not set on the websocket 101 path; unsigned `tick - emit_tick` wrap in
-   client-tick handler (`game_server_match_slots.cpp:~19`); unchecked `alloc`
-   in `http_receive` (`web_server_http.cpp:~387`).
+## Open questions
+
+- Future-tick client commands are rejected (kept as is).
+
+## Outcome
+
+Unit complete. Carried over: `full_ship.cmd` deploy step -> `dev_iteration_loop`;
+layout-change re-init fallback -> backlog (`server_reload_reinit_fallback`).

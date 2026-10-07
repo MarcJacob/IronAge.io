@@ -386,15 +386,18 @@ bool web_server_http_receive(game_server& server, web_server_client& web_client,
         ui32 receptionSize = ia_min(HTTP_RECEPTION_CHUNK_SIZE, client.request.buffer.mem_size - client.request.buffer.allocated_count);
         void* receptionBuffer = client.request.buffer.alloc(receptionSize, 1);
 
-		// Receive bytes on the httpConnection and place them in the request buffer.
-		ui32 receivedBytes = game_server_client_receive_net_bytes(server, web_client.client_handle,
-			(ui8*)receptionBuffer, receptionSize);
-
-		// Give back the part of the allocation that wasn't filled.
-		client.request.buffer.allocated_count -= receptionSize - receivedBytes;
-		if (receivedBytes > 0)
+		if (receptionBuffer != nullptr)
 		{
-			web_client.last_activity_ms = server.uptime_ms;
+			// Receive bytes on the httpConnection and place them in the request buffer.
+			ui32 receivedBytes = game_server_client_receive_net_bytes(server, web_client.client_handle,
+				(ui8*)receptionBuffer, receptionSize);
+
+			// Give back the part of the allocation that wasn't filled.
+			client.request.buffer.allocated_count -= receptionSize - receivedBytes;
+			if (receivedBytes > 0)
+			{
+				web_client.last_activity_ms = server.uptime_ms;
+			}
 		}
 	}
 

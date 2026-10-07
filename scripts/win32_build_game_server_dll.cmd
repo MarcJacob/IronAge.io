@@ -23,7 +23,7 @@ if errorLevel 1 (
     goto :end
 )
 
-set "%errorLevel%=0"
+set "errorLevel=0"
 
 :end
 if "%PAUSE_ON_END%"=="1" pause

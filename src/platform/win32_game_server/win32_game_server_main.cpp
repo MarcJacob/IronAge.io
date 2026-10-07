@@ -468,7 +468,9 @@ static constexpr char SERVER_PROGRAM_FILENAME_BASE[] = "./game_server.dll"; // B
 
 static game_server_program SERVER_PROGRAM; // Static memory storage of the server program running on this platform.
 static HMODULE SERVER_PROGRAM_MODULE;
+static constexpr char SERVER_PROGRAM_PDB_FILENAME_BASE[] = "./game_server.pdb"; // Debug symbols matching the base DLL.
 static ia_static_string<256> SERVER_PROGRAM_FILENAME; // Filepath of file the server program was loaded from. Kept null-terminated.
+static ia_static_string<256> SERVER_PROGRAM_PDB_FILENAME; // Filepath of the PDB copy made for the loaded program (empty if none). Kept null-terminated.
 static ui64 SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently-loaded server program dll file.
 
 // (Re)Loads the Game Server program dll if it is newer than what is currently loaded.
@@ -485,6 +487,9 @@ void win32_reload_game_server_program()
         FreeLibrary(SERVER_PROGRAM_MODULE);
         SERVER_PROGRAM_MODULE = NULL;
         DeleteFile(SERVER_PROGRAM_FILENAME._str);
+        DeleteFile(SERVER_PROGRAM_PDB_FILENAME._str); // Fails harmlessly if a debugger still holds it.
+        SERVER_PROGRAM_FILENAME = ia_static_string<256>();
+        SERVER_PROGRAM_PDB_FILENAME = ia_static_string<256>();
     }
 
     // Load Game Server dll. It is expected to live next to the executable. 
@@ -527,6 +532,24 @@ void win32_reload_game_server_program()
                 SERVER_PROGRAM_FILENAME_BASE, dllFileNameBuilder.string._str, GetLastError());
 
         win32_logf("", "Copied Game Server program DLL to \"%s\".", dllFileNameBuilder.string._str);
+
+        // Copy the PDB the same way, so the debugger holds the copy and never locks the one the linker writes.
+        static_mem_arena<256> pdbFileNameMem;
+        pdbFileNameMem.reset();
+        ia_string_builder pdbFileNameBuilder(&pdbFileNameMem);
+        pdbFileNameBuilder.push_back("./HOT_RELOAD_TEMP/game_server_");
+        pdbFileNameBuilder.push_back_format("%llu.pdb", SERVER_PROGRAM_FILE_CREATION_TIME);
+        pdbFileNameBuilder.push_back('\0');
+
+        if (CopyFile(SERVER_PROGRAM_PDB_FILENAME_BASE, pdbFileNameBuilder.string._str, 0))
+        {
+            SERVER_PROGRAM_PDB_FILENAME = pdbFileNameBuilder.string;
+        }
+        else
+        {
+            win32_logf("", LOG_WARNING, "PDB file copy failed on hot reload. Base name = %s | Copy name = %s | Error Code = %d",
+                    SERVER_PROGRAM_PDB_FILENAME_BASE, pdbFileNameBuilder.string._str, GetLastError());
+        }
     }
 
     SERVER_PROGRAM_FILENAME = dllFileNameBuilder.string;

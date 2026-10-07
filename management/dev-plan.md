@@ -18,7 +18,7 @@ when it finishes.
 - `work_units/platform_list_resource_files_2026-09-20.md` [DONE]
 - `work_units/web_server_file_auto_reload_2026-09-20.md`
 - `work_units/server_dev_mode_2026-10-03.md`
-- `work_units/build_system_revamp_2026-10-03.md`
+- `work_units/build_system_revamp_2026-10-03.md` [DONE]
 - `work_units/dev_iteration_loop_2026-10-03.md`
 - `work_units/string_pass_2026-10-03.md` [DONE]
 - `work_units/blit_canvas_2026-09-26.md`
@@ -92,7 +92,7 @@ work to a line or two.
      (`server_dev_mode`)
    - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
      change; TODO in web server). (`web_server_file_auto_reload`)
-   - Build system revamp: off CMake, Game Common as a static library, server as a
+   - [DONE] Build system revamp: off CMake, Game Common as a static library, server as a
      hot-reloadable dynamic library. (`build_system_revamp`)
    - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.
      (`dev_iteration_loop`)

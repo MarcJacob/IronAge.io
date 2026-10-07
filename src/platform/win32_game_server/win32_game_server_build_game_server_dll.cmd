@@ -37,6 +37,7 @@ set "COMPILER_FLAGS=%COMPILER_FLAGS% -fno-exceptions"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -fno-rtti"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -ffp-contract=off"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -ffreestanding"
+set "COMPILER_FLAGS=%COMPILER_FLAGS% -fno-builtin"
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -fsigned-char"
 
 set "COMPILER_FLAGS=%COMPILER_FLAGS% -nostdinc"
@@ -58,7 +59,7 @@ set "LINKER_FLAGS=%LINKER_FLAGS% -fuse-ld=lld"
 
 :: Get output folder and create it if it doesn't exist.
 for %%i in ("%OUTPUT%") do set "OUTPUT_DIR=%%~dpi"
-if not exist %OUTPUT_DIR% mkdir %OUTPUT_DIR% || (
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%" || (
     endlocal
     exit /b 1
 )

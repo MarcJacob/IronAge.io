@@ -11,6 +11,8 @@ code, and tells the server to reload its http-serveable resources.
 - Extend deploy_web_client.bat to trigger the resource reload (dev mode message).
 - Possible follow-up: Visual Studio -> VIM once the build is simple enough.
 
+- Includes the `full_ship.cmd` deploy step (carried over from build system revamp).
+
 ## Depends on
 
 `build_system_revamp_2026-10-03.md`, `server_dev_mode_2026-10-03.md`.

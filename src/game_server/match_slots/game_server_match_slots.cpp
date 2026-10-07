@@ -17,6 +17,7 @@ void match_slot_handle_message_client_tick(match_slot& slot, game_server_client*
 {
     const auto& payload = msg.get_payload_ref<game_message_payload_client_tick>();
     if (slot.match.next_tick_commands_builder._tick_commands_start != nullptr 
+            && payload.emit_tick <= slot.match.match_ptr->tick // Unsigned: a future emit tick would wrap below.
             && slot.match.match_ptr->tick - payload.emit_tick < slot.match_params->tick_rate) // Don't take command into account if it was emitted on too old a tick.
     {
         slot.match.next_tick_commands_builder.push_validated_sequence(player_client->game_client.player_index, *slot.match.match_ptr, payload.commands);
