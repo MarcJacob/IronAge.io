@@ -9,6 +9,8 @@ import { get_selected_entity_guid } from "./input.js"
 
 let canvas: HTMLCanvasElement;
 
+let canvas_offscreen_tiles: OffscreenCanvas;
+
 let ctx: CanvasRenderingContext2D;
 
 let tintCanvas: HTMLCanvasElement | null = null;
@@ -40,14 +42,28 @@ class RESOURCES_STORE
 
 let RESOURCES: RESOURCES_STORE | null = null; // Run constructor to load resources.
 
+let BACKBUFFER_TILES_TERRAIN: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent terrain.
+let BACKBUFFER_TILES_INFLUENCE: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent influence.
+
 // Fill styles according to diplomatic status with local player.
 let DIPLOMATIC_TINTS =
 {
-    OWN: 'rgba(40, 200, 90, 0.45)',
+    OWN: 'rgba(0, 250, 0, 0.45)',
     FRIENDLY: 'rgba(40, 40, 200, 0.45)',
     NEUTRAL: 'rgba(200, 40, 40, 0.45)',
     ENEMY: 'rgba(200, 40, 40, 0.45)',
 }
+
+// RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
+let TERRAIN_COLORS: Array<[number, number, number, number]> =
+[
+    [80, 120, 80, 255],     // LAND_PLAINS
+    [75, 100, 90, 255],  // LAND_HILLS
+    [170, 170, 170, 255], // LAND_MOUNTAINS
+    [230, 210, 140, 255], // WATER_COAST
+    [30, 80, 190, 255],   // WATER_SEA
+];
+const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 255];
 
 // Current state / parameteres of the render surface. Updated on every tick.
 let RENDER_PARAMS =
@@ -67,8 +83,9 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
     const w = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
     const h = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 
-    const drawX = viewport_x * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - w / 2;
-    const drawY = canvas.height - viewport_y * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - h / 2;
+    // Tile i covers [i, i+1]: center the entity on its tile's center. Viewport space is world space minus a translation, so +0.5 applies as is.
+    const drawX = (viewport_x + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - w / 2;
+    const drawY = canvas.height - (viewport_y + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - h / 2;
 
     ctx.drawImage(entity_img, drawX, drawY, w, h);
 
@@ -139,6 +156,38 @@ function draw_world_background()
     ctx.fillRect(left, top, right - left, bottom - top);
 }
 
+// Draws the visible part of the terrain bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
+// Tile i covers [i, i+1] in world space.
+function draw_terrain()
+{
+    if (canvas_offscreen_tiles === undefined) return;
+
+    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const vx = RENDER_PARAMS.viewportBottomLeftX;
+    const vy = RENDER_PARAMS.viewportBottomLeftY;
+
+    let x0 = Math.max(0, vx);
+    let x1 = Math.min(RENDER_PARAMS.WORLD_SIZE.width, vx + canvas.width / s);
+    let y0 = Math.max(0, vy);
+    let y1 = Math.min(RENDER_PARAMS.WORLD_SIZE.height, vy + canvas.height / s);
+    if (x1 <= x0 || y1 <= y0) return;
+
+    x0 = Math.floor(x0);
+    x1 = Math.ceil(x1);
+    y0 = Math.floor(y0);
+    y1 = Math.ceil(y1);
+
+    ctx.imageSmoothingEnabled = false;
+
+    // Flip vertically so bitmap row 0 (world bottom) ends up at the bottom of the canvas.
+    ctx.save();
+    ctx.translate(0, canvas.height);
+    ctx.scale(1, -1);
+    ctx.drawImage(canvas_offscreen_tiles, x0, y0, x1 - x0, y1 - y0,
+        (x0 - vx) * s, (y0 - vy) * s, (x1 - x0) * s, (y1 - y0) * s);
+    ctx.restore();
+}
+
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
 function draw_world_border()
 {
@@ -166,6 +215,7 @@ export function draw(render_state: Backend.RenderState | null)
     RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
     draw_world_background();
+    draw_terrain();
     draw_world_border();
 
     const selectedGuid = get_selected_entity_guid();
@@ -216,6 +266,28 @@ export function init_render(canvas_element : HTMLCanvasElement) {
     // LOAD RENDER RESOURCES
     console.log("Loading render resources...");
     RESOURCES = new RESOURCES_STORE();
+
+    Core.register_on_match_joined_callback(() => 
+    {
+        if (Backend.LAST_RENDER_STATE == null) return;
+
+        const tileTypes = Backend.get_terrain_tiles_view();
+        if (tileTypes === null) return;
+        console.log("Initializing backbuffer...");
+
+        // Convert terrain type bytes to RGBA pixels, once.
+        const pixels = new Uint8ClampedArray(tileTypes.length * 4);
+        for (let i = 0; i < tileTypes.length; i++)
+        {
+            pixels.set(TERRAIN_COLORS[tileTypes[i]] ?? TERRAIN_COLOR_UNKNOWN, i * 4);
+        }
+
+        BACKBUFFER_TILES_TERRAIN = new ImageData(pixels, Backend.LAST_RENDER_STATE.world_size.width, Backend.LAST_RENDER_STATE.world_size.height);
+        canvas_offscreen_tiles = new OffscreenCanvas(Backend.LAST_RENDER_STATE.world_size.width, Backend.LAST_RENDER_STATE.world_size.height); 
+
+        let offscreenCtx = canvas_offscreen_tiles.getContext('2d') as OffscreenCanvasRenderingContext2D;
+        offscreenCtx.putImageData(BACKBUFFER_TILES_TERRAIN, 0, 0);
+    });
 
     // Register frame event.
     Core.register_frame_callback((dt) => draw(Backend.LAST_RENDER_STATE));

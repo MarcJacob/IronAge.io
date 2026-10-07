@@ -60,20 +60,9 @@ struct game_client_input_state
 
 // BEGIN CLIENT RENDER
 
-// Contains information about what the client's viewport: where in the world it is located, its zoom level...
-// Indirectly set / driven by viewport input, used by render state to determine what's in view, and where.
-struct client_viewport_state
-{
-	vec2<ui16> world_size; // Total world size in tiles this viewport is viewing.
-
-	vec2f view_rect_min; // Min rectangle corner of the world area the frontend wants to view, in world tiles.
-	vec2f view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
-};
-
 // Rebuilds Render State from the local match's current state and viewport. controlled_player_id and the
 // match's world size are copied into render_state as-is (see client_render_state).
-void game_client_rebuild_render_state(client_render_state& render_state, mem_arena& render_memory,
-	const game_match& match, const client_viewport_state& viewport, match_player_id controlled_player_id);
+void game_client_rebuild_render_state(client_render_state& render_state, const game_match& match);
 
 // END CLIENT RENDER
 
@@ -100,17 +89,14 @@ void game_client_output_client_tick_message(game_client& backend);
 struct game_client
 {
 	mem_arena* memory; // All memory the client has to work with, provided by platform. 
-
 	mem_arena local_match_mem; // Memory used for running the local match simulation.
-	mem_arena render_memory; // Memory used to build & rebuild the render state continually.
 
 	game_match* local_match; // Pointer to local match simulation if any.
 	match_player_id controlled_player_id; // ID of controlled player in active match.
 
 	game_client_input_state input; // State of input on the client, impacted by input calls from the frontend.
-	client_viewport_state player_viewport; // State of the abstract viewport, used to determine what is in view and where when building the render state.
 
-	client_render_state render_state; // Latest render state.
+	client_render_state render_state; // Screen render state / memory.
 
 	static constexpr ui32 NET_MSG_BUFFER_SIZE = KiB(4);
 	ui8 net_msg_buffer[NET_MSG_BUFFER_SIZE]; // Filled by the host with a received message's bytes before processing.

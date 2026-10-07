@@ -10,6 +10,7 @@
 #include "game_common/match/match.h"
 
 #include "game_common/game_messages.h"
+#include "game_common/match/world.h"
 
 // Structure definitions for resources sent from the client backend to frontend.
 
@@ -37,17 +38,28 @@ struct client_render_state
 	{
 		// Kept as floats (not rounded to whole tiles): rounding here caused visible per-frame jitter in
 		// scaleX/scaleY (canvas pixels per tile) on the frontend as the eased zoom crossed tile boundaries.
-		vec2f viewport_bottom_left; // World-space coordinates of the viewport.
-		float viewport_width; // Width of the viewport in world tiles.
-		float viewport_height; // Height of the viewport in world tiles.
+		vec2f bottom_left; // World-space coordinates of the viewport.
+        vec2f dimensions; // Width & Height of the viewport in world tiles.
 	} viewport;
 
-	match_player_id controlled_player_id; // ID of the player this client is in control of.
 	vec2<ui16> world_size; // Dimensions of the match world, in tiles. May move elsewhere once match info grows.
 
-	ui16 entity_count; // Entities currently visible in the viewport only.
-	render_entity* entity_states;
+    struct
+    {
+        mem_arena memory; // Memory within which the frame data is rebuilt every frame.
+
+        ui16 entity_count; // Entities currently visible in the viewport only.
+        render_entity* entity_states;
+    } frame;
+
+    struct
+    {
+        // One TERRAIN_TILE_TYPE value per world tile, row-major (y * width + x), row 0 = world y 0.
+        TERRAIN_TILE_TYPE* terrain_tiles;
+        ui8* influence_tiles_bitmap;
+    } tiles;
 };
+static_assert(sizeof(TERRAIN_TILE_TYPE) == 1, "terrain_tiles holds one byte per tile (read by backend.ts).");
 
 #pragma pack(pop)
 

@@ -2,6 +2,7 @@
 // src/platform/wasm_client_main.cpp for the WASM export wrappers that drive this from JS.
 
 #include "core.h"
+#include "core/memory.h"
 #include "game_client/game_client_backend.h"
 
 #include "game_client.h"
@@ -34,12 +35,10 @@ game_client* game_client_init(mem_arena& backend_memory)
 	static constexpr ui64 COMMAND_QUEUE_MEM_SIZE = KiB(1);
 
 	backend->local_match_mem = mem_arena_create_sub(*backend->memory, LOCAL_MATCH_MEM_SIZE);
-	backend->render_memory = mem_arena_create_sub(*backend->memory, RENDER_MEM_SIZE);
 
 	backend->input.command_queue = mem_arena_create_sub(*backend->memory, COMMAND_QUEUE_MEM_SIZE);
 	backend->input.command_queue_builder.target_mem = &backend->input.command_queue;
 	ASSERT(backend->input.command_queue_builder.init());
-
 	return backend;
 }
 
@@ -48,8 +47,7 @@ void game_client_tick(game_client& backend, float delta_time)
 	if (backend.local_match != nullptr)
 	{
 		game_client_apply_viewport_input(backend, delta_time);
-		game_client_rebuild_render_state(backend.render_state, backend.render_memory, *backend.local_match,
-			backend.player_viewport, backend.controlled_player_id);
+		game_client_rebuild_render_state(backend.render_state, *backend.local_match);
 	}
 }
 
@@ -66,6 +64,23 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
 	}
 
 	backend.local_match = localMatch;
-	backend.player_viewport.world_size = params.world_size_regions * world_terrain::REGION_SIZE;
+	backend.render_state.world_size = params.world_size_regions * world_terrain::REGION_SIZE;
+
+    ui64 tileCount = backend.render_state.world_size.x * backend.render_state.world_size.y;
+
+    // Initialize render state memory blocks & bitmaps.
+    backend.render_state.tiles.terrain_tiles = backend.memory->alloc<TERRAIN_TILE_TYPE>(tileCount);
+    ASSERT(backend.render_state.tiles.terrain_tiles != nullptr);
+
+    backend.render_state.tiles.influence_tiles_bitmap = backend.memory->alloc<ui8>(tileCount);
+    ASSERT(backend.render_state.tiles.influence_tiles_bitmap != nullptr);
+
+    // Single terrain type for now, and no influence.
+    ia_memset(backend.render_state.tiles.terrain_tiles, LAND_PLAINS, tileCount);
+    ia_memset_32(backend.render_state.tiles.influence_tiles_bitmap, 0, tileCount);
+
+    // Alloc per-frame memory.
+    backend.render_state.frame.memory = mem_arena_create_sub(*backend.memory, MiB(16));
+
 	return true;
 }

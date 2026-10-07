@@ -7,6 +7,7 @@
 
 #include "core/assert.h"
 #include "game_client/game_client_backend.h"
+#include "game_common/match/world.h"
 #include "web_game_client.h"
 
 // Unity-compile the client backend.
@@ -48,10 +49,48 @@ WASM_EXPORT void web_client_tick(float delta_time)
 	game_client_tick(*WEB_CLIENT.backend, delta_time);
 }
 
-WASM_EXPORT client_render_state* client_get_render_state()
+WASM_EXPORT world_dimensions* web_client_get_world_size()
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
-	return game_client_get_render_state(*WEB_CLIENT.backend);
+	return &game_client_get_render_state(*WEB_CLIENT.backend)->world_size;
+}
+
+WASM_EXPORT match_player_id web_client_get_controlled_player_index()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return WEB_CLIENT.backend->controlled_player_id;
+}
+
+// Render state reading
+
+WASM_EXPORT client_render_state::viewport_state* client_render_state_get_viewport()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return &game_client_get_render_state(*WEB_CLIENT.backend)->viewport;   
+}
+
+WASM_EXPORT render_entity* client_render_state_get_entities()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return game_client_get_render_state(*WEB_CLIENT.backend)->frame.entity_states;
+}
+
+WASM_EXPORT ui32 client_render_state_get_entity_count()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return game_client_get_render_state(*WEB_CLIENT.backend)->frame.entity_count;
+}
+
+WASM_EXPORT ui8* client_render_state_get_terrain_tiles()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return (ui8*)game_client_get_render_state(*WEB_CLIENT.backend)->tiles.terrain_tiles;
+}
+
+WASM_EXPORT ui8* client_render_state_get_influence_tiles()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return game_client_get_render_state(*WEB_CLIENT.backend)->tiles.influence_tiles_bitmap;
 }
 
 // Net message handling. JS writes a received websocket message's bytes into the buffer, then calls client_process_net_message.

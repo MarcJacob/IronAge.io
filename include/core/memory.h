@@ -173,6 +173,44 @@ static void ia_memset(void* dest, ui8 val, ui64 size)
 	}
 }
 
+// 32 bits variant of memset. size_32 is the number of 32 byte blocks to set.
+static void ia_memset_32(void* dest, ui64 val, ui32 size_32)
+{
+    if (size_32 == 0) return;
+    ASSERT(dest != nullptr);
+
+    if (val == 0)
+    {
+        ia_memzero(dest, size_32 * 4);
+        return;
+    }
+
+    ui32* destMem = (ui32*)dest;
+    for (ui64 i = 0; i < size_32; i++)
+    {
+        destMem[i] = val;
+    }
+}
+
+// 64 bits variant of memset. size_64 is the number of 64 byte blocks to set.
+static void ia_memset_64(void* dest, ui64 val, ui64 size_64)
+{
+    if (size_64 == 0) return;
+    ASSERT(dest != nullptr);
+
+    if (val == 0)
+    {
+        ia_memzero(dest, size_64 * 8);
+        return;
+    }
+
+    ui64* destMem = (ui64*)dest;
+    for (ui64 i = 0; i < size_64; i++)
+    {
+        destMem[i] = val;
+    }
+}
+
 // TODO(Marc): optimize this.
 static void ia_memmove(void* dest, const void* src, ui64 size)
 {

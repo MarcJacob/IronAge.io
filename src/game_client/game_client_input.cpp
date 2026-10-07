@@ -3,6 +3,7 @@
 #include "core.h"
 
 #include "game_client.h"
+#include "game_client/game_client_backend.h"
 
 static constexpr float VIEWPORT_PAN_SPEED_FRACTION = 0.5f; // Fraction of current viewport size crossed per second, at full pan input.
 static constexpr float VIEWPORT_ZOOM_EASE_RATE = 3.0f; // How fast zoom_level eases toward its target, per second.
@@ -12,9 +13,9 @@ void game_client_input_set_target_loc(game_client& backend, entity_guid entity, 
 	if (backend.local_match == nullptr) return;
 
 	// Viewport space -> world location, rounded to a tile and clamped inside the world.
-	const client_viewport_state& viewport = backend.player_viewport;
-	float worldX = ia_max(0.0f, ia_min(viewport.view_rect_min.x + (float)viewport_x, (float)viewport.world_size.x - 1.0f));
-	float worldY = ia_max(0.0f, ia_min(viewport.view_rect_min.y + (float)viewport_y, (float)viewport.world_size.y - 1.0f));
+	const client_render_state::viewport_state& viewport = backend.render_state.viewport;
+	float worldX = ia_max(0.0f, ia_min(viewport.bottom_left.x + (float)viewport_x, (float)backend.render_state.world_size.x - 1.0f));
+	float worldY = ia_max(0.0f, ia_min(viewport.bottom_left.y + (float)viewport_y, (float)backend.render_state.world_size.y - 1.0f));
 
 	auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_move_target>(MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
 	if (payload == nullptr) return; // Queue full - drop the command.
@@ -121,9 +122,9 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 
 void game_client_apply_viewport_input(game_client& backend, float delta_time)
 {
-	client_viewport_state& viewport = backend.player_viewport;
+    client_render_state::viewport_state& viewport = backend.render_state.viewport;
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
 
-	viewport.view_rect_min = viewportInput.view_rect_min;
-	viewport.view_rect_max = viewportInput.view_rect_max;
+	viewport.bottom_left = viewportInput.view_rect_min;
+	viewport.dimensions = viewportInput.view_rect_max - viewportInput.view_rect_min;
 }

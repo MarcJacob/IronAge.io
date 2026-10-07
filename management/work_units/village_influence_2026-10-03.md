@@ -4,19 +4,45 @@ Started: 2026-10-03
 
 ## Goal
 
-Villages project influence over terrain tiles. Tiles are colored by
-ownership: own territory green, enemy red, etc., with a dark shade on the
-border. Rendered on the blit canvas terrain view.
+Villages project soft influence over terrain, not hard tile ownership. Several
+settlements (usually 1, sometimes 2, rarely 3) can influence the same tile.
+Rendered as a faded area on the blit canvas terrain view, not a clean border.
 
 ## Decisions
 
 - Influence lives in GameCommon sim state (all game mechanics do). It feeds
   the settlement econ tick (`settlement_econ_tick_2026-10-03.md`).
+- Per tile: 2 (maybe 3) unranked influencing-settlement slots, strength
+  derived from distance and population. Tiles feed their settlements additively into "land exploitation",
+  weighted by tile fertility; a contested tile yields less in total (encourages
+  conflict).
+- Storage is region-local (tiles belong to regions): static entities are stored
+  per region so tile claimants can be updated cheaply when a settlement is
+  founded / destroyed in nearby regions.
+- Target map size: 1024^2 first, 4096^2 later (see `blit_canvas`).
+- Strength depends on population and is reduced by tier (big urban settlements
+  claim less per inhabitant); falls off with squared distance; never reaches
+  further than one region.
+- Slot choice is unranked: settlements aligned behind a closer one are
+  discarded (natural areas when dense, cheap).
+- Slot entry ~1 byte: per-region settlement table index + which of the 9
+  regions (self + 8 neighbours). Needs a strict settlements-per-region cap.
+- Land production per settlement is updated coarsely, deterministically
+  staggered (never every tick).
+- Optional coarse influence grid if memory requires.
+- Terrain generation out of scope: one tile type for now; color-coded image
+  loading later.
 
 ## Open design
 
-- Influence model: radius, falloff, contested tiles, per-tile data layout.
-- Color scheme per viewer vs per player.
+- Alignment discard rule and slot count (2 vs 3).
+- Whether slot membership is static between found / destroy (strength computed
+  on read from distance + current population) or re-evaluated over time.
+- Update schedule: period and stagger rule.
+- Per-region settlement cap and behavior when a region is full.
+- Contested-tile output penalty formula.
+- Rendering: blend of owner colors by strength, alpha by total strength; color
+  scheme per viewer vs per player; whether any border hint remains.
 
 ## Depends on
 
@@ -24,4 +50,5 @@ border. Rendered on the blit canvas terrain view.
 
 ## Progress
 
-Not started.
+Not started. Survey done (terrain struct exists but is never generated;
+`area_influence` ui8 exists on settlements, unused).

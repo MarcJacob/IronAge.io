@@ -87,7 +87,7 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 		if (!game_client_begin_match_with_params(backend, *(game_match_start_params*)paramsCopy, paramsBlockSize)) return GAME_MESSAGE_TYPE::INVALID;
 
 		// Refresh render state so it can take match params into account.
-		game_client_rebuild_render_state(backend.render_state, backend.render_memory, *backend.local_match, backend.player_viewport, backend.controlled_player_id);
+		game_client_rebuild_render_state(backend.render_state, *backend.local_match);
 
 		break;
 	}

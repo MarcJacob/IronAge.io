@@ -57,7 +57,13 @@ interface ClientExports extends WebAssembly.Exports
     client_get_net_output_message_buffer_offset(): number;
 
     // Render state
-    client_get_render_state(): number;
+    client_render_state_get_viewport(): number; // Pointer to client_render_state::viewport_state.
+    client_render_state_get_entities(): number; // Pointer to render_entity array.
+    client_render_state_get_entity_count(): number; // Value (ui32).
+    client_render_state_get_terrain_tiles(): number; // Pointer to TERRAIN_TILE_TYPE array (1 byte each).
+    client_render_state_get_influence_tiles():number; // Pointer to render_tiles array (4 bytes each).
+    web_client_get_world_size(): number; // Pointer to vec2<ui16> (x = width, y = height).
+    web_client_get_controlled_player_index(): number; // Value (match_player_id, ui16).
 
     // Input
 
@@ -263,33 +269,57 @@ export class RenderState
     viewport_bottom_left_y: number = 0;
     viewport_width: number = 0;
     viewport_height: number = 0;
+
     controlled_player_id: number = 0;
     world_size: Core.WorldSize = new Core.WorldSize();
+
     entity_count: number = 0;
     entity_states: Array<RenderEntity> = [];
+
+    terrain_tiles_pointer: number = 0; // Wasm memory offset of the terrain tile type bytes.
+    influence_tiles_pointer: number = 0;
+}
+//
+// Fresh view of terrain type bytes (one TERRAIN_TILE_TYPE per tile, row 0 = world y 0) over wasm memory, or null if there is no match.
+// Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
+export function get_terrain_tiles_view(): Uint8Array<ArrayBuffer> | null
+{
+    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.terrain_tiles_pointer === 0) return null;
+
+    const world = LAST_RENDER_STATE.world_size;
+    const length = world.width * world.height;
+    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.terrain_tiles_pointer, length);
 }
 
 // Reads the latest render state of the local match. Called once per animation frame, during tick().
 // Mirrors client_render_state (include/game_client/game_client_backend.h) by hand. Keep both in sync.
 function read_render_state()
 {
-    // Layout of client_render_state: viewport (bottom_left x/y f32, width f32, height f32), controlled_player_id
-    // (ui16), world_size (ui16 width/height), entity_count (ui16), entity_states pointer (ui32). Views are
-    // re-created on every read on purpose, as they become invalid if wasm memory ever grows.
-    const renderStateOffset: number = CLIENT_BACKEND.client_get_render_state();
-    const renderStateDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, renderStateOffset);
-
+    // Read through the client_render_state_get_* getters. Views are re-created on every read on purpose,
+    // as they become invalid if wasm memory ever grows.
     let renderState = new RenderState();
-    renderState.viewport_bottom_left_x = renderStateDataView.getFloat32(0, true);
-    renderState.viewport_bottom_left_y = renderStateDataView.getFloat32(4, true);
-    renderState.viewport_width = renderStateDataView.getFloat32(8, true);
-    renderState.viewport_height = renderStateDataView.getFloat32(12, true);
-    renderState.controlled_player_id = renderStateDataView.getUint16(16, true);
-    renderState.world_size.width = renderStateDataView.getUint16(18, true);
-    renderState.world_size.height = renderStateDataView.getUint16(20, true);
-    renderState.entity_count = renderStateDataView.getUint16(22, true);
 
-    const entityStatesOffset: number = renderStateDataView.getUint32(24, true);
+    // viewport_state: bottom_left x/y (f32), dimensions width/height (f32). Packed, offsets 0 / 4 / 8 / 12.
+    const viewportDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_render_state_get_viewport());
+    renderState.viewport_bottom_left_x = viewportDataView.getFloat32(0, true);
+    renderState.viewport_bottom_left_y = viewportDataView.getFloat32(4, true);
+    renderState.viewport_width = viewportDataView.getFloat32(8, true);
+    renderState.viewport_height = viewportDataView.getFloat32(12, true);
+
+    // world_size: vec2<ui16>, x = width, y = height.
+    const worldSizeDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.web_client_get_world_size());
+    renderState.world_size.width = worldSizeDataView.getUint16(0, true);
+    renderState.world_size.height = worldSizeDataView.getUint16(2, true);
+
+    renderState.controlled_player_id = CLIENT_BACKEND.web_client_get_controlled_player_index();
+    renderState.entity_count = CLIENT_BACKEND.client_render_state_get_entity_count();
+
+    renderState.terrain_tiles_pointer = CLIENT_BACKEND.client_render_state_get_terrain_tiles();
+    renderState.influence_tiles_pointer = CLIENT_BACKEND.client_render_state_get_influence_tiles();
+
+    // ENTITIES
+
+    const entityStatesOffset: number = CLIENT_BACKEND.client_render_state_get_entities();
     const entityStatesDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
 
     // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y), size_viewport (ui8).
