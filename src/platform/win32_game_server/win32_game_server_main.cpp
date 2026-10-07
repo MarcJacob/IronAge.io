@@ -411,7 +411,8 @@ ui16 win32_list_resource_files(game_server_platform& platform, const game_server
 // BEGIN PROGRAM ENTRY
 
 static win32_platform WIN32_PLATFORM;  // Static memory storage of the main platform object.
-static game_server_program SERVER_PROGRAM; // Static memory storage of the server program running on this platform.
+static bool DEV_MODE = true; // When true at program init, will enable the required infrastructure 
+                             // to allow quicker development cycles and dev commands on the game server.
 
 // Program / Console signal handler.
 static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
@@ -459,6 +460,50 @@ void win32_platform_init()
 	// ... TODO(Marc) Many more platform functions / properties to add !
 
 	WIN32_PLATFORM.initialized = true;
+}
+
+static game_server_program SERVER_PROGRAM; // Static memory storage of the server program running on this platform.
+static ia_static_string<256> SERVER_PROGRAM_FILENAME; // Filename of file the server program was loaded from. Kept null-terminated.
+static FILETIME SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently-loaded server program dll file.
+
+// (Re)Loads the Game Server program dll if it is newer than what is currently loaded.
+// Returns whether the program was successfully loaded.
+void win32_reload_game_server_program()
+{
+    if (SERVER_PROGRAM._is_loaded && !DEV_MODE) return;
+    else if (SERVER_PROGRAM._is_loaded)
+    {
+        // Check if the available library file is newer than the one currently 
+
+        win32_log("Win32", "Unloading existing server program...");
+        SERVER_PROGRAM.unload();
+
+        // Unload library and delete old program file.
+        // ... TODO
+    }
+
+    // Load Game Server dll. It is expected to live next to the executable. 
+    win32_logf("", "Loading Game Server program...");
+
+    static_mem_arena<256> writeMem;
+    writeMem.reset();
+    ia_string_builder dllFileNameBuilder(&writeMem);
+    dllFileNameBuilder.push_back("game_server.dll");
+    dllFileNameBuilder.push_back('\0');
+
+    // @TODO(Marc): In dev mode, Add file time to name, COPY the file (and the debug symbols) first THEN load it.
+
+    SERVER_PROGRAM_FILENAME = dllFileNameBuilder.string;
+
+    HMODULE serverModule = LoadLibrary(dllFileNameBuilder.string._str);
+    ASSERT_MSG(serverModule != NULL, "Failed to load Game Server DLL module.");
+
+    // Provide the Server Program structure with the load function and let it do the rest.
+    SERVER_PROGRAM.load_program_func = (game_server_program::load_program_fn)GetProcAddress(serverModule, "game_server_load_program");
+    ASSERT_MSG(SERVER_PROGRAM.load_program_func != nullptr, "Failed to load game_server_load_program from Game Server DLL.");
+
+    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR);
+    win32_log("", LOG_SUCCESS, "Game Server Program loaded successfully.");
 }
 
 void win32_platform_shutdown()
@@ -544,37 +589,11 @@ int main(int argc, char** argv)
 		.test_scenario_dump_filename = "snapshot_native.bin",
 	};
 
-	win32_logf("Win32", "Initializing Game Server...\n");
+    // Initial load of Game Server program.
+    win32_reload_game_server_program();
+    ASSERT_MSG(SERVER_PROGRAM._is_loaded, "Failed to load server program.");
 
-    // Load Game Server dll. It is expected to live next to the executable.
-    DWORD execFileNameLen = GetModuleFileName(NULL, WIN32_PLATFORM.exec_filename, sizeof(WIN32_PLATFORM.exec_filename));
-    ASSERT(execFileNameLen > 0);
-
-    ia_string_view modulePath = WIN32_PLATFORM.exec_filename;
-    ia_string_chop_left_until(modulePath, '\\', false);
-
-    static_mem_arena<512> scratchMem;
-    ia_string_builder modulePathBuilder(&scratchMem);
-
-    modulePathBuilder.push_back(modulePath);
-
-    modulePathBuilder.push_back('\0');
-    win32_logf("Win32", "Loading Game Server code from folder %s.", modulePathBuilder.string._str);
-    modulePathBuilder.chop_left(1);
-
-    modulePathBuilder.push_back("game_server.dll");
-    modulePathBuilder.push_back('\0');
-
-    win32_logf("Win32", "Loading Game Server code from dll %s.", modulePathBuilder.string._str);
-    HMODULE serverModule = LoadLibrary(modulePathBuilder.string._str);
-    ASSERT_MSG(serverModule != NULL, "Failed to load Game Server DLL module.");
-
-    // Provide the Server Program structure with the load function and let it do the rest.
-    SERVER_PROGRAM.load_program_func = (game_server_program::load_program_fn)GetProcAddress(serverModule, "game_server_load_program");
-    ASSERT_MSG(SERVER_PROGRAM.load_program_func != nullptr, "Failed to load game_server_load_program from Game Server DLL.");
-
-    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR);
-
+	win32_logf("", "Initializing Game Server...\n");
 	SERVER_PROGRAM.is_running = SERVER_PROGRAM.init(WIN32_PLATFORM, server_init_params, game_server_mem, GAME_SERVER_MEM_SIZE);
 	if (!SERVER_PROGRAM.is_running)
 	{
@@ -609,6 +628,15 @@ int main(int argc, char** argv)
 			win32_platform_shutdown();
 			return 1;
 		}
+
+        if (DEV_MODE)
+        {
+            // Query file timestamp of loaded Game Server program and compare it to current loadable program file.
+            // If loadable file is newer, unload current program and reload it from the new file.
+            // ...
+            
+            win32_reload_game_server_program();
+        }
 
 		// Query uptime and run game server main tick function.
 		QueryPerformanceCounter(&current_counter);

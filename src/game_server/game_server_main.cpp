@@ -212,6 +212,7 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 		game_server_open_lobby(*newServer, 0);
 	}
 
+	newServer->log(LOG_SUCCESS, "Game Server initialization successful.\n");
 	return newServer;
 }
 
