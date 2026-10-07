@@ -149,8 +149,8 @@ struct game_server_platform
 struct game_server;
 
 // Game Server program, built from dynamically-loaded / assigned functions.
-// Held and built by the platform implementation.
-// If and when the server program ever gets reloaded independently of the platform, make sure to call on_load again.
+// Held by the platform implementation. The game server code is responsible for handing a load() implementation that ties the rest of the
+// program functions to the corresponding game server functionality.
 struct game_server_program
 {
     // Pointer to game server implementation if init was successful.
@@ -167,11 +167,10 @@ struct game_server_program
      * Must be called for the Game Server code to function properly, and to load the rest of the program's functions.
      */
     using load_program_fn = void (*)(game_server_program& program, _ASSERTION_HANDLER* assertion_handler);
-    load_program_fn load_program_func;
-    inline void load(_ASSERTION_HANDLER* assertion_handler) 
+    inline void load(_ASSERTION_HANDLER* assertion_handler, load_program_fn load_func) 
     {
-        ASSERT(load_program_func != nullptr && assertion_handler != nullptr);
-        load_program_func(*this, assertion_handler);
+        ASSERT(load_func != nullptr && assertion_handler != nullptr);
+        load_func(*this, assertion_handler);
 
         // Check that the Game Server program has filled in all the other functions of the program.
         ASSERT(    on_unload_func != nullptr
@@ -189,10 +188,9 @@ struct game_server_program
     void (*on_unload_func)();
     inline void unload()
     {
-        if (on_unload_func != nullptr) on_unload_func();
+        on_unload_func();
         _is_loaded = false;
 
-        load_program_func = nullptr;
         on_unload_func = nullptr;
         init_func = nullptr;
         tick_func = nullptr;

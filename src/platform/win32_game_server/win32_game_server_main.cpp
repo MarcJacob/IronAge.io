@@ -462,9 +462,14 @@ void win32_platform_init()
 	WIN32_PLATFORM.initialized = true;
 }
 
+// GAME SERVER PROGRAM MANAGEMENT
+
+static constexpr char SERVER_PROGRAM_FILENAME_BASE[] = "./game_server.dll"; // Base name of the DLL filepath containing the game server code.
+
 static game_server_program SERVER_PROGRAM; // Static memory storage of the server program running on this platform.
-static ia_static_string<256> SERVER_PROGRAM_FILENAME; // Filename of file the server program was loaded from. Kept null-terminated.
-static FILETIME SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently-loaded server program dll file.
+static HMODULE SERVER_PROGRAM_MODULE;
+static ia_static_string<256> SERVER_PROGRAM_FILENAME; // Filepath of file the server program was loaded from. Kept null-terminated.
+static ui64 SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently-loaded server program dll file.
 
 // (Re)Loads the Game Server program dll if it is newer than what is currently loaded.
 // Returns whether the program was successfully loaded.
@@ -473,38 +478,71 @@ void win32_reload_game_server_program()
     ASSERT(!SERVER_PROGRAM._is_loaded || DEV_MODE); // Check that we're not attempting a hot reload without being a dev mode.
     if (SERVER_PROGRAM._is_loaded)
     {
-        // Check if the available library file is newer than the one currently 
-
         win32_log("Win32", "Unloading existing server program...");
         SERVER_PROGRAM.unload();
 
         // Unload library and delete old program file.
-        // ... TODO
+        FreeLibrary(SERVER_PROGRAM_MODULE);
+        SERVER_PROGRAM_MODULE = NULL;
+        DeleteFile(SERVER_PROGRAM_FILENAME._str);
     }
 
     // Load Game Server dll. It is expected to live next to the executable. 
     win32_logf("", "Loading Game Server program...");
 
-    static_mem_arena<256> writeMem;
-    writeMem.reset();
-    ia_string_builder dllFileNameBuilder(&writeMem);
-    dllFileNameBuilder.push_back("game_server.dll");
+    static_mem_arena<256> dllFileNameMem;
+    dllFileNameMem.reset();
+    ia_string_builder dllFileNameBuilder(&dllFileNameMem);
+    dllFileNameBuilder.push_back(SERVER_PROGRAM_FILENAME_BASE);
     dllFileNameBuilder.push_back('\0');
 
-    // @TODO(Marc): In dev mode, Add file time to name, COPY the file (and the debug symbols) first THEN load it.
+    if (DEV_MODE)
+    {
+        // In Dev Mode, we want to find the file, copy it alongside its debug symbols and rename them, adding their time stamp.
+        // Lookup creation time of base DLL we're about to copy.
+        {
+            HANDLE baseDLLFile = CreateFile(SERVER_PROGRAM_FILENAME_BASE, GENERIC_READ, NULL, NULL, OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+            FILETIME createTime, lastAccess, lastWrite;
+            GetFileTime(baseDLLFile, &createTime, &lastAccess, &lastWrite);
+            CloseHandle(baseDLLFile);
+
+            ui64 createTime64 = (ui64)createTime.dwLowDateTime | ((ui64)createTime.dwHighDateTime << 32);
+            win32_logf("", "Game Server reload. Creation times %llu -> %llu", SERVER_PROGRAM_FILE_CREATION_TIME, createTime64);
+            SERVER_PROGRAM_FILE_CREATION_TIME = createTime64;
+        }
+
+        // Change file name builder string to include timestamp.
+        dllFileNameBuilder.chop_left(5); // Remove null terminator + ".dll".
+        dllFileNameBuilder.chop_right(2); // Remove "./"
+        dllFileNameBuilder.push_back_format("_%llu.dll", SERVER_PROGRAM_FILE_CREATION_TIME); // Append _<timestamp>.dll back on.
+        dllFileNameBuilder.push_back('\0'); // Add null terminator.
+
+        // Add folder.
+        dllFileNameBuilder.push_front("./HOT_RELOAD_TEMP/");
+
+        // Perform copy, assert on failure (server has to be fully restarted).
+        BOOL copySuccess = CopyFile(SERVER_PROGRAM_FILENAME_BASE, dllFileNameBuilder.string._str, 0);
+        ASSERT_MSG(copySuccess, "DLL file copy failed on hot reload. Base name = %s | Copy name = %s | Error Code = %d", 
+                SERVER_PROGRAM_FILENAME_BASE, dllFileNameBuilder.string._str, GetLastError());
+
+        win32_logf("", "Copied Game Server program DLL to \"%s\".", dllFileNameBuilder.string._str);
+    }
 
     SERVER_PROGRAM_FILENAME = dllFileNameBuilder.string;
 
-    HMODULE serverModule = LoadLibrary(dllFileNameBuilder.string._str);
-    ASSERT_MSG(serverModule != NULL, "Failed to load Game Server DLL module.");
+    SERVER_PROGRAM_MODULE = LoadLibrary(dllFileNameBuilder.string._str);
+    ASSERT_MSG(SERVER_PROGRAM_MODULE != NULL, "Failed to load Game Server DLL module.");
 
     // Provide the Server Program structure with the load function and let it do the rest.
-    SERVER_PROGRAM.load_program_func = (game_server_program::load_program_fn)GetProcAddress(serverModule, "game_server_load_program");
-    ASSERT_MSG(SERVER_PROGRAM.load_program_func != nullptr, "Failed to load game_server_load_program from Game Server DLL.");
+    game_server_program::load_program_fn load_program_func = (game_server_program::load_program_fn)GetProcAddress(SERVER_PROGRAM_MODULE, "game_server_load_program");
+    ASSERT_MSG(load_program_func != nullptr, "Failed to load function from Game Server DLL.");
 
-    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR);
+    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR, load_program_func);
     win32_log("", LOG_SUCCESS, "Game Server Program loaded successfully.");
 }
+
+// -------------------------------------
 
 void win32_platform_shutdown()
 {
@@ -635,9 +673,22 @@ int main(int argc, char** argv)
         {
             // Query file timestamp of loaded Game Server program and compare it to current loadable program file.
             // If loadable file is newer, unload current program and reload it from the new file.
-            // ...
-            
-            win32_reload_game_server_program();
+            // @TODO(Marc): Don't do this on every single tick !
+
+            HANDLE baseDLLFile = CreateFile(SERVER_PROGRAM_FILENAME_BASE, GENERIC_READ, NULL, NULL, OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL, NULL);
+            if (baseDLLFile != INVALID_HANDLE_VALUE)
+            {
+                FILETIME createTime, lastAccess, lastWrite;
+                GetFileTime(baseDLLFile, &createTime, &lastAccess, &lastWrite);
+                CloseHandle(baseDLLFile);
+
+                ui64 createTime64 = (ui64)createTime.dwLowDateTime | ((ui64)createTime.dwHighDateTime << 32);
+                if (createTime64 > SERVER_PROGRAM_FILE_CREATION_TIME)
+                {
+                    win32_reload_game_server_program();
+                }
+            }
         }
 
 		// Query uptime and run game server main tick function.

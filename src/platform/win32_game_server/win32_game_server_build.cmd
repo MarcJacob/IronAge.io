@@ -13,6 +13,13 @@ setlocal
 
 set "SCRIPT_FOLDER=%~dp0"
 
+:: if -hotreload parameter was just call dll build and pass it second parameter, then stop.
+if "%~1"=="-hotreload" (
+    call "%SCRIPT_FOLDER%win32_game_server_build_game_server_dll.cmd" %2 || exit /b
+    endlocal
+    exit /b 0
+)
+
 :: Start with rebuilding the platform-independent Game Server code.
 :: (bare "exit /b" keeps the DLL script's error code)
 call "%SCRIPT_FOLDER%win32_game_server_build_game_server_dll.cmd" %1 || exit /b

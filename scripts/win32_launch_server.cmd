@@ -31,7 +31,10 @@ if not "%~2"=="" (
     echo Using Resources path = %GAME_SERVER_RESOURCES_DIR%
 ) else echo Using default Resources path = %GAME_SERVER_RESOURCES_DIR%
 
+:: Launch with cd = exe file.
+pushd %GAME_SERVER_DIR%
 call %GAME_SERVER_EXE_PATH% %GAME_SERVER_RESOURCES_DIR%
+popd
 
 endlocal
 

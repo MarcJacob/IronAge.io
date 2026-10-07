@@ -38,9 +38,14 @@ local run_command_term = function(cmd, auto_close, switch_modes)
     return jobID, buf
 end
 
-local GAME_SERVER_BUILD_CMD = vim.fn.getenv("APP_BUILD_WIN32_GAME_SERVER");
+local GAME_SERVER_BUILD_CMD = vim.fn.getenv("APP_BUILD_WIN32_GAME_SERVER")
 local game_server_build = function()
-    run_command_term(GAME_SERVER_BUILD_CMD, false, true)
+    run_command_term(GAME_SERVER_BUILD_CMD, false, false)
+end
+
+local GAME_SERVER_BUILD_HOTRELOAD_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_build_game_server_dll.cmd"
+local game_server_build_hotreload = function()
+    vim.cmd("silent !" .. GAME_SERVER_BUILD_HOTRELOAD_CMD, true, false)
 end
 
 local TEST_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_launch_server.cmd"
@@ -63,6 +68,7 @@ end
 
 local setup_key_mappings = function()
     vim.keymap.set("n", "<leader>b", game_server_build) -- @TODO(Marc): Target system, toggling between active targets (Game server platform, game server dll, client...).
+    vim.keymap.set("n", "<leader>bb", game_server_build_hotreload) -- @TODO(Marc): Target system, toggling between active targets (Game server platform, game server dll, client...).
     vim.keymap.set("n", "<leader>t", test) -- @TODO(Marc): Same target system, launching the correct app.
     vim.keymap.set("n", "<leader>bt", build_and_test) -- @TODO(Marc): IDEM
     vim.keymap.set("n", "<leader>B", full_build)
