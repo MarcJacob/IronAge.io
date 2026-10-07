@@ -19,4 +19,5 @@ Prerequisite for `dev_iteration_loop_2026-10-03.md`.
 
 ## Next step
 
-Not started.
+Not started. Deferred: the crude flag-on-reload resource reload in
+`web_server_file_auto_reload` covers the immediate need.

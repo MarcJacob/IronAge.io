@@ -92,6 +92,8 @@ work to a line or two.
      (`server_dev_mode`)
    - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
      change; TODO in web server). (`web_server_file_auto_reload`)
+     - [DONE] Crude version: resources rediscovered / reloaded on the first tick after a
+       server DLL hot reload.
    - [DONE] Build system revamp: off CMake, Game Common as a static library, server as a
      hot-reloadable dynamic library. (`build_system_revamp`)
    - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.

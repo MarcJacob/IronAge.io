@@ -17,7 +17,18 @@ optionally auto-reload when the file's modified-time changed.
   names point into it.
 - Explicit reload via dev mode may supersede auto-reload.
 
+- Crude approach chosen (replaces waiting on dev mode): on server DLL load, if
+  the server already exists (reload, not first load), flag it to reload
+  resources. Resources rediscovery + reload runs whenever the flag is set (or on
+  init). Safe because reloads only happen with no external connections.
+- Dev mode / auth / HTTP trigger deferred (`server_dev_mode_2026-10-03.md` stays
+  open, not started).
+
+- Implemented: flag `reload_resources` on `game_server`, set in
+  `game_server_load_program` on reload, checked at the top of `game_server_tick`
+  (rediscover + `web_server_reload_files`). Hand-tested.
+
 ## Next step
 
-Not started. String pass dependency is done. Phase order: build revamp, dev
-mode, this, dev iteration loop.
+Crude version [DONE]. Left open: in-flight response handling, explicit
+reload via dev mode, mtime auto-reload. Nothing planned.

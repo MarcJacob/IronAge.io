@@ -129,12 +129,33 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& pr
     program.stop_func = game_server_stop;
 
     program.on_unload_func = game_server_on_program_unloaded;
+
+    // If the server already exists, this is a hot reload: resources may have changed on disk.
+    if (program._game_server_ptr != nullptr)
+    {
+        program._game_server_ptr->reload_resources = true;
+    }
 }
 
 // Called right before the server program is unloaded, independently of whether the server is actually shutting down / has shut down.
 GAME_SERVER_PROGRAM_EXPORT void game_server_on_program_unloaded()
 {
     // ...
+}
+
+static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
+
+// Lists the platform's resource files into the server's (already allocated) resource files buffer.
+static void game_server_discover_resources(game_server& server)
+{
+	server.resource_file_count = server.platform->list_resource_files("*", server.resource_files, MAX_RESOURCE_FILE_COUNT);
+
+	// TEST: List all discovered resource files.
+	server.log("Discovered resource files:");
+	for (ui8 resourceFileIndex = 0; resourceFileIndex < server.resource_file_count; resourceFileIndex++)
+	{
+		server.logf(LOG_NORMAL, "%s", (ia_string_view)server.resource_files[resourceFileIndex]);
+	}
 }
 
 GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
@@ -158,17 +179,9 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	newServer->main_memory = mem_arena_create(memory + sizeof(game_server), memory_size - sizeof(game_server));
 
 	// Discover and pre-load all resource files.
-	static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
 	newServer->resource_files = newServer->main_memory.alloc<game_server_resource_path>(MAX_RESOURCE_FILE_COUNT);
 	ASSERT_MSG(newServer->resource_files != nullptr, "Not enough server memory for the resource files list.");
-	newServer->resource_file_count = platform.list_resource_files("*", newServer->resource_files, MAX_RESOURCE_FILE_COUNT);
-
-	// TEST: List all discovered resource files.
-	newServer->log("Discovered resource files:");
-	for (ui8 resourceFileIndex = 0; resourceFileIndex < newServer->resource_file_count; resourceFileIndex++)
-	{
-		newServer->logf(LOG_NORMAL, "%s", (ia_string_view)newServer->resource_files[resourceFileIndex]);
-	}
+	game_server_discover_resources(*newServer);
 
 	// Initialize clients table subsystem.
 	if (init_params.max_client_count == 0)
@@ -262,6 +275,14 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 
 	server.delta_ms = platform_time_ms - server.uptime_ms;
 	server.uptime_ms = platform_time_ms;
+
+	// Reload resources if flagged (set on server program hot reload).
+	if (server.reload_resources)
+	{
+		server.reload_resources = false;
+		game_server_discover_resources(server);
+		web_server_reload_files(server);
+	}
 
 	// Query new & closed connections.
 	game_server_query_new_connections(server);

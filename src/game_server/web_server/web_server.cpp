@@ -139,8 +139,6 @@ void web_server_reload_files(game_server& server)
 	// TODO(Marc): When implementing actual runtime reload, it needs to be done while we have the guarantee that no files are currently being server.
 	// During that time, we can just stop reacting to GET requests or even any request at all. Reloading the files should never take that long or happen that often,
 	// or happen in critical circumstances, so it can be kept very simple. The reload flag preventing this collision can be made atomic for good measure.
-	ASSERT(server.web->file_count == 0); // Temp assert so I don't forget the todo above.
-
 	game_server_platform& platform = *server.platform;
 	web_server& web = *server.web;
 

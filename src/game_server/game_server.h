@@ -28,6 +28,7 @@ struct game_server
 
 	game_server_resource_path* resource_files;
 	ui16 resource_file_count;
+	bool reload_resources; // Set on server program hot reload. Resources get rediscovered and reloaded on next tick, then this is cleared.
 
 	bool shutdown_triggered; // Should the server shutdown as soon as possible ?
 	ui64 tick_count; // How many ticks this server has gone through in total.
