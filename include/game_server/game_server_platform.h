@@ -187,10 +187,16 @@ struct game_server_program
      * Unloads the program's functions.
      */
     void (*on_unload_func)();
-    inline void on_unload()
+    inline void unload()
     {
         if (on_unload_func != nullptr) on_unload_func();
         _is_loaded = false;
+
+        load_program_func = nullptr;
+        on_unload_func = nullptr;
+        init_func = nullptr;
+        tick_func = nullptr;
+        stop_func = nullptr;
     }
 
     /**

@@ -142,11 +142,6 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
 
 	// Check init params.
-	if (init_params.web_root.is_empty())
-	{
-		platform.log(LOG_ERROR, "Web Server requires a valid web root folder, relative to the platform resources path. Aborting.");
-		return nullptr;
-	}
 	if (init_params.match_slot_count == 0)
 	{
 		platform.log(LOG_ERROR, "Game Server requires at least one match slot to function. Aborting.");

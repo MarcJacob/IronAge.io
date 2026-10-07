@@ -157,7 +157,7 @@ void web_server_reload_files(game_server& server)
 	for (ui32 fileIndex = 0; fileIndex < server.resource_file_count; fileIndex++)
 	{
 		const game_server_resource_path& serverFile = server.resource_files[fileIndex];
-		if (!ia_string_starts_with(serverFile, server.init_params.web_root))
+		if (!ia_string_starts_with(serverFile, WEB_ROOT_FOLDER))
 		{
 			// Not located in web root.
 			continue;
@@ -178,7 +178,7 @@ void web_server_reload_files(game_server& server)
 		ui64 readSize = platform.read_resource_file(serverFile, file.data, fileSize);
 		ASSERT_MSG(readSize == fileSize, "Failed to read web file \"%.*s\".", (int)serverFile.length, serverFile._str);
 
-		file.resource_name = { serverFile._str + server.init_params.web_root.length, serverFile.length - server.init_params.web_root.length };
+		file.resource_name = { serverFile._str + ia_str_len(WEB_ROOT_FOLDER), serverFile.length - ia_str_len(WEB_ROOT_FOLDER)};
 		file.size = (ui32)fileSize;
 		file.content_type = http_get_content_type(file.resource_name);
 

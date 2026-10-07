@@ -470,8 +470,8 @@ static FILETIME SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently
 // Returns whether the program was successfully loaded.
 void win32_reload_game_server_program()
 {
-    if (SERVER_PROGRAM._is_loaded && !DEV_MODE) return;
-    else if (SERVER_PROGRAM._is_loaded)
+    ASSERT(!SERVER_PROGRAM._is_loaded || DEV_MODE); // Check that we're not attempting a hot reload without being a dev mode.
+    if (SERVER_PROGRAM._is_loaded)
     {
         // Check if the available library file is newer than the one currently 
 
@@ -580,13 +580,15 @@ int main(int argc, char** argv)
 	// TODO(Marc): Read command line / config file for those !
 	game_server_init_params server_init_params = {
 
+        .dev_mode = DEV_MODE,
+
 		.match_slot_count = 4,
 		.max_client_count = 1024,
-
-		.web_root = "./web_root/",
-
+    
+        /*
 		.run_test_scenario = false,
 		.test_scenario_dump_filename = "snapshot_native.bin",
+        */
 	};
 
     // Initial load of Game Server program.

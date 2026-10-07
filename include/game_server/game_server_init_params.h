@@ -7,11 +7,10 @@
 
 struct game_server_init_params
 {
+    bool dev_mode; // Whether server should be ready to handle special development commands / behavior like load / unload.
+
 	ui8 match_slot_count;
 	ui16 max_client_count;
-
-	ia_string_view web_root; // Folder holding the web client bundle to serve over HTTP, relative to the platform resources folder. 
-									// Must be in the format "./<path>/" (leading "./" and trailing "/"), matching the paths returned by the platform's list_resource_files.
 
 	// Test mode parameters.
 	bool run_test_scenario; // If set to true, the server will start, run a match scenario on its first tick, dump it to a specific file then shutdown.
