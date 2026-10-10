@@ -90,7 +90,7 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
             }
         }
     }
-    ia_memset_32(backend.render_state.tiles.influence_tiles_bitmap, 0, tileCount);
+    ia_memset(backend.render_state.tiles.influence_tiles_bitmap, 0, tileCount);
 
     // Alloc per-frame memory.
     backend.render_state.frame.memory = mem_arena_create_sub(*backend.memory, MiB(16));

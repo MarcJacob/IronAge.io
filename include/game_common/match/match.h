@@ -8,11 +8,6 @@
 struct match_world_state;
 struct game_match_start_params;
 
-using match_player_id = ui16;
-using match_player_count = match_player_id; // Alias type for places where we need to count player.
-
-static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0; // TODO(Marc): Make this 0 so things have an invalid player ID by default.
-
 // Main memory ownership and definition structure for a single ongoing match.
 struct game_match
 {
@@ -23,8 +18,6 @@ struct game_match
 
 	ui32 tick; // Next tick to be computed.
 	match_world_state* world; // Observable world state associated to this match, recomputed on each tick.
-
-	rand_generator_32 main_rand_gen; // Main random generator structure for this match.
 };
 
 

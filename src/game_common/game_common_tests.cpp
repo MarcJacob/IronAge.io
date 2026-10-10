@@ -2,7 +2,6 @@
 
 #include "core.h"
 
-#include "game_common_internals.h"
 #include "game_common/match/commands.h"
 #include "game_common/match/start_params.h"
 

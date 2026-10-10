@@ -15,7 +15,7 @@ static void fill_movement_view(entity_full_view& view, const world_entity_moveme
 bool game_client_query_entity(game_client& backend, entity_guid entity, entity_full_view& out_view)
 {
 	if (backend.local_match == nullptr) return false;
-	const game_match& match = *backend.local_match;
+	const match_world_state& world = *backend.local_match->world;
 
 	// Dispatch on the GUID's type to the matching match query, which also validates the GUID.
 	switch (entity.get_type())
@@ -23,7 +23,7 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 	case ENTITY_TYPE::SETTLEMENT:
 	{
 		world_entity_settlements::single settlement;
-		if (!query_entity_state_settlement(match, entity, settlement)) return false;
+		if (!query_entity_state_settlement(world, entity, settlement)) return false;
 
 		out_view = {};
 		out_view.location_x = settlement.location.x;
@@ -39,7 +39,7 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 	case ENTITY_TYPE::CARAVAN:
 	{
 		world_entity_caravans::single caravan;
-		if (!query_entity_state_caravan(match, entity, caravan)) return false;
+		if (!query_entity_state_caravan(world, entity, caravan)) return false;
 
 		out_view = {};
 		out_view.location_x = caravan.location.x;
@@ -47,7 +47,7 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 
 		// Owner is that of the origin settlement, as in the render state.
 		world_entity_settlements::single origin;
-		out_view.owner = query_entity_state_settlement(match, caravan.origin_settlement, origin) ? origin.owner : INVALID_MATCH_PLAYER_ID;
+		out_view.owner = query_entity_state_settlement(world, caravan.origin_settlement, origin) ? origin.owner : INVALID_MATCH_PLAYER_ID;
 
 		out_view.has_target_entity = caravan.dest_settlement.is_valid();
 		out_view.target_entity = caravan.dest_settlement;
@@ -58,7 +58,7 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 	case ENTITY_TYPE::ARMY:
 	{
 		world_entity_armies::single army;
-		if (!query_entity_state_army(match, entity, army)) return false;
+		if (!query_entity_state_army(world, entity, army)) return false;
 
 		out_view = {};
 		out_view.location_x = army.location.x;

@@ -4,6 +4,12 @@
 #define MATCH_WORLD_INCLUDED
 
 #include "core.h"
+#include "core/math/random.h"
+
+using match_player_id = ui16; // Index / unique ID of a player in the game, a single atomic participant in the match able to own entities and emit commands.
+using match_player_count = match_player_id; // Alias type for places where we need to count player.
+
+static constexpr match_player_id INVALID_MATCH_PLAYER_ID = ~0; // TODO(Marc): Make this 0 so things have an invalid player ID by default.
 
 using world_location = vec2<ui16>;
 using world_dimensions = vec2<ui16>;
@@ -107,7 +113,7 @@ static inline entity_guid entity_guid_new(ENTITY_TYPE type, ui16 index, ui16 ext
 	return { (ui32)type | ((ui32)index << 8) | ((ui32)(extra & 0xFF) << 24) };
 }
 
-bool operator==(const entity_guid& guid_a, const entity_guid& guid_b)
+static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid_b)
 {
 	return guid_a._value == guid_b._value; // Whole value, so _extra is compared too.
 }
@@ -211,7 +217,11 @@ struct world_entity_caravans : public world_entity_container
 // Overall this represents the "observable state" of the match that can be interacted with indirectly by sending input commands into the next tick.
 struct match_world_state
 {
-	world_terrain terrain;
+    ui64 age; // Age of the world in ticks.
+
+    rand_generator_32 rand_gen; // Main random generator used by this world's systems.
+
+	world_terrain terrain; // World Terrain data.
 
 	// Holds all entity data for this world state.
 	// Currently is all pre-allocated for pre-estimated max possible usage.
@@ -228,22 +238,20 @@ struct match_world_state
 // Initializes a full world state according to the passed parameters.
 // Memory is allocated for the full terrain tile info, and pre-allocated for a reasonable number of each entity type given the size of the world.
 // TODO(Marc): Profile system so worlds can be exactly configured (image-based terrain generation, exact max entity counts...).
-match_world_state* world_state_init(mem_arena& memory, world_dimensions size_regions);
+match_world_state* world_state_init(mem_arena& memory, ui32 rand_seed);
 
-struct game_match;
+// World query functions.
 
-// Returns true if the GUID is non-zero, its index is in range, and the GUID stored at that slot is identical to it.
-// If the entity was destroyed and its slot reused, the stored GUID will (almost always) differ in its _extra field, and this returns false.
-bool match_entity_is_valid(const game_match& match, entity_guid entity);
+bool world_entity_is_valid(const match_world_state& world, entity_guid entity);
 
-// Per-type queries: if entity is a valid entity of the matching type, fills out_state with its current state and returns true.
-// Otherwise returns false and leaves out_state untouched.
-bool query_entity_state_settlement(const game_match& match, entity_guid entity, world_entity_settlements::single& out_state);
-bool query_entity_state_caravan(const game_match& match, entity_guid entity, world_entity_caravans::single& out_state);
-bool query_entity_state_army(const game_match& match, entity_guid entity, world_entity_armies::single& out_state);
+world_location world_get_entity_location(const match_world_state& world, entity_guid entity);
 
-// Caravans have no owner of their own: a caravan is "ours" if its origin OR destination settlement (if it still exists) is owned by the player.
-// Returns false if the caravan itself is not valid.
-bool match_caravan_is_owned_by(const game_match& match, entity_guid caravan, match_player_id player);
+bool query_entity_state_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state);
+
+bool query_entity_state_caravan(const match_world_state& world, entity_guid entity, world_entity_caravans::single& out_state);
+
+bool query_entity_state_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
+
+bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player);
 
 #endif // MATCH_WORLD_INCLUDED

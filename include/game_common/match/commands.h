@@ -38,11 +38,11 @@ struct command_data_set_entity_move_target
 };
 
 // VALIDITY CHECK
-bool command_set_entity_move_target_validity_check(const game_match& match, match_player_id player,
+bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_set_entity_move_target& command);
 
 // APPLY
-void command_set_entity_move_target_apply(game_match& match, match_player_id player,
+void command_set_entity_move_target_apply(match_world_state& world, match_player_id player,
 	const command_data_set_entity_move_target& command);
 
 // SET ENTITY ATTACK TARGET
@@ -53,11 +53,11 @@ struct command_data_set_entity_attack_target
 };
 
 // VALIDITY CHECK
-bool command_set_entity_attack_target_validity_check(const game_match& match, match_player_id player,
+bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_set_entity_attack_target& command);
 
 // APPLY
-void command_set_entity_attack_target_apply(game_match& match, match_player_id player,
+void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player,
 	const command_data_set_entity_attack_target& command);
 
 // FOUND SETTLEMENT
@@ -67,11 +67,11 @@ struct command_data_found_settlement
 };
 
 // VALIDITY CHECK
-bool command_found_settlement_validity_check(const game_match& match, match_player_id player,
+bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_found_settlement& command);
 
 // APPLY
-void command_found_settlement_apply(game_match& match, match_player_id player,
+void command_found_settlement_apply(match_world_state& world, match_player_id player,
 	const command_data_found_settlement& command);
 
 // SPAWN ARMY
@@ -81,11 +81,11 @@ struct command_data_spawn_army
 };
 
 // VALIDITY CHECK
-bool command_spawn_army_validity_check(const game_match& match, match_player_id player,
+bool command_spawn_army_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
 
 // APPLY
-void command_spawn_army_apply(game_match& match, match_player_id player,
+void command_spawn_army_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
 
 // SPAWN CARAVAN
@@ -95,11 +95,11 @@ struct command_data_spawn_caravan
 };
 
 // VALIDITY CHECK
-bool command_spawn_caravan_validity_check(const game_match& match, match_player_id player,
+bool command_spawn_caravan_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_spawn_caravan& command);
 
 // APPLY
-void command_spawn_caravan_apply(game_match& match, match_player_id player,
+void command_spawn_caravan_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_caravan& command);
 
 // Header & command size mapping definitions.

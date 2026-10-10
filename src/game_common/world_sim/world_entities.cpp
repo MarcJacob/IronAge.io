@@ -1,0 +1,316 @@
+#include "world_sim.h"
+
+bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
+{
+	if (!entity.is_valid()) return false;
+
+	const world_entity_container* container;
+
+	switch (entity.get_type())
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		container = &world.entities.settlements;
+		break;
+	case ENTITY_TYPE::CARAVAN:
+		container = &world.entities.caravans;
+		break;
+	case ENTITY_TYPE::ARMY:
+		container = &world.entities.armies;
+		break;
+	default:
+		return false;
+	}
+
+	// The stored GUID is zero for inactive slots, and differs in its extra bits if the slot was reused by a newer entity.
+	ui16 index = entity.get_index();
+	return index < container->max_count && container->guids[index] == entity;
+}
+
+// Spawns a new settlement in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid world_spawn_settlement(match_world_state& world, const world_entity_settlements::single& start_state)
+{
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.settlements.max_count && world.entities.settlements.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.settlements.max_count);
+
+	// Compute GUID (stored and returned value are the same).
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::SETTLEMENT, freeIndex, world.age % 0x1000); // 12-bit extra field.
+
+	world.entities.settlements.guids[freeIndex] = newID;
+	world.entities.settlements.active_count++;
+
+	// Apply start state.
+	world.entities.settlements.owners[freeIndex] = start_state.owner;
+	world.entities.settlements.locations[freeIndex] = start_state.location;
+	world.entities.settlements.populations[freeIndex] = start_state.population;
+	world.entities.settlements.local_wealth[freeIndex] = start_state.local_wealth;
+	world.entities.settlements.tier[freeIndex] = start_state.tier;
+	world.entities.settlements.trade_attractivity[freeIndex] = start_state.trade_attractivity;
+	world.entities.settlements.area_influence[freeIndex] = start_state.area_influence;
+
+	return newID;
+}
+
+// Spawns a new caravan in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid world_spawn_caravan(match_world_state& world, const world_entity_caravans::single& start_state)
+{
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.caravans.max_count && world.entities.caravans.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.caravans.max_count);
+
+	// Compute GUID (stored and returned value are the same).
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::CARAVAN, freeIndex, world.age % 0x100); // 8-bit extra field.
+
+	world.entities.caravans.guids[freeIndex] = newID;
+	world.entities.caravans.active_count++;
+
+	// Apply start state.
+	world.entities.caravans.locations[freeIndex] = start_state.location;
+	world.entities.caravans.movements[freeIndex] = start_state.movement;
+	world.entities.caravans.origin_settlements[freeIndex] = start_state.origin_settlement;
+	world.entities.caravans.dest_settlements[freeIndex] = start_state.dest_settlement;
+
+	return newID;
+}
+
+// Spawns a new army in the world with the provided start state and returns its GUID.
+// Returns a deterministic new ID according to match state, if there's room.
+entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state)
+{
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.armies.max_count && world.entities.armies.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.armies.max_count);
+
+	// Compute GUID (stored and returned value are the same).
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::ARMY, freeIndex, world.age % 0x100); // 8-bit extra field.
+
+	world.entities.armies.guids[freeIndex] = newID;
+	world.entities.armies.active_count++;
+
+	// Apply start state.
+	world.entities.armies.owners[freeIndex] = start_state.owner;
+	world.entities.armies.locations[freeIndex] = start_state.location;
+	world.entities.armies.movements[freeIndex] = start_state.movement;
+	world.entities.armies.compositions[freeIndex] = start_state.composition;
+	world.entities.armies.action_targets[freeIndex] = start_state.action_target;
+	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
+
+	return newID;
+}
+
+void world_destroy_army(match_world_state& world, entity_guid army)
+{
+	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
+	world_entity_armies& armies = world.entities.armies;
+
+	// Same pattern as despawned caravans: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
+	armies.guids[army.get_index()] = INVALID_ENTITY_GUID;
+	armies.active_count--;
+}
+
+void world_destroy_settlement(match_world_state& world, entity_guid settlement)
+{
+	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	world_entity_settlements& settlements = world.entities.settlements;
+
+	// Same pattern as destroyed armies: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
+	settlements.guids[settlement.get_index()] = INVALID_ENTITY_GUID;
+	settlements.active_count--;
+}
+
+void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)
+{
+	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	ui32& population = world.entities.settlements.populations[settlement.get_index()];
+
+	population = amount < population ? population - amount : 0;
+	if (population == 0)
+	{
+		world_destroy_settlement(world, settlement);
+	}
+}
+
+world_location world_get_entity_location(const match_world_state& world, entity_guid entity)
+{
+	ENTITY_TYPE type = entity.get_type();
+
+	switch (type)
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		return world.entities.settlements.locations[entity.get_index()];
+	case ENTITY_TYPE::CARAVAN:
+		return world.entities.caravans.locations[entity.get_index()];
+	case ENTITY_TYPE::ARMY:
+		return world.entities.armies.locations[entity.get_index()];
+	default:
+		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
+		return INVALID_WORLD_LOCATION;
+	}
+}
+
+bool query_entity_state_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_settlements& settlements = world.entities.settlements;
+	ui16 i = entity.get_index();
+
+	out_state = {
+		.owner = settlements.owners[i],
+		.location = settlements.locations[i],
+		.population = settlements.populations[i],
+		.local_wealth = settlements.local_wealth[i],
+		.tier = settlements.tier[i],
+		.trade_attractivity = settlements.trade_attractivity[i],
+		.area_influence = settlements.area_influence[i],
+	};
+	return true;
+}
+
+bool query_entity_state_caravan(const match_world_state& world, entity_guid entity, world_entity_caravans::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::CARAVAN || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_caravans& caravans = world.entities.caravans;
+	ui16 i = entity.get_index();
+
+	out_state = {
+		.location = caravans.locations[i],
+		.movement = caravans.movements[i],
+		.origin_settlement = caravans.origin_settlements[i],
+		.dest_settlement = caravans.dest_settlements[i],
+	};
+	return true;
+}
+
+bool query_entity_state_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::ARMY || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_armies& armies = world.entities.armies;
+	ui16 i = entity.get_index();
+
+	out_state = {
+		.owner = armies.owners[i],
+		.location = armies.locations[i],
+		.movement = armies.movements[i],
+		.composition = armies.compositions[i],
+		.action_target = armies.action_targets[i],
+		.arrows_target = armies.arrows_targets[i],
+	};
+	return true;
+}
+
+bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player)
+{
+	world_entity_caravans::single state;
+	if (!query_entity_state_caravan(world, caravan, state)) return false;
+
+	world_entity_settlements::single settlement;
+	if (query_entity_state_settlement(world, state.origin_settlement, settlement) && settlement.owner == player) return true;
+	return query_entity_state_settlement(world, state.dest_settlement, settlement) && settlement.owner == player;
+}
+
+bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_settlements& settlements = world.entities.settlements;
+
+	settlements.max_count = count;
+	settlements.active_count = 0;
+
+	settlements.guids = memory.alloc<entity_guid>(count);
+	if (settlements.guids == nullptr) return false;
+
+	settlements.owners = memory.alloc<match_player_id>(count);
+	if (settlements.owners == nullptr) return false;
+
+	settlements.locations = memory.alloc<world_location>(count);
+	if (settlements.locations == nullptr) return false;
+
+	settlements.populations = memory.alloc<ui32>(count);
+	if (settlements.populations == nullptr) return false;
+
+	settlements.local_wealth = memory.alloc<ui32>(count);
+	if (settlements.local_wealth == nullptr) return false;
+
+	settlements.tier = memory.alloc<ui8>(count);
+	if (settlements.tier == nullptr) return false;
+
+	settlements.trade_attractivity = memory.alloc<ui8>(count);
+	if (settlements.trade_attractivity == nullptr) return false;
+
+	settlements.area_influence = memory.alloc<ui8>(count);
+	if (settlements.area_influence == nullptr) return false;
+
+	return true;
+}
+
+bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_caravans& caravans = world.entities.caravans;
+
+	caravans.max_count = count;
+
+	caravans.guids = memory.alloc<entity_guid>(count);
+	if (caravans.guids == nullptr) return false;
+
+	caravans.locations = memory.alloc<world_location>(count);
+	if (caravans.locations == nullptr) return false;
+
+	caravans.movements = memory.alloc<world_entity_movement>(count);
+	if (caravans.movements == nullptr) return false;
+
+	caravans.origin_settlements = memory.alloc<entity_guid>(count);
+	if (caravans.origin_settlements == nullptr) return false;
+
+	caravans.dest_settlements = memory.alloc<entity_guid>(count);
+	if (caravans.dest_settlements == nullptr) return false;
+
+	return true;
+}
+
+bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_armies& armies = world.entities.armies;
+
+	armies.max_count = count;
+
+	armies.guids = memory.alloc<entity_guid>(count);
+	if (armies.guids == nullptr) return false;
+
+	armies.owners = memory.alloc<match_player_id>(count);
+	if (armies.owners == nullptr) return false;
+
+	armies.locations = memory.alloc<world_location>(count);
+	if (armies.locations == nullptr) return false;
+
+	armies.movements = memory.alloc<world_entity_movement>(count);
+	if (armies.movements == nullptr) return false;
+
+	armies.compositions = memory.alloc<world_entity_armies::comp>(count);
+	if (armies.compositions == nullptr) return false;
+
+	armies.action_targets = memory.alloc<entity_guid>(count);
+	if (armies.action_targets == nullptr) return false;
+
+	armies.arrows_targets = memory.alloc<entity_guid>(count);
+	if (armies.arrows_targets == nullptr) return false;
+
+	return true;
+}
+
+

@@ -4,45 +4,56 @@ Started: 2026-10-03
 
 ## Goal
 
-Villages project soft influence over terrain, not hard tile ownership. Several
-settlements (usually 1, sometimes 2, rarely 3) can influence the same tile.
-Rendered as a faded area on the blit canvas terrain view, not a clean border.
+Villages project soft influence over terrain, not hard tile ownership. Rendered
+as a faded area on the blit canvas terrain view, not a clean border. Borders
+change organically over time (wanted).
 
 ## Decisions
 
 - Influence lives in GameCommon sim state (all game mechanics do). It feeds
   the settlement econ tick (`settlement_econ_tick_2026-10-03.md`).
-- Per tile: 2 (maybe 3) unranked influencing-settlement slots, strength
-  derived from distance and population. Tiles feed their settlements additively into "land exploitation",
-  weighted by tile fertility; a contested tile yields less in total (encourages
-  conflict).
-- Storage is region-local (tiles belong to regions): static entities are stored
-  per region so tile claimants can be updated cheaply when a settlement is
-  founded / destroyed in nearby regions.
+- Approach: cellular-automaton spread (chosen over distance-binding design).
+  Terrain affects influence (water blocks, mountains slow, etc.).
+- Settlement emits from adjacent tiles at full influence; each update spreads
+  to neighbours (flood-fill style) while the settlement's weighted exploitation
+  is below a threshold depending on population (and tier: big urban settlements
+  claim less per inhabitant). Spread weighted by distance.
+- Each tile remembers one main owner settlement.
+- Contestation: sourced from strong tiles touching non-friendly (enemy / neutral)
+  owned tiles, itself flood-filled to surrounding tiles.
+- Tiles feed their owner additively into "land exploitation", weighted by tile
+  fertility; contested tiles yield less in total (encourages conflict).
+- Settlement influence generation rarely jumps suddenly; slow propagation
+  latency is acceptable / desired.
+- Tile state, 3 separate planes (SIMD-friendly): owner (1 byte), influence
+  (1 byte, 0 = unowned), contestation (1 byte).
+- Owner byte = 2-bit region selector + 6-bit index into that region's settlement
+  table (cap 64 per region; spawn denied when full, plus a gameplay min distance).
+  Selector picks among 4 candidate regions (own, nearest horizontal / vertical
+  neighbour by which half of the region the tile is in, diagonal). Requires
+  influence path distance from owner < 64 tiles. Tile scale vs gameplay still
+  undecided; a non-region-based settlement encoding may replace this later.
+- Supply rule: tiles adjacent to a settlement stop being fed when its exploitation
+  (previous tick's sum) exceeds its capacity; unfed influence decays outward
+  until equilibrium. A tile owned by another settlement is only taken when
+  incoming influence beats current by a margin (tuning constant).
+- Update every tick for the first slice.
+- Updates must be deterministic (lockstep): double-buffered or fixed scan order.
+- Destroy: owned tiles lose their owner, neighbours absorb them over later updates.
 - Target map size: 1024^2 first, 4096^2 later (see `blit_canvas`).
-- Strength depends on population and is reduced by tier (big urban settlements
-  claim less per inhabitant); falls off with squared distance; never reaches
-  further than one region.
-- Slot choice is unranked: settlements aligned behind a closer one are
-  discarded (natural areas when dense, cheap).
-- Slot entry ~1 byte: per-region settlement table index + which of the 9
-  regions (self + 8 neighbours). Needs a strict settlements-per-region cap.
-- Land production per settlement is updated coarsely, deterministically
-  staggered (never every tick).
-- Optional coarse influence grid if memory requires.
-- Terrain generation out of scope: one tile type for now; color-coded image
-  loading later.
+- Simple first: no staggering, threading or SIMD (ideas for when perf requires;
+  multithreading to be discussed then). Practice reasonable non-pessimization.
+- Terrain generation out of scope (placeholder only, see Progress).
 
 ## Open design
 
-- Alignment discard rule and slot count (2 vs 3).
-- Whether slot membership is static between found / destroy (strength computed
-  on read from distance + current population) or re-evaluated over time.
-- Update schedule: period and stagger rule.
-- Per-region settlement cap and behavior when a region is full.
-- Contested-tile output penalty formula.
+- Spread/decay formula, capacity formula, takeover margin.
+- Contestation byte semantics (precision).
+- Terrain spread costs per terrain type.
+- Contested-tile output penalty formula; diplomatic status ignored until diplomacy exists.
 - Rendering: blend of owner colors by strength, alpha by total strength; color
   scheme per viewer vs per player; whether any border hint remains.
+- Mid-match join: state is derived, confirm it needs no transfer.
 
 ## Depends on
 
@@ -50,19 +61,15 @@ Rendered as a faded area on the blit canvas terrain view, not a clean border.
 
 ## Progress
 
-Not started. Survey done (terrain struct exists but is never generated;
-`area_influence` ui8 exists on settlements, unused). `blit_canvas` base is in
-place (terrain type buffer + offscreen canvas + blit).
-
 - [DONE] Prerequisite slice: placeholder terrain generated in `match_start`
   (Chebyshev border: < 10 mountains, < 15 hills; central 10x10 lake, outer 2 coast,
   inner 6x6 sea; else plains), copied into client `terrain_tiles` at match begin.
   Region/tile index math duplicated (generation + client copy); extract a helper
   when a third user appears.
+- Survey: `area_influence` ui8 exists on settlements, unused.
 
 ## Next step
 
-Design discussion on the open points above, then first slice: per-region settlement tables and
-tile slot bytes in GameCommon with a fixed influence radius; then the staggered
-land production update; then the TS overlay (influence as a type / byte buffer,
-colored in TS, dirty-rect repaint of the offscreen canvas).
+Settle remaining open points (spread formula, capacity), then first slice: per-region
+settlement tables + tile planes + CA spread in GameCommon on flat terrain, then terrain costs and land output sum,
+then the TS overlay (byte buffer colored in TS, dirty-rect repaint).
