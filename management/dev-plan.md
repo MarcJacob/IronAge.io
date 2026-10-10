@@ -21,7 +21,7 @@ when it finishes.
 - `work_units/build_system_revamp_2026-10-03.md` [DONE]
 - `work_units/dev_iteration_loop_2026-10-03.md`
 - `work_units/string_pass_2026-10-03.md` [DONE]
-- `work_units/blit_canvas_2026-09-26.md`
+- `work_units/blit_canvas_2026-09-26.md` [DONE]
 - `work_units/village_influence_2026-10-03.md`
 - `work_units/game_server_match_lifecycle_2026-10-03.md`
 - `work_units/lobby_system_2026-09-27.md`
@@ -105,8 +105,10 @@ work to a line or two.
    sequence, but haven't been re-specified against the architecture above yet. Revisit
    phase by phase in a future pass.
    Phase 3 sequence:
-   - Blit canvas: earliest terrain bitmap generated client-side (wasm) from terrain
+   - [DONE] Blit canvas: earliest terrain bitmap generated client-side (wasm) from terrain
      tiles, blitted efficiently to the page. (`blit_canvas`)
+     - [DONE] Flat terrain type buffer, TS colors it into an offscreen canvas, blitted
+       aligned to the world. Remaining: dirty-rect updates (with influence).
    - Village influence over terrain: tile ownership coloring, dark border.
      (`village_influence`)
    - Game server match lifecycle: open lobby, placement phase, match start / end,

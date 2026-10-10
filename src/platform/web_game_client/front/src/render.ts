@@ -58,9 +58,9 @@ let DIPLOMATIC_TINTS =
 let TERRAIN_COLORS: Array<[number, number, number, number]> =
 [
     [80, 120, 80, 255],     // LAND_PLAINS
-    [75, 100, 90, 255],  // LAND_HILLS
+    [140, 130, 80, 255],  // LAND_HILLS
     [170, 170, 170, 255], // LAND_MOUNTAINS
-    [230, 210, 140, 255], // WATER_COAST
+    [70, 170, 210, 255], // WATER_COAST
     [30, 80, 190, 255],   // WATER_SEA
 ];
 const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 255];

@@ -51,4 +51,18 @@ Rendered as a faded area on the blit canvas terrain view, not a clean border.
 ## Progress
 
 Not started. Survey done (terrain struct exists but is never generated;
-`area_influence` ui8 exists on settlements, unused).
+`area_influence` ui8 exists on settlements, unused). `blit_canvas` base is in
+place (terrain type buffer + offscreen canvas + blit).
+
+- [DONE] Prerequisite slice: placeholder terrain generated in `match_start`
+  (Chebyshev border: < 10 mountains, < 15 hills; central 10x10 lake, outer 2 coast,
+  inner 6x6 sea; else plains), copied into client `terrain_tiles` at match begin.
+  Region/tile index math duplicated (generation + client copy); extract a helper
+  when a third user appears.
+
+## Next step
+
+Design discussion on the open points above, then first slice: per-region settlement tables and
+tile slot bytes in GameCommon with a fixed influence radius; then the staggered
+land production update; then the TS overlay (influence as a type / byte buffer,
+colored in TS, dirty-rect repaint of the offscreen canvas).

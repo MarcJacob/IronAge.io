@@ -75,8 +75,21 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
     backend.render_state.tiles.influence_tiles_bitmap = backend.memory->alloc<ui8>(tileCount);
     ASSERT(backend.render_state.tiles.influence_tiles_bitmap != nullptr);
 
-    // Single terrain type for now, and no influence.
-    ia_memset(backend.render_state.tiles.terrain_tiles, LAND_PLAINS, tileCount);
+    // Copy match terrain (stored region by region) into the row-major terrain bitmap.
+    {
+        const world_terrain& terrain = localMatch->world->terrain;
+        const ui16 width = backend.render_state.world_size.x;
+        const ui16 height = backend.render_state.world_size.y;
+        for (ui16 y = 0; y < height; y++)
+        {
+            for (ui16 x = 0; x < width; x++)
+            {
+                ui32 regionIndex = (y / world_terrain::REGION_SIZE) * terrain.size_regions.x + (x / world_terrain::REGION_SIZE);
+                ui32 tileIndex = (y % world_terrain::REGION_SIZE) * world_terrain::REGION_SIZE + (x % world_terrain::REGION_SIZE);
+                backend.render_state.tiles.terrain_tiles[(ui64)y * width + x] = terrain.regions[regionIndex].terrain_types[tileIndex];
+            }
+        }
+    }
     ia_memset_32(backend.render_state.tiles.influence_tiles_bitmap, 0, tileCount);
 
     // Alloc per-frame memory.

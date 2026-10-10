@@ -406,8 +406,51 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	out_match.world = world_state_init(match_mem, params.world_size_regions);
 	if (out_match.world == nullptr) return false;
 
-	// Apply start params to world state
+	// Generate terrain: ring of mountains then hills along the world border, plains elsewhere.
+	// TODO(Marc): Replace with map generation from data transmitted by the server before match start (e.g. image files).
+	{
+		const ui16 MOUNTAIN_BORDER_DISTANCE = 10;
+		const ui16 HILLS_BORDER_DISTANCE = 15;
+		const i32 LAKE_HALF_SIZE = 5; // Central lake spans tiles [center - 5, center + 4] on both axes (10x10).
+		const i32 LAKE_COAST_THICKNESS = 2;
 
+		world_terrain& terrain = out_match.world->terrain;
+		for (ui16 y = 0; y < terrain.size_tiles.y; y++)
+		{
+			for (ui16 x = 0; x < terrain.size_tiles.x; x++)
+			{
+				// Distance to the nearest world border.
+				ui16 d = x;
+				if (y < d) d = y;
+				if (terrain.size_tiles.x - 1 - x < d) d = terrain.size_tiles.x - 1 - x;
+				if (terrain.size_tiles.y - 1 - y < d) d = terrain.size_tiles.y - 1 - y;
+
+				TERRAIN_TILE_TYPE type = LAND_PLAINS;
+				if (d < MOUNTAIN_BORDER_DISTANCE) type = LAND_MOUNTAINS;
+				else if (d < HILLS_BORDER_DISTANCE) type = LAND_HILLS;
+				else
+				{
+					// Distance from the lake's outer edge, inward (negative = outside the lake).
+					i32 lakeMinX = terrain.size_tiles.x / 2 - LAKE_HALF_SIZE;
+					i32 lakeMinY = terrain.size_tiles.y / 2 - LAKE_HALF_SIZE;
+					i32 lakeDepth = x - lakeMinX;
+					if (lakeMinX + 2 * LAKE_HALF_SIZE - 1 - x < lakeDepth) lakeDepth = lakeMinX + 2 * LAKE_HALF_SIZE - 1 - x;
+					if ((i32)y - lakeMinY < lakeDepth) lakeDepth = (i32)y - lakeMinY;
+					if (lakeMinY + 2 * LAKE_HALF_SIZE - 1 - (i32)y < lakeDepth) lakeDepth = lakeMinY + 2 * LAKE_HALF_SIZE - 1 - (i32)y;
+
+					if (lakeDepth >= LAKE_COAST_THICKNESS) type = WATER_SEA;
+					else if (lakeDepth >= 0) type = WATER_COAST;
+				}
+
+				// Regions are stored row-major, and tiles are row-major within a region.
+				ui32 regionIndex = (y / world_terrain::REGION_SIZE) * terrain.size_regions.x + (x / world_terrain::REGION_SIZE);
+				ui32 tileIndex = (y % world_terrain::REGION_SIZE) * world_terrain::REGION_SIZE + (x % world_terrain::REGION_SIZE);
+				terrain.regions[regionIndex].terrain_types[tileIndex] = type;
+			}
+		}
+	}
+
+	// Apply start params to world state
 	for (ui32 settlementIndex = 0; settlementIndex < params.start_settlement_count; settlementIndex++)
 	{
 		world_entity_settlements::single& settlementStartState = params.get_settlement_start_state(settlementIndex);

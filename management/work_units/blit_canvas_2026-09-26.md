@@ -46,5 +46,6 @@ terrain / fog of war).
 
 ## Next step
 
-Unit's terrain-bitmap goal met. Influence overlay and dirty-rect updates belong to
-`village_influence_2026-10-03.md`. Decide whether to flag this unit [DONE].
+Unit [DONE]. Influence overlay and dirty-rect updates belong to
+`village_influence_2026-10-03.md`. Terrain data sync + border mountains/hills
+generation tracked in `village_influence` (prerequisite slice).
