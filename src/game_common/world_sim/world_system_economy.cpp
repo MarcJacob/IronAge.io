@@ -10,13 +10,29 @@ void world_system_settlement_economy(match_world_state& world)
     // Only run on every 10th tick.
     if (world.age % 10 != 0) return;
 
-    // Settlements have a 1% chance per tick to grow by 5% of their population (at least 1).
+
+    // POP GROWTH
+    // Population seeks to reach an equilibrium that depends on settlement land / food output and by local wealth.
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
 
-        ui32 growth = settlements.populations[settlementIndex] * 5 / 100;
-        settlements.populations[settlementIndex] += growth > 0 ? growth : 1;
+        ui32 targetPopulation = settlements.land_outputs[settlementIndex]
+                            +   settlements.local_wealths[settlementIndex];
+
+        i32 growth = ((i64)targetPopulation - (i64)settlements.populations[settlementIndex]) * 5 / 100;
+        if (growth > 0 && (ui32)growth >= 1 + settlements.populations[settlementIndex] / 100)
+        {
+            growth = 1 + (i64)settlements.populations[settlementIndex] / 100; // Population cannot grow by more than 1% per tick.
+        }
+
+        if (settlements.populations[settlementIndex] + growth < 1)
+        {
+            settlements.populations[settlementIndex] = 1;
+            continue;
+        }
+
+        settlements.populations[settlementIndex] += growth;
     }
 }
 
@@ -82,11 +98,11 @@ void world_system_caravan_arrivals(match_world_state& world)
 			ui16 originIndex = originValid ? caravans.origin_settlements[caravanIndex].get_index() : 0;
 
 			ui32 distanceTiles = originValid ? vec2_dist(settlements.locations[originIndex], destLoc) : 0;
-			ui32 originWealth = originValid ? settlements.local_wealth[originIndex] : 0;
-			ui32 earnings = 20 + distanceTiles + settlements.local_wealth[destIndex] / 10 + originWealth / 20;
+			ui32 originWealth = originValid ? settlements.local_wealths[originIndex] : 0;
+			ui32 earnings = 20 + distanceTiles + settlements.local_wealths[destIndex] / 10 + originWealth / 20;
 
-			settlements.local_wealth[destIndex] += earnings;
-			if (originValid) settlements.local_wealth[originIndex] += earnings;
+			settlements.local_wealths[destIndex] += earnings;
+			if (originValid) settlements.local_wealths[originIndex] += earnings;
 		}
 	}
 }

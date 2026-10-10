@@ -81,7 +81,6 @@ static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid
 	return guid_a._value == guid_b._value; // Whole value, so _extra is compared too.
 }
 
-
 // Types of terrain tiles.
 enum TERRAIN_TILE_TYPE : ui8
 {
@@ -138,12 +137,17 @@ struct world_entity_settlements : public world_entity_container
 	match_player_id*	owners;
 	world_location*		locations;
 
+    // Base economic factors
 	ui32*				populations;
-	ui32*				local_wealth;
-	ui8*				tier;
+	ui32*				local_wealths;
+    ui32*               land_outputs;
 
-	ui8*				trade_attractivity;
-	ui8*				area_influence;
+    // Infrastructure / building factors
+	ui8*				tiers;
+
+    // Intermediate values
+	ui8*				trade_attraction_indices;
+	ui8*				influence_capacities;
 
 	// Consolidated representation of a single settlement for viewing purposes.
 	struct single
@@ -153,10 +157,12 @@ struct world_entity_settlements : public world_entity_container
 
 		ui32 population;
 		ui32 local_wealth;
+        ui32 land_output;
+
 		ui8 tier;
 
-		ui8 trade_attractivity;
-		ui8 area_influence;
+		ui8 trade_attaction_index;
+        ui8 influence_capacity;
 	};
 };
 

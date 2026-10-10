@@ -18,25 +18,6 @@ struct game_match_start_params
 	ui8 tick_rate; // Number of ticks per second.
 
 	ui32 random_seed; // Drives every random element of the match simulation. The same seed and same input commands will lead to the same outcome.
-
-	ui16 start_settlement_count; // Number of settlements at the start of the game. Find their states in extra data.
-
-	// Extra Data. Layout:
-	// - Settlement Start states
-	// ...
-
-	ui16 extra_data_size; // Total amount of extra data bytes.
-	ui8 _extra_data[]; // Dynamically-allocated data attached to this match, sized according to parameters like player count.
-
-	// Access a settlement start date in the extra data for reading or editing.
-	inline world_entity_settlements::single& get_settlement_start_state(ui16 index) const
-	{
-		ASSERT(sizeof(world_entity_settlements::single) * index < extra_data_size);
-		ASSERT(index < start_settlement_count);
-
-		world_entity_settlements::single* settlements = (world_entity_settlements::single*)_extra_data;
-		return settlements[index];
-	}
 };
 
 #pragma pack(pop)

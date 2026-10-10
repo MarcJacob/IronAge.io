@@ -43,7 +43,7 @@ bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_para
 	}
 
 	// TODO: Instead of checking total memory size of the arena, we should instead check how much it has *left* in case it already contains stuff (not recommended).
-	if (match_mem.mem_size < match_get_required_mem(params))
+	if (match_mem.mem_size - match_mem.allocated_count < match_get_required_mem(params))
 	{
 		return false; // Not enough memory.
 	}

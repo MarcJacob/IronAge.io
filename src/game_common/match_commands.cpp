@@ -6,6 +6,37 @@
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
+// SERVER SPAWN PLAYER
+
+bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
+        const command_data_server_spawn_player& command)
+{
+    // Check that command was emitted by the server itself (INVALID player ID).
+    if (player != INVALID_MATCH_PLAYER_ID) return false;
+
+    // @TODO(Marc): More checks such as making sure the player doesn't own any entities.
+    return true;
+}
+
+bool command_server_spawn_player_apply(match_world_state& world, match_player_id player,
+        const command_data_server_spawn_player& command)
+{
+    if (!command_server_spawn_player_validity_check(world, player, command)) return false;
+
+    // Spawn start settlement for the player.
+
+    world_entity_settlements::single startSettlement = {
+        .owner = command.spawned_player,
+        .location = command.spawn_location,
+        .population = 100,
+        .tier = 1,
+    };
+
+    entity_guid newSettlement = world_spawn_settlement(world, startSettlement);
+    return newSettlement.is_valid();
+}
+
+
 // ENTITY SET MOVE TARGET
 
 // Example of command sanity check function.
@@ -144,7 +175,7 @@ bool command_spawn_caravan_validity_check(const match_world_state& world, match_
 	ui16 settlementIndex = command.settlement.get_index();
 	const world_entity_settlements& settlements = world.entities.settlements;
 	if (settlements.owners[settlementIndex] != player) return false;
-	if (settlements.local_wealth[settlementIndex] < SPAWN_CARAVAN_WEALTH_COST) return false;
+	if (settlements.local_wealths[settlementIndex] < SPAWN_CARAVAN_WEALTH_COST) return false;
 
 	// A destination needs another settlement to exist.
 	if (settlements.active_count < 2) return false;
@@ -183,7 +214,7 @@ void command_spawn_caravan_apply(match_world_state& world, match_player_id playe
 		.dest_settlement = settlements.guids[destRandIndex],
 	};
 	world_spawn_caravan(world, newCaravan);
-	settlements.local_wealth[settlementIndex] -= SPAWN_CARAVAN_WEALTH_COST;
+	settlements.local_wealths[settlementIndex] -= SPAWN_CARAVAN_WEALTH_COST;
 }
 
 // ENTITY SET ATTACK TARGET
@@ -238,6 +269,8 @@ bool match_command_validity_check(const match_world_state& world, match_player_i
 			return command_spawn_army_validity_check(world, player, command.get_command_data<command_data_spawn_army>());
 		case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
 			return command_spawn_caravan_validity_check(world, player, command.get_command_data<command_data_spawn_caravan>());
+        case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
+            return command_server_spawn_player_validity_check(world, player, command.get_command_data<command_data_server_spawn_player>());
 		default:
 			ASSERT_MSG(0, "No validity check logic associated with command type.");
 			return false;
@@ -266,6 +299,9 @@ inline void match_command_apply(match_world_state& world, match_player_id player
 	case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
 		command_spawn_caravan_apply(world, player, command.get_command_data<command_data_spawn_caravan>());
 		break;
+    case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
+        command_server_spawn_player_apply(world, player, command.get_command_data<command_data_server_spawn_player>());
+        break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
 	}

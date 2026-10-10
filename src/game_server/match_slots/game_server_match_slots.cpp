@@ -10,6 +10,7 @@
 #include "game_common/match/match.h"
 #include "game_common/match/commands.h"
 
+#include "game_common/match/world.h"
 #include "match_slots.h"
 #include "../game_server.h"
 
@@ -128,14 +129,14 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
         // Allocate message, adding extra data size of the match parameters as extra bytes.
 
-        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, slot.match_params->extra_data_size);
+        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, 0);
         ASSERT(joinMsgHeader);
 
         auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_joined>();
         joinMsgPayload = {};
 
         // Copy start params.
-        ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params) + slot.match_params->extra_data_size);
+        ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params));
 
         for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
         {
@@ -187,12 +188,25 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
         // Link AI players buffer.
         slot.match.ai_players = (AI_player_state*)AIPlayersMem.mem_start;
-    }
+   }
 
     // Allocate input commands memory according to total player count.
     slot.match.next_tick_commands_memory = mem_arena_create_sub(slot.slot_memory, 64 * slot.match_params->player_count);
     slot.match.next_tick_commands_builder = { &slot.match.next_tick_commands_memory };
     slot.match.next_tick_commands_builder.init();
+
+    // Spawn players at random by pushing spawn commands to be processed for the first tick.
+    // @TODO(Marc): Determine start locations in lobby.
+
+    slot.match.next_tick_commands_builder.push_new_sequence(INVALID_MATCH_PLAYER_ID);
+    for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+    {
+        command_data_server_spawn_player* spawnPlayer = slot.match.next_tick_commands_builder
+            .push_command<command_data_server_spawn_player>(MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER);
+
+        spawnPlayer->spawned_player = playerID;
+        spawnPlayer->spawn_location = match.world->rand_gen.next_vec2(world_dimensions {50, 50}, match.world->terrain.size_tiles - world_dimensions{50, 50});
+    }
 
     server.logf("MATCH", LOG_SUCCESS, "Match started on slot %d.", slot_index);
 
@@ -297,7 +311,10 @@ static void game_server_tick_match_slot_lobby(game_server& server, ui8 slotIndex
 {
 	if (connectionCount < 2) return; // Wait until a player connects.
 
-	game_server_start_match_slot(server, slotIndex);
+	if (!game_server_start_match_slot(server, slotIndex))
+    {
+        server.logf("Match", LOG_ERROR, "Failed to start match on slot %d !", slotIndex);
+    }
 }
 
 // Ticks a match slot with an ongoing match: gathers input, simulates & relays as many ticks as have elapsed since last time.

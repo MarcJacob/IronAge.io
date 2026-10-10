@@ -48,10 +48,8 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	world.entities.settlements.owners[freeIndex] = start_state.owner;
 	world.entities.settlements.locations[freeIndex] = start_state.location;
 	world.entities.settlements.populations[freeIndex] = start_state.population;
-	world.entities.settlements.local_wealth[freeIndex] = start_state.local_wealth;
-	world.entities.settlements.tier[freeIndex] = start_state.tier;
-	world.entities.settlements.trade_attractivity[freeIndex] = start_state.trade_attractivity;
-	world.entities.settlements.area_influence[freeIndex] = start_state.area_influence;
+	world.entities.settlements.local_wealths[freeIndex] = start_state.local_wealth;
+	world.entities.settlements.tiers[freeIndex] = start_state.tier;
 
 	return newID;
 }
@@ -173,10 +171,11 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 		.owner = settlements.owners[i],
 		.location = settlements.locations[i],
 		.population = settlements.populations[i],
-		.local_wealth = settlements.local_wealth[i],
-		.tier = settlements.tier[i],
-		.trade_attractivity = settlements.trade_attractivity[i],
-		.area_influence = settlements.area_influence[i],
+		.local_wealth = settlements.local_wealths[i],
+        .land_output = settlements.land_outputs[i],
+		.tier = settlements.tiers[i],
+		.trade_attaction_index = settlements.trade_attraction_indices[i],
+		.influence_capacity = settlements.influence_capacities[i],
 	};
 	return true;
 }
@@ -244,17 +243,20 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.populations = memory.alloc<ui32>(count);
 	if (settlements.populations == nullptr) return false;
 
-	settlements.local_wealth = memory.alloc<ui32>(count);
-	if (settlements.local_wealth == nullptr) return false;
+	settlements.local_wealths = memory.alloc<ui32>(count);
+	if (settlements.local_wealths == nullptr) return false;
 
-	settlements.tier = memory.alloc<ui8>(count);
-	if (settlements.tier == nullptr) return false;
+    settlements.land_outputs = memory.alloc<ui32>(count);
+    if (settlements.land_outputs == nullptr) return false;
 
-	settlements.trade_attractivity = memory.alloc<ui8>(count);
-	if (settlements.trade_attractivity == nullptr) return false;
+	settlements.tiers = memory.alloc<ui8>(count);
+	if (settlements.tiers == nullptr) return false;
 
-	settlements.area_influence = memory.alloc<ui8>(count);
-	if (settlements.area_influence == nullptr) return false;
+	settlements.trade_attraction_indices = memory.alloc<ui8>(count);
+	if (settlements.trade_attraction_indices == nullptr) return false;
+
+	settlements.influence_capacities = memory.alloc<ui8>(count);
+	if (settlements.influence_capacities == nullptr) return false;
 
 	return true;
 }

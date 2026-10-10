@@ -79,7 +79,7 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 		// Copy the params (+ their trailing extra data) into the match's own memory: the net message buffer is reused for the next message.
 		backend.local_match_mem.clear();
 
-		ui32 paramsBlockSize = sizeof(game_match_start_params) + payload.match_start_params.extra_data_size;
+		ui32 paramsBlockSize = sizeof(game_match_start_params);
 		ui8* paramsCopy = backend.local_match_mem.alloc<ui8>(paramsBlockSize);
 		ASSERT(paramsCopy != nullptr);
 		ia_memcpy(paramsCopy, &payload.match_start_params, paramsBlockSize);

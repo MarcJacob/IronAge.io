@@ -34,6 +34,12 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 // SYSTEMS
 
+void world_system_settlement_economy(match_world_state& world);
+
+void world_system_settlement_spawn_caravans(match_world_state& world);
+
+void world_system_entity_movement_decision(match_world_state& world);
+
 void world_system_entity_movement(match_world_state& world);
 
 void world_system_caravan_arrivals(match_world_state& world);

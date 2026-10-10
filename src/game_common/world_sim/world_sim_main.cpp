@@ -87,30 +87,6 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
         }
     }
 
-    // Apply start params to world state
-    for (ui32 settlementIndex = 0; settlementIndex < start_params.start_settlement_count; settlementIndex++)
-    {
-        world_entity_settlements::single& settlementStartState = start_params.get_settlement_start_state(settlementIndex);
-        entity_guid settlementGUID = world_spawn_settlement(*newWorld, settlementStartState);
-
-        // Temp: Spawn an army near every settlement.
-        world_location startLoc = world_get_entity_location(*newWorld, settlementGUID) + vec2i{ -10, 10 };
-
-        world_entity_armies::single newArmy = {
-            .owner = settlementStartState.owner,
-            .location = startLoc,
-            .movement = {
-                .travel_speed = 50,
-                .move_target = startLoc,
-            },
-            .composition = {
-                .levies = 100,
-            },
-        };
-
-        entity_guid armyGUID = world_spawn_army(*newWorld, newArmy);
-    }
-
 	return newWorld;
 
 WORLD_INIT_FAIL:

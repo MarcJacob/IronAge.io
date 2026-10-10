@@ -20,32 +20,6 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 
 	params.player_count = player_count;
 	params.world_size_regions = { 4, 4 };
 
-	// Initialize player entity start locations.
-	ui16 extraDataSize = 0;
-
-	// Start settlements
-	params.start_settlement_count = params.player_count;
-	extraDataSize += sizeof(world_entity_settlements::single) * params.start_settlement_count;
-
-	void* extraData = memory.alloc(extraDataSize); // Will be readable as params's extra data memory.
-	ASSERT(extraData != nullptr);
-
-	params.extra_data_size = extraDataSize;
-
-	rand_generator_32 rand = { seed };
-
-	for (match_player_id player = 0; player < params.player_count; player++)
-	{
-		world_entity_settlements::single& startSettlement = params.get_settlement_start_state(player); 
-		startSettlement = { 0 };
-
-		startSettlement.owner = player;
-		startSettlement.location = rand.next_vec2({ 100.f, 100.f }, params.world_size_regions * world_terrain::REGION_SIZE - vec2i{100, 100});
-		startSettlement.population = 100;
-		startSettlement.local_wealth = 100;
-		startSettlement.tier = 1;
-	}
-
 	return &params;
 }
 

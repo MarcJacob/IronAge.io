@@ -22,6 +22,10 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SPAWN_ARMY, // Spawns an army of levies from a settlement's population.
 	SPAWN_CARAVAN, // Spawns a caravan from a settlement's local wealth, headed to a random other settlement.
 
+    // SERVER COMMANDS
+
+    SERVER_SPAWN_PLAYER, // Spawn starting entity/ies for a player. Called at game start.
+
 	TYPE_COUNT,
 };
 
@@ -30,6 +34,19 @@ enum class MATCH_COMMAND_TYPE : ui8
 // All structures must be aligned to 1 since they must exist in packed contexts for network transmission and structured reading.
 #pragma pack(push, 1)
 
+// SERVER SPAWN PLAYER
+struct command_data_server_spawn_player
+{
+    world_location spawn_location;
+    match_player_id spawned_player;
+};
+
+bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
+        const command_data_server_spawn_player& command);
+
+bool command_server_spawn_player_apply(match_world_state& world, match_player_id player,
+        const command_data_server_spawn_player& command);
+
 // SET ENTITY MOVE TARGET
 struct command_data_set_entity_move_target
 {
@@ -37,11 +54,9 @@ struct command_data_set_entity_move_target
 	world_location move_target;
 };
 
-// VALIDITY CHECK
 bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_set_entity_move_target& command);
 
-// APPLY
 void command_set_entity_move_target_apply(match_world_state& world, match_player_id player,
 	const command_data_set_entity_move_target& command);
 
@@ -52,11 +67,9 @@ struct command_data_set_entity_attack_target
 	entity_guid target_entity;
 };
 
-// VALIDITY CHECK
 bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_set_entity_attack_target& command);
 
-// APPLY
 void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player,
 	const command_data_set_entity_attack_target& command);
 
@@ -66,11 +79,9 @@ struct command_data_found_settlement
 	entity_guid army;
 };
 
-// VALIDITY CHECK
 bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_found_settlement& command);
 
-// APPLY
 void command_found_settlement_apply(match_world_state& world, match_player_id player,
 	const command_data_found_settlement& command);
 
@@ -80,11 +91,9 @@ struct command_data_spawn_army
 	entity_guid settlement;
 };
 
-// VALIDITY CHECK
 bool command_spawn_army_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
 
-// APPLY
 void command_spawn_army_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
 
@@ -94,11 +103,9 @@ struct command_data_spawn_caravan
 	entity_guid settlement;
 };
 
-// VALIDITY CHECK
 bool command_spawn_caravan_validity_check(const match_world_state& world, match_player_id player,
 	const command_data_spawn_caravan& command);
 
-// APPLY
 void command_spawn_caravan_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_caravan& command);
 
@@ -190,6 +197,8 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_spawn_army);
 	case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
 		return sizeof(command_data_spawn_caravan);
+    case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
+        return sizeof(command_data_server_spawn_player);
 	default:
 		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
 		return 0;
