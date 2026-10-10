@@ -9,6 +9,7 @@
 #include "game_common/match/start_params.h"
 #include "game_common/match/commands.h"
 
+#include "game_common/match/world.h"
 #include "world_sim/world_sim.h"
 
 // Unity compile game common components.
@@ -22,7 +23,16 @@ void match_command_apply_all(match_world_state& world, const match_tick_commands
 
 constexpr ui64 match_get_required_mem(game_match_start_params& params)
 {
-	return MiB(32); // For now let's just keep it static at 32 mibibyte.
+    // Ask for some base memory for general usage, and for the world state.
+ 
+    ui32 regionCount = params.world_size_regions.x * params.world_size_regions.y;
+
+    ui64 terrainCost = regionCount * sizeof(world_terrain::region) + sizeof(match_world_state); 
+    ui64 entitiesCost = regionCount * MICRO_ENTITIES_PER_TYPE_PER_REGION;
+    entitiesCost += entitiesCost * sizeof(world_entity_armies::single) + entitiesCost * sizeof(world_entity_caravans::single);
+    entitiesCost += regionCount * SETTLEMENTS_PER_REGION * sizeof(world_entity_settlements::single);
+
+    return MiB(32) + terrainCost + entitiesCost;
 }
 
 bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_params& params, game_match& out_match)

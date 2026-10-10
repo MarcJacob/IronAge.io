@@ -16,43 +16,6 @@ using world_dimensions = vec2<ui16>;
 
 static constexpr world_location INVALID_WORLD_LOCATION = { ~0, ~0 };
 
-// Types of terrain tiles.
-enum TERRAIN_TILE_TYPE : ui8
-{
-	LAND_PLAINS,
-	LAND_HILLS,
-	LAND_MOUNTAINS,
-
-	WATER_COAST,
-	WATER_SEA,
-};
-
-enum TERRAIN_TILE_FLAGS : ui8
-{
-	IS_ROAD = 1 << 0,
-	// ...
-};
-
-// Holds information about a world's terrain and other static information.
-struct world_terrain
-{
-	world_dimensions size_tiles; // Size of the world in tiles.
-	world_dimensions size_regions; // Size of the world in regions.
-
-	static constexpr ui8 REGION_SIZE = 128; // Square side size of a region. Total tile count per region = REGION_SIZE^2.
-	static constexpr ui16 REGION_TILE_COUNT = REGION_SIZE * REGION_SIZE;
-
-	// A Region is a square of REGION_SIZE * REGION_SIZE tiles. Each of the world's dimensions must be a multiplier of that size.
-	// Tiles are stored square-by-square as to increase data locality in most cases where we'll want to apply area-based effects.
-	// Holds static data about each tile in the region. Dynamic tile-related elements like settlement influences or modifiers are stored in other ways.
-	struct region
-	{
-		TERRAIN_TILE_TYPE terrain_types[REGION_TILE_COUNT];
-		TERRAIN_TILE_FLAGS flags[REGION_TILE_COUNT];
-		ui8 fertilities [REGION_TILE_COUNT];
-	} *regions;
-};
-
 // Possible types for an entity.
 // A type identifies the exact set of properties an entity possesses, and some of the behaviors that apply to it.
 enum ENTITY_TYPE : ui8
@@ -117,6 +80,41 @@ static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid
 {
 	return guid_a._value == guid_b._value; // Whole value, so _extra is compared too.
 }
+
+
+// Types of terrain tiles.
+enum TERRAIN_TILE_TYPE : ui8
+{
+	LAND_PLAINS,
+	LAND_HILLS,
+	LAND_MOUNTAINS,
+
+	WATER_COAST,
+	WATER_SEA,
+};
+
+// Holds the state of a world's terrain / tiles.
+struct world_terrain
+{
+	world_dimensions size_tiles; // Size of the world in tiles.
+	world_dimensions size_regions; // Size of the world in regions.
+
+	static constexpr ui8 REGION_SIZE = 128; // Square side size of a region. Total tile count per region = REGION_SIZE^2.
+	static constexpr ui16 REGION_TILE_COUNT = REGION_SIZE * REGION_SIZE;
+
+	// A Region is a square of REGION_SIZE * REGION_SIZE tiles. Each of the world's dimensions must be a multiplier of that size.
+	// Tiles are stored square-by-square as to increase data locality in most cases where we'll want to apply area-based effects.
+	struct region
+	{
+        // Geologic / static properties determined at terrain generation / authoring.
+		TERRAIN_TILE_TYPE terrain_types[REGION_TILE_COUNT]; // Type of terrain of this tile. Influences all entities and mechanics.
+
+        // Dynamic properties
+        entity_guid owners[REGION_TILE_COUNT]; // Tile owner if any. Determines which settlement obtains the tile's production output.
+        ui8 influence_levels[REGION_TILE_COUNT]; // How much influence the owning settlement has over the tile. Determines ability to hold it and exploit it.
+        ui8 contestation_levels[REGION_TILE_COUNT]; // How contested the tile is between its owner settlement and neighbouring settlements. Decreases productivity.
+    } *regions;
+};
 
 // Reused entity sub-components
 
@@ -212,6 +210,10 @@ struct world_entity_caravans : public world_entity_container
 		entity_guid dest_settlement;
 	};
 };
+
+// @TEMP(Marc): Static memory size / layout properties.
+constexpr ui32 SETTLEMENTS_PER_REGION = 10;
+constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
 
 // Contains the match's world state, namely its active entities, and static elements such as tiles.
 // Overall this represents the "observable state" of the match that can be interacted with indirectly by sending input commands into the next tick.

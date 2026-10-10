@@ -20,7 +20,7 @@
 web_client_state WEB_CLIENT;
 _ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;
 
-static constexpr ui64 CLIENT_MEMORY_SIZE = MiB(128);
+static constexpr ui64 CLIENT_MEMORY_SIZE = MiB(256); // @TEMP(Marc): Generous amount of memory.
 ui8 CLIENT_MEMORY_BLOCK[CLIENT_MEMORY_SIZE];
 
 

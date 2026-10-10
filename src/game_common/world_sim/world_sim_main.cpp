@@ -12,9 +12,6 @@
 #include "world_system_movement.cpp"
 #include "world_system_economy.cpp"
 
-constexpr ui32 SETTLEMENTS_PER_REGION = 10;
-constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
-
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
 {
 	// Estimate size:
