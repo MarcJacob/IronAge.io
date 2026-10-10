@@ -32,6 +32,14 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
+// SYSTEMS
+
+void world_system_entity_movement(match_world_state& world);
+
+void world_system_caravan_arrivals(match_world_state& world);
+
+void world_system_armies_target_reached(match_world_state& world);
+
 // LIFECYCLE
 
 // Initializes a new world state into the given memory from match start parameters.

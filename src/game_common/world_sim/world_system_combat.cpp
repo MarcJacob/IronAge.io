@@ -1,4 +1,5 @@
 #include "core/math/random.h"
+#include "game_common/match/world.h"
 #include "world_sim.h"
 
 // ATTACK RESOLUTION HELPERS
@@ -111,4 +112,24 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	}
 }
 
+void world_system_armies_target_reached(match_world_state& world)
+{
+    world_entity_armies& armies = world.entities.armies;
 
+	// Armies that got close enough to their attack target resolve the attack, which ends the chase.
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
+
+		// An earlier resolution this tick may have destroyed the target.
+		entity_guid target = armies.action_targets[armyIndex];
+		if (!world_entity_is_valid(world, target)) continue; // Handled by the chase code next tick.
+
+		if (vec2_dist_squared(armies.locations[armyIndex], world_get_entity_location(world, target))
+			> ATTACK_REACH_TILES * ATTACK_REACH_TILES) continue;
+
+		armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+		armies.movements[armyIndex].move_target = armies.locations[armyIndex];
+		world_resolve_attack(world, armies.guids[armyIndex], target);
+	}
+}
