@@ -96,6 +96,7 @@ enum TERRAIN_TILE_TYPE : ui8
 enum TILE_FLAGS : ui8
 {
 	TILE_FLAG_BORDER = 1 << 0, // Owned tile touching an unowned 8-neighbour, or a neighbour owned by a higher settlement slot (one-sided at contact lines).
+	TILE_FLAG_TAKEOVER = 1 << 1, // Transient: set and cleared inside the takeover pass (tile is to change owner this tick). Never set between ticks.
 	// Room for future flags (roads...).
 };
 
@@ -126,6 +127,7 @@ struct world_terrain
         // @TEMP(Marc): Per-region scratch buffers like this are pretty memory inefficient. Later we'll come up with some sort of
         // intermediate update memory scheme so less is used, by spreading the work over multiple passes / ticks.
         ui8 influence_next[REGION_TILE_COUNT];
+        ui8 contestation_next[REGION_TILE_COUNT]; // Contestation sources, then the new contestation, before the copy back.
     } *regions;
 
     static constexpr ui16 UNOWNED_TILE = ~0; // Owner value of a tile with no owner (influence 0).
@@ -186,7 +188,7 @@ struct world_entity_settlements : public world_entity_container
     // Per-slot values for the influence / land output systems. Derived, rewritten every tick.
     ui64*               maintenance_totals; // Sum of maintenance cost of owned tiles, fixed point (capacity * 16). Set by the land output pass, adjusted by claims / unclaims in between.
     ui16*               maintenance_overshoots; // How far over budget (1..256, in 1/256 of capacity), 0 = within budget. Set at the start of each influence tick.
-    ui64*               land_output_sums; // Fixed-point (x255) land output accumulator.
+    ui64*               land_output_sums; // Fixed-point (x255 x255) land output accumulator.
 
 	// Consolidated representation of a single settlement for viewing purposes.
 	struct single

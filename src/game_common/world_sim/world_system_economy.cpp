@@ -12,6 +12,15 @@ static constexpr ui8 CLAIM_MIN_INFLUENCE = 32; // A border tile needs at least t
 static constexpr ui8 CLAIM_START_INFLUENCE = 16; // Influence of a freshly claimed tile.
 static constexpr ui64 INFLUENCE_FALL_BASE = 4; // Over budget, an adjacent plains tile at full (256/256) overshoot loses this much per tick. Scales with tile cost and overshoot.
 
+// TAKEOVER TUNING
+static constexpr i32 TAKEOVER_MARGIN_BASE = 255; // A foreign neighbour takes a contested tile if its influence > tile influence + (this - contestation).
+
+// CONTESTATION TUNING
+static constexpr i32 CONTEST_ATTEN_BASE = 4; // Contestation lost per tile of spread = BASE + influence * K / 255 (higher influence = shorter reach).
+static constexpr i32 CONTEST_ATTEN_K = 32;
+static constexpr i32 CONTEST_RISE_MAX = 32; // Rise per tick = max(1, this * (255 - influence) / 255) (higher influence = slower spread).
+static constexpr i32 CONTEST_DECAY_MAX = 8; // Decay per tick = max(1, this * influence / 255).
+
 // Maintenance cost of a tile, in 1/MAINTENANCE_COST_FP units:
 // resistance * FP * (DIST_BASE_SQ + squared euclidean dist to settlement) / DIST_BASE_SQ * COST_SCALE.
 // Capacity is compared as capacity * COST_FP. maintenance_totals are in the same fixed point.
@@ -312,8 +321,230 @@ void world_system_economy_influence_spread(match_world_state& world)
     }
 }
 
+// Contestation: sources at contacts between settlements, then spread / rise / decay over owned tiles.
+// Reads old contestation_levels, writes contestation_next (sources first, then each tile's new value), copies back at the end.
+void world_system_economy_contestation(match_world_state& world)
+{
+    world_terrain& terrain = world.terrain;
+    const i32 regionsX = terrain.size_regions.x;
+    const i32 regionsY = terrain.size_regions.y;
+    const i32 tilesX = terrain.size_tiles.x;
+    const i32 tilesY = terrain.size_tiles.y;
+
+    for (i32 regionIndex = 0; regionIndex < regionsX * regionsY; regionIndex++)
+    {
+        ia_memzero(terrain.regions[regionIndex].contestation_next, sizeof(terrain.regions[regionIndex].contestation_next));
+    }
+
+    // Sources: each border tile and every foreign tile it touches get s = influence * influence / 255 (keeping the max).
+    for (i32 regionY = 0; regionY < regionsY; regionY++)
+    {
+        for (i32 regionX = 0; regionX < regionsX; regionX++)
+        {
+            world_terrain::region& region = terrain.regions[regionY * regionsX + regionX];
+            for (i32 tileY = 0; tileY < TILE_REGION_SIZE; tileY++)
+            {
+                for (i32 tileX = 0; tileX < TILE_REGION_SIZE; tileX++)
+                {
+                    const ui16 tile = (ui16)(tileY * TILE_REGION_SIZE + tileX);
+                    const ui16 owner = region.owners[tile];
+                    if (owner == world_terrain::UNOWNED_TILE || !(region.tile_flags[tile] & TILE_FLAG_BORDER)) continue;
+
+                    for (i32 dy = -1; dy <= 1; dy++)
+                    {
+                        for (i32 dx = -1; dx <= 1; dx++)
+                        {
+                            const i32 nx = regionX * TILE_REGION_SIZE + tileX + dx;
+                            const i32 ny = regionY * TILE_REGION_SIZE + tileY + dy;
+                            if ((dx == 0 && dy == 0) || nx < 0 || ny < 0 || nx >= tilesX || ny >= tilesY) continue;
+
+                            ui16 nTile;
+                            world_terrain::region& nRegion = influence_tile_region(terrain, nx, ny, nTile);
+                            const ui16 nOwner = nRegion.owners[nTile];
+                            if (nOwner == world_terrain::UNOWNED_TILE || nOwner == owner) continue;
+
+                            const ui8 s = (ui32)(region.influence_levels[tile] + nRegion.influence_levels[nTile]) * 1000 / 512 / 4;
+                            if (s > region.contestation_next[tile]) region.contestation_next[tile] = s;
+                            if (s > nRegion.contestation_next[nTile]) nRegion.contestation_next[nTile] = s;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Spread, rise and decay. A tile reads its own source from contestation_next, then overwrites it with its new value.
+    for (i32 regionY = 0; regionY < regionsY; regionY++)
+    {
+        for (i32 regionX = 0; regionX < regionsX; regionX++)
+        {
+            world_terrain::region& region = terrain.regions[regionY * regionsX + regionX];
+            for (i32 tileY = 0; tileY < TILE_REGION_SIZE; tileY++)
+            {
+                for (i32 tileX = 0; tileX < TILE_REGION_SIZE; tileX++)
+                {
+                    const ui16 tile = (ui16)(tileY * TILE_REGION_SIZE + tileX);
+                    if (region.owners[tile] == world_terrain::UNOWNED_TILE)
+                    {
+                        region.contestation_next[tile] = 0;
+                        continue;
+                    }
+
+                    const i32 influence = region.influence_levels[tile];
+                    const i32 old = region.contestation_levels[tile];
+
+                    i32 strongest = 0;
+                    for (i32 dy = -1; dy <= 1; dy++)
+                    {
+                        for (i32 dx = -1; dx <= 1; dx++)
+                        {
+                            const i32 nx = regionX * TILE_REGION_SIZE + tileX + dx;
+                            const i32 ny = regionY * TILE_REGION_SIZE + tileY + dy;
+                            if ((dx == 0 && dy == 0) || nx < 0 || ny < 0 || nx >= tilesX || ny >= tilesY) continue;
+
+                            ui16 nTile;
+                            const world_terrain::region& nRegion = influence_tile_region(terrain, nx, ny, nTile);
+                            if (nRegion.owners[nTile] != world_terrain::UNOWNED_TILE && nRegion.contestation_levels[nTile] > strongest) strongest = nRegion.contestation_levels[nTile];
+                        }
+                    }
+
+                    i32 target = strongest - (CONTEST_ATTEN_BASE + influence * CONTEST_ATTEN_K / 255);
+                    if (target < (i32)region.contestation_next[tile]) target = region.contestation_next[tile];
+                    if (target < 0) target = 0;
+
+                    i32 value;
+                    if (target > old)
+                    {
+                        i32 rise = CONTEST_RISE_MAX * (255 - influence) / 255;
+                        if (rise < 1) rise = 1;
+                        value = old + rise < target ? old + rise : target;
+                    }
+                    else
+                    {
+                        i32 fall = CONTEST_DECAY_MAX * influence / 255;
+                        if (fall < 1) fall = 1;
+                        value = old - fall > target ? old - fall : target;
+                    }
+                    region.contestation_next[tile] = (ui8)value;
+                }
+            }
+        }
+    }
+
+    for (i32 regionIndex = 0; regionIndex < regionsX * regionsY; regionIndex++)
+    {
+        world_terrain::region& region = terrain.regions[regionIndex];
+        ia_memcpy(region.contestation_levels, region.contestation_next, sizeof(region.contestation_levels));
+    }
+}
+
+// Takeover of contested tiles by the strongest foreign neighbour, decide-then-apply in two sweeps.
+// Sweep 1 only reads the unmodified state, so decisions cannot depend on scan order or cascade within a tick (a front moves one tile per tick).
+// It parks the new owner in influence_next (low byte) / contestation_next (high byte), scratch planes that are free here, and marks the tile with TILE_FLAG_TAKEOVER.
+// Sweep 2 applies the marked tiles. Border flags depend only on owners, so refreshing after each change ends with correct flags.
+void world_system_economy_takeover(match_world_state& world)
+{
+    world_terrain& terrain = world.terrain;
+    world_entity_settlements& settlements = world.entities.settlements;
+    const i32 regionsX = terrain.size_regions.x;
+    const i32 regionsY = terrain.size_regions.y;
+    const i32 tilesX = terrain.size_tiles.x;
+    const i32 tilesY = terrain.size_tiles.y;
+
+    // Sweep 1: decide.
+    for (i32 regionY = 0; regionY < regionsY; regionY++)
+    {
+        for (i32 regionX = 0; regionX < regionsX; regionX++)
+        {
+            world_terrain::region& region = terrain.regions[regionY * regionsX + regionX];
+            for (i32 tileY = 0; tileY < TILE_REGION_SIZE; tileY++)
+            {
+                for (i32 tileX = 0; tileX < TILE_REGION_SIZE; tileX++)
+                {
+                    const ui16 tile = (ui16)(tileY * TILE_REGION_SIZE + tileX);
+                    const ui16 owner = region.owners[tile];
+                    const i32 contestation = region.contestation_levels[tile];
+                    if (owner == world_terrain::UNOWNED_TILE || contestation == 0) continue;
+
+                    const i32 worldX = regionX * TILE_REGION_SIZE + tileX;
+                    const i32 worldY = regionY * TILE_REGION_SIZE + tileY;
+
+                    // Never take a settlement's own tile.
+                    const world_location ownerLoc = settlements.locations[owner];
+                    if (settlements.guids[owner].is_valid() && ownerLoc.x == worldX && ownerLoc.y == worldY) continue;
+
+                    // Strongest foreign owned neighbour: highest influence, ties to the lower owner slot, then fixed neighbour order.
+                    i32 bestInfluence = -1;
+                    ui16 bestOwner = world_terrain::UNOWNED_TILE;
+                    for (i32 dy = -1; dy <= 1; dy++)
+                    {
+                        for (i32 dx = -1; dx <= 1; dx++)
+                        {
+                            const i32 nx = worldX + dx;
+                            const i32 ny = worldY + dy;
+                            if ((dx == 0 && dy == 0) || nx < 0 || ny < 0 || nx >= tilesX || ny >= tilesY) continue;
+
+                            ui16 nTile;
+                            const world_terrain::region& nRegion = influence_tile_region(terrain, nx, ny, nTile);
+                            const ui16 nOwner = nRegion.owners[nTile];
+                            if (nOwner == world_terrain::UNOWNED_TILE || nOwner == owner) continue;
+
+                            const i32 nInfluence = nRegion.influence_levels[nTile];
+                            if (nInfluence > bestInfluence || (nInfluence == bestInfluence && nOwner < bestOwner))
+                            {
+                                bestInfluence = nInfluence;
+                                bestOwner = nOwner;
+                            }
+                        }
+                    }
+
+                    if (bestOwner != world_terrain::UNOWNED_TILE && bestInfluence > (i32)region.influence_levels[tile] + (TAKEOVER_MARGIN_BASE - contestation))
+                    {
+                        region.influence_next[tile] = (ui8)(bestOwner & 0xFF);
+                        region.contestation_next[tile] = (ui8)(bestOwner >> 8);
+                        region.tile_flags[tile] |= TILE_FLAG_TAKEOVER;
+                    }
+                }
+            }
+        }
+    }
+
+    // Sweep 2: apply. Influence and contestation of the tile are kept.
+    for (i32 regionY = 0; regionY < regionsY; regionY++)
+    {
+        for (i32 regionX = 0; regionX < regionsX; regionX++)
+        {
+            world_terrain::region& region = terrain.regions[regionY * regionsX + regionX];
+            for (i32 tileY = 0; tileY < TILE_REGION_SIZE; tileY++)
+            {
+                for (i32 tileX = 0; tileX < TILE_REGION_SIZE; tileX++)
+                {
+                    const ui16 tile = (ui16)(tileY * TILE_REGION_SIZE + tileX);
+                    if (!(region.tile_flags[tile] & TILE_FLAG_TAKEOVER)) continue;
+                    region.tile_flags[tile] &= ~TILE_FLAG_TAKEOVER;
+
+                    const i32 worldX = regionX * TILE_REGION_SIZE + tileX;
+                    const i32 worldY = regionY * TILE_REGION_SIZE + tileY;
+                    const ui16 oldOwner = region.owners[tile];
+                    const ui16 newOwner = (ui16)(region.influence_next[tile] | (region.contestation_next[tile] << 8));
+                    const TERRAIN_TILE_TYPE type = region.terrain_types[tile];
+
+                    const ui64 oldCost = influence_tile_cost(type, vec2_dist_squared(world_location{worldX, worldY}, settlements.locations[oldOwner]));
+                    const ui64 newCost = influence_tile_cost(type, vec2_dist_squared(world_location{worldX, worldY}, settlements.locations[newOwner]));
+                    ui64& oldTotal = settlements.maintenance_totals[oldOwner];
+                    oldTotal = oldTotal > oldCost ? oldTotal - oldCost : 0;
+                    settlements.maintenance_totals[newOwner] += newCost;
+
+                    region.owners[tile] = newOwner;
+                    influence_refresh_border_around(terrain, worldX, worldY);
+                }
+            }
+        }
+    }
+}
+
 // Land output and maintenance of each settlement, summed over its owned tiles in one pass.
-// Output is terrain output weighted by influence, capped by the settlement's capacity. It feeds the population target in world_system_settlement_economy.
+// Output is terrain output weighted by influence and by (255 - contestation), capped by the settlement's capacity. It feeds the population target in world_system_settlement_economy.
 // Maintenance is the tile cost sum, read by the influence spread system next tick.
 void world_system_economy_land_output(match_world_state& world)
 {
@@ -340,7 +571,7 @@ void world_system_economy_land_output(match_world_state& world)
                 const i32 worldY = regionY * TILE_REGION_SIZE + tile / TILE_REGION_SIZE;
                 const TERRAIN_TILE_TYPE type = region.terrain_types[tile];
 
-                settlements.land_output_sums[owner] += (ui64)TERRAIN_OUTPUT[type] * region.influence_levels[tile];
+                settlements.land_output_sums[owner] += (ui64)TERRAIN_OUTPUT[type] * region.influence_levels[tile] * (255 - region.contestation_levels[tile]);
                 settlements.maintenance_totals[owner] += influence_tile_cost(type, vec2_dist_squared(world_location{ worldX, worldY }, settlements.locations[owner]));
             }
         }
@@ -349,7 +580,7 @@ void world_system_economy_land_output(match_world_state& world)
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         const ui64 capacity = settlements.guids[settlementIndex].is_valid() ? settlements.influence_capacities[settlementIndex] : 0;
-        const ui64 output = settlements.land_output_sums[settlementIndex] / 255;
+        const ui64 output = settlements.land_output_sums[settlementIndex] / (255 * 255);
         settlements.land_outputs[settlementIndex] = (ui32)(output < capacity ? output : capacity);
     }
 }

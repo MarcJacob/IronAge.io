@@ -41,12 +41,18 @@ change organically over time (wanted).
 - Capacity = linear in pop (existing `pop + 10 + pop / 2`), no tiers. Equilibrium
   (pop = output) is the point; it pushes the player to found settlements, improve
   infrastructure, raid neighbours, trade.
-- Takeover (with contestation, later): owner changes only when contestation is high
-  enough, then higher influence wins; margin depends on contestation (full = 0,
-  none = effectively impossible, ~255).
-- Contestation (later): influence from a settlement that is not the tile's owner
-  contributes contestation instead; static decay per tick, spreads over neighbours like
-  influence (peaks at borders, fades outward).
+- Takeover [written, untested]: non-settlement tile with contestation > 0 flips to the
+  strongest foreign neighbour (ties: lower slot) when its influence > tile influence +
+  (255 - contestation). Tile keeps influence / contestation; conquest ignores budget.
+  Two sweeps (decide from snapshot, then apply) so scan order cannot cascade; transient
+  `TILE_FLAG_TAKEOVER` bit plus scratch planes reused. Tick order: spread, contestation,
+  takeover, land output. A tile taken this tick can still attack in the same tick.
+- Contestation [works in play test]: flagged border tile and each foreign-owned
+  neighbour both get source = influence * neighbour influence / 255 (max). Spreads to
+  owned neighbours (any owner) with attenuation 4 + influence * 32 / 255; rise slower and
+  decay faster with higher influence. Tile output *= (255 - contestation) / 255.
+  Maintenance cost unaffected. Own scratch plane (8 bytes / tile total). Constants:
+  atten base 4 / k 32, rise 32, decay 8.
 - Land output: one pass over all tiles per tick (all tiles for now), per settlement sum
   of terrain-based value (no fertility) weighted by influence; contested tiles yield
   less. 1 land output = 1 population naturally supported; it is the base of the pop
@@ -54,9 +60,9 @@ change organically over time (wanted).
 - Destroy: owned tiles lose their owner, neighbours absorb them over later updates.
 - Target map size: 1024^2 first, 4096^2 later (see `blit_canvas`).
 - Terrain generation out of scope (placeholder only).
-- Rendering: contestation drives hue / alpha (pure red at full), influence a capped
-  green tint (~110/255 alpha), per-terrain darkening (plains 1.0, hills 0.85,
-  mountains 0.7). Dirty-rect repaint later.
+- Rendering (done): straight green -> red blend by contestation, alpha = max(influence,
+  contestation) / 2, border tiles pitch black. Not done: per-terrain darkening, dirty-rect
+  repaint (overlay rebuilt every frame).
 
 ## Open design
 
@@ -91,5 +97,7 @@ change organically over time (wanted).
 
 ## Next step
 
-User hand-tests and tunes. Then: rendering (flags plane to client, border = slightly
-darker tile, new color formula), then contestation / takeover.
+User hand-tests takeover (watch for front oscillation, tiles lost around a settlement
+tile, conquest eroding via over-budget decay). Optional: terrain darkening, dirty-rect
+repaint, slot-reuse stale tiles fix. Once stable, flag this unit [DONE] and unblock
+`settlement_econ_tick` for real econ inputs.

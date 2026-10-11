@@ -107,6 +107,8 @@ void world_state_tick(match_world_state& world)
 
     world_system_settlement_economy(world);
     world_system_economy_influence_spread(world);
+    world_system_economy_contestation(world);
+    world_system_economy_takeover(world);
     world_system_economy_land_output(world);
     world_system_settlement_spawn_caravans(world);
     world_system_entity_movement_decision(world);

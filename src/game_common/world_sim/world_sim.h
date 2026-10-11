@@ -38,6 +38,10 @@ void world_system_settlement_economy(match_world_state& world);
 
 void world_system_economy_influence_spread(match_world_state& world);
 
+void world_system_economy_contestation(match_world_state& world);
+
+void world_system_economy_takeover(match_world_state& world);
+
 void world_system_economy_land_output(match_world_state& world);
 
 void world_system_settlement_spawn_caravans(match_world_state& world);

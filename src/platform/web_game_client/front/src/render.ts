@@ -287,20 +287,25 @@ function draw_influence(render_state: Backend.RenderState)
 
     if (influenceBytes === null || contestationBytes === null || flagBytes === null || canvas_offscreen_tiles_influence === undefined) return;
 
-    // Build explicit RGBA bytes. Influence is green, contestation is red,
-    // and the combined strength controls opacity so zero-valued tiles remain
-    // transparent over the terrain.
+    // Build explicit RGBA bytes. Color is a straight (non-premultiplied) lerp from green to red
+    // by contestation fraction. Opacity is max(influence, contestation) scaled by INFLUENCE_MAX_ALPHA_FRACTION,
+    // so it never dips mid-transition and zero-valued tiles remain transparent over the terrain.
+    const INFLUENCE_COLOR_GREEN = [0, 255, 0];
+    const INFLUENCE_COLOR_RED = [255, 0, 0];
+    const INFLUENCE_MAX_ALPHA_FRACTION = 0.5;
+
     const drawBytes = new Uint8ClampedArray(tileCount * 4);
     for (let i = 0; i < tileCount; i++)
     {
-        const influenceVal = influenceBytes[i] - contestationBytes[i];
+        const influenceVal = influenceBytes[i];
         const contestationVal = contestationBytes[i];
+        const contestationFraction = contestationVal / 255;
         const pixelOffset = i * 4;
 
-        drawBytes[pixelOffset] = contestationVal;
-        drawBytes[pixelOffset + 1] = influenceVal;
-        drawBytes[pixelOffset + 2] = 0;
-        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal) / 2;
+        drawBytes[pixelOffset] = INFLUENCE_COLOR_GREEN[0] + (INFLUENCE_COLOR_RED[0] - INFLUENCE_COLOR_GREEN[0]) * contestationFraction;
+        drawBytes[pixelOffset + 1] = INFLUENCE_COLOR_GREEN[1] + (INFLUENCE_COLOR_RED[1] - INFLUENCE_COLOR_GREEN[1]) * contestationFraction;
+        drawBytes[pixelOffset + 2] = INFLUENCE_COLOR_GREEN[2] + (INFLUENCE_COLOR_RED[2] - INFLUENCE_COLOR_GREEN[2]) * contestationFraction;
+        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal) * INFLUENCE_MAX_ALPHA_FRACTION;
 
         if ((flagBytes[i] & TILE_FLAG_BORDER) !== 0)
         {
