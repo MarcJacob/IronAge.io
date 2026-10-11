@@ -10,49 +10,53 @@ change organically over time (wanted).
 
 ## Decisions
 
-- Influence lives in GameCommon sim state (all game mechanics do). It feeds
-  the settlement econ tick (`settlement_econ_tick_2026-10-03.md`).
-- Approach: cellular-automaton spread (chosen over distance-binding design).
-  Terrain affects influence (water blocks, mountains slow, etc.).
-- Settlement emits from adjacent tiles at full influence; each update spreads
-  to neighbours (flood-fill style) while the settlement's weighted exploitation
-  is below a threshold depending on population (and tier: big urban settlements
-  claim less per inhabitant). Spread weighted by distance.
-- Each tile remembers one main owner settlement.
-- Contestation: sourced from strong tiles touching non-friendly (enemy / neutral)
-  owned tiles, itself flood-filled to surrounding tiles.
-- Tiles feed their owner additively into "land exploitation", weighted by tile
-  fertility; contested tiles yield less in total (encourages conflict).
-- Settlement influence generation rarely jumps suddenly; slow propagation
-  latency is acceptable / desired.
-- Tile state, 3 separate planes (SIMD-friendly): owner (1 byte), influence
-  (1 byte, 0 = unowned), contestation (1 byte).
-- Owner byte = 2-bit region selector + 6-bit index into that region's settlement
-  table (cap 64 per region; spawn denied when full, plus a gameplay min distance).
-  Selector picks among 4 candidate regions (own, nearest horizontal / vertical
-  neighbour by which half of the region the tile is in, diagonal). Requires
-  influence path distance from owner < 64 tiles. Tile scale vs gameplay still
-  undecided; a non-region-based settlement encoding may replace this later.
-- Supply rule: tiles adjacent to a settlement stop being fed when its exploitation
-  (previous tick's sum) exceeds its capacity; unfed influence decays outward
-  until equilibrium. A tile owned by another settlement is only taken when
-  incoming influence beats current by a margin (tuning constant).
-- Update every tick for the first slice.
-- Updates must be deterministic (lockstep): double-buffered or fixed scan order.
+- Influence lives in GameCommon sim state. It feeds the settlement econ tick
+  (`settlement_econ_tick_2026-10-03.md`).
+- Update every tick, deterministic (double-buffered or fixed scan order), simple first:
+  no staggering / threading / SIMD (region-by-region work later).
+- Tile planes (separate): owner, influence (ui8, 0 = unowned), contestation (ui8).
+  Owner = ui16 settlement slot index per tile for now (region selector + 6-bit
+  encoding dropped; compact encoding maybe later).
+- Model: fluid-like diffusion. Settlement tile is the source; every tile is a uniform
+  sink (leak); terrain only changes transmission (conductance), never sinks, so hard
+  terrain redirects / slows spread. A tile receives from several neighbours; distance
+  (diagonal) also weighs.
+- Terrain cost (resistance): plains 4, coast 8, hills 8, sea 12, mountains 32 (barrier);
+  lakes are coast + sea tiles (no own type).
+- Influence stays 1 byte (memory); small differences truncating to zero flow is intended.
+- Capacity = pop * k, k slightly above 1 (start 1.5), so target pop keeps rising from
+  existing pop for a while. Equilibrium (pop = output) is the point; it pushes the player
+  to found settlements, improve infrastructure, raid neighbours, trade.
+- Slow organic change: rise / fall rates R and F per tick, scaled by how settlement
+  capacity compares to its last land output (fast shrink after sudden pop loss).
+- No supply rule; the field erodes inward: tiles look at whether the owner is
+  under capacity vs its last output and adjust by their influence, distance, terrain.
+- Capacity = linear in population (no tiers for now). Expansion gets costlier with
+  distance / terrain, giving a soft population ceiling.
+- Ownership slice 1: unowned tile takes the owner of its strongest neighbour; owned
+  tile keeps its owner until influence reaches 0.
+- Takeover (with contestation, later): owner changes only when contestation is high
+  enough, then higher influence wins; margin depends on contestation (full = 0,
+  none = effectively impossible, ~255).
+- Contestation (later): influence from a settlement that is not the tile's owner
+  contributes contestation instead; static decay per tick, spreads over neighbours like
+  influence (peaks at borders, fades outward).
+- Land output: one pass over all tiles per tick (all tiles for now), per settlement sum
+  of terrain-based value (no fertility) weighted by influence; contested tiles yield
+  less. 1 land output = 1 population naturally supported; it is the base of the pop
+  growth target. Pop -> capacity -> influence -> output loop.
 - Destroy: owned tiles lose their owner, neighbours absorb them over later updates.
 - Target map size: 1024^2 first, 4096^2 later (see `blit_canvas`).
-- Simple first: no staggering, threading or SIMD (ideas for when perf requires;
-  multithreading to be discussed then). Practice reasonable non-pessimization.
-- Terrain generation out of scope (placeholder only, see Progress).
+- Terrain generation out of scope (placeholder only).
+- Rendering: contestation drives hue / alpha (pure red at full), influence a capped
+  green tint (~110/255 alpha), per-terrain darkening (plains 1.0, hills 0.85,
+  mountains 0.7). Dirty-rect repaint later.
 
 ## Open design
 
-- Spread/decay formula, capacity formula, takeover margin.
-- Contestation byte semantics (precision).
-- Terrain spread costs per terrain type.
-- Contested-tile output penalty formula; diplomatic status ignored until diplomacy exists.
-- Rendering: blend of owner colors by strength, alpha by total strength; color
-  scheme per viewer vs per player; whether any border hint remains.
+- Exact formulas, R / F values, leak amount, k (tuned by play).
+- Contested-tile output penalty formula; diplomacy ignored until it exists.
+- Rendering: per-owner colors, viewer vs player scheme, border hint.
 - Mid-match join: state is derived, confirm it needs no transfer.
 
 ## Depends on
@@ -61,15 +65,16 @@ change organically over time (wanted).
 
 ## Progress
 
-- [DONE] Prerequisite slice: placeholder terrain generated in `match_start`
-  (Chebyshev border: < 10 mountains, < 15 hills; central 10x10 lake, outer 2 coast,
-  inner 6x6 sea; else plains), copied into client `terrain_tiles` at match begin.
-  Region/tile index math duplicated (generation + client copy); extract a helper
-  when a third user appears.
-- Survey: `area_influence` ui8 exists on settlements, unused.
+- [DONE] Placeholder terrain generated in `match_start` (Chebyshev border: < 10 mountains,
+  < 15 hills; central 10x10 lake, outer 2 coast, inner 6x6 sea; else plains).
+- [DONE] Storage + render plumbing (commit 640cb5b): per-region planes (owner is a 4-byte
+  `entity_guid`, never written), copied to client byte buffers, TS overlay over terrain.
+- Placeholder only: econ tick stamps a 20x20 box every tick per settlement.
+- [DONE] Coordinate unification in `render.ts` (tile-aligned, entities centered on tile
+  center), hover tile highlight.
 
 ## Next step
 
-Settle remaining open points (spread formula, capacity), then first slice: per-region
-settlement tables + tile planes + CA spread in GameCommon on flat terrain, then terrain costs and land output sum,
-then the TS overlay (byte buffer colored in TS, dirty-rect repaint).
+Settle the capacity / field open points, then builder tasks: (1) owner ui16 + diffusion
+spread on terrain replacing the box stamp, (2) land output pass feeding the pop target,
+(3) rendering formula; contestation / takeover after.

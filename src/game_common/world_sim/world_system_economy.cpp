@@ -19,55 +19,32 @@ void world_system_settlement_economy(match_world_state& world)
         ui32 targetPopulation = settlements.land_outputs[settlementIndex]
                             +   settlements.local_wealths[settlementIndex];
 
-        i32 growth = ((i64)targetPopulation - (i64)settlements.populations[settlementIndex]) * 5 / 100;
-        if (growth > 0 && (ui32)growth >= 1 + settlements.populations[settlementIndex] / 100)
+        ui32& population = settlements.populations[settlementIndex];
+        
+        i32 growth = ((i64)targetPopulation - (i64)population) * 5 / 100;
+        if (growth > 0 && (ui32)growth >= 1 + population / 100)
         {
-            growth = 1 + (i64)settlements.populations[settlementIndex] / 100; // Population cannot grow by more than 1% per tick.
+            growth = 1 + (i64)population / 100; // Population cannot grow by more than 1% per tick.
         }
 
-        if (settlements.populations[settlementIndex] + growth < 1)
+        if (population + growth < 1)
         {
-            settlements.populations[settlementIndex] = 1;
+            population = 1;
             continue;
         }
 
-        settlements.populations[settlementIndex] += growth;
+        population += growth;
+
+        // Calculate new influence capacity.
+        settlements.influence_capacities[settlementIndex] = population + 10 + population / 2;
     }
 
     world_terrain& terrain = world.terrain;
 
-    // INFLUENCE SPREAD
-    // @TEMP(Marc): Temp system. Just set influence of all tiles in a square to 1 with the borders of the square being contested.
+    // INFLUENCE SPREAD & LAND OUTPUT.
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
-
-        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every 10 ticks based on their Extra guid field and world age.
-        //if ((settlements.guids[settlementIndex].get_extra() + world.age) % 10 != 0) continue;
-
-        world_location settlementLoc = world.entities.settlements.locations[settlementIndex];
-        world_location min = settlementLoc - world_location{10, 10};
-        world_location max = settlementLoc + world_location{10, 10};
-
-        min.x = ia_clamped<world_location::val_type>(min.x, 0, world.terrain.size_tiles.x);
-        min.y = ia_clamped<world_location::val_type>(min.y, 0, world.terrain.size_tiles.y);
-        max.x = ia_clamped<world_location::val_type>(max.x, 0, world.terrain.size_tiles.x);
-        max.y = ia_clamped<world_location::val_type>(max.y, 0, world.terrain.size_tiles.y);
-
-        for (world_location::val_type x = min.x; x < max.x; x++)
-        {
-            for (world_location::val_type y = min.y; y < max.y; y++)
-            {
-                ui16 regionIndex, tileIndex;
-                world_get_tile(world.terrain, {x, y}, regionIndex, tileIndex);
-
-                world_terrain::region& region = world.terrain.regions[regionIndex];
-
-                region.influence_levels[tileIndex] = 255;
-                region.contestation_levels[tileIndex] =
-                    255 * (x == min.x || x == max.x - 1 || y == min.y || y == max.y - 1);
-            }
-        }
    }
 }
 

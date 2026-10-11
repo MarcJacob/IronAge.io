@@ -45,7 +45,7 @@ function update_viewport_move_input()
     return moveInput;
 }
 
-// World location under the mouse as of the last mousemove event, or null if the mouse hasn't moved over the canvas yet.
+// World tile under the mouse (not clamped to the world) as of the last mousemove event, or null if the mouse hasn't moved over the canvas yet.
 export function get_mouse_world_location(): { x: number, y: number } | null
 {
     return MOUSE_WORLD_LOC;
@@ -65,7 +65,10 @@ function send_set_target_loc(clientX: number, clientY: number)
 {
     if (SELECTED_ENTITY_GUID === null) return;
 
-    const viewportLocation = Render.page_to_viewport(clientX, clientY);
+    // The backend adds the viewport's bottom-left to these offsets and rounds to a tile (clamped in the world), so the rounded offset
+    // to the tile lands back on it. Tile i's location is i (entities are drawn at i + 0.5).
+    const tile = Render.page_to_tile(clientX, clientY);
+    const viewportLocation = Render.world_to_viewport(tile.x, tile.y);
 
     // Layout of input_event_payload_set_target_loc (game_client_backend.h): ui32 entity guid, i32 x, i32 y (viewport space, whole tiles).
     const view = Backend.ClientInput.begin_input_event();
@@ -175,7 +178,13 @@ function on_context_menu(menuEvent: MouseEvent)
 
 function on_mouse_move(moveEvent: MouseEvent)
 {
-    MOUSE_WORLD_LOC = Render.page_to_world(moveEvent.clientX, moveEvent.clientY);
+    MOUSE_WORLD_LOC = Render.page_to_tile(moveEvent.clientX, moveEvent.clientY);
+    Render.set_hover_page_pos(moveEvent.clientX, moveEvent.clientY);
+}
+
+function on_mouse_leave()
+{
+    Render.set_hover_page_pos(null, null);
 }
 
 function on_mouse_wheel(wheelEvent: WheelEvent)
@@ -196,6 +205,7 @@ export function init_input(canvas_element: HTMLCanvasElement)
     canvas_element.addEventListener('click', canvas_only(on_pointer_click));
     canvas_element.addEventListener('contextmenu', canvas_only(on_context_menu));
     canvas_element.addEventListener('mousemove', canvas_only(on_mouse_move));
+    canvas_element.addEventListener('mouseleave', on_mouse_leave);
     canvas_element.addEventListener('wheel', canvas_only(on_mouse_wheel), { passive: false });
 
     // Keyboard

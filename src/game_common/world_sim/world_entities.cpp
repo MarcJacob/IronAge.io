@@ -58,7 +58,6 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.settlements.populations[freeIndex], 100);
-    // ...
 
 	return newID;
 }

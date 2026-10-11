@@ -77,6 +77,17 @@ let TERRAIN_COLORS: Array<[number, number, number, number]> =
 ];
 const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 255];
 
+// Fill style of the world tile under the mouse.
+const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
+
+// Page position of the mouse over the canvas, or null if it isn't over it. Resolved to a tile every draw so the highlight follows camera moves too.
+let HOVER_PAGE_POS: { x: number, y: number } | null = null;
+
+export function set_hover_page_pos(clientX: number | null, clientY: number | null)
+{
+    HOVER_PAGE_POS = clientX === null || clientY === null ? null : { x: clientX, y: clientY };
+}
+
 // Current state / parameteres of the render surface. Updated on every tick.
 let RENDER_PARAMS =
 {
@@ -90,6 +101,72 @@ let RENDER_PARAMS =
 	viewportBottomLeftY : 0,
 }
 
+// COORDINATE CONVERSIONS. The only place that does page / canvas / world math (and the only Y flip between canvas and world).
+// Spaces: page = mouse event client px; canvas = canvas px, origin top-left, Y down; world = tile units, origin bottom-left, Y up.
+// Tile (i, j) covers world [i, i+1) x [j, j+1). All use the viewport of the last draw() call.
+
+// Page (client px) -> canvas px.
+function page_to_canvas(clientX: number, clientY: number)
+{
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) * (canvas.width / rect.width),
+        y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+}
+
+// Canvas px -> world (fractional).
+function canvas_to_world(canvasX: number, canvasY: number)
+{
+    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    return {
+        x: RENDER_PARAMS.viewportBottomLeftX + canvasX / s,
+        y: RENDER_PARAMS.viewportBottomLeftY + (canvas.height - canvasY) / s,
+    };
+}
+
+// World -> canvas px.
+function world_to_canvas(worldX: number, worldY: number)
+{
+    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    return {
+        x: (worldX - RENDER_PARAMS.viewportBottomLeftX) * s,
+        y: canvas.height - (worldY - RENDER_PARAMS.viewportBottomLeftY) * s,
+    };
+}
+
+// Canvas rect (top-left corner and square size, px) of a world tile.
+function tile_to_canvas_rect(tileX: number, tileY: number)
+{
+    const topLeft = world_to_canvas(tileX, tileY + 1);
+    return { x: topLeft.x, y: topLeft.y, size: RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE };
+}
+
+// Canvas px of the center of the tile an entity is in, from its render state viewport position (world location - viewport bottom-left).
+function entity_canvas_center(viewport_x: number, viewport_y: number)
+{
+    return world_to_canvas(viewport_x + RENDER_PARAMS.viewportBottomLeftX + 0.5, viewport_y + RENDER_PARAMS.viewportBottomLeftY + 0.5);
+}
+
+// Page -> world tile (integer) under it. Not clamped: may be outside the world, see is_tile_in_world().
+export function page_to_tile(clientX: number, clientY: number)
+{
+    const canvasPos = page_to_canvas(clientX, clientY);
+    const world = canvas_to_world(canvasPos.x, canvasPos.y);
+    return { x: Math.floor(world.x), y: Math.floor(world.y) };
+}
+
+export function is_tile_in_world(tile: { x: number, y: number }): boolean
+{
+    return tile.x >= 0 && tile.y >= 0 && tile.x < RENDER_PARAMS.WORLD_SIZE.width && tile.y < RENDER_PARAMS.WORLD_SIZE.height;
+}
+
+// World position -> offset from the viewport's bottom-left corner, as the game client backend expects for move targets.
+export function world_to_viewport(worldX: number, worldY: number)
+{
+    return { x: worldX - RENDER_PARAMS.viewportBottomLeftX, y: worldY - RENDER_PARAMS.viewportBottomLeftY };
+}
+
 // Returns an entity's canvas square size from current render parameters and provided type.
 function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
 {
@@ -101,9 +178,9 @@ function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
 
 function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
-    // Tile i covers [i, i+1]: center the entity on its tile's center.
-    const drawX = (viewport_x + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - size / 2;
-    const drawY = canvas.height - (viewport_y + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - size / 2;
+    const center = entity_canvas_center(viewport_x, viewport_y);
+    const drawX = center.x - size / 2;
+    const drawY = center.y - size / 2;
 
     ctx.drawImage(entity_img, drawX, drawY, size, size);
 
@@ -161,20 +238,17 @@ function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local
     draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
 }
 
-// Draws the visible part of the terrain bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
-// Tile i covers [i, i+1] in world space.
-function draw_terrain()
+// Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
+function draw_tile_layer(layer: OffscreenCanvas)
 {
-    if (canvas_offscreen_tiles_terrain === undefined) return;
-
     const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const vx = RENDER_PARAMS.viewportBottomLeftX;
-    const vy = RENDER_PARAMS.viewportBottomLeftY;
+    const viewMin = canvas_to_world(0, canvas.height);
+    const viewMax = canvas_to_world(canvas.width, 0);
 
-    let x0 = Math.max(0, vx);
-    let x1 = Math.min(RENDER_PARAMS.WORLD_SIZE.width, vx + canvas.width / s);
-    let y0 = Math.max(0, vy);
-    let y1 = Math.min(RENDER_PARAMS.WORLD_SIZE.height, vy + canvas.height / s);
+    let x0 = Math.max(0, viewMin.x);
+    let x1 = Math.min(RENDER_PARAMS.WORLD_SIZE.width, viewMax.x);
+    let y0 = Math.max(0, viewMin.y);
+    let y1 = Math.min(RENDER_PARAMS.WORLD_SIZE.height, viewMax.y);
     if (x1 <= x0 || y1 <= y0) return;
 
     x0 = Math.floor(x0);
@@ -184,13 +258,19 @@ function draw_terrain()
 
     ctx.imageSmoothingEnabled = false;
 
-    // Flip vertically so bitmap row 0 (world bottom) ends up at the bottom of the canvas.
+    // Origin at the canvas position of the block's bottom-left corner, flipped vertically so bitmap row 0 ends up at the bottom.
+    const origin = world_to_canvas(x0, y0);
     ctx.save();
-    ctx.translate(0, canvas.height);
+    ctx.translate(origin.x, origin.y);
     ctx.scale(1, -1);
-    ctx.drawImage(canvas_offscreen_tiles_terrain, x0, y0, x1 - x0, y1 - y0,
-        (x0 - vx) * s, (y0 - vy) * s, (x1 - x0) * s, (y1 - y0) * s);
+    ctx.drawImage(layer, x0, y0, x1 - x0, y1 - y0, 0, 0, (x1 - x0) * s, (y1 - y0) * s);
     ctx.restore();
+}
+
+function draw_terrain()
+{
+    if (canvas_offscreen_tiles_terrain === undefined) return;
+    draw_tile_layer(canvas_offscreen_tiles_terrain);
 }
 
 // @TODO(Marc): Consider moving the logic to WASM and / or to GPU accelerated objects.
@@ -208,57 +288,45 @@ function draw_influence(render_state: Backend.RenderState)
     const drawBytes = new Uint8ClampedArray(tileCount * 4);
     for (let i = 0; i < tileCount; i++)
     {
-        const influenceVal = influenceBytes[i];
+        const influenceVal = influenceBytes[i] - contestationBytes[i];
         const contestationVal = contestationBytes[i];
         const pixelOffset = i * 4;
 
         drawBytes[pixelOffset] = contestationVal;
         drawBytes[pixelOffset + 1] = influenceVal;
         drawBytes[pixelOffset + 2] = 0;
-        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal);
+        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal) / 2;
     }
 
     const influenceImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
     const offscreenCtx = canvas_offscreen_tiles_influence.getContext('2d') as OffscreenCanvasRenderingContext2D;
     offscreenCtx.putImageData(influenceImg, 0, 0);
 
-    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const vx = RENDER_PARAMS.viewportBottomLeftX;
-    const vy = RENDER_PARAMS.viewportBottomLeftY;
+    draw_tile_layer(canvas_offscreen_tiles_influence);
+}
 
-    let x0 = Math.max(0, vx);
-    let x1 = Math.min(RENDER_PARAMS.WORLD_SIZE.width, vx + canvas.width / s);
-    let y0 = Math.max(0, vy);
-    let y1 = Math.min(RENDER_PARAMS.WORLD_SIZE.height, vy + canvas.height / s);
-    if (x1 <= x0 || y1 <= y0) return;
+// Highlights the world tile under the mouse, if any.
+function draw_hovered_tile()
+{
+    if (HOVER_PAGE_POS === null) return;
 
-    x0 = Math.floor(x0);
-    x1 = Math.ceil(x1);
-    y0 = Math.floor(y0);
-    y1 = Math.ceil(y1);
+    const tile = page_to_tile(HOVER_PAGE_POS.x, HOVER_PAGE_POS.y);
+    if (!is_tile_in_world(tile)) return;
 
-    ctx.imageSmoothingEnabled = false;
-
-    // Flip vertically so bitmap row 0 (world bottom) ends up at the bottom of the canvas.
-    ctx.save();
-    ctx.translate(0, canvas.height);
-    ctx.scale(1, -1);
-    ctx.drawImage(canvas_offscreen_tiles_influence, x0, y0, x1 - x0, y1 - y0,
-        (x0 - vx) * s, (y0 - vy) * s, (x1 - x0) * s, (y1 - y0) * s);
-    ctx.restore();
+    const rect = tile_to_canvas_rect(tile.x, tile.y);
+    ctx.fillStyle = HOVERED_TILE_COLOR;
+    ctx.fillRect(rect.x, rect.y, rect.size, rect.size);
 }
 
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
 function draw_world_border()
 {
-    const left = (0 - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const right = (RENDER_PARAMS.WORLD_SIZE.width - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const top = canvas.height - (RENDER_PARAMS.WORLD_SIZE.height - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const bottom = canvas.height - (0 - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const bottomLeft = world_to_canvas(0, 0);
+    const topRight = world_to_canvas(RENDER_PARAMS.WORLD_SIZE.width, RENDER_PARAMS.WORLD_SIZE.height);
 
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
-    ctx.strokeRect(left, top, right - left, bottom - top);
+    ctx.strokeRect(bottomLeft.x, topRight.y, topRight.x - bottomLeft.x, bottomLeft.y - topRight.y);
 }
 
 // Draws the given render state (see backend.read_render_state()).
@@ -276,6 +344,7 @@ export function draw(render_state: Backend.RenderState | null)
 
     draw_terrain();
     draw_influence(render_state);
+    draw_hovered_tile();
     draw_world_border();
 
     const selectedGuid = get_selected_entity_guid();
@@ -366,49 +435,15 @@ export function init_render(canvas_element : HTMLCanvasElement) {
     Core.register_frame_callback((dt) => draw(Backend.LAST_RENDER_STATE));
 }
 
-// Converts a position on the page (mouse event coordinates) to a world tile position, clamped inside the world.
-export function page_to_world(clientX: number, clientY: number)
-{
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
-    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
-
-    const viewRect = FRONTEND_CAMERA.get_rect();
-    const worldX = viewRect.min.x + canvasX / canvas.width * (viewRect.max.x - viewRect.min.x);
-    const worldY = viewRect.min.y + (canvas.height - canvasY) / canvas.height * (viewRect.max.y - viewRect.min.y);
-
-    return {
-        x: Math.min(Math.max(Math.round(worldX), 0), RENDER_PARAMS.WORLD_SIZE.width - 1),
-        y: Math.min(Math.max(Math.round(worldY), 0), RENDER_PARAMS.WORLD_SIZE.height - 1),
-    };
-}
-
-// Converts a position on the page (mouse event coordinates) to viewport coordinates, assuming the pointer is inside it.
-export function page_to_viewport(clientX: number, clientY: number)
-{
-    if (Backend.LAST_RENDER_STATE == null) return { x:0, y:0 };
-
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
-    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
-
-    return {
-        x: canvasX / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE,
-        y: (canvas.height - canvasY) / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE
-    };
-}
-
 // Converts a position on the page (mouse event coordinates) to a normalized [0, 1] fraction across the canvas.
-// (0,0) = bottom-left.
+// (0,0) = bottom-left. Camera zoom anchor, not a world conversion.
 export function page_to_viewport_fraction(clientX: number, clientY: number)
 {
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = (clientX - rect.left) * (canvas.width / rect.width);
-    const canvasY = (clientY - rect.top) * (canvas.height / rect.height);
+    const canvasPos = page_to_canvas(clientX, clientY);
 
     return {
-        x: Math.min(Math.max(canvasX / canvas.width, 0), 1),
-        y: Math.min(Math.max(1 - canvasY / canvas.height, 0), 1),
+        x: Math.min(Math.max(canvasPos.x / canvas.width, 0), 1),
+        y: Math.min(Math.max(1 - canvasPos.y / canvas.height, 0), 1),
     };
 }
 
@@ -419,7 +454,7 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
 {
     if (Backend.LAST_RENDER_STATE === null) return null;
 
-    const viewportCoords = page_to_viewport(clientX, clientY);
+    const clickPos = page_to_canvas(clientX, clientY);
 
     const hitGuids: number[] = []; // In render-list order.
     let nearestGuid: number | null = null;
@@ -430,9 +465,10 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
         if (entity.entity_type == Backend.ENTITY_TYPE.INVALID) continue;
         if (exclude_owner !== null && entity.owner === exclude_owner) continue;
 
-        const dx = viewportCoords.x - entity.viewport_x;
-        const dy = viewportCoords.y - entity.viewport_y;
-        const halfSize = compute_entity_canvas_size(entity.entity_type) / 2 / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE; // Convert canvas -> viewport size units.
+        const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+        const dx = clickPos.x - center.x;
+        const dy = clickPos.y - center.y;
+        const halfSize = compute_entity_canvas_size(entity.entity_type) / 2;
         if (Math.abs(dx) > halfSize || Math.abs(dy) > halfSize) continue;
 
         hitGuids.push(entity.guid);
