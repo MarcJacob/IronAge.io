@@ -11,7 +11,7 @@ change organically over time (wanted).
 ## Decisions
 
 - Influence lives in GameCommon sim state. It feeds the settlement econ tick
-  (`settlement_econ_tick_2026-10-03.md`).
+  (now `settlement_trade_construction_2026-10-03.md`).
 - Update every tick, deterministic (double-buffered or fixed scan order), simple first:
   no staggering / threading / SIMD (region-by-region work later).
 - Tile planes (separate): owner, influence (ui8, 0 = unowned), contestation (ui8).
@@ -97,7 +97,6 @@ change organically over time (wanted).
 
 ## Next step
 
-User hand-tests takeover (watch for front oscillation, tiles lost around a settlement
-tile, conquest eroding via over-budget decay). Optional: terrain darkening, dirty-rect
-repaint, slot-reuse stale tiles fix. Once stable, flag this unit [DONE] and unblock
-`settlement_econ_tick` for real econ inputs.
+Unit complete (takeover works, a bit slow). Further work is the backlog rework
+`backlog/influence_contestation_rework_2026-10-12.md`; leftovers: terrain darkening,
+dirty-rect repaint, slot-reuse stale tiles.
