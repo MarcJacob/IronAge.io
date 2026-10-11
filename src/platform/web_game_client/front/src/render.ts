@@ -54,6 +54,17 @@ let DIPLOMATIC_TINTS =
     ENEMY: 'rgba(200, 40, 40, 0.45)',
 }
 
+// Minimum view size (in canvas pixels) of entities before scale multiplier is taken into account.
+let ENTITY_MIN_VIEW_SIZE = 10;
+
+// Base scale value of entities according to their type.
+let ENTITY_BASE_SCALE_MULTIPLIERS =
+{
+    [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
+    [Backend.ENTITY_TYPE.CARAVAN]: 2,
+    [Backend.ENTITY_TYPE.ARMY]: 2,
+}
+
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
 let TERRAIN_COLORS: Array<[number, number, number, number]> =
 [
@@ -78,22 +89,27 @@ let RENDER_PARAMS =
 	viewportBottomLeftY : 0,
 }
 
-function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, scale:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+// Returns an entity's canvas square size from current render parameters and provided type.
+function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
 {
-    const w = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const h = scale * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    if (entity_type == Backend.ENTITY_TYPE.INVALID) return 0;
 
-    // Tile i covers [i, i+1]: center the entity on its tile's center. Viewport space is world space minus a translation, so +0.5 applies as is.
-    const drawX = (viewport_x + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - w / 2;
-    const drawY = canvas.height - (viewport_y + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - h / 2;
+    const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[entity_type];
+    return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
+}
 
-    ctx.drawImage(entity_img, drawX, drawY, w, h);
+function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+{
+    // Tile i covers [i, i+1]: center the entity on its tile's center.
+    const drawX = (viewport_x + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - size / 2;
+    const drawY = canvas.height - (viewport_y + 0.5) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE - size / 2;
 
-    // Tint on an isolated transparent surface so compositing cannot clear the world or other entities.
+    ctx.drawImage(entity_img, drawX, drawY, size, size);
+
     if (tintCanvas === null || tintCtx === null) return;
 
-    const tintWidth = Math.max(1, Math.ceil(w));
-    const tintHeight = Math.max(1, Math.ceil(h));
+    const tintWidth = Math.max(1, Math.ceil(size));
+    const tintHeight = Math.max(1, Math.ceil(size));
     tintCanvas.width = tintWidth;
     tintCanvas.height = tintHeight;
 
@@ -105,7 +121,7 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
     tintCtx.fillRect(0, 0, tintWidth, tintHeight);
     tintCtx.globalCompositeOperation = 'source-over';
 
-    ctx.drawImage(tintCanvas, drawX, drawY, w, h);
+    ctx.drawImage(tintCanvas, drawX, drawY, size, size);
 
     // Selection indicator: green outline around the image, constant width in screen pixels.
     if (is_selected)
@@ -113,47 +129,35 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
         const padding = 4;
         ctx.strokeStyle = '#0c0';
         ctx.lineWidth = 2;
-        ctx.strokeRect(drawX - padding, drawY - padding, w + 2 * padding, h + 2 * padding);
+        ctx.strokeRect(drawX - padding, drawY - padding, size + 2 * padding, size + 2 * padding);
     }
 }
 
 // Draws a settlement entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_settlement(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_settlement(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), owned_by_local_player, is_selected);
 }
 
 // Draws a caravan entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_caravan(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_caravan(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_army(viewport_x: number, viewport_y: number, scale: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, scale, owned_by_local_player, is_selected);
-}
-
-// Fills the world's projected area white, leaving the out-of-world canvas area transparent/dark.
-function draw_world_background()
-{
-    const left = (0 - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const right = (RENDER_PARAMS.WORLD_SIZE.width - RENDER_PARAMS.viewportBottomLeftX) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const top = canvas.height - (RENDER_PARAMS.WORLD_SIZE.height - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-    const bottom = canvas.height - (0 - RENDER_PARAMS.viewportBottomLeftY) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
-
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(left, top, right - left, bottom - top);
+    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
 }
 
 // Draws the visible part of the terrain bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -214,7 +218,6 @@ export function draw(render_state: Backend.RenderState | null)
     RENDER_PARAMS.viewportBottomLeftY = render_state.viewport_bottom_left_y;
     RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
-    draw_world_background();
     draw_terrain();
     draw_world_border();
 
@@ -226,15 +229,15 @@ export function draw(render_state: Backend.RenderState | null)
         const isSelected = selectedGuid !== null && entity.guid === selectedGuid;
 
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
-            draw_entity_settlement(entity.viewport_x, entity.viewport_y, entity.size_viewport,
+            draw_entity_settlement(entity.viewport_x, entity.viewport_y,
                 entity.owner === render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type == Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(entity.viewport_x, entity.viewport_y, entity.size_viewport,
+            draw_entity_caravan(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
-            draw_entity_army(entity.viewport_x, entity.viewport_y, entity.size_viewport,
+            draw_entity_army(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
         }
     }
@@ -338,4 +341,40 @@ export function page_to_viewport_fraction(clientX: number, clientY: number)
         y: Math.min(Math.max(1 - canvasY / canvas.height, 0), 1),
     };
 }
+
+// Returns the GUID of the entity under the given page position, or null if none.
+// If previous_pick is given, the previously-picked entity will only be returned if there is nothing else to select.
+// If exclude_owner is given, entities owned by that player are ignored.
+export function pick_entity_at(clientX: number, clientY: number, previous_pick: number | null, exclude_owner: number | null = null): number | null
+{
+    if (Backend.LAST_RENDER_STATE === null) return null;
+
+    const viewportCoords = page_to_viewport(clientX, clientY);
+
+    const hitGuids: number[] = []; // In render-list order.
+    let nearestGuid: number | null = null;
+    let nearestDistSq = Infinity;
+    for (let i = 0; i < Backend.LAST_RENDER_STATE.entity_count; i++)
+    {
+        const entity = Backend.LAST_RENDER_STATE.entity_states[i];
+        if (entity.entity_type == Backend.ENTITY_TYPE.INVALID) continue;
+        if (exclude_owner !== null && entity.owner === exclude_owner) continue;
+
+        const dx = viewportCoords.x - entity.viewport_x;
+        const dy = viewportCoords.y - entity.viewport_y;
+        const halfSize = compute_entity_canvas_size(entity.entity_type) / 2 / RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE; // Convert canvas -> viewport size units.
+        if (Math.abs(dx) > halfSize || Math.abs(dy) > halfSize) continue;
+
+        hitGuids.push(entity.guid);
+        if (dx * dx + dy * dy < nearestDistSq) {
+            nearestDistSq = dx * dx + dy * dy;
+            nearestGuid = entity.guid;
+        }
+    }
+
+    const selectedHitIndex = previous_pick === null ? -1 : hitGuids.indexOf(previous_pick);
+    if (selectedHitIndex === -1) return nearestGuid;
+    return hitGuids[(selectedHitIndex + 1) % hitGuids.length];
+}
+
 

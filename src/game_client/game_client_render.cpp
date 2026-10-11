@@ -4,21 +4,14 @@
 #include "game_client/game_client_backend.h"
 #include "game_common/match/world.h"
 
-static constexpr float ENTITY_RADIUS = 5.0f; // TODO: sync this with JS instead of assuming a fixed size for every entity.
 static constexpr ui8 SETTLEMENT_RENDER_SIZE = 12; // Square size of a settlement icon in viewport tiles.
 static constexpr ui8 CARAVAN_RENDER_SIZE = 6; // Square size of a caravan icon in viewport tiles.
 static constexpr ui8 ARMY_RENDER_SIZE = 6; // Square size of an army icon in viewport tiles.
 
-// Whether a circle of ENTITY_RADIUS centered on loc overlaps [bottom_left, bottom_left + size].
 static bool is_visible_in_viewport(vec2<float> loc, const client_render_state::viewport_state& viewport)
 {
-	float closestX = ia_max(viewport.bottom_left.x, ia_min(loc.x, viewport.bottom_left.x + viewport.dimensions.x));
-	float closestY = ia_max(viewport.bottom_left.y, ia_min(loc.y, viewport.bottom_left.y + viewport.dimensions.y));
-
-	float dx = loc.x - closestX;
-	float dy = loc.y - closestY;
-
-	return (dx * dx + dy * dy) <= (ENTITY_RADIUS * ENTITY_RADIUS);
+    return (loc.x >= viewport.bottom_left.x && loc.x < viewport.bottom_left.x + viewport.dimensions.x)
+        && (loc.y >= viewport.bottom_left.y && loc.y < viewport.bottom_left.y + viewport.dimensions.y);
 }
 
 client_render_state* game_client_get_render_state(game_client& backend)
@@ -53,7 +46,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// SETTLEMENTS
 		for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 		{
-			vec2<float> settlementLoc = { (float)settlements.locations[settlementIndex].x, (float)settlements.locations[settlementIndex].y };
+			vec2<float> settlementLoc = settlements.locations[settlementIndex];
 			if (!settlements.guids[settlementIndex].is_valid() || !is_visible_in_viewport(settlementLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -61,7 +54,6 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = settlements.owners[settlementIndex];
 			outEntity.guid = settlements.guids[settlementIndex];
 			outEntity.viewport_location = settlementLoc - render_state.viewport.bottom_left;
-			outEntity.size_viewport = SETTLEMENT_RENDER_SIZE;
 
 			visibleCount++;
 		}
@@ -69,7 +61,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// CARAVANS
 		for (ui16 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
 		{
-			vec2<float> caravanLoc = { (float)caravans.locations[caravanIndex].x, (float)caravans.locations[caravanIndex].y };
+			vec2<float> caravanLoc = caravans.locations[caravanIndex];
 			if (!caravans.guids[caravanIndex].is_valid() || !is_visible_in_viewport(caravanLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -81,7 +73,6 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = owner;
 			outEntity.guid = caravans.guids[caravanIndex];
 			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
-			outEntity.size_viewport = CARAVAN_RENDER_SIZE;
 
 			visibleCount++;
 		}
@@ -89,7 +80,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// ARMIES
 		for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 		{
-			vec2<float> armyLoc = { (float)armies.locations[armyIndex].x, (float)armies.locations[armyIndex].y };
+			vec2<float> armyLoc = armies.locations[armyIndex];
 			if (!armies.guids[armyIndex].is_valid() || !is_visible_in_viewport(armyLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -97,11 +88,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = armies.owners[armyIndex];
 			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = armyLoc - render_state.viewport.bottom_left;
-			outEntity.size_viewport = ARMY_RENDER_SIZE;
 
 			visibleCount++;
 		}
-
 
 		render_state.frame.entity_count = visibleCount;
 		render_state.frame.entity_states = entityStates;

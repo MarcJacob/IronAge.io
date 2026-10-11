@@ -25,9 +25,8 @@ struct render_entity
 	entity_guid guid; // GUID of the entity, so the frontend can name what it hit-tested.
 
 	vec2f viewport_location; // Location of center of entity.
-	ui8 size_viewport; // Square size of the entity in viewport space.
 };
-static_assert(sizeof(render_entity) == 16, "render_entity layout is read by backend.ts at fixed offsets (stride 16).");
+static_assert(sizeof(render_entity) == 15, "render_entity struct size changed. Adapt TS reading code, then this assertion.");
 
 // Render state exposed to the frontend.
 struct client_render_state

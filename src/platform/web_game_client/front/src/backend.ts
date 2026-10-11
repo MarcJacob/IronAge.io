@@ -260,7 +260,6 @@ export class RenderEntity
     guid: number = 0;
     viewport_x: number = 0;
     viewport_y: number = 0;
-    size_viewport: number = 0;
 }
 
 export class RenderState
@@ -322,9 +321,9 @@ function read_render_state()
     const entityStatesOffset: number = CLIENT_BACKEND.client_render_state_get_entities();
     const entityStatesDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
 
-    // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y), size_viewport (ui8).
-    // Packed, offsets 0 / 1 / 3 / 7 / 15, sizeof 16 (static_assert'd in game_client_backend.h).
-    const ENTITY_MEM_SIZE: number = 16;
+    // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y). 
+    // Packed, offsets 0 / 1 / 3 / 7, sizeof 15 (static_assert'd in game_client_backend.h).
+    const ENTITY_MEM_SIZE: number = 15;
 
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push(
@@ -334,7 +333,6 @@ function read_render_state()
                 guid: entityStatesDataView.getUint32(ENTITY_MEM_SIZE * i + 3, true),
                 viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 7, true),
                 viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 11, true),
-                size_viewport: entityStatesDataView.getUint8(ENTITY_MEM_SIZE * i + 15),
             });
     }
 

@@ -52,43 +52,6 @@ export function get_mouse_world_location(): { x: number, y: number } | null
 }
 
 // QUERY FUNCTIONS
-
-// Returns the GUID of the entity under the given page position, or null if none.
-// Works in viewport space (tiles from the viewport's bottom-left), like entity positions: an entity covers a square of
-// size_viewport tiles centered on its location, same as draw_entity. If several overlap, the one whose center is nearest wins,
-// except when the currently selected entity is among them: then the next one in render-list order after it (wrapping) wins,
-// so repeated clicks on a stack cycle through all of it. A lone selected entity stays selected.
-// If exclude_owner is given, entities owned by that player are ignored.
-export function pick_entity_at(clientX: number, clientY: number, exclude_owner: number | null = null): number | null
-{
-    if (Backend.LAST_RENDER_STATE === null) return null;
-
-    const viewportCoords = Render.page_to_viewport(clientX, clientY);
-
-    const hitGuids: number[] = []; // In render-list order.
-    let nearestGuid: number | null = null;
-    let nearestDistSq = Infinity;
-    for (let i = 0; i < Backend.LAST_RENDER_STATE.entity_count; i++)
-    {
-        const entity = Backend.LAST_RENDER_STATE.entity_states[i];
-        if (exclude_owner !== null && entity.owner === exclude_owner) continue;
-        const dx = viewportCoords.x - entity.viewport_x;
-        const dy = viewportCoords.y - entity.viewport_y;
-        const halfSize = entity.size_viewport / 2;
-        if (Math.abs(dx) > halfSize || Math.abs(dy) > halfSize) continue;
-
-        hitGuids.push(entity.guid);
-        if (dx * dx + dy * dy < nearestDistSq) {
-            nearestDistSq = dx * dx + dy * dy;
-            nearestGuid = entity.guid;
-        }
-    }
-
-    const selectedHitIndex = SELECTED_ENTITY_GUID === null ? -1 : hitGuids.indexOf(SELECTED_ENTITY_GUID);
-    if (selectedHitIndex === -1) return nearestGuid;
-    return hitGuids[(selectedHitIndex + 1) % hitGuids.length];
-}
-
 export function get_selected_entity_view(): Backend.EntityView | null
 {
     return SELECTED_ENTITY_GUID != null ? Backend.query_entity(SELECTED_ENTITY_GUID) : null;
@@ -158,7 +121,7 @@ function send_context_order(clientX: number, clientY: number)
     if (selected !== null && localPlayerId !== null
         && selected.entity_type === Backend.ENTITY_TYPE.ARMY && selected.owner === localPlayerId)
     {
-        const targetGuid = pick_entity_at(clientX, clientY, localPlayerId);
+        const targetGuid = Render.pick_entity_at(clientX, clientY, SELECTED_ENTITY_GUID, localPlayerId);
         if (targetGuid !== null)
         {
             send_attack_target(selected.guid, targetGuid);
@@ -191,7 +154,7 @@ function do_mouse_action(action: MOUSE_ACTION | null, clientX: number, clientY: 
 
     switch (action) {
         case MOUSE_ACTION.SELECT:
-            SELECTED_ENTITY_GUID = pick_entity_at(clientX, clientY); // Empty space clears the selection.
+            SELECTED_ENTITY_GUID = Render.pick_entity_at(clientX, clientY, SELECTED_ENTITY_GUID); // Empty space clears the selection.
             break;
         case MOUSE_ACTION.SET_MOVE_TARGET:
             send_set_target_loc(clientX, clientY);
