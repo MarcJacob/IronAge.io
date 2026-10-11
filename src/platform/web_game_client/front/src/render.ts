@@ -80,6 +80,9 @@ const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 25
 // Fill style of the world tile under the mouse.
 const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
 
+// Mirrors TILE_FLAG_BORDER (TILE_FLAGS in include/game_common/match/world.h).
+const TILE_FLAG_BORDER = 1;
+
 // Page position of the mouse over the canvas, or null if it isn't over it. Resolved to a tile every draw so the highlight follows camera moves too.
 let HOVER_PAGE_POS: { x: number, y: number } | null = null;
 
@@ -280,7 +283,9 @@ function draw_influence(render_state: Backend.RenderState)
     const influenceBytes = Backend.get_influence_tiles_view();
     const contestationBytes = Backend.get_contestation_tiles_view();
 
-    if (influenceBytes === null || contestationBytes === null || canvas_offscreen_tiles_influence === undefined) return;
+    const flagBytes = Backend.get_tile_flags_view();
+
+    if (influenceBytes === null || contestationBytes === null || flagBytes === null || canvas_offscreen_tiles_influence === undefined) return;
 
     // Build explicit RGBA bytes. Influence is green, contestation is red,
     // and the combined strength controls opacity so zero-valued tiles remain
@@ -296,6 +301,14 @@ function draw_influence(render_state: Backend.RenderState)
         drawBytes[pixelOffset + 1] = influenceVal;
         drawBytes[pixelOffset + 2] = 0;
         drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal) / 2;
+
+        if ((flagBytes[i] & TILE_FLAG_BORDER) !== 0)
+        {
+            drawBytes[pixelOffset] = 0;
+            drawBytes[pixelOffset + 1] = 0;
+            drawBytes[pixelOffset + 2] = 0;
+            drawBytes[pixelOffset + 3] = 255;
+        }
     }
 
     const influenceImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);

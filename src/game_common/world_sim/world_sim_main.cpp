@@ -49,7 +49,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
     {
         const ui16 MOUNTAIN_BORDER_DISTANCE = 10;
         const ui16 HILLS_BORDER_DISTANCE = 15;
-        const i32 LAKE_HALF_SIZE = 5; // Central lake spans tiles [center - 5, center + 4] on both axes (10x10).
+        const i32 LAKE_HALF_SIZE = 40; // Central lake spans tiles [center - 5, center + 4] on both axes (10x10).
         const i32 LAKE_COAST_THICKNESS = 2;
 
         world_terrain& terrain = newWorld->terrain;
@@ -84,6 +84,9 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
                 ui32 regionIndex = (y / world_terrain::REGION_SIZE) * terrain.size_regions.x + (x / world_terrain::REGION_SIZE);
                 ui32 tileIndex = (y % world_terrain::REGION_SIZE) * world_terrain::REGION_SIZE + (x % world_terrain::REGION_SIZE);
                 terrain.regions[regionIndex].terrain_types[tileIndex] = type;
+
+                // Also initialize tile ownership to UNOWNED.
+                terrain.regions[regionIndex].owners[tileIndex] = world_terrain::UNOWNED_TILE;
             }
         }
     }
@@ -103,6 +106,8 @@ void world_state_tick(match_world_state& world)
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
     world_system_settlement_economy(world);
+    world_system_economy_influence_spread(world);
+    world_system_economy_land_output(world);
     world_system_settlement_spawn_caravans(world);
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);

@@ -20,12 +20,12 @@ export enum MESSAGE_TYPE
 // Mirrors INPUT_EVENT_TYPE (include/game_client/game_client_backend.h). Update here if the enum changes.
 export enum INPUT_EVENT_TYPE
 {
-    VIEWPORT_CONTROL = 0,
-    SET_TARGET_LOC = 1,
-    FOUND_SETTLEMENT = 2,
-    SPAWN_ARMY = 3,
-    ATTACK_TARGET = 4,
-    SPAWN_CARAVAN = 5,
+    VIEWPORT_CONTROL,
+
+    SET_TARGET_LOC,
+    FOUND_SETTLEMENT,
+    SPAWN_ARMY,
+    ATTACK_TARGET,
 };
 
 // Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
@@ -64,6 +64,7 @@ interface ClientExports extends WebAssembly.Exports
     client_render_state_get_terrain_tiles(): number; // Pointer to TERRAIN_TILE_TYPE array (1 byte each).
     client_render_state_get_influence_tiles(): number; // Pointer to byte array with influence values. 
     client_render_state_get_contestation_tiles(): number; // Pointer to byte array with contestation values.
+    client_render_state_get_tile_flags(): number; // Pointer to byte array with TILE_FLAGS bits.
 
     web_client_get_world_size(): number; // Pointer to vec2<ui16> (x = width, y = height).
     web_client_get_controlled_player_index(): number; // Value (match_player_id, ui16).
@@ -199,7 +200,7 @@ export class EntityView
     target_location: { x: number, y: number } | null = null; // null if none.
     travel_speed: number = 0;
 
-    settlement?: { population: number, local_wealth: number, tier: number, trade_attractivity: number, area_influence: number };
+    settlement?: { population: number, local_wealth: number, tier: number, trade_attractivity: number, influence_capacity: number };
     caravan?: { origin_settlement: number };
     army?: { levies: number, archers: number, men_at_arms: number, horsemen: number, knights: number, arrows_target: number | null };
 }
@@ -233,7 +234,7 @@ export function query_entity(guid: number): EntityView | null
                 local_wealth: view.getUint32(26, true),
                 tier: view.getUint8(30),
                 trade_attractivity: view.getUint8(31),
-                area_influence: view.getUint8(32),
+                influence_capacity: view.getUint32(32, true),
             };
             break;
         case ENTITY_TYPE.CARAVAN:
@@ -281,6 +282,7 @@ export class RenderState
     terrain_tiles_pointer: number = 0; // WASM memory offset of the terrain tile type bytes.
     influence_tiles_pointer: number = 0; // WASM memory offset of the tile influence bytes.
     contestation_tiles_pointer: number = 0; // WASM memory offset of the tile contestation bytes.
+    tile_flags_pointer: number = 0; // WASM memory offset of the tile flags bytes.
 }
 
 // Fresh view of terrain type bytes (one TERRAIN_TILE_TYPE per tile, row 0 = world y 0) over wasm memory, or null if there is no match.
@@ -316,6 +318,17 @@ export function get_contestation_tiles_view(): Uint8Array<ArrayBuffer> | null
     return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.contestation_tiles_pointer, length);
 }
 
+// Fresh view of tile flags bytes (TILE_FLAGS bits) over wasm memory, or null if there is no match.
+// Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
+export function get_tile_flags_view(): Uint8Array<ArrayBuffer> | null
+{
+    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.tile_flags_pointer === 0) return null;
+
+    const world = LAST_RENDER_STATE.world_size;
+    const length = world.width * world.height;
+    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.tile_flags_pointer, length);
+}
+
 // Reads the latest render state of the local match. Called once per animation frame, during tick().
 // Mirrors client_render_state (include/game_client/game_client_backend.h) by hand. Keep both in sync.
 function read_render_state()
@@ -342,6 +355,7 @@ function read_render_state()
     renderState.terrain_tiles_pointer = CLIENT_BACKEND.client_render_state_get_terrain_tiles();
     renderState.influence_tiles_pointer = CLIENT_BACKEND.client_render_state_get_influence_tiles();
     renderState.contestation_tiles_pointer = CLIENT_BACKEND.client_render_state_get_contestation_tiles();
+    renderState.tile_flags_pointer = CLIENT_BACKEND.client_render_state_get_tile_flags();
 
     // ENTITIES
 

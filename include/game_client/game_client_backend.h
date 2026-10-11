@@ -59,6 +59,8 @@ struct client_render_state
         ui8* influence_tiles_bitmap;
         // One byte value per world tile. Row major.
         ui8* contestation_tiles_bitmap;
+        // One TILE_FLAGS bit set per world tile. Row major.
+        ui8* tile_flags_bitmap;
     } tiles;
 };
 static_assert(sizeof(TERRAIN_TILE_TYPE) == 1, "terrain_tiles holds one byte per tile (read by backend.ts).");
@@ -103,7 +105,7 @@ struct entity_full_view
 			ui32 local_wealth;
 			ui8 tier;
 			ui8 trade_attractivity;
-			ui8 area_influence;
+			ui32 influence_capacity;
 		} settlement;
 
 		struct
@@ -136,7 +138,6 @@ enum class INPUT_EVENT_TYPE : ui16
 	FOUND_SETTLEMENT,
 	SPAWN_ARMY,
 	ATTACK_TARGET,
-	SPAWN_CARAVAN,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -175,13 +176,6 @@ struct input_event_payload_spawn_army
 	entity_guid settlement; // Settlement to spawn the army from.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_spawn_army);
-
-// Has a settlement spawn a caravan from its local wealth.
-struct input_event_payload_spawn_caravan
-{
-	entity_guid settlement; // Settlement to spawn the caravan from.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_spawn_caravan);
 
 // Orders an army to chase and attack another entity.
 struct input_event_payload_attack_target

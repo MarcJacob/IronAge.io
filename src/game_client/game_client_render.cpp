@@ -118,6 +118,7 @@ void game_client_render_influence(client_render_state& render_state, const game_
 
                     render_state.tiles.influence_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].influence_levels[tileIndex];
                     render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
+                    render_state.tiles.tile_flags_bitmap[worldTileIndex] = terrain.regions[regionIndex].tile_flags[tileIndex];
                 }
             }
         }

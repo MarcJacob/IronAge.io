@@ -54,6 +54,13 @@ static inline bool operator==(const vec2<VecTypeA>& vec_a, vec2<VecTypeB> vec_b)
 	return vec_a.x == vec_b.x && vec_a.y == vec_b.y;
 }
 
+// Vec2 != Vec2
+template<typename VecTypeA, typename VecTypeB>
+static inline bool operator!=(const vec2<VecTypeA> vec_a, vec2<VecTypeB> vec_b)
+{
+    return vec_a.x != vec_b.x || vec_a.y != vec_b.y;
+}
+
 template<typename VecAType, typename VecBType>
 static inline float vec2_dist_squared(vec2<VecAType> vec_a, vec2<VecBType> vec_b)
 {

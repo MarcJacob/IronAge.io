@@ -20,7 +20,6 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
 	SPAWN_ARMY, // Spawns an army of levies from a settlement's population.
-	SPAWN_CARAVAN, // Spawns a caravan from a settlement's local wealth, headed to a random other settlement.
 
     // SERVER COMMANDS
 
@@ -96,18 +95,6 @@ bool command_spawn_army_validity_check(const match_world_state& world, match_pla
 
 void command_spawn_army_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
-
-// SPAWN CARAVAN
-struct command_data_spawn_caravan
-{
-	entity_guid settlement;
-};
-
-bool command_spawn_caravan_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_spawn_caravan& command);
-
-void command_spawn_caravan_apply(match_world_state& world, match_player_id player,
-	const command_data_spawn_caravan& command);
 
 // Header & command size mapping definitions.
 
@@ -195,8 +182,6 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_found_settlement);
 	case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 		return sizeof(command_data_spawn_army);
-	case MATCH_COMMAND_TYPE::SPAWN_CARAVAN:
-		return sizeof(command_data_spawn_caravan);
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         return sizeof(command_data_server_spawn_player);
 	default:

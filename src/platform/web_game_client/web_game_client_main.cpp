@@ -99,6 +99,12 @@ WASM_EXPORT ui8* client_render_state_get_contestation_tiles()
     return game_client_get_render_state(*WEB_CLIENT.backend)->tiles.contestation_tiles_bitmap;
 }
 
+WASM_EXPORT ui8* client_render_state_get_tile_flags()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    return game_client_get_render_state(*WEB_CLIENT.backend)->tiles.tile_flags_bitmap;
+}
+
 // Net message handling. JS writes a received websocket message's bytes into the buffer, then calls client_process_net_message.
 
 WASM_EXPORT ui8* client_get_net_message_buffer_offset()

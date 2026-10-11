@@ -3,7 +3,7 @@
 
 // Used to initialize default values on entity property fields if they are left at 0.
 #define SET_DEFAULT_VAL(value, default) \
-    (value = (value) ? (value) : (default))
+    (value = (value != (__typeof(value)){}) ? (value) : (default))
 
 bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 {
@@ -121,6 +121,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 12);
+    SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].move_target, start_state.location);
 
 	return newID;
 }
@@ -278,8 +279,17 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.trade_attraction_indices = memory.alloc<ui8>(count);
 	if (settlements.trade_attraction_indices == nullptr) return false;
 
-	settlements.influence_capacities = memory.alloc<ui8>(count);
+	settlements.influence_capacities = memory.alloc<ui32>(count);
 	if (settlements.influence_capacities == nullptr) return false;
+
+	settlements.maintenance_totals = memory.alloc<ui64>(count);
+	if (settlements.maintenance_totals == nullptr) return false;
+
+	settlements.maintenance_overshoots = memory.alloc<ui16>(count);
+	if (settlements.maintenance_overshoots == nullptr) return false;
+
+	settlements.land_output_sums = memory.alloc<ui64>(count);
+	if (settlements.land_output_sums == nullptr) return false;
 
 	return true;
 }
