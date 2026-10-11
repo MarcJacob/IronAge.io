@@ -95,8 +95,33 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		render_state.frame.entity_count = visibleCount;
 		render_state.frame.entity_states = entityStates;
 	}
+}
 
+void game_client_render_influence(client_render_state& render_state, const game_match& match)
+{
+    ASSERT(match.world != nullptr);
 
+    const world_terrain& terrain = match.world->terrain;
+    for (ui16 regionX = 0; regionX < terrain.size_regions.x; regionX++)
+    {
+        for (ui16 regionY = 0; regionY < terrain.size_regions.y; regionY++)
+        {
+            ui16 regionIndex = regionY * terrain.size_regions.x + regionX;
+            for (ui16 tileY = 0; tileY < world_terrain::REGION_SIZE; tileY++)
+            {
+                for (ui16 tileX = 0; tileX < world_terrain::REGION_SIZE; tileX++)
+                {
+                    ui16 tileIndex = tileY * world_terrain::REGION_SIZE + tileX;
+                    ui16 worldX = regionX * world_terrain::REGION_SIZE + tileX;
+                    ui16 worldY = regionY * world_terrain::REGION_SIZE + tileY;
+                    ui64 worldTileIndex = (ui64)worldY * terrain.size_tiles.x + worldX;
+
+                    render_state.tiles.influence_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].influence_levels[tileIndex];
+                    render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
+                }
+            }
+        }
+    }
 }
 
 void game_client_rebuild_render_state(client_render_state& render_state, const game_match& match)
@@ -108,6 +133,6 @@ void game_client_rebuild_render_state(client_render_state& render_state, const g
     render_state.frame.memory.clear();
     game_client_render_entities(render_state, match);
 
-    // Update tile influence bitmap.
-    // ...
+    // Update tile influence & contestation bitmaps.
+    game_client_render_influence(render_state, match);
 }

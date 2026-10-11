@@ -199,7 +199,7 @@ export function init_input(canvas_element: HTMLCanvasElement)
     canvas_element.addEventListener('wheel', canvas_only(on_mouse_wheel), { passive: false });
 
     // Keyboard
-    const movementKeyCodes = new Set(['KeyA', 'KeyD', 'KeyS', 'KeyW', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp']);
+    const movementKeyCodes = new Set(['KeyA', 'KeyD', 'KeyS', 'KeyW', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'NumpadAdd', 'NumpadSubtract']);
     window.addEventListener('keydown', (keyEvent) => {
         if (movementKeyCodes.has(keyEvent.code)) {
             KB_HELD_KEYS.add(keyEvent.code);
@@ -216,6 +216,14 @@ export function init_input(canvas_element: HTMLCanvasElement)
 function tick_input(delta_time: number)
 {
     FRONTEND_CAMERA.pan(update_viewport_move_input(), delta_time);
+    
+    // Handle held zoom keys (numpad + and -)
+    if (KB_HELD_KEYS.has('NumpadAdd')) {
+        FRONTEND_CAMERA.zoom_at({ x: 0.5, y: 0.5 }, 250 * delta_time); // Zoom in at a constant rate
+    } else if (KB_HELD_KEYS.has('NumpadSubtract')) {
+        FRONTEND_CAMERA.zoom_at({ x: 0.5, y: 0.5 }, -250 * delta_time); // Zoom out at a constant rate
+    }
+    
     FRONTEND_CAMERA.update(delta_time);
 
     // Layout of input_event_payload_viewport_control (game_client_backend.h):

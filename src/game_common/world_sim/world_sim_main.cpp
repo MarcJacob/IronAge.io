@@ -32,6 +32,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 
 	newWorld->terrain.regions = memory.alloc<world_terrain::region>(regionCount);
 	if (newWorld->terrain.regions == nullptr) goto WORLD_INIT_FAIL;
+	ia_memzero(newWorld->terrain.regions, sizeof(world_terrain::region) * regionCount);
 
 	// Alloc entities
 	{

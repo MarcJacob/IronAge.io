@@ -53,9 +53,12 @@ struct client_render_state
 
     struct
     {
-        // One TERRAIN_TILE_TYPE value per world tile, row-major (y * width + x), row 0 = world y 0.
+        // One TERRAIN_TILE_TYPE value per world tile. Row major.
         TERRAIN_TILE_TYPE* terrain_tiles;
+        // One byte value per world tile. Row major.
         ui8* influence_tiles_bitmap;
+        // One byte value per world tile. Row major.
+        ui8* contestation_tiles_bitmap;
     } tiles;
 };
 static_assert(sizeof(TERRAIN_TILE_TYPE) == 1, "terrain_tiles holds one byte per tile (read by backend.ts).");

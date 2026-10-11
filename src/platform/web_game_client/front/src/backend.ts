@@ -60,8 +60,11 @@ interface ClientExports extends WebAssembly.Exports
     client_render_state_get_viewport(): number; // Pointer to client_render_state::viewport_state.
     client_render_state_get_entities(): number; // Pointer to render_entity array.
     client_render_state_get_entity_count(): number; // Value (ui32).
+
     client_render_state_get_terrain_tiles(): number; // Pointer to TERRAIN_TILE_TYPE array (1 byte each).
-    client_render_state_get_influence_tiles():number; // Pointer to render_tiles array (4 bytes each).
+    client_render_state_get_influence_tiles(): number; // Pointer to byte array with influence values. 
+    client_render_state_get_contestation_tiles(): number; // Pointer to byte array with contestation values.
+
     web_client_get_world_size(): number; // Pointer to vec2<ui16> (x = width, y = height).
     web_client_get_controlled_player_index(): number; // Value (match_player_id, ui16).
 
@@ -275,10 +278,11 @@ export class RenderState
     entity_count: number = 0;
     entity_states: Array<RenderEntity> = [];
 
-    terrain_tiles_pointer: number = 0; // Wasm memory offset of the terrain tile type bytes.
-    influence_tiles_pointer: number = 0;
+    terrain_tiles_pointer: number = 0; // WASM memory offset of the terrain tile type bytes.
+    influence_tiles_pointer: number = 0; // WASM memory offset of the tile influence bytes.
+    contestation_tiles_pointer: number = 0; // WASM memory offset of the tile contestation bytes.
 }
-//
+
 // Fresh view of terrain type bytes (one TERRAIN_TILE_TYPE per tile, row 0 = world y 0) over wasm memory, or null if there is no match.
 // Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
 export function get_terrain_tiles_view(): Uint8Array<ArrayBuffer> | null
@@ -288,6 +292,28 @@ export function get_terrain_tiles_view(): Uint8Array<ArrayBuffer> | null
     const world = LAST_RENDER_STATE.world_size;
     const length = world.width * world.height;
     return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.terrain_tiles_pointer, length);
+}
+
+// Fresh view of tile influence bytes over wasm memory, or null if there is no match.
+// Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
+export function get_influence_tiles_view(): Uint8Array<ArrayBuffer> | null
+{
+    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.influence_tiles_pointer === 0) return null;
+
+    const world = LAST_RENDER_STATE.world_size;
+    const length = world.width * world.height;
+    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.influence_tiles_pointer, length);
+}
+
+// Fresh view of tile contestation bytes over wasm memory, or null if there is no match.
+// Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
+export function get_contestation_tiles_view(): Uint8Array<ArrayBuffer> | null
+{
+    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.contestation_tiles_pointer === 0) return null;
+
+    const world = LAST_RENDER_STATE.world_size;
+    const length = world.width * world.height;
+    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.contestation_tiles_pointer, length);
 }
 
 // Reads the latest render state of the local match. Called once per animation frame, during tick().
@@ -315,6 +341,7 @@ function read_render_state()
 
     renderState.terrain_tiles_pointer = CLIENT_BACKEND.client_render_state_get_terrain_tiles();
     renderState.influence_tiles_pointer = CLIENT_BACKEND.client_render_state_get_influence_tiles();
+    renderState.contestation_tiles_pointer = CLIENT_BACKEND.client_render_state_get_contestation_tiles();
 
     // ENTITIES
 

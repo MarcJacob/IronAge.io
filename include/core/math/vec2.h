@@ -9,16 +9,18 @@
 template<typename Numeric>
 struct vec2
 {
-	Numeric x, y;
+    using val_type = Numeric;
+
+	val_type x, y;
 
 	constexpr vec2() : x(0), y(0) {}
-	constexpr vec2(Numeric in_x, Numeric in_y) : x(in_x), y(in_y) {}
+	constexpr vec2(val_type in_x, val_type in_y) : x(in_x), y(in_y) {}
 
 	template<typename OtherNumeric>
-	constexpr vec2(const vec2<OtherNumeric>& other) : x((Numeric)other.x), y((Numeric)other.y) {}
+	constexpr vec2(const vec2<OtherNumeric>& other) : x((val_type)other.x), y((val_type)other.y) {}
 
 	template<typename OtherNumeric>
-	constexpr vec2(OtherNumeric in_x, OtherNumeric in_y) : x((Numeric)in_x), y((Numeric)in_y) {}
+	constexpr vec2(OtherNumeric in_x, OtherNumeric in_y) : x((val_type)in_x), y((val_type)in_y) {}
 };
 
 using vec2f = vec2<float>;

@@ -1,4 +1,9 @@
+#include "game_common/match/world.h"
 #include "world_sim.h"
+
+// Used to initialize default values on entity property fields if they are left at 0.
+#define SET_DEFAULT_VAL(value, default) \
+    (value = (value) ? (value) : (default))
 
 bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 {
@@ -51,6 +56,10 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	world.entities.settlements.local_wealths[freeIndex] = start_state.local_wealth;
 	world.entities.settlements.tiers[freeIndex] = start_state.tier;
 
+    // Init default values if they weren't specified by start state.
+    SET_DEFAULT_VAL(world.entities.settlements.populations[freeIndex], 100);
+    // ...
+
 	return newID;
 }
 
@@ -77,6 +86,10 @@ entity_guid world_spawn_caravan(match_world_state& world, const world_entity_car
 	world.entities.caravans.movements[freeIndex] = start_state.movement;
 	world.entities.caravans.origin_settlements[freeIndex] = start_state.origin_settlement;
 	world.entities.caravans.dest_settlements[freeIndex] = start_state.dest_settlement;
+
+    // Initialize default values if they were missing from the provided start state.
+    SET_DEFAULT_VAL(world.entities.caravans.movements[freeIndex].travel_speed, 10);
+    // ...
 
 	return newID;
 }
@@ -107,7 +120,29 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities.armies.action_targets[freeIndex] = start_state.action_target;
 	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
 
+    // Init default values if they weren't specified by start state.
+    SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 12);
+
 	return newID;
+}
+
+
+void world_destroy_settlement(match_world_state& world, entity_guid settlement)
+{
+	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	world_entity_settlements& settlements = world.entities.settlements;
+
+	settlements.guids[settlement.get_index()] = INVALID_ENTITY_GUID;
+	settlements.active_count--;
+}
+
+void world_destroy_caravan(match_world_state& world, entity_guid caravan)
+{
+    ASSERT(world_entity_is_valid(world, caravan));
+    world_entity_caravans& caravans = world.entities.caravans;
+
+    caravans.guids[caravan.get_index()] = INVALID_ENTITY_GUID;
+    caravans.active_count--;
 }
 
 void world_destroy_army(match_world_state& world, entity_guid army)
@@ -115,19 +150,8 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
 	world_entity_armies& armies = world.entities.armies;
 
-	// Same pattern as despawned caravans: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
 	armies.guids[army.get_index()] = INVALID_ENTITY_GUID;
 	armies.active_count--;
-}
-
-void world_destroy_settlement(match_world_state& world, entity_guid settlement)
-{
-	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
-	world_entity_settlements& settlements = world.entities.settlements;
-
-	// Same pattern as destroyed armies: the other property arrays keep stale values, every loop skips slots with an invalid GUID.
-	settlements.guids[settlement.get_index()] = INVALID_ENTITY_GUID;
-	settlements.active_count--;
 }
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)

@@ -9,7 +9,8 @@ import { get_selected_entity_guid } from "./input.js"
 
 let canvas: HTMLCanvasElement;
 
-let canvas_offscreen_tiles: OffscreenCanvas;
+let canvas_offscreen_tiles_terrain: OffscreenCanvas;
+let canvas_offscreen_tiles_influence: OffscreenCanvas;
 
 let ctx: CanvasRenderingContext2D;
 
@@ -43,7 +44,7 @@ class RESOURCES_STORE
 let RESOURCES: RESOURCES_STORE | null = null; // Run constructor to load resources.
 
 let BACKBUFFER_TILES_TERRAIN: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent terrain.
-let BACKBUFFER_TILES_INFLUENCE: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent influence.
+let BACKBUFFER_TILES_INFLUENCE: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent influence & contestation.
 
 // Fill styles according to diplomatic status with local player.
 let DIPLOMATIC_TINTS =
@@ -164,7 +165,7 @@ function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local
 // Tile i covers [i, i+1] in world space.
 function draw_terrain()
 {
-    if (canvas_offscreen_tiles === undefined) return;
+    if (canvas_offscreen_tiles_terrain === undefined) return;
 
     const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
     const vx = RENDER_PARAMS.viewportBottomLeftX;
@@ -187,7 +188,62 @@ function draw_terrain()
     ctx.save();
     ctx.translate(0, canvas.height);
     ctx.scale(1, -1);
-    ctx.drawImage(canvas_offscreen_tiles, x0, y0, x1 - x0, y1 - y0,
+    ctx.drawImage(canvas_offscreen_tiles_terrain, x0, y0, x1 - x0, y1 - y0,
+        (x0 - vx) * s, (y0 - vy) * s, (x1 - x0) * s, (y1 - y0) * s);
+    ctx.restore();
+}
+
+// @TODO(Marc): Consider moving the logic to WASM and / or to GPU accelerated objects.
+function draw_influence(render_state: Backend.RenderState)
+{
+    const tileCount = render_state.world_size.width * render_state.world_size.height;
+    const influenceBytes = Backend.get_influence_tiles_view();
+    const contestationBytes = Backend.get_contestation_tiles_view();
+
+    if (influenceBytes === null || contestationBytes === null || canvas_offscreen_tiles_influence === undefined) return;
+
+    // Build explicit RGBA bytes. Influence is green, contestation is red,
+    // and the combined strength controls opacity so zero-valued tiles remain
+    // transparent over the terrain.
+    const drawBytes = new Uint8ClampedArray(tileCount * 4);
+    for (let i = 0; i < tileCount; i++)
+    {
+        const influenceVal = influenceBytes[i];
+        const contestationVal = contestationBytes[i];
+        const pixelOffset = i * 4;
+
+        drawBytes[pixelOffset] = contestationVal;
+        drawBytes[pixelOffset + 1] = influenceVal;
+        drawBytes[pixelOffset + 2] = 0;
+        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal);
+    }
+
+    const influenceImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
+    const offscreenCtx = canvas_offscreen_tiles_influence.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    offscreenCtx.putImageData(influenceImg, 0, 0);
+
+    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    const vx = RENDER_PARAMS.viewportBottomLeftX;
+    const vy = RENDER_PARAMS.viewportBottomLeftY;
+
+    let x0 = Math.max(0, vx);
+    let x1 = Math.min(RENDER_PARAMS.WORLD_SIZE.width, vx + canvas.width / s);
+    let y0 = Math.max(0, vy);
+    let y1 = Math.min(RENDER_PARAMS.WORLD_SIZE.height, vy + canvas.height / s);
+    if (x1 <= x0 || y1 <= y0) return;
+
+    x0 = Math.floor(x0);
+    x1 = Math.ceil(x1);
+    y0 = Math.floor(y0);
+    y1 = Math.ceil(y1);
+
+    ctx.imageSmoothingEnabled = false;
+
+    // Flip vertically so bitmap row 0 (world bottom) ends up at the bottom of the canvas.
+    ctx.save();
+    ctx.translate(0, canvas.height);
+    ctx.scale(1, -1);
+    ctx.drawImage(canvas_offscreen_tiles_influence, x0, y0, x1 - x0, y1 - y0,
         (x0 - vx) * s, (y0 - vy) * s, (x1 - x0) * s, (y1 - y0) * s);
     ctx.restore();
 }
@@ -219,6 +275,7 @@ export function draw(render_state: Backend.RenderState | null)
     RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
     draw_terrain();
+    draw_influence(render_state);
     draw_world_border();
 
     const selectedGuid = get_selected_entity_guid();
@@ -256,6 +313,35 @@ function resize_canvas()
     FRONTEND_CAMERA.set_canvas_size(width, height);
 }
 
+function init_offscreen_canvases(render_state: Backend.RenderState)
+{
+    console.log("Initializing offscreen canvases...");
+
+    // TERRAIN
+    const tileTypes = Backend.get_terrain_tiles_view();
+    if (tileTypes === null) return;
+
+    // Convert terrain type bytes to RGBA pixels, once.
+    const pixels = new Uint8ClampedArray(tileTypes.length * 4);
+    for (let i = 0; i < tileTypes.length; i++)
+    {
+        pixels.set(TERRAIN_COLORS[tileTypes[i]] ?? TERRAIN_COLOR_UNKNOWN, i * 4);
+    }
+
+    BACKBUFFER_TILES_TERRAIN = new ImageData(pixels, render_state.world_size.width, render_state.world_size.height);
+
+    // Initialize and draw offscreen canvas.
+    canvas_offscreen_tiles_terrain = new OffscreenCanvas(render_state.world_size.width, render_state.world_size.height);
+
+    let offscreenCtx = canvas_offscreen_tiles_terrain.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    offscreenCtx.putImageData(BACKBUFFER_TILES_TERRAIN, 0, 0);
+
+    // INFLUENCE
+
+    // Initialize offscreen canvas.
+    canvas_offscreen_tiles_influence = new OffscreenCanvas(render_state.world_size.width, render_state.world_size.height);
+}
+
 export function init_render(canvas_element : HTMLCanvasElement) {
     canvas = canvas_element;
     ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -273,24 +359,8 @@ export function init_render(canvas_element : HTMLCanvasElement) {
     Core.register_on_match_joined_callback(() => 
     {
         if (Backend.LAST_RENDER_STATE == null) return;
-
-        const tileTypes = Backend.get_terrain_tiles_view();
-        if (tileTypes === null) return;
-        console.log("Initializing backbuffer...");
-
-        // Convert terrain type bytes to RGBA pixels, once.
-        const pixels = new Uint8ClampedArray(tileTypes.length * 4);
-        for (let i = 0; i < tileTypes.length; i++)
-        {
-            pixels.set(TERRAIN_COLORS[tileTypes[i]] ?? TERRAIN_COLOR_UNKNOWN, i * 4);
-        }
-
-        BACKBUFFER_TILES_TERRAIN = new ImageData(pixels, Backend.LAST_RENDER_STATE.world_size.width, Backend.LAST_RENDER_STATE.world_size.height);
-        canvas_offscreen_tiles = new OffscreenCanvas(Backend.LAST_RENDER_STATE.world_size.width, Backend.LAST_RENDER_STATE.world_size.height); 
-
-        let offscreenCtx = canvas_offscreen_tiles.getContext('2d') as OffscreenCanvasRenderingContext2D;
-        offscreenCtx.putImageData(BACKBUFFER_TILES_TERRAIN, 0, 0);
-    });
+        init_offscreen_canvases(Backend.LAST_RENDER_STATE);
+   });
 
     // Register frame event.
     Core.register_frame_callback((dt) => draw(Backend.LAST_RENDER_STATE));

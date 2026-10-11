@@ -115,6 +115,24 @@ struct world_terrain
     } *regions;
 };
 
+// Returns region index & tile regional index of tile at given world location.
+// Asserts if the location is invalid !
+// @NOTE(Marc): Do not use this in performance-critical systems if possible. Instead, apply logic on every tile region-by-region.
+static inline void world_get_tile(const world_terrain& terrain, world_location loc, ui16& out_region_index, ui16& out_tile_index)
+{
+    ASSERT(loc.x >= 0 && loc.x < terrain.size_tiles.x);
+    ASSERT(loc.y >= 0 && loc.y < terrain.size_tiles.y);
+
+    ui16 regionX = loc.x / world_terrain::REGION_SIZE;
+    ui16 regionY = loc.y / world_terrain::REGION_SIZE;
+
+    ui16 tileX = loc.x - regionX * world_terrain::REGION_SIZE;
+    ui16 tileY = loc.y - regionY * world_terrain::REGION_SIZE;
+
+    out_region_index = regionY * terrain.size_regions.x + regionX;
+    out_tile_index = tileY * world_terrain::REGION_SIZE + tileX;
+}
+
 // Reused entity sub-components
 
 struct world_entity_movement

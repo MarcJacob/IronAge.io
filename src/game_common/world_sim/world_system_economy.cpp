@@ -7,15 +7,14 @@ void world_system_settlement_economy(match_world_state& world)
 {
     world_entity_settlements& settlements = world.entities.settlements;
 
-    // Only run on every 10th tick.
-    if (world.age % 10 != 0) return;
-
-
     // POP GROWTH
     // Population seeks to reach an equilibrium that depends on settlement land / food output and by local wealth.
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
+
+        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every 10 ticks based on their Extra guid field and world age.
+        if ((settlements.guids[settlementIndex].get_extra() + world.age) % 10 != 0) continue;
 
         ui32 targetPopulation = settlements.land_outputs[settlementIndex]
                             +   settlements.local_wealths[settlementIndex];
@@ -34,6 +33,42 @@ void world_system_settlement_economy(match_world_state& world)
 
         settlements.populations[settlementIndex] += growth;
     }
+
+    world_terrain& terrain = world.terrain;
+
+    // INFLUENCE SPREAD
+    // @TEMP(Marc): Temp system. Just set influence of all tiles in a square to 1 with the borders of the square being contested.
+    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+    {
+        if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
+
+        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every 10 ticks based on their Extra guid field and world age.
+        //if ((settlements.guids[settlementIndex].get_extra() + world.age) % 10 != 0) continue;
+
+        world_location settlementLoc = world.entities.settlements.locations[settlementIndex];
+        world_location min = settlementLoc - world_location{10, 10};
+        world_location max = settlementLoc + world_location{10, 10};
+
+        min.x = ia_clamped<world_location::val_type>(min.x, 0, world.terrain.size_tiles.x);
+        min.y = ia_clamped<world_location::val_type>(min.y, 0, world.terrain.size_tiles.y);
+        max.x = ia_clamped<world_location::val_type>(max.x, 0, world.terrain.size_tiles.x);
+        max.y = ia_clamped<world_location::val_type>(max.y, 0, world.terrain.size_tiles.y);
+
+        for (world_location::val_type x = min.x; x < max.x; x++)
+        {
+            for (world_location::val_type y = min.y; y < max.y; y++)
+            {
+                ui16 regionIndex, tileIndex;
+                world_get_tile(world.terrain, {x, y}, regionIndex, tileIndex);
+
+                world_terrain::region& region = world.terrain.regions[regionIndex];
+
+                region.influence_levels[tileIndex] = 255;
+                region.contestation_levels[tileIndex] =
+                    255 * (x == min.x || x == max.x - 1 || y == min.y || y == max.y - 1);
+            }
+        }
+   }
 }
 
 void world_system_settlement_spawn_caravans(match_world_state& world)
@@ -61,7 +96,6 @@ void world_system_settlement_spawn_caravans(match_world_state& world)
                 .location = settlements.locations[settlementIndex],
                 .movement =
                 {
-                    .travel_speed = 40,
                     .move_target = settlements.locations[destRandIndex],
                 },
                 .origin_settlement = settlements.guids[settlementIndex],
@@ -85,13 +119,11 @@ void world_system_caravan_arrivals(match_world_state& world)
 		const world_location& caravanLoc = caravans.locations[caravanIndex];
 		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
 
-		if (vec2_dist_squared(caravanLoc, destLoc) < 5)
+		if (caravanLoc == destLoc)
 		{
-			// Despawn caravan.
-			caravans.guids[caravanIndex] = INVALID_ENTITY_GUID;
-			caravans.active_count--;
+            // Caravan has arrived !
 
-			// Both origin and destination town earn 20 + distance in tiles + destination wealth / 10 + origin wealth / 20, read before either is increased.
+			// Both origin and destination town earn 20 + distance in tiles / 10 + destination wealth / 10 + origin wealth / 20, read before either is increased.
 			// A destroyed origin counts as 0 distance and 0 wealth, and earns nothing.
 			ui16 destIndex = caravans.dest_settlements[caravanIndex].get_index();
 			bool originValid = world_entity_is_valid(world, caravans.origin_settlements[caravanIndex]);
@@ -99,10 +131,13 @@ void world_system_caravan_arrivals(match_world_state& world)
 
 			ui32 distanceTiles = originValid ? vec2_dist(settlements.locations[originIndex], destLoc) : 0;
 			ui32 originWealth = originValid ? settlements.local_wealths[originIndex] : 0;
-			ui32 earnings = 20 + distanceTiles + settlements.local_wealths[destIndex] / 10 + originWealth / 20;
+			ui32 earnings = 20 + distanceTiles / 10 + settlements.local_wealths[destIndex] / 10 + originWealth / 20;
 
 			settlements.local_wealths[destIndex] += earnings;
 			if (originValid) settlements.local_wealths[originIndex] += earnings;
+
+            // Get rid of caravan.
+            world_destroy_caravan(world, caravans.guids[caravanIndex]);
 		}
 	}
 }

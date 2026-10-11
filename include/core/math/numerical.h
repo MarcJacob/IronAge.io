@@ -76,6 +76,12 @@ static inline Numeric ia_abs(Numeric val)
 	return val - (2 * val * (val < 0));
 }
 
+// Returns value clamped between min and max, both INCLUDED as possible values (IE ia_clamped(1, 0, 1) -> 1).
+template<typename Numeric>
+static inline Numeric ia_clamped(Numeric val, Numeric min, Numeric max)
+{
+    return val < min ? min : (val > max ? max : val);
+}
 
 #endif // NUMERICAL_INCLUDED
 
