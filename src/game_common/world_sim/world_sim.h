@@ -32,17 +32,16 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
-// SYSTEMS
+// SYSTEMS & HELPERS
 
-void world_system_settlement_economy(match_world_state& world);
-
+// Claims a tile in the world for the given settlement using the origin proximity value as proximity base.
+// Ensure settlement's influence bounds rectangle is kept up to date !
+void world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);
 void world_system_economy_influence_spread(match_world_state& world);
 
 void world_system_economy_contestation(match_world_state& world);
 
-void world_system_economy_takeover(match_world_state& world);
-
-void world_system_economy_land_output(match_world_state& world);
+void world_system_economy_pop_growth(match_world_state& world);
 
 void world_system_settlement_spawn_caravans(match_world_state& world);
 

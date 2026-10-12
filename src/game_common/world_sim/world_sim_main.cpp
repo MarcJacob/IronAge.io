@@ -63,9 +63,9 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
                 if (terrain.size_tiles.x - 1 - x < d) d = terrain.size_tiles.x - 1 - x;
                 if (terrain.size_tiles.y - 1 - y < d) d = terrain.size_tiles.y - 1 - y;
 
-                TERRAIN_TILE_TYPE type = LAND_PLAINS;
-                if (d < MOUNTAIN_BORDER_DISTANCE) type = LAND_MOUNTAINS;
-                else if (d < HILLS_BORDER_DISTANCE) type = LAND_HILLS;
+                TERRAIN_TILE_TYPE type = TERRAIN_TILE_TYPE::LAND_PLAINS;
+                if (d < MOUNTAIN_BORDER_DISTANCE) type = TERRAIN_TILE_TYPE::LAND_MOUNTAINS;
+                else if (d < HILLS_BORDER_DISTANCE) type = TERRAIN_TILE_TYPE::LAND_HILLS;
                 else
                 {
                     // Distance from the lake's outer edge, inward (negative = outside the lake).
@@ -76,8 +76,8 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
                     if ((i32)y - lakeMinY < lakeDepth) lakeDepth = (i32)y - lakeMinY;
                     if (lakeMinY + 2 * LAKE_HALF_SIZE - 1 - (i32)y < lakeDepth) lakeDepth = lakeMinY + 2 * LAKE_HALF_SIZE - 1 - (i32)y;
 
-                    if (lakeDepth >= LAKE_COAST_THICKNESS) type = WATER_SEA;
-                    else if (lakeDepth >= 0) type = WATER_COAST;
+                    if (lakeDepth >= LAKE_COAST_THICKNESS) type = TERRAIN_TILE_TYPE::WATER_SEA;
+                    else if (lakeDepth >= 0) type = TERRAIN_TILE_TYPE::WATER_COAST;
                 }
 
                 // Regions are stored row-major, and tiles are row-major within a region.
@@ -85,8 +85,9 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
                 ui32 tileIndex = (y % world_terrain::REGION_SIZE) * world_terrain::REGION_SIZE + (x % world_terrain::REGION_SIZE);
                 terrain.regions[regionIndex].terrain_types[tileIndex] = type;
 
-                // Also initialize tile ownership to UNOWNED.
+                // Also initialize tile ownership to UNOWNED and border count to 4.
                 terrain.regions[regionIndex].owners[tileIndex] = world_terrain::UNOWNED_TILE;
+                terrain.regions[regionIndex].status[tileIndex].border_count = 4;
             }
         }
     }
@@ -105,14 +106,15 @@ void world_state_tick(match_world_state& world)
     // @TODO(Marc): Figure out an appropriate abstraction for systems 
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
-    world_system_settlement_economy(world);
     world_system_economy_influence_spread(world);
     world_system_economy_contestation(world);
-    world_system_economy_takeover(world);
-    world_system_economy_land_output(world);
+    world_system_economy_pop_growth(world);
+
     world_system_settlement_spawn_caravans(world);
+
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
+
     world_system_caravan_arrivals(world);
     world_system_armies_target_reached(world);
 

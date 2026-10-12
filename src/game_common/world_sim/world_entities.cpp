@@ -3,7 +3,10 @@
 
 // Used to initialize default values on entity property fields if they are left at 0.
 #define SET_DEFAULT_VAL(value, default) \
-    (value = (value != (__typeof(value)){}) ? (value) : (default))
+    (value = (value != 0 ? (value) : ((__typeof(value))default)))
+
+#define SET_DEFAULT_VAL_STRUCT(value, default) \
+    (value = (STRUCT_IS_INITIALIZED(value) ? (value) : ((__typeof(value))default)))
 
 bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 {
@@ -58,6 +61,19 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.settlements.populations[freeIndex], 100);
+    SET_DEFAULT_VAL_STRUCT(world.entities.settlements.influences[freeIndex], (world_entity_settlements::land_influence
+                {
+                .bounds_min = world.entities.settlements.locations[freeIndex],
+                .bounds_max = world.entities.settlements.locations[freeIndex],
+                .used = 0,
+                .capacity = 0,
+                }));
+
+    // Claim own tile and set it as border to begin influence field.
+    ui16 regionIndex, tileIndex;
+    world_get_tile(world.terrain, start_state.location, regionIndex, tileIndex);
+
+    world_influence_claim_tile(world, regionIndex, tileIndex, freeIndex);
 
 	return newID;
 }
@@ -121,7 +137,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 12);
-    SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].move_target, start_state.location);
+    SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].move_target, start_state.location);
 
 	return newID;
 }
@@ -197,9 +213,9 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 		.population = settlements.populations[i],
 		.local_wealth = settlements.local_wealths[i],
         .land_output = settlements.land_outputs[i],
+		.influence = settlements.influences[i],
 		.tier = settlements.tiers[i],
 		.trade_attaction_index = settlements.trade_attraction_indices[i],
-		.influence_capacity = settlements.influence_capacities[i],
 	};
 	return true;
 }
@@ -279,17 +295,8 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.trade_attraction_indices = memory.alloc<ui8>(count);
 	if (settlements.trade_attraction_indices == nullptr) return false;
 
-	settlements.influence_capacities = memory.alloc<ui32>(count);
-	if (settlements.influence_capacities == nullptr) return false;
-
-	settlements.maintenance_totals = memory.alloc<ui64>(count);
-	if (settlements.maintenance_totals == nullptr) return false;
-
-	settlements.maintenance_overshoots = memory.alloc<ui16>(count);
-	if (settlements.maintenance_overshoots == nullptr) return false;
-
-	settlements.land_output_sums = memory.alloc<ui64>(count);
-	if (settlements.land_output_sums == nullptr) return false;
+	settlements.influences = memory.alloc<world_entity_settlements::land_influence>(count);
+	if (settlements.influences == nullptr) return false;
 
 	return true;
 }

@@ -28,7 +28,7 @@ bool command_server_spawn_player_apply(match_world_state& world, match_player_id
     world_entity_settlements::single startSettlement = {
         .owner = command.spawned_player,
         .location = command.spawn_location,
-        .population = 500,
+        .population = 100,
         .tier = 1,
     };
 

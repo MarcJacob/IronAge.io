@@ -116,9 +116,14 @@ void game_client_render_influence(client_render_state& render_state, const game_
                     ui16 worldY = regionY * world_terrain::REGION_SIZE + tileY;
                     ui64 worldTileIndex = (ui64)worldY * terrain.size_tiles.x + worldX;
 
-                    render_state.tiles.influence_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].influence_levels[tileIndex];
+                    bool isOwned = terrain.regions[regionIndex].owners[tileIndex] != world_terrain::UNOWNED_TILE;
+
+                    render_state.tiles.influence_tiles_bitmap[worldTileIndex] = 255 * isOwned;
                     render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
-                    render_state.tiles.tile_flags_bitmap[worldTileIndex] = terrain.regions[regionIndex].tile_flags[tileIndex];
+
+                    bool isBorder = terrain.regions[regionIndex].status[tileIndex].border_count > 0 && isOwned; 
+
+                    render_state.tiles.tile_flags_bitmap[worldTileIndex] = (ui8)RENDER_TILE_FLAGS::IS_BORDER * isBorder;
                 }
             }
         }

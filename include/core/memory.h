@@ -254,6 +254,22 @@ struct static_mem_arena : public mem_arena
 	static_mem_arena& operator=(const static_mem_arena&) = delete;
 };
 
+// Checks whether memory is zeroed out.
+inline bool ia_mem_is_zero(void* ptr, ui64 size)
+{
+    ASSERT(ptr != nullptr);
+
+    for (ui64 i = 0; i < size; i++)
+    {
+        if (*((ui8*)ptr + i) != 0) return false;
+    }
+
+    return true;
+}
+
+#define STRUCT_IS_INITIALIZED(struct_val) \
+    (!ia_mem_is_zero(&struct_val, sizeof(struct_val)))
+
 // These exist for the compiler to call when there's no libc to provide them (freestanding builds).
 // Use the ia_ versions above in source code.
 #if !__STDC_HOSTED__

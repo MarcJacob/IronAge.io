@@ -82,7 +82,7 @@ static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid
 }
 
 // Types of terrain tiles.
-enum TERRAIN_TILE_TYPE : ui8
+enum class TERRAIN_TILE_TYPE : ui8
 {
 	LAND_PLAINS,
 	LAND_HILLS,
@@ -90,14 +90,6 @@ enum TERRAIN_TILE_TYPE : ui8
 
 	WATER_COAST,
 	WATER_SEA,
-};
-
-// Bit flags of a tile (world_terrain::region::tile_flags).
-enum TILE_FLAGS : ui8
-{
-	TILE_FLAG_BORDER = 1 << 0, // Owned tile touching an unowned 8-neighbour, or a neighbour owned by a higher settlement slot (one-sided at contact lines).
-	TILE_FLAG_TAKEOVER = 1 << 1, // Transient: set and cleared inside the takeover pass (tile is to change owner this tick). Never set between ticks.
-	// Room for future flags (roads...).
 };
 
 // Holds the state of a world's terrain / tiles.
@@ -117,17 +109,15 @@ struct world_terrain
 		TERRAIN_TILE_TYPE terrain_types[REGION_TILE_COUNT]; // Type of terrain of this tile. Influences all entities and mechanics.
 
         // Dynamic properties
+        struct
+        {
+            ui8 border_count : 3; // How many neighbouring tiles are unowned or owned by a different settlements ? Tile is considered to be a border if above 0.
+            bool is_road : 1;
+            // ...
+        } status[REGION_TILE_COUNT]; // Various status values packed together in a byte.
         ui16 owners[REGION_TILE_COUNT]; // Tile owner if any, as a settlement slot index (see UNOWNED_TILE). Determines which settlement obtains the tile's production output.
-        ui8 influence_levels[REGION_TILE_COUNT]; // How much influence the owning settlement has over the tile. 0 = unowned. Determines ability to hold it and exploit it.
         ui8 contestation_levels[REGION_TILE_COUNT]; // How contested the tile is between its owner settlement and neighbouring settlements. Decreases productivity.
-        ui8 tile_flags[REGION_TILE_COUNT]; // TILE_FLAGS bits. BORDER is maintained incrementally by the influence system.
-
-        // Scratch plane for the double-buffered influence growth (written during the pass, then copied back). Not state.
-        // Avoids a directional bias in growth from the fixed scan order.
-        // @TEMP(Marc): Per-region scratch buffers like this are pretty memory inefficient. Later we'll come up with some sort of
-        // intermediate update memory scheme so less is used, by spreading the work over multiple passes / ticks.
-        ui8 influence_next[REGION_TILE_COUNT];
-        ui8 contestation_next[REGION_TILE_COUNT]; // Contestation sources, then the new contestation, before the copy back.
+        ui16 proximities[REGION_TILE_COUNT]; // Proximity to settlement value for claimed tiles.
     } *regions;
 
     static constexpr ui16 UNOWNED_TILE = ~0; // Owner value of a tile with no owner (influence 0).
@@ -149,6 +139,15 @@ static inline void world_get_tile(const world_terrain& terrain, world_location l
 
     out_region_index = regionY * terrain.size_regions.x + regionX;
     out_tile_index = tileY * world_terrain::REGION_SIZE + tileX;
+}
+
+static inline world_location world_get_tile_location(const world_terrain& terrain, ui16 region_index, ui16 tile_index)
+{
+    ASSERT(region_index < (terrain.size_regions.x * terrain.size_regions.y));
+    ASSERT(tile_index < world_terrain::REGION_TILE_COUNT);
+
+    return { (region_index % terrain.size_regions.x * world_terrain::REGION_SIZE) + (tile_index % world_terrain::REGION_SIZE),
+            (region_index / terrain.size_regions.x * world_terrain::REGION_SIZE) + (tile_index / world_terrain::REGION_SIZE)};
 }
 
 // Reused entity sub-components
@@ -176,19 +175,21 @@ struct world_entity_settlements : public world_entity_container
     // Base economic factors
 	ui32*				populations;
 	ui32*				local_wealths;
-    ui32*               land_outputs;
+    ui32*               land_outputs; // Set by influence system according to terrain type, infrastructure...
+
+    struct land_influence
+    {
+        world_location bounds_min, bounds_max; // Rectangle bounds of all currently claimed tiles.
+        ui32 used; // Total influence currently used for claiming land.
+        ui32 capacity; // Maximum influence budget for claiming land.
+    };
+	land_influence*				influences; // Influence values used to claim / lose land.
 
     // Infrastructure / building factors
 	ui8*				tiers;
 
     // Intermediate values
 	ui8*				trade_attraction_indices;
-	ui32*				influence_capacities;
-
-    // Per-slot values for the influence / land output systems. Derived, rewritten every tick.
-    ui64*               maintenance_totals; // Sum of maintenance cost of owned tiles, fixed point (capacity * 16). Set by the land output pass, adjusted by claims / unclaims in between.
-    ui16*               maintenance_overshoots; // How far over budget (1..256, in 1/256 of capacity), 0 = within budget. Set at the start of each influence tick.
-    ui64*               land_output_sums; // Fixed-point (x255 x255) land output accumulator.
 
 	// Consolidated representation of a single settlement for viewing purposes.
 	struct single
@@ -199,11 +200,11 @@ struct world_entity_settlements : public world_entity_container
 		ui32 population;
 		ui32 local_wealth;
         ui32 land_output;
+        land_influence influence;
 
 		ui8 tier;
 
 		ui8 trade_attaction_index;
-        ui32 influence_capacity;
 	};
 };
 

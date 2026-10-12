@@ -33,7 +33,7 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 		out_view.extra.settlement.local_wealth = settlement.local_wealth;
 		out_view.extra.settlement.tier = settlement.tier;
 		out_view.extra.settlement.trade_attractivity = settlement.trade_attaction_index;
-		out_view.extra.settlement.influence_capacity = settlement.influence_capacity;
+		out_view.extra.settlement.influence_capacity = settlement.influence.capacity;
 		break;
 	}
 	case ENTITY_TYPE::CARAVAN:

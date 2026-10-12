@@ -28,6 +28,13 @@ struct render_entity
 };
 static_assert(sizeof(render_entity) == 15, "render_entity struct size changed. Adapt TS reading code, then this assertion.");
 
+enum class RENDER_TILE_FLAGS : ui8
+{
+    IS_BORDER = 1 << 0,
+    IS_ROAD = 1 << 1,
+    // ...
+};
+
 // Render state exposed to the frontend.
 struct client_render_state
 {
@@ -59,7 +66,7 @@ struct client_render_state
         ui8* influence_tiles_bitmap;
         // One byte value per world tile. Row major.
         ui8* contestation_tiles_bitmap;
-        // One TILE_FLAGS bit set per world tile. Row major.
+        // One RENDER_TILE_FLAGS bit set per world tile. Row major.
         ui8* tile_flags_bitmap;
     } tiles;
 };
