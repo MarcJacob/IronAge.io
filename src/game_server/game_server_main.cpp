@@ -216,7 +216,7 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	{
 		// .. Get parameters from test scenario.
 		newServer->match_slots[0].match_params = match_test_scenario_get_params(
-                newServer->match_slots[0].slot_memory, (ui32)(iptr)&newServer, 10);
+                newServer->match_slots[0].slot_memory, (ui32)(iptr)&newServer, 2);
 		game_server_open_lobby(*newServer, 0);
 	}
 

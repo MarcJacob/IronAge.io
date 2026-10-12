@@ -24,13 +24,46 @@ static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
     1, // WATER_SEA
 };
 
+// Contestation parameters. Contestation is a per tile value from 0 to CONTESTATION_MAX.
+static constexpr ui8 CONTESTATION_MAX = 255;
+static constexpr ui8 CONTESTATION_GAIN = 24; // Per tick, per foreign neighbour tile (diagonals included).
+static constexpr ui8 CONTESTATION_DECAY = 2; // Per tick.
+static constexpr ui8 CONTESTATION_FALLOFF = 32; // Lost per tile when spreading to neighbouring tiles of the same settlement.
+static constexpr i32 CONTESTATION_PUSH_MARGIN = 100; // Per mille of capacity that effective pressure must lead by to push a barely contested tile. Scales down to 0 at full contestation.
+static constexpr ui8 CONTESTATION_MAX_FOREIGN_NEIGHBOURS = 7; // Number of foreign neighbours that gives full contestation. All 8 is a special case for later.
+
 // Proximity is measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).
 // Stepping to a tile adds its terrain travel cost times the weight.
 static constexpr ui16 PROXIMITY_WEIGHT_ORTHOGONAL = 5;
 static constexpr ui16 PROXIMITY_WEIGHT_DIAGONAL = 7;
 
 // Proximity contributes to a tile's influence cost divided by this value, so that distance matters less than the tile's own terrain.
-static constexpr ui16 INFLUENCE_COST_PROXIMITY_DIVISOR = 10;
+static constexpr ui16 INFLUENCE_COST_PROXIMITY_DIVISOR = 5;
+
+// Neighbour offsets, non-diagonal only or all 8.
+static const vec2<i8> NEIGHBOUR_OFFSETS_ORTHOGONAL[] = { {-1, 0}, {0, -1}, {0, 1}, {1, 0} };
+static const vec2<i8> NEIGHBOUR_OFFSETS_ALL[] = { {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1} };
+
+// Gets the region and tile indices of the tile at the given offset from a world location. Returns false if that tile is off the map.
+static bool world_get_neighbour_tile(const world_terrain& terrain, world_location location, vec2<i8> offset, ui16& out_region_index, ui16& out_tile_index)
+{
+    i32 x = location.x + offset.x;
+    i32 y = location.y + offset.y;
+    if (x < 0 || x >= terrain.size_tiles.x || y < 0 || y >= terrain.size_tiles.y) return false;
+
+    world_get_tile(terrain, { (ui16)x, (ui16)y }, out_region_index, out_tile_index);
+    return true;
+}
+
+// Grows the bounds so they include the given location.
+static void world_bounds_include(world_location& bounds_min, world_location& bounds_max, world_location location)
+{
+    if (location.x < bounds_min.x) bounds_min.x = location.x;
+    else if (location.x > bounds_max.x) bounds_max.x = location.x;
+
+    if (location.y < bounds_min.y) bounds_min.y = location.y;
+    else if (location.y > bounds_max.y) bounds_max.y = location.y;
+}
 
 // Get influence cost for claiming / keeping a tile.
 // Cost is the tile's terrain travel cost plus a fraction of its own proximity (the value it has, or would get, once claimed).
@@ -49,28 +82,21 @@ static ui16 world_influence_get_claim_proximity(const match_world_state& world, 
     world_location tileWorldLocation = world_get_tile_location(world.terrain, region_index, tile_index);
     bool found = false;
     ui16 claimProximity = 0;
-    for (i8 x = -1; x <= 1; x++)
-        for (i8 y = -1; y <= 1; y++)
+    for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
+    {
+        ui16 neighbourRegionIndex, neighbourTileIndex;
+        if (!world_get_neighbour_tile(world.terrain, tileWorldLocation, offset, neighbourRegionIndex, neighbourTileIndex)) continue;
+        if (world.terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlement_index) continue;
+
+        bool isDiagonal = offset.x != 0 && offset.y != 0;
+        ui16 stepProximity = world.terrain.regions[neighbourRegionIndex].proximities[neighbourTileIndex]
+                + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
+        if (!found || stepProximity < claimProximity)
         {
-            if (x == 0 && y == 0) continue;
-            vec2<i32> relativeLoc = tileWorldLocation + vec2<i8>{x, y};
-            if (relativeLoc.x < 0 || relativeLoc.x >= world.terrain.size_tiles.x
-                    || relativeLoc.y < 0 || relativeLoc.y >= world.terrain.size_tiles.y) continue;
-
-            ui16 neighbourRegionIndex, neighbourTileIndex;
-            world_get_tile(world.terrain, { x + tileWorldLocation.x, y + tileWorldLocation.y }, neighbourRegionIndex, neighbourTileIndex);
-
-            if (world.terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlement_index) continue;
-
-            bool isDiagonal = x != 0 && y != 0;
-            ui16 stepProximity = world.terrain.regions[neighbourRegionIndex].proximities[neighbourTileIndex]
-                    + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
-            if (!found || stepProximity < claimProximity)
-            {
-                claimProximity = stepProximity;
-                found = true;
-            }
+            claimProximity = stepProximity;
+            found = true;
         }
+    }
 
     return claimProximity;
 }
@@ -95,22 +121,15 @@ void world_influence_unclaim_tile(const match_world_state& world, ui16 region_in
 
     // Increase all non-diagonal neighbour tile border count owned by the same settlement.
     world_location tileWorldLocation = world_get_tile_location(world.terrain, region_index, tile_index);
-    for (i8 x = -1; x <= 1; x++) 
-        for (i8 y = -1; y <= 1; y++) 
-        {
-            if (ia_abs(x + y) != 1) continue;
-            vec2<i32> relativeLoc = tileWorldLocation + vec2<i8>{x, y};
-            if (relativeLoc.x < 0 || relativeLoc.x >= world.terrain.size_tiles.x
-                    || relativeLoc.y < 0 || relativeLoc.y >= world.terrain.size_tiles.y) continue;
+    for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ORTHOGONAL)
+    {
+        ui16 neighbourRegionIndex, neighbourTileIndex;
+        if (!world_get_neighbour_tile(world.terrain, tileWorldLocation, offset, neighbourRegionIndex, neighbourTileIndex)) continue;
+        if (world.terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlement_index) continue;
 
-            ui16 claimRegionIndex, claimTileIndex;
-            world_get_tile(world.terrain, { x + tileWorldLocation.x, y + tileWorldLocation.y }, claimRegionIndex, claimTileIndex);
-
-            if (world.terrain.regions[claimRegionIndex].owners[claimTileIndex] != settlement_index) continue;
-
-            world.terrain.regions[claimRegionIndex].status[claimTileIndex].border_count++;
-            ASSERT(world.terrain.regions[claimRegionIndex].status[claimTileIndex].border_count <= 4);
-        }
+        world.terrain.regions[neighbourRegionIndex].status[neighbourTileIndex].border_count++;
+        ASSERT(world.terrain.regions[neighbourRegionIndex].status[neighbourTileIndex].border_count <= 4);
+    }
 
     // Set tile as unowned, and reset its border count to its unowned value.
     world.terrain.regions[region_index].owners[tile_index] = world_terrain::UNOWNED_TILE;
@@ -119,7 +138,8 @@ void world_influence_unclaim_tile(const match_world_state& world, ui16 region_in
     proximity = 0;
 }
 
-void world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
+// Claims the tile for the settlement and returns the influence cost it was claimed at.
+ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
 {
     ASSERT(region_index < world.terrain.size_regions.x * world.terrain.size_regions.y);
     ASSERT(tile_index < world_terrain::REGION_TILE_COUNT);
@@ -147,28 +167,83 @@ void world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     tileStatus.border_count = 4;
 
     world_location tileWorldLocation = world_get_tile_location(world.terrain, region_index, tile_index);
-    for (i8 x = -1; x <= 1; x++)
-        for (i8 y = -1; y <= 1; y++)
+    for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ORTHOGONAL)
+    {
+        ui16 neighbourRegionIndex, neighbourTileIndex;
+        if (!world_get_neighbour_tile(world.terrain, tileWorldLocation, offset, neighbourRegionIndex, neighbourTileIndex))
         {
-            if (ia_abs(x + y) != 1) continue;
-            vec2<i32> relativeLoc = tileWorldLocation + vec2<i8>{x, y};
-            if (relativeLoc.x < 0 || relativeLoc.x >= world.terrain.size_tiles.x
-                    || relativeLoc.y < 0 || relativeLoc.y >= world.terrain.size_tiles.y)
-            {
-                // Map edge is not a border.
-                tileStatus.border_count--;
-                continue;
-            }
-
-            ui16 claimRegionIndex, claimTileIndex;
-            world_get_tile(world.terrain, { x + tileWorldLocation.x, y + tileWorldLocation.y }, claimRegionIndex, claimTileIndex);
-
-            if (world.terrain.regions[claimRegionIndex].owners[claimTileIndex] != settlement_index) continue;
-
+            // Map edge is not a border.
             tileStatus.border_count--;
-            ASSERT(world.terrain.regions[claimRegionIndex].status[claimTileIndex].border_count > 0);
-            world.terrain.regions[claimRegionIndex].status[claimTileIndex].border_count--;
+            continue;
         }
+
+        if (world.terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlement_index) continue;
+
+        tileStatus.border_count--;
+        ASSERT(world.terrain.regions[neighbourRegionIndex].status[neighbourTileIndex].border_count > 0);
+        world.terrain.regions[neighbourRegionIndex].status[neighbourTileIndex].border_count--;
+    }
+
+    return cost;
+}
+
+// Pressure as per mille of capacity. Negative if more influence is used than available. A settlement with no capacity has no pressure.
+static i32 world_influence_get_pressure_permille(ui32 capacity, i64 pressure)
+{
+    return capacity == 0 ? 0 : (i32)(pressure * 1000 / (i64)capacity);
+}
+
+// Returns true if the settlement can push into the given tile, owned by another settlement.
+// The tile must be contested (which also keeps settlement tiles safe, since they never gain contestation), and the settlement's effective pressure must beat the
+// defender's by a margin that shrinks with contestation (CONTESTATION_PUSH_MARGIN at the lowest contestation, none at full contestation).
+// Pressures are compared as a fraction of each settlement's capacity (in per mille), so push power doesn't depend on settlement size.
+// A positive attacking pressure is multiplied by the ratio of the target tile's proximity (to its own settlement) over the attacking border tile's proximity
+// (to the attacking settlement): ten times closer to its core = ten times the pressure.
+static bool world_influence_can_push(const match_world_state& world, ui16 border_region_index, ui16 border_tile_index,
+        ui16 target_region_index, ui16 target_tile_index, ui16 settlement_index, i32 influence_pressure)
+{
+    ui16 defenderIndex = world.terrain.regions[target_region_index].owners[target_tile_index];
+    ASSERT(defenderIndex != world_terrain::UNOWNED_TILE && defenderIndex != settlement_index);
+
+    ui8 contestation = world.terrain.regions[target_region_index].contestation_levels[target_tile_index];
+    if (contestation == 0) return false;
+
+    const world_entity_settlements::land_influence& defenderInfluence = world.entities.settlements.influences[defenderIndex];
+    const world_entity_settlements::land_influence& attackerInfluence = world.entities.settlements.influences[settlement_index];
+
+    i32 defenderPressure = world_influence_get_pressure_permille(defenderInfluence.capacity, (i64)defenderInfluence.capacity - (i64)defenderInfluence.used);
+    i32 attackerPressure = world_influence_get_pressure_permille(attackerInfluence.capacity, influence_pressure);
+
+    if (attackerPressure > 0)
+    {
+        // Proximity ratio in per mille. The settlement's own tile has proximity 0, so treat the attacker proximity as at least 1.
+        i64 attackerProximity = world.terrain.regions[border_region_index].proximities[border_tile_index];
+        if (attackerProximity < 1) attackerProximity = 1;
+        i64 proximityRatio = (i64)world.terrain.regions[target_region_index].proximities[target_tile_index] * 1000 / attackerProximity;
+        attackerPressure = (i32)((i64)attackerPressure * proximityRatio / 1000);
+    }
+
+    i32 requiredMargin = CONTESTATION_PUSH_MARGIN * (CONTESTATION_MAX - contestation) / CONTESTATION_MAX;
+    return attackerPressure - defenderPressure > requiredMargin;
+}
+
+// Returns true if the border tile has at least one non-diagonal neighbour the settlement could expand into.
+// That means an unclaimed tile or a tile that can be pushed into.
+static bool world_influence_can_expand(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index, i32 influence_pressure)
+{
+    world_location tileLocation = world_get_tile_location(world.terrain, region_index, tile_index);
+    for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ORTHOGONAL)
+    {
+        ui16 neighbourRegionIndex, neighbourTileIndex;
+        if (!world_get_neighbour_tile(world.terrain, tileLocation, offset, neighbourRegionIndex, neighbourTileIndex)) continue;
+
+        ui16 neighbourOwner = world.terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex];
+        if (neighbourOwner == world_terrain::UNOWNED_TILE) return true;
+        if (neighbourOwner != settlement_index
+                && world_influence_can_push(world, region_index, tile_index, neighbourRegionIndex, neighbourTileIndex, settlement_index, influence_pressure)) return true;
+    }
+
+    return false;
 }
 
 // Runs full influence logic over a border tile owned by the settlement (assumed to have been checked as so).
@@ -181,51 +256,31 @@ void world_influence_border_logic(const match_world_state& world, ui16 region_in
 
     world_location tileLocation = world_get_tile_location(world.terrain, region_index, tile_index);
 
-    // The border tile itself must stay within the new bounds.
-    if (tileLocation.x < bounds_min.x) bounds_min.x = tileLocation.x;
-    else if (tileLocation.x > bounds_max.x) bounds_max.x = tileLocation.x;
-
-    if (tileLocation.y < bounds_min.y) bounds_min.y = tileLocation.y;
-    else if (tileLocation.y > bounds_max.y) bounds_max.y = tileLocation.y;
-
     // Check all 4 neighbours for claiming.
-    for (i8 claimX = -1; claimX <= 1 && influence_pressure > 0; claimX++) 
-        for (i8 claimY = -1; claimY <= 1 && influence_pressure > 0; claimY++) 
-        {
-            if (ia_abs(claimX + claimY) != 1) continue;
-            vec2<i32> relativeLoc = tileLocation + vec2<i8>{claimX, claimY};
-            if (relativeLoc.x < 0 || relativeLoc.x >= world.terrain.size_tiles.x
-                    || relativeLoc.y < 0 || relativeLoc.y >= world.terrain.size_tiles.y) continue;
+    for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ORTHOGONAL)
+    {
+        if (influence_pressure <= 0) return;
 
-            ui16 claimRegionIndex, claimTileIndex;
-            world_get_tile(world.terrain, { tileLocation.x + claimX, tileLocation.y + claimY }, claimRegionIndex, claimTileIndex);
+        ui16 claimRegionIndex, claimTileIndex;
+        if (!world_get_neighbour_tile(world.terrain, tileLocation, offset, claimRegionIndex, claimTileIndex)) continue;
 
-            if (world.terrain.regions[claimRegionIndex].owners[claimTileIndex] == world_terrain::UNOWNED_TILE)
-            {
-                // Colonize empty tile if cheap enough.
-                ui16 claimProximity = world_influence_get_claim_proximity(world, claimRegionIndex, claimTileIndex, settlement_index);
-                ui16 cost = world_influence_get_tile_cost(world, claimRegionIndex, claimTileIndex, claimProximity);
-                if (cost <= influence_pressure)
-                {
-                    world_influence_claim_tile(world, claimRegionIndex, claimTileIndex, settlement_index);
-                    influence_pressure -= cost;
+        ui16 targetOwner = world.terrain.regions[claimRegionIndex].owners[claimTileIndex];
+        bool isUnowned = targetOwner == world_terrain::UNOWNED_TILE;
+        if (targetOwner == settlement_index) continue;
 
-                    // Update bounds.
-                    if (tileLocation.x + claimX < bounds_min.x) bounds_min.x = tileLocation.x + claimX;
-                    else if (tileLocation.x + claimX > bounds_max.x) bounds_max.x = tileLocation.x + claimX;
+        // Colonize empty tile, or push into a foreign tile that is contested enough. Both cost the same.
+        if (!isUnowned && !world_influence_can_push(world, region_index, tile_index, claimRegionIndex, claimTileIndex, settlement_index, influence_pressure)) continue;
 
-                    if (tileLocation.y + claimY < bounds_min.y) bounds_min.y = tileLocation.y + claimY;
-                    else if (tileLocation.y + claimY > bounds_max.y) bounds_max.y = tileLocation.y + claimY;
+        // A pushed tile is first unclaimed by its defender, and has its contestation reset.
+        if (!isUnowned) world_influence_unclaim_tile(world, claimRegionIndex, claimTileIndex, targetOwner);
+        influence_pressure -= world_influence_claim_tile(world, claimRegionIndex, claimTileIndex, settlement_index);
+        if (!isUnowned) world.terrain.regions[claimRegionIndex].contestation_levels[claimTileIndex] = 0;
 
-                    // Check border flag and return from the function immediately if tile isn't a border anymore.
-                    if (world.terrain.regions[region_index].status[tile_index].border_count == 0) return;
-                }
-            }
-            else
-            {
-                // @TODO(Marc): PUSH BACK MECHANICS
-            }
-        }
+        world_bounds_include(bounds_min, bounds_max, { (ui16)(tileLocation.x + offset.x), (ui16)(tileLocation.y + offset.y) });
+
+        // Check border flag and return from the function immediately if tile isn't a border anymore.
+        if (world.terrain.regions[region_index].status[tile_index].border_count == 0) return;
+    }
 }
 
 // Border tile picked for processing by the influence spread.
@@ -236,14 +291,25 @@ struct influence_candidate
 };
 static constexpr ui16 INFLUENCE_CANDIDATE_COUNT = 16; // Max border tiles processed per settlement per tick.
 
+// Inserts into the candidate list, kept sorted by ascending proximity, replacing the worst entry if full. Ties keep the earliest inserted.
+static void world_influence_candidate_insert(influence_candidate* candidates, ui32& candidate_count, const influence_candidate& candidate)
+{
+    if (candidate_count == INFLUENCE_CANDIDATE_COUNT && candidate.proximity >= candidates[INFLUENCE_CANDIDATE_COUNT - 1].proximity) return;
+
+    ui32 slot = candidate_count < INFLUENCE_CANDIDATE_COUNT ? candidate_count : INFLUENCE_CANDIDATE_COUNT - 1;
+    while (slot > 0 && candidates[slot - 1].proximity > candidate.proximity)
+    {
+        candidates[slot] = candidates[slot - 1];
+        slot--;
+    }
+    candidates[slot] = candidate;
+    if (candidate_count < INFLUENCE_CANDIDATE_COUNT) candidate_count++;
+}
+
 void world_system_economy_influence_spread(match_world_state& world)
 {
-    world_terrain& terrain = world.terrain;
-    world_entity_settlements& settlements = world.entities.settlements;
-
-    // For each world tile, run a parameterized cellular automata over the settlement's influence bounds.
-    // Unclaimed and heartland tiles are left alone.
-    // Border tiles check current pressure (differential between Used and Capacity) and can claim or shrink if pressure is great enough to justify it (depending on proximity).
+    // For each settlement, border tiles within its influence bounds claim unowned tiles, or push into contested foreign ones, as far as the pressure
+    // (differential between Capacity and Used) allows. Interior tiles are left alone.
 
     for (ui16 settlementIndex = 0; settlementIndex < world.entities.settlements.max_count; settlementIndex++)
     {
@@ -275,25 +341,13 @@ void world_system_economy_influence_spread(match_world_state& world)
                 if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) continue;
                 if (world.terrain.regions[regionIndex].status[tileIndex].border_count == 0) continue;
 
-                // Update bounds.
-                if (x < newBoundsMin.x) newBoundsMin.x = x;
-                else if (x > newBoundsMax.x) newBoundsMax.x = x;
+                world_bounds_include(newBoundsMin, newBoundsMax, { x, y });
 
-                if (y < newBoundsMin.y) newBoundsMin.y = y;
-                else if (y > newBoundsMax.y) newBoundsMax.y = y;
+                // Border tiles that can't expand anywhere are kept in the bounds but must not take up candidate slots.
+                if (!world_influence_can_expand(world, regionIndex, tileIndex, settlementIndex, influencePressure)) continue;
 
-                // Insert into the sorted candidate list, replacing the worst entry if full.
-                ui16 proximity = world.terrain.regions[regionIndex].proximities[tileIndex];
-                if (candidateCount == INFLUENCE_CANDIDATE_COUNT && proximity >= candidates[INFLUENCE_CANDIDATE_COUNT - 1].proximity) continue;
-
-                ui32 slot = candidateCount < INFLUENCE_CANDIDATE_COUNT ? candidateCount : INFLUENCE_CANDIDATE_COUNT - 1;
-                while (slot > 0 && candidates[slot - 1].proximity > proximity)
-                {
-                    candidates[slot] = candidates[slot - 1];
-                    slot--;
-                }
-                candidates[slot] = { regionIndex, tileIndex, proximity };
-                if (candidateCount < INFLUENCE_CANDIDATE_COUNT) candidateCount++;
+                world_influence_candidate_insert(candidates, candidateCount,
+                        { regionIndex, tileIndex, world.terrain.regions[regionIndex].proximities[tileIndex] });
             }
         }
 
@@ -311,6 +365,79 @@ void world_system_economy_influence_spread(match_world_state& world)
 void world_system_economy_contestation(match_world_state& world)
 {
     world_terrain& terrain = world.terrain;
+    world_entity_settlements& settlements = world.entities.settlements;
+
+    for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+    {
+        if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+        ui16 settlementRegionIndex, settlementTileIndex;
+        world_get_tile(terrain, settlements.locations[settlementIndex], settlementRegionIndex, settlementTileIndex);
+        const world_location boundsMin = settlements.influences[settlementIndex].bounds_min;
+        const world_location boundsMax = settlements.influences[settlementIndex].bounds_max;
+
+        // Decay, then generate contestation from foreign neighbours and spread it to immediate neighbours, over all tiles of the settlement.
+        // A tile's contestation goes up to a cap proportional to its foreign neighbour count, and is never lowered by that cap.
+        for (i32 x = boundsMin.x; x <= boundsMax.x; x++)
+            for (i32 y = boundsMin.y; y <= boundsMax.y; y++)
+            {
+                ui16 regionIndex, tileIndex;
+                world_get_tile(terrain, { (ui16)x, (ui16)y }, regionIndex, tileIndex);
+
+                if (terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) continue;
+
+                ui8& contestation = terrain.regions[regionIndex].contestation_levels[tileIndex];
+                contestation -= contestation < CONTESTATION_DECAY ? contestation : CONTESTATION_DECAY;
+
+                // Settlement tiles are invulnerable for now.
+                if (regionIndex == settlementRegionIndex && tileIndex == settlementTileIndex) continue;
+
+                // Interior tiles (no non-diagonal neighbour that isn't ours) have no foreign neighbours worth counting.
+                if (terrain.regions[regionIndex].status[tileIndex].border_count == 0) continue;
+
+                // Count foreign neighbours, remembering the neighbouring tiles for the spread below.
+                ui16 neighbourRegionIndices[8], neighbourTileIndices[8];
+                ui32 neighbourCount = 0;
+                ui32 foreignCount = 0;
+                for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
+                {
+                    ui16 neighbourRegionIndex, neighbourTileIndex;
+                    if (!world_get_neighbour_tile(terrain, { (ui16)x, (ui16)y }, offset, neighbourRegionIndex, neighbourTileIndex)) continue;
+
+                    neighbourRegionIndices[neighbourCount] = neighbourRegionIndex;
+                    neighbourTileIndices[neighbourCount] = neighbourTileIndex;
+                    neighbourCount++;
+
+                    ui16 neighbourOwner = terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex];
+                    if (neighbourOwner != world_terrain::UNOWNED_TILE && neighbourOwner != settlementIndex) foreignCount++;
+                }
+
+                if (foreignCount == 0) continue;
+                if (foreignCount > CONTESTATION_MAX_FOREIGN_NEIGHBOURS) foreignCount = CONTESTATION_MAX_FOREIGN_NEIGHBOURS;
+
+                ui32 cap = CONTESTATION_MAX * foreignCount / CONTESTATION_MAX_FOREIGN_NEIGHBOURS;
+                if (contestation < cap)
+                {
+                    ui32 newContestation = contestation + CONTESTATION_GAIN * foreignCount;
+                    contestation = newContestation < cap ? newContestation : cap;
+                }
+
+                // Border tiles spread their contestation to their immediate neighbours of the same settlement (diagonals included), losing CONTESTATION_FALLOFF.
+                // The settlement's own tile never gains contestation.
+                if (contestation <= CONTESTATION_FALLOFF) continue;
+                ui8 spreadContestation = contestation - CONTESTATION_FALLOFF;
+                for (ui32 neighbourIndex = 0; neighbourIndex < neighbourCount; neighbourIndex++)
+                {
+                    ui16 neighbourRegionIndex = neighbourRegionIndices[neighbourIndex];
+                    ui16 neighbourTileIndex = neighbourTileIndices[neighbourIndex];
+                    if (terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlementIndex) continue;
+                    if (neighbourRegionIndex == settlementRegionIndex && neighbourTileIndex == settlementTileIndex) continue;
+
+                    ui8& neighbourContestation = terrain.regions[neighbourRegionIndex].contestation_levels[neighbourTileIndex];
+                    if (spreadContestation > neighbourContestation) neighbourContestation = spreadContestation;
+                }
+            }
+    }
 }
 
 void world_system_economy_pop_growth(match_world_state& world)
@@ -330,19 +457,24 @@ void world_system_economy_pop_growth(match_world_state& world)
 
         ui32& population = settlements.populations[settlementIndex];
         
-        i32 growth = ((i64)targetPopulation - (i64)population) * 5 / 100; // Base growth is 5% of difference between current and target.
-        if (growth > 0 && (ui32)growth >= 1 + population / 5)
+        i32 growth = ((i64)targetPopulation - (i64)population);
+        if (growth > 0 && (ui32)growth >= 1 + population / 100)
         {
-            growth = 1 + (i64)population / 5; // Population cannot grow by more than 5% per growth tick.
+            growth = 1 + (i64)population / 100; // Population cannot grow by more than 1% per growth tick.
+        }
+        else if (growth < 0 && ia_abs(growth) > (i64)population / 20)
+        {
+            growth = -(i64)population / 20; // Population cannot shrink by more than 5% per growth tick.
         }
 
-        if (population + growth < 1)
+        if ((i64)population + growth < 1)
         {
             population = 1;
-            continue;
         }
-
-        population += growth;
+        else
+        {
+            population += growth;
+        }
 
         // Calculate new influence capacity.
         settlements.influences[settlementIndex].capacity = population * 100 + 1000;

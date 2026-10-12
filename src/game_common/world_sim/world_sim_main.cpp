@@ -49,7 +49,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
     {
         const ui16 MOUNTAIN_BORDER_DISTANCE = 10;
         const ui16 HILLS_BORDER_DISTANCE = 15;
-        const i32 LAKE_HALF_SIZE = 40; // Central lake spans tiles [center - 5, center + 4] on both axes (10x10).
+        const i32 LAKE_HALF_SIZE = 4; // Central lake spans tiles [center - 5, center + 4] on both axes (10x10).
         const i32 LAKE_COAST_THICKNESS = 2;
 
         world_terrain& terrain = newWorld->terrain;
