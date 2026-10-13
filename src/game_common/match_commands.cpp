@@ -95,7 +95,9 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
 	if (world.entities.armies.owners[command.army.get_index()] != player) return false;
 
-	// The army is kept if there is no room for the settlement.
+	// The army is kept if the location is invalid or there is no room for the settlement.
+	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return false;
+
 	const world_entity_settlements& settlements = world.entities.settlements;
 	return settlements.active_count < settlements.max_count;
 }
@@ -103,9 +105,10 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 // Spawns a settlement at the army's location with its owner and total manpower as population, then destroys the army.
 void command_found_settlement_apply(match_world_state& world, match_player_id player, const command_data_found_settlement& command)
 {
-	// Checked again: earlier commands in the same tick may have destroyed this army or filled the last settlement slot.
+	// Checked again: earlier commands in the same tick may have destroyed this army, filled the last settlement slot or made the location invalid.
 	if (!world_entity_is_valid(world, command.army)) return;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return;
+	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return;
 
 	const world_entity_settlements& settlements = world.entities.settlements;
 	if (settlements.active_count >= settlements.max_count) return;

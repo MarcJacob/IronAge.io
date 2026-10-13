@@ -263,6 +263,35 @@ bool world_caravan_is_owned_by(const match_world_state& world, entity_guid carav
 	return query_entity_state_settlement(world, state.dest_settlement, settlement) && settlement.owner == player;
 }
 
+bool world_is_valid_settlement_location(const match_world_state& world, world_location loc, match_player_id player)
+{
+	const world_terrain& terrain = world.terrain;
+	if (loc.x >= terrain.size_tiles.x || loc.y >= terrain.size_tiles.y) return false;
+
+	ui16 regionIndex, tileIndex;
+	world_get_tile(terrain, loc, regionIndex, tileIndex);
+
+	TERRAIN_TILE_TYPE type = terrain.regions[regionIndex].terrain_types[tileIndex];
+	if (type != TERRAIN_TILE_TYPE::LAND_PLAINS && type != TERRAIN_TILE_TYPE::LAND_HILLS) return false;
+
+	const world_entity_settlements& settlements = world.entities.settlements;
+
+	// Tile owner is a settlement slot index.
+	ui16 tileOwner = terrain.regions[regionIndex].owners[tileIndex];
+	if (tileOwner != world_terrain::UNOWNED_TILE && settlements.owners[tileOwner] != player) return false;
+
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+		i32 dx = (i32)settlements.locations[settlementIndex].x - (i32)loc.x;
+		i32 dy = (i32)settlements.locations[settlementIndex].y - (i32)loc.y;
+		if (dx * dx + dy * dy < (i32)(SETTLEMENT_MIN_DISTANCE * SETTLEMENT_MIN_DISTANCE)) return false;
+	}
+
+	return true;
+}
+
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count)
 {
 	world_entity_settlements& settlements = world.entities.settlements;

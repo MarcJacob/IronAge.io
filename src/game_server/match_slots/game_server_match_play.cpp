@@ -10,13 +10,32 @@
 #include "match_slots.h"
 #include "../game_server.h"
 
-void match_pick_start_location(game_server& server, ui8 slot_index, match_player_id player, world_location picked_loc)
+// Returns whether the location is a valid settlement location for the player, and at least SETTLEMENT_MIN_DISTANCE tiles from the current pick of every other player.
+static bool match_is_valid_pick(game_server& server, ui8 slot_index, match_player_id player, world_location loc)
 {
-    // ... TODO(Marc): Check location validity.
+    match_slot& slot = server.match_slots[slot_index];
+    if (!world_is_valid_settlement_location(*slot.match.match_ptr->world, loc, player)) return false;
 
+    for (match_player_id otherID = 0; otherID < slot.match_params->player_count; otherID++)
+    {
+        world_location otherLoc = slot.match.start_locations[otherID];
+        if (otherID == player || otherLoc == INVALID_WORLD_LOCATION) continue; // Not picked yet.
+
+        i32 dx = (i32)otherLoc.x - (i32)loc.x;
+        i32 dy = (i32)otherLoc.y - (i32)loc.y;
+        if (dx * dx + dy * dy < (i32)(SETTLEMENT_MIN_DISTANCE * SETTLEMENT_MIN_DISTANCE)) return false;
+    }
+    return true;
+}
+
+// Picks the start location of a player and broadcasts it. Invalid locations are discarded silently, unless skip_validity_check is set.
+void match_pick_start_location(game_server& server, ui8 slot_index, match_player_id player, world_location picked_loc, bool skip_validity_check = false)
+{
     match_slot& slot = server.match_slots[slot_index];
     ASSERT(slot.match_params->player_count > player);
     ASSERT(slot.match.start_locations != nullptr);
+
+    if (!skip_validity_check && !match_is_valid_pick(server, slot_index, player, picked_loc)) return;
 
     slot.match.start_locations[player] = picked_loc;
 
@@ -146,13 +165,22 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
     slot.match.start_locations = slot.slot_memory.alloc<world_location>(slot.match_params->player_count);
     ASSERT(slot.match.start_locations != nullptr);
+    for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+    {
+        slot.match.start_locations[playerID] = INVALID_WORLD_LOCATION; // Marks "not picked yet".
+    }
 
-    // Pick a random location for all players to begin with.
+    // Pick a random location for all players to begin with, retrying a few times to find a valid one (else the last one is accepted anyway).
     rand_generator_32 randGen = { match.start_params->random_seed };
     for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
     {
-        world_location randLoc = randGen.next_vec2({10, 10}, match.start_params->world_size_regions * world_terrain::REGION_SIZE - world_location {10, 10});
-        match_pick_start_location(server, slot_index, playerID, randLoc);
+        world_location randLoc;
+        for (ui8 tryIndex = 0; tryIndex < 32; tryIndex++)
+        {
+            randLoc = randGen.next_vec2({10, 10}, match.start_params->world_size_regions * world_terrain::REGION_SIZE - world_location {10, 10});
+            if (match_is_valid_pick(server, slot_index, playerID, randLoc)) break;
+        }
+        match_pick_start_location(server, slot_index, playerID, randLoc, true);
     }
 
     server.logf("MATCH", LOG_SUCCESS, "Match started on slot %d.", slot_index);

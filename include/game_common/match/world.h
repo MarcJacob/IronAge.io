@@ -305,4 +305,11 @@ bool query_entity_state_army(const match_world_state& world, entity_guid entity,
 
 bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player);
 
+// Minimum distance (in tiles) between a new settlement and the closest other settlement.
+constexpr ui32 SETTLEMENT_MIN_DISTANCE = 16;
+
+// Returns whether the location is a valid place for the player to build a settlement: buildable terrain, tile unclaimed or owned by the player,
+// and at least SETTLEMENT_MIN_DISTANCE tiles away from every settlement.
+bool world_is_valid_settlement_location(const match_world_state& world, world_location loc, match_player_id player);
+
 #endif // MATCH_WORLD_INCLUDED
