@@ -35,15 +35,17 @@ extern struct _ASSERTION_HANDLER
 #define ASSERT(exp)  \
     if (!(exp)) \
     { \
-        if (_ASSERTION_HANDLER_PTR == nullptr || _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC == nullptr) _assert_break(); \
-        else _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC(); \
+        if (_ASSERTION_HANDLER_PTR != nullptr && _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC != nullptr) _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC(#exp, __FILE_NAME__, __LINE__); \
+        if (_ASSERTION_HANDLER_PTR == nullptr || _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC == nullptr) _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC(); \
+        else  _assert_break(); \
     }
 
 #define ASSERT_MSG(exp, fail_msg, ...) \
     if (!(exp)) \
     {			\
-        if (_ASSERTION_HANDLER_PTR == nullptr || _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC == nullptr) _assert_break_verbose(fail_msg); \
-        else _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC((fail_msg), __FILE_NAME__, __LINE__, ##__VA_ARGS__);	\
+        if (_ASSERTION_HANDLER_PTR != nullptr && _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC != nullptr) _ASSERTION_HANDLER_PTR->ASSERT_MSG_FUNC(fail_msg, __FILE_NAME__, __LINE__); \
+        if (_ASSERTION_HANDLER_PTR == nullptr || _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC == nullptr) _ASSERTION_HANDLER_PTR->ASSERT_EXIT_FUNC(); \
+        else  _assert_break_verbose(fail_msg); \
     }
 
 #endif // CORE_ASSERT_INCLUDED
