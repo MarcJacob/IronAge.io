@@ -3,6 +3,7 @@
 #include "game_common/match/commands.h"
 #include "game_common/match/world.h"
 #include "world_sim/world_sim.h"
+#include "world_sim/world_tile_travel.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
@@ -29,6 +30,7 @@ bool command_server_spawn_player_apply(match_world_state& world, match_player_id
         .owner = command.spawned_player,
         .location = command.spawn_location,
         .population = 500,
+        .local_wealth = 10000,
         .tier = 1,
     };
 
@@ -165,6 +167,115 @@ void command_spawn_army_apply(match_world_state& world, match_player_id player, 
 	world_settlement_decrease_population(world, command.settlement, SPAWN_ARMY_POPULATION_COST);
 }
 
+// BUILD ROAD
+
+// Local wealth paid per unit of road building cost. @PLACEHOLDER(tune)
+constexpr ui32 BUILD_ROAD_WEALTH_PER_COST = 1;
+
+// Cost of building the road along the path: the travel cost of each of its tiles that is not already a road, plus the wilderness extra cost if unowned.
+// Weighted like the pathfinder does. The path's first tile is a start tile, so it is free.
+static ui32 command_build_road_cost(const match_world_state& world, const path_view& path)
+{
+	ui32 cost = 0;
+	for (ui32 i = 1; i < path.tile_count; i++)
+	{
+		ui16 regionIndex, tileIndex;
+		world_get_tile(world.terrain, path.tiles[i], regionIndex, tileIndex);
+		if (world.terrain.regions[regionIndex].status[tileIndex].is_road) continue;
+
+		ui32 tileCost = world_get_tile_travel_cost(world.terrain, regionIndex, tileIndex);
+		if (world.terrain.regions[regionIndex].owners[tileIndex] == world_terrain::UNOWNED_TILE) tileCost += TILE_WILDERNESS_EXTRA_COST;
+
+		bool isDiagonal = path.tiles[i].x != path.tiles[i - 1].x && path.tiles[i].y != path.tiles[i - 1].y;
+		cost += tileCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
+	}
+	return cost * BUILD_ROAD_WEALTH_PER_COST;
+}
+
+// Checks the command, finds (or reuses) the road path and checks that the settlement can afford it. Returns false if the road can't be built.
+// The path stays stored, so a following call with the same command in the same epoch reuses it.
+static bool command_build_road_find_path(const match_world_state& world, match_player_id player, const command_data_build_road& command,
+	path_view& out_path, ui32& out_cost)
+{
+	if (!world_entity_is_valid(world, command.origin_settlement)) return false;
+	if (command.origin_settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
+
+	const world_terrain& terrain = world.terrain;
+	const world_entity_settlements& settlements = world.entities.settlements;
+	ui16 settlementIndex = command.origin_settlement.get_index();
+	if (settlements.owners[settlementIndex] != player) return false;
+
+	// The target must be a land tile, owned by the settlement or by nobody.
+	if (command.target.x >= terrain.size_tiles.x || command.target.y >= terrain.size_tiles.y) return false;
+	ui16 targetRegion, targetTile;
+	world_get_tile(terrain, command.target, targetRegion, targetTile);
+	if (terrain.regions[targetRegion].terrain_types[targetTile] >= TERRAIN_TILE_TYPE::WATER_COAST) return false;
+	ui16 targetOwner = terrain.regions[targetRegion].owners[targetTile];
+	if (targetOwner != world_terrain::UNOWNED_TILE && targetOwner != settlementIndex) return false;
+
+	// Start tiles: the settlement's tile first, then the road tiles it owns in row order.
+	// @TODO(Marc): Roads beyond the start list capacity are ignored, which also makes the path uncacheable if exceeded.
+	world_location starts[world_path_store::SLOT_TILE_CAPACITY];
+	ui32 startCount = 0;
+	starts[startCount++] = settlements.locations[settlementIndex];
+	const world_location boundsMin = settlements.influences[settlementIndex].bounds_min;
+	const world_location boundsMax = settlements.influences[settlementIndex].bounds_max;
+	for (ui32 y = boundsMin.y; y <= boundsMax.y; y++)
+	{
+		for (ui32 x = boundsMin.x; x <= boundsMax.x; x++)
+		{
+			if (startCount >= world_path_store::SLOT_TILE_CAPACITY) break;
+
+			ui16 regionIndex, tileIndex;
+			world_get_tile(terrain, { (ui16)x, (ui16)y }, regionIndex, tileIndex);
+			if (terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) continue;
+			if (!terrain.regions[regionIndex].status[tileIndex].is_road) continue;
+			if (settlements.locations[settlementIndex] == world_location{ (ui16)x, (ui16)y }) continue;
+			starts[startCount++] = { (ui16)x, (ui16)y };
+		}
+	}
+
+	path_params params = {};
+	params.maritime = false;
+	params.allow_wilderness = true;
+	params.wilderness_extra_cost = TILE_WILDERNESS_EXTRA_COST;
+	params.only_settlement = command.origin_settlement;
+	params.only_player = INVALID_MATCH_PLAYER_ID;
+	params.max_nodes = world_path_store::SEARCH_NODE_CAPACITY;
+
+	path_handle handle = path_find(world, starts, startCount, command.target, params);
+	if (!path_get(world, handle, out_path)) return false;
+	if (out_path.status != PATH_COMPLETE) return false;
+
+	out_cost = command_build_road_cost(world, out_path);
+	return out_cost <= settlements.local_wealths[settlementIndex];
+}
+
+bool command_build_road_validity_check(const match_world_state& world, match_player_id player, const command_data_build_road& command)
+{
+	path_view path;
+	ui32 cost;
+	return command_build_road_find_path(world, player, command, path, cost);
+}
+
+// Flags the path's tiles as roads, and pays for them from the settlement's local wealth.
+void command_build_road_apply(match_world_state& world, match_player_id player, const command_data_build_road& command)
+{
+	// Checked again, as everywhere. On the server the path is normally reused from the validity check, clients compute it here.
+	path_view path;
+	ui32 cost;
+	if (!command_build_road_find_path(world, player, command, path, cost)) return;
+
+	world.entities.settlements.local_wealths[command.origin_settlement.get_index()] -= cost;
+	for (ui32 i = 0; i < path.tile_count; i++)
+	{
+		ui16 regionIndex, tileIndex;
+		world_get_tile(world.terrain, path.tiles[i], regionIndex, tileIndex);
+		world.terrain.regions[regionIndex].status[tileIndex].is_road = true;
+		world.terrain.regions[regionIndex].status[tileIndex].proximity_recalc = true;
+	}
+}
+
 // ENTITY SET ATTACK TARGET
 
 bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player, const command_data_set_entity_attack_target& command)
@@ -215,6 +326,8 @@ bool match_command_validity_check(const match_world_state& world, match_player_i
 			return command_found_settlement_validity_check(world, player, command.get_command_data<command_data_found_settlement>());
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 			return command_spawn_army_validity_check(world, player, command.get_command_data<command_data_spawn_army>());
+		case MATCH_COMMAND_TYPE::BUILD_ROAD:
+			return command_build_road_validity_check(world, player, command.get_command_data<command_data_build_road>());
         case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
             return command_server_spawn_player_validity_check(world, player, command.get_command_data<command_data_server_spawn_player>());
 		default:
@@ -245,9 +358,15 @@ inline void match_command_apply(match_world_state& world, match_player_id player
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         command_server_spawn_player_apply(world, player, command.get_command_data<command_data_server_spawn_player>());
         break;
+	case MATCH_COMMAND_TYPE::BUILD_ROAD:
+		command_build_road_apply(world, player, command.get_command_data<command_data_build_road>());
+		break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
 	}
+
+	// Whatever the command did may change path results: stored paths must not be reused after this.
+	world.paths->epoch++;
 }
 
 void match_command_apply_all(match_world_state& world, const match_tick_commands& tick_commands)
@@ -307,6 +426,10 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 			isValid = command_spawn_army_validity_check(world, player_id,
 				commandHeader.get_command_data<command_data_spawn_army>());
+			break;
+		case MATCH_COMMAND_TYPE::BUILD_ROAD:
+			isValid = command_build_road_validity_check(world, player_id,
+				commandHeader.get_command_data<command_data_build_road>());
 			break;
 		default:
 			// Only assert if the command type IS valid but not handled.

@@ -3,13 +3,14 @@
 // DOM is only touched when the text / visibility actually changed.
 
 import * as Backend from "./backend.js"
-import { get_selected_entity_guid, get_selected_entity_view, send_found_settlement, send_spawn_army } from "./input.js"
+import { enter_road_construction, get_selected_entity_guid, get_selected_entity_view, is_in_construction, send_found_settlement, send_spawn_army } from "./input.js"
 import { get_local_player_id } from "./main.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
 let foundSettlementButton: HTMLElement | null = null;
 let spawnArmyButton: HTMLElement | null = null;
+let buildRoadButton: HTMLElement | null = null;
 
 // Minimum settlement population to offer spawning an army (test-grade).
 const SPAWN_ARMY_MIN_POPULATION = 100;
@@ -29,6 +30,12 @@ export function init_game_ui(): void
     spawnArmyButton.addEventListener('click', () => {
         const guid = get_selected_entity_guid();
         if (guid !== null) send_spawn_army(guid);
+    });
+
+    buildRoadButton = document.getElementById("game_hud_build_road") as HTMLElement;
+    buildRoadButton.addEventListener('click', () => {
+        const guid = get_selected_entity_guid();
+        if (guid !== null) enter_road_construction(guid);
     });
 }
 
@@ -71,7 +78,7 @@ function entity_view_text(view: Backend.EntityView): string
 // Per-frame refresh. Call once the match is running.
 export function update_game_ui(): void
 {
-    if (selectedPanelElement === null || selectedTextElement === null || foundSettlementButton === null || spawnArmyButton === null) return;
+    if (selectedPanelElement === null || selectedTextElement === null || foundSettlementButton === null || spawnArmyButton === null || buildRoadButton === null) return;
 
     // Re-query the selected entity every frame so its values stay live.
     const view = get_selected_entity_view();
@@ -88,4 +95,9 @@ export function update_game_ui(): void
     const canSpawnArmy = view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === get_local_player_id()
         && view.settlement !== undefined && view.settlement.population >= SPAWN_ARMY_MIN_POPULATION;
     set_hidden(spawnArmyButton, !canSpawnArmy);
+
+    const canBuildRoad = view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === get_local_player_id();
+    set_hidden(buildRoadButton, !canBuildRoad);
+    const roadButtonText = is_in_construction() ? "Click target tile (right click cancels)" : "Build road";
+    if (buildRoadButton.textContent !== roadButtonText) buildRoadButton.textContent = roadButtonText;
 }
