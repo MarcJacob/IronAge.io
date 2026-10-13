@@ -50,7 +50,7 @@ struct match_slot
 	game_match_start_params* match_params; // Parameters for the current or next match (valid when in lobby or in a match).
 
 	match_player* players; // Array of match_params->player_count entries, indexed by player index. Allocated once match_params is known.
-
+    ui16 connection_count; // Counts the number of clients connected to the match.
 
 	union
 	{
@@ -80,6 +80,10 @@ struct game_server;
 
 // Attaches a client as the controller of a free player index in the slot. Writes the assigned index to out_player_index on success.
 bool game_server_slot_attach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
+
+// Detaches the client from the match slot if it is attached, freeing its player index slot / replacing it with an AI player depending on slot state.
+// Returns whether the client was actually attached to the slot.
+bool game_server_slot_detach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle);
 
 // Handles a game message from the client. Returns whether the message was handled.
 bool game_server_match_slot_handle_message(game_server& server, game_server_client::client_handle client_handle, const game_message_header& msg);

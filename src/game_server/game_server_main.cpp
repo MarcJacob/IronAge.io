@@ -3,6 +3,8 @@
 
 // Main "chaining" of game server platform and game server internals.
 #include "core/assert.h"
+#include "core/math/random.h"
+#include "game_common/match/start_params.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -62,11 +64,15 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
     // @TEST(Marc): Any Game Client not attached to a match gets attached to one.
 	if (client.game_client.match_slot == INVALID_MATCH_SLOT_INDEX)
 	{
-		ui16 playerIndex = 0;
-		if (game_server_slot_attach_client(server, 0, client.handle, playerIndex))
-		{
-			server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot 0 as player %d.", client.handle.value, playerIndex);
-		}
+        for (match_slot_index slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
+        {
+		    ui16 playerIndex = 0;
+            if (game_server_slot_attach_client(server, slotIndex, client.handle, playerIndex))
+            {
+                server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot 0 as player %d.", client.handle.value, playerIndex);
+                break;
+            }
+        }
 	}
 
     // Handle message reception.
@@ -86,7 +92,6 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
         }
 
         // Just go through a list of known message handlers until one of them says they've handled it, then try our own handlers.
-        
         bool handled = game_server_match_slot_handle_message(server, client.handle, *msgPtr);
         // || ... (More handlers...)
 
@@ -212,14 +217,6 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	newServer->web = web_server_init(*newServer);
 	web_server_reload_files(*newServer);
 
-	// TEMP(Marc): Until we have a full working match slot lifecycle with join request messages from clients, just set slot 0 to lobby and redirect all players there.	
-	{
-		// .. Get parameters from test scenario.
-		newServer->match_slots[0].match_params = match_test_scenario_get_params(
-                newServer->match_slots[0].slot_memory, (ui32)(iptr)&newServer, 2);
-		game_server_open_lobby(*newServer, 0);
-	}
-
 	newServer->log(LOG_SUCCESS, "Game Server initialization successful.\n");
 	return newServer;
 }
@@ -261,6 +258,10 @@ void game_server_query_closed_connections(game_server& server)
 
             // Signal relevant subsystems.
             web_server_on_client_disconnected(server, client);
+            if (client.type == game_server_client::TYPE::GAME_CLIENT)
+            {
+                game_server_slot_detach_client(server, client.game_client.match_slot, client.handle);
+            }
 
             // Remove client from clients table.
             clients_table_remove_client(server, client.handle);
@@ -298,6 +299,20 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 
 		// ...
 	}
+
+    // Update match slots.
+    for (match_slot_index slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
+    {
+        // If a slot is waiting, open it as a new lobby with test params.
+        match_slot& slot = server.match_slots[slotIndex];
+
+        if (slot.state == MATCH_SLOT_STATE::WAITING)
+        {
+            // Test parameters, two players, random seed.
+            slot.match_params = match_test_scenario_get_params(slot.slot_memory, ia_xorshift_i32(), 2);
+            game_server_open_lobby(server, slotIndex);
+        }
+    }
 
 	// Process GAME_CLIENT type client connections.
     // Will handle game message reception & dispatch.

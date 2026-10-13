@@ -230,7 +230,6 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index)
 	slot.state = MATCH_SLOT_STATE::MATCH_ENDED;
 
 	// TO IMPLEMENT.
-
 	return true;
 }
 
@@ -247,6 +246,15 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 
 	server.logf("MATCH", LOG_NORMAL, "Resetting server match slot index %d.", slot_index);
 
+    // Boot out all attached clients if they're still here.
+    for (match_player_id playerID = 0; slot.match_params != nullptr && playerID < slot.match_params->player_count; playerID++)
+    {
+        if (slot.players[playerID].bIsClientPlayer)
+        {
+            game_server_slot_detach_client(server, slot_index, slot.players[playerID].client);
+        }
+    }
+
 	// Zero out the slot and set it back to waiting. Conserve only its memory.
 
 	mem_arena slot_mem = slot.slot_memory;
@@ -259,24 +267,27 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
     slot.slot_memory.clear();
 
 	// From there the slot can be put into lobby mode to start accepting players, or directly have its parameters set and match started.
-
 	return true;
 }
 
 bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_server_client::client_handle client_handle, ui16& out_player_index)
 {
+
 	ASSERT(slot_index < server.init_params.match_slot_count);
 	match_slot& slot = server.match_slots[slot_index];
 
 	ASSERT(slot.state == MATCH_SLOT_STATE::IN_LOBBY
 		|| slot.state == MATCH_SLOT_STATE::MATCH_ONGOING);
 
+    server.logf("MATCH", LOG_NORMAL, "Attaching client %d, PLAYER INDEX = %hu", client_handle.value, client.game_client.player_index);
 	game_server_client* clientPtr = game_server_get_client_data(server, client_handle);
 	ASSERT(clientPtr != nullptr);	
 	
 	game_server_client& client = *clientPtr;
-	ASSERT(client.type == game_server_client::TYPE::GAME_CLIENT);
 
+	ASSERT(client.type == game_server_client::TYPE::GAME_CLIENT);
+    ASSERT(client.game_client.match_slot == INVALID_MATCH_SLOT_INDEX);
+    ASSERT(client.game_client.player_index == INVALID_MATCH_PLAYER_ID);
 
 	if (slot.match_params == nullptr)
 	{
@@ -292,8 +303,10 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 																						// Later this will change to being any slot that was NEVER assigned to a client.
 		player.client = client_handle;
 		out_player_index = playerIndex;
+
         client.game_client.player_index = playerIndex;
         client.game_client.match_slot = slot_index;
+
 		attachSuccessful = true;
 		break;
 	}
@@ -303,33 +316,98 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 		server.logf("MATCH", LOG_WARNING, "Match slot %d has no free player index to attach a client to.", slot_index);
 		return false;
 	}
+
+    slot.connection_count++;
+
 	return true;
 }
 
-// Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
-static void game_server_tick_match_slot_lobby(game_server& server, ui8 slotIndex, ui8 connectionCount)
+bool game_server_slot_detach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle)
 {
-	if (connectionCount < 2) return; // Wait until a player connects.
+    match_slot& slot = server.match_slots[slot_index];
 
-	if (!game_server_start_match_slot(server, slotIndex))
+    match_player_id freedSlot = INVALID_MATCH_PLAYER_ID;
+
+    // If client is active on the server and has valid data, we can just check its slot index and lookup its player index.
+    // For robustness, any failure skip to the full check in case data has become incoherent.
+    game_server_client* clientPtr = game_server_get_client_data(server, client_handle);
+    if (clientPtr != nullptr)
     {
-        server.logf("Match", LOG_ERROR, "Failed to start match on slot %d !", slotIndex);
+        if (clientPtr->type == game_server_client::TYPE::GAME_CLIENT 
+        && clientPtr->game_client.match_slot == slot_index
+        && clientPtr->game_client.player_index <= slot.match_params->player_count
+        && slot.players[clientPtr->game_client.player_index].client.value == client_handle.value) 
+        {
+            slot.players[clientPtr->game_client.player_index].client = {};
+            slot.players[clientPtr->game_client.player_index].bIsClientPlayer = false;
+
+            clientPtr->game_client.match_slot = INVALID_MATCH_SLOT_INDEX;
+            clientPtr->game_client.player_index = INVALID_MATCH_PLAYER_ID;
+
+            goto SUCCESS;
+        }
+    }
+
+    // Game client is no longer valid or has incoherent data. Perform a full check and free up whatever player index the handle takes up, if any.
+    for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+    {
+        if (slot.players[playerID].bIsClientPlayer && slot.players[playerID].client.value == client_handle.value)
+        {
+            slot.players[playerID].client = {};
+            slot.players[playerID].bIsClientPlayer = false;
+
+            goto SUCCESS;   
+        }
+    }
+
+NO_PLAYER:
+    return false;
+
+SUCCESS:
+    ASSERT(slot.connection_count > 0);
+    slot.connection_count--;
+    // TODO: Spawn an AI player for freed player index if match is ongoing.
+
+    server.logf("MATCH", LOG_NORMAL, "Detached client %ud from match slot %d. Freed player index = %uh.", client_handle.value, freedSlot);
+    return true;
+}
+
+// Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
+static void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index)
+{
+    // TEST: Count how many active connections there are. Once there are 2, start the match.
+    ui8 connectionCount = 0;
+
+    match_slot& slot = server.match_slots[slot_index];
+
+    if (slot.state == MATCH_SLOT_STATE::IN_LOBBY || slot.state == MATCH_SLOT_STATE::MATCH_ONGOING)
+    {
+        for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+        {
+            const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+            if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+            connectionCount++;
+        }
+    }
+
+	if (connectionCount < slot.match_params->player_count) return; // Wait until a player connects.
+
+	if (!game_server_start_match_slot(server, slot_index))
+    {
+        server.logf("Match", LOG_ERROR, "Failed to start match on slot %d !", slot_index);
     }
 }
 
 // Ticks a match slot with an ongoing match: gathers input, simulates & relays as many ticks as have elapsed since last time.
-static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slotIndex, ui8 connectionCount)
+static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 {
-	match_slot& slot = server.match_slots[slotIndex];
+	match_slot& slot = server.match_slots[slot_index];
 
 	// End match early if all players disconnect.
-	if (connectionCount == 0)
+	if (slot.connection_count == 0)
 	{
-		server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slotIndex);
-		game_server_end_match_slot(server, slotIndex);
-
-		// TEMP: Until the full match lifecycle + clients delayed joining are here, just shut the server down along with the match.
-		server.platform->shutdown(0);
+		server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slot_index);
+		game_server_end_match_slot(server, slot_index);
 		return;
 	}
 
@@ -393,27 +471,25 @@ void game_server_tick_match_slots(game_server& server)
 	{
 		match_slot& slot = server.match_slots[slotIndex];
 
-		// TEST: Count how many active connections there are. Once there are 2, start the match.
-		ui8 connectionCount = 0;
-
-		if (slot.state == MATCH_SLOT_STATE::IN_LOBBY || slot.state == MATCH_SLOT_STATE::MATCH_ONGOING)
-		{
-			for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
-			{
-				const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
-				if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
-				connectionCount++;
-			}
-		}
-
 		switch (slot.state)
 		{
+        case MATCH_SLOT_STATE::WAITING:
+            // Wait for server to open lobby.
+            break;
 		case MATCH_SLOT_STATE::IN_LOBBY:
-			game_server_tick_match_slot_lobby(server, slotIndex, connectionCount);
+			game_server_tick_match_slot_lobby(server, slotIndex);
 			break;
 		case MATCH_SLOT_STATE::MATCH_ONGOING:
-			game_server_tick_match_slot_ongoing(server, slotIndex, connectionCount);
+			game_server_tick_match_slot_ongoing(server, slotIndex);
 			break;
+        case MATCH_SLOT_STATE::MATCH_ENDED:
+            // ... TODO: Wait until match results have been transmitted to all player & master server.
+
+            // FALLTHROUGH
+        case MATCH_SLOT_STATE::AWAITING_CLEANUP:
+            // Reset slot.
+            game_server_reset_match_slot(server, slotIndex);
+            break;
 		default:
 			// Do nothing.
 			break;

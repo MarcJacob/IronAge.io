@@ -18,7 +18,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 
 	params.tick_rate = 20;
 	params.random_seed = seed;
 	params.player_count = player_count;
-	params.world_size_regions = { 1, 1 };
+	params.world_size_regions = { 2, 2 };
 
 	return &params;
 }

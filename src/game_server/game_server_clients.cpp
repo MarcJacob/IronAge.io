@@ -117,7 +117,9 @@ void game_server_promote_game_client(game_server& server, game_server_client::cl
     // Change client type and reset its specific properties (the union member still holds the previous type's data).
 	client.type = game_server_client::TYPE::GAME_CLIENT;
     ia_memzero(&client.game_client, sizeof(client.game_client));
+
     client.game_client.match_slot = INVALID_MATCH_SLOT_INDEX;
+    client.game_client.player_index = INVALID_MATCH_PLAYER_ID;
     // ...
 
     client.game_client.in_messages_buffer = reception_buffer_ptr;
