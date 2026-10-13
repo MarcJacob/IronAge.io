@@ -7,9 +7,10 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
 import { init_render, draw } from './render.js';
-import { init_input } from './input.js';
+import { init_input, clear_selected_entity } from './input.js';
 import { FRONTEND_CAMERA, init_camera_system } from './camera.js';
-import { init_game_ui, update_game_ui } from './game_ui.js';
+import { init_game_ui, update_game_ui, set_game_ui_visible } from './game_ui.js';
+import { init_lobby_ui, show_lobby, show_match_ended, hide_lobby } from './lobby_ui.js';
 
 // Game / Client state
 
@@ -35,10 +36,35 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
     const messageType = Backend.process_net_message(new Core.ByteBuffer(event.data));
     if (messageType === Backend.MESSAGE_TYPE.INVALID) return; // Message could not be processed: nothing changed.
 
+    if (messageType === Backend.MESSAGE_TYPE.LOBBY_JOINED)
+    {
+        show_lobby(Backend.read_lobby_joined_payload());
+    }
+
+    // The backend already dropped its local match: clear what the frontend holds of it and fall back to the lobby screen.
+    if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
+    {
+        console.log("Match ended.");
+
+        IN_A_MATCH = false;
+        LOCAL_PLAYER_ID = null;
+        Backend.clear_render_state();
+        clear_selected_entity();
+
+        canvas.hidden = true;
+        set_game_ui_visible(false);
+        show_match_ended(Backend.read_match_ended_winner());
+
+        Core.broadcast_on_match_ended();
+    }
+
     // On joining a match, reveal the canvas and start drawing. Rendering/input were already set up at start().
-    if (messageType === Backend.MESSAGE_TYPE.MATCH_JOINED)
+    if (messageType === Backend.MESSAGE_TYPE.MATCH_STARTED)
     {
         console.log("Joined match.");
+
+        hide_lobby();
+        set_game_ui_visible(true);
 
         // Perform the first render state update on the backend.
         Backend.update_render_state();
@@ -103,6 +129,7 @@ async function start()
 
     // Initialize in-match HUD.
     init_game_ui();
+    init_lobby_ui();
 
     // Initialize websocket conneciton.
     const socket = new WebSocket(websocket_url());

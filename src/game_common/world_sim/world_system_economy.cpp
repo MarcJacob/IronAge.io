@@ -366,7 +366,7 @@ static bool world_influence_can_push(const match_world_state& world, ui16 border
     // Compare: attacker_ratio * proximity_ratio > defender_ratio
     i64 attackerEffective = (i64)attackerRatio * proximityRatio;
     
-    return attackerEffective > (i64)defenderRatio * 1100; // Give slight advantage to defender.
+    return attackerEffective > (i64)defenderRatio * 1400; // Give slight advantage to defender.
 }
 
 // Returns true if the border tile has at least one non-diagonal neighbour the settlement could expand into.

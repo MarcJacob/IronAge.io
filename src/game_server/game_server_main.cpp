@@ -69,7 +69,7 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
 		    ui16 playerIndex = 0;
             if (game_server_slot_attach_client(server, slotIndex, client.handle, playerIndex))
             {
-                server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot 0 as player %d.", client.handle.value, playerIndex);
+                server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot %d as player %d.", client.handle.value, slotIndex, playerIndex);
                 break;
             }
         }
@@ -258,7 +258,7 @@ void game_server_query_closed_connections(game_server& server)
 
             // Signal relevant subsystems.
             web_server_on_client_disconnected(server, client);
-            if (client.type == game_server_client::TYPE::GAME_CLIENT)
+            if (client.type == game_server_client::TYPE::GAME_CLIENT && client.game_client.match_slot != INVALID_MATCH_SLOT_INDEX)
             {
                 game_server_slot_detach_client(server, client.game_client.match_slot, client.handle);
             }
@@ -308,7 +308,7 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 
         if (slot.state == MATCH_SLOT_STATE::WAITING)
         {
-            // Test parameters, two players, random seed.
+            // Test parameters, 2 players, random seed.
             slot.match_params = match_test_scenario_get_params(slot.slot_memory, ia_xorshift_i32(), 2);
             game_server_open_lobby(server, slotIndex);
         }

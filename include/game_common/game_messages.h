@@ -10,7 +10,8 @@
 // Each type features a high-level description of its functionality. More detail can be found atop the corresponding payload structure.
 enum class GAME_MESSAGE_TYPE : ui8
 {
-	MATCH_JOINED,		// Server -> Client = Contains instructions on the match the client is joining, including which player is controlled.
+	LOBBY_JOINED,		// Server -> Client = Client is in a lobby. Sent on joining and again whenever the lobby's player count changes.
+	MATCH_STARTED,		// Server -> Client = Contains instructions on the match the client is in, including which player is controlled.
 	MATCH_ENDED,		// Server -> Client = Signal of match ending on the server, with result information.
 
 	SERVER_TICK,		// Server -> Client = Input sequence for a specific tick provided by the server to the client. Allows client to progress local match state.
@@ -43,8 +44,20 @@ struct game_message_header
 // BEGIN GAME SERVER CORE MESSAGES
 
 // Server -> Client message payload.
+// Received by a client as signal that it is in a lobby, with the lobby's state. The match starts when the countdown reaches 0.
+// The client can count down locally from countdown_remaining_ms (relative to message reception), a new message corrects it.
+struct game_message_payload_lobby_joined
+{
+	ui32 countdown_remaining_ms; // Time left before the match starts, in milliseconds.
+	ui16 lobby_player_count; // Number of clients currently in the lobby.
+	ui8 match_slot_index; // Index of the server match slot hosting this lobby.
+
+	game_match_start_params match_start_params; // Params the match will start with. match_start_params.player_count is the number of players; unfilled indices become AI players.
+};
+
+// Server -> Client message payload.
 // Received by a client as instruction by the server of what the match starting / current state is, and what player ID they are in control of.
-struct game_message_payload_match_joined
+struct game_message_payload_match_started
 {
 	ui32 join_tick; // What tick the match is currently on as the client joins. Currently this means "You will have to catch up to this tick" if above 0.
 					// TODO: Allow this message (or an alternative form of it) to feature a snapshot of the game state to speedup mid-game joining process ?
@@ -56,10 +69,10 @@ struct game_message_payload_match_joined
 
 // Server -> Client message payload.
 // Received by a client as signal that the match they're in has ended and that the server will supply no further tick messages.
-// Currently this is also a signal that 
+// The connection stays up: the server then puts the client back in a lobby (LOBBY_JOINED).
 struct game_message_payload_match_ended
 {
-	match_player_id winner_id; // ID of the victorious player.
+	match_player_id winner_id; // ID of the victorious player, INVALID_MATCH_PLAYER_ID if none.
 };
 
 // END GAME SERVER CORE MESSAGES
@@ -108,8 +121,10 @@ static inline ui16 get_message_type_payload_size(GAME_MESSAGE_TYPE type)
 {
 	switch (type)
 	{
-	case GAME_MESSAGE_TYPE::MATCH_JOINED:
-		return sizeof(game_message_payload_match_joined);
+	case GAME_MESSAGE_TYPE::LOBBY_JOINED:
+		return sizeof(game_message_payload_lobby_joined);
+	case GAME_MESSAGE_TYPE::MATCH_STARTED:
+		return sizeof(game_message_payload_match_started);
 	case GAME_MESSAGE_TYPE::MATCH_ENDED:
 		return sizeof(game_message_payload_match_ended);
 	case GAME_MESSAGE_TYPE::SERVER_TICK:

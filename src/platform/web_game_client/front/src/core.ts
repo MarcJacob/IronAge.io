@@ -67,6 +67,6 @@ export function broadcast_on_match_joined(): void
 
 export function broadcast_on_match_ended(): void
 {
-    // ... (match ended event for cleanup / menu nav).
+    // ... (match ended event for cleanup / menu nav). No listeners yet: main.ts does the cleanup itself.
 }
 

@@ -70,9 +70,9 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 	switch (header->message_type)
 	{
 	// Signal from the server that a match was just joined by the client. Use the provided parameters to start the local match.
-	case GAME_MESSAGE_TYPE::MATCH_JOINED:
+	case GAME_MESSAGE_TYPE::MATCH_STARTED:
 	{
-		auto& payload = header->get_payload_ref<game_message_payload_match_joined>();
+		auto& payload = header->get_payload_ref<game_message_payload_match_started>();
 
 		backend.controlled_player_id = payload.controlled_player_id;
 
@@ -89,6 +89,19 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 		// Refresh render state so it can take match params into account.
 		game_client_rebuild_render_state(backend.render_state, *backend.local_match);
 
+		break;
+	}
+	// The frontend reads the lobby state straight from the net message buffer: nothing to do here.
+	case GAME_MESSAGE_TYPE::LOBBY_JOINED:
+		break;
+	// Drop the local match so no more ticking, input or queries happen on it, along with any stale output / queued input.
+	case GAME_MESSAGE_TYPE::MATCH_ENDED:
+	{
+		backend.local_match = nullptr;
+		backend.local_match_mem.clear();
+		backend.net_output_msg_size = 0;
+		backend.input.command_queue.clear();
+		ASSERT(backend.input.command_queue_builder.init());
 		break;
 	}
 	// Input commands from the server, for the client to simulate the next match tick with.

@@ -58,4 +58,4 @@ Client Departure:
     - "Politely" tells the Server the client has unilaterally ended the connection, and did so deliberately.
 - Server detects Client is for any reason unable to be a source of inputs for too long = "Kick" message, if needed.
 - On MATCH END = Server -> Client: "Match Ended" message.
-	- Similar to Kick message. **Currently the client can assume this message acts as a Kick and that the connection will be dropped unilaterally**.
+	- Contains the winner player id (or none). **The connection is NOT dropped**: the client resets its local match state and the server re-attaches it to a lobby ("Lobby Joined" message follows).

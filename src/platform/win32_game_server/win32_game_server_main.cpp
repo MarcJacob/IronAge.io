@@ -49,6 +49,7 @@ void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
 	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
 	OutputDebugString(assert_msg_buff);
 
+    _assert_break();
 	raise(SIGABRT);
 }
 
@@ -57,6 +58,8 @@ void ASSERT_EXIT_FUNC()
 {
     win32_log("ASSERT", LOG_ERROR, "Assertion triggered. Ending program...");
     OutputDebugString("Assertion triggered. Ending program...");
+
+    _assert_break();
 	raise(SIGABRT);
 }
 

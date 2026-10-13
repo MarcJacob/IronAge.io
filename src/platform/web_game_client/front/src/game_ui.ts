@@ -32,6 +32,13 @@ export function init_game_ui(): void
     });
 }
 
+// Shows / hides the whole HUD overlay.
+export function set_game_ui_visible(visible: boolean): void
+{
+    const hud = document.getElementById("game_hud") as HTMLElement;
+    hud.hidden = !visible;
+}
+
 // Sets an element's hidden state, only if it differs.
 function set_hidden(element: HTMLElement, hidden: boolean): void
 {

@@ -14,6 +14,76 @@
 #include "match_slots.h"
 #include "../game_server.h"
 
+static constexpr time_ms LOBBY_COUNTDOWN_MS = 60000; // Time between the first client joining a lobby and its match starting.
+static constexpr ui32 MATCH_END_CHECK_INTERVAL_TICKS = 30; // Placeholder end condition is checked every this many ticks.
+static constexpr ui64 MATCH_END_POPULATION_PERCENT = 80; // Placeholder end condition: one player controls this much of the world population.
+
+// Sends a message to every live game client attached to the slot.
+static void game_server_slot_broadcast(game_server& server, match_slot& slot, const game_message_header& msg)
+{
+	for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
+	{
+		game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
+		if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
+
+		playerClient->game_client_send_message(msg);
+	}
+}
+
+// Sends the lobby's state (countdown, player count, slot index, match params) to every client in it.
+static void game_server_slot_send_lobby_state(game_server& server, match_slot& slot, match_slot_index slot_index)
+{
+	ui8 msgBuff[64];
+	mem_arena msgMem = mem_arena_create(msgBuff, sizeof(msgBuff));
+
+	game_message_header* msgHeader = build_game_message(GAME_MESSAGE_TYPE::LOBBY_JOINED, msgMem);
+	ASSERT(msgHeader);
+
+	auto& payload = msgHeader->get_payload_ref<game_message_payload_lobby_joined>();
+	payload.countdown_remaining_ms = (slot.countdown_active && slot.countdown_end_ms > server.uptime_ms) ? (ui32)(slot.countdown_end_ms - server.uptime_ms) : 0;
+	payload.lobby_player_count = slot.connection_count;
+	payload.match_slot_index = slot_index;
+	ia_memcpy(&payload.match_start_params, slot.match_params, sizeof(game_match_start_params));
+
+	game_server_slot_broadcast(server, slot, *msgHeader);
+}
+
+// Returns the player controlling at least MATCH_END_POPULATION_PERCENT of the world's total settlement population, or INVALID_MATCH_PLAYER_ID if none does.
+static match_player_id game_server_find_dominant_player(const match_world_state& world)
+{
+	const world_entity_settlements& settlements = world.entities.settlements;
+
+	// Weighted majority vote (Boyer-Moore) finds the only player who could hold more than half the population, without per-player storage.
+	ui64 totalPopulation = 0;
+	match_player_id candidate = INVALID_MATCH_PLAYER_ID;
+	ui64 votes = 0;
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+		ui64 population = settlements.populations[settlementIndex];
+		totalPopulation += population;
+
+		if (settlements.owners[settlementIndex] == candidate) votes += population;
+		else if (votes >= population) votes -= population;
+		else
+		{
+			candidate = settlements.owners[settlementIndex];
+			votes = population - votes;
+		}
+	}
+
+	if (totalPopulation == 0 || candidate == INVALID_MATCH_PLAYER_ID) return INVALID_MATCH_PLAYER_ID;
+
+	ui64 candidatePopulation = 0;
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (settlements.guids[settlementIndex].is_valid() && settlements.owners[settlementIndex] == candidate) candidatePopulation += settlements.populations[settlementIndex];
+	}
+
+	return (candidatePopulation * 100 >= totalPopulation * MATCH_END_POPULATION_PERCENT) ? candidate : INVALID_MATCH_PLAYER_ID;
+}
+
 void match_slot_handle_message_client_tick(match_slot& slot, game_server_client* player_client, const game_message_header& msg)
 {
     const auto& payload = msg.get_payload_ref<game_message_payload_client_tick>();
@@ -121,7 +191,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
 
-	// Send MATCH JOINED message to all connected clients.
+	// Send MATCH STARTED message to all connected clients.
     i16 humanPlayerCount = 0;
     {
         ui8 msg_scratch_buff[2048];
@@ -129,10 +199,10 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
         // Allocate message, adding extra data size of the match parameters as extra bytes.
 
-        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_JOINED, msg_scratch_mem, 0);
+        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_STARTED, msg_scratch_mem, 0);
         ASSERT(joinMsgHeader);
 
-        auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_joined>();
+        auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_started>();
         joinMsgPayload = {};
 
         // Copy start params.
@@ -213,8 +283,8 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	return true;
 }
 
-bool game_server_end_match_slot(game_server& server, ui8 slot_index)
-{	
+bool game_server_end_match_slot(game_server& server, ui8 slot_index, match_player_id winner_id)
+{
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
 	match_slot& slot = server.match_slots[slot_index];
@@ -229,7 +299,16 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index)
 
 	slot.state = MATCH_SLOT_STATE::MATCH_ENDED;
 
-	// TO IMPLEMENT.
+	// Notify attached clients.
+	ui8 msgBuff[64];
+	mem_arena msgMem = mem_arena_create(msgBuff, sizeof(msgBuff));
+
+	game_message_header* msgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_ENDED, msgMem);
+	ASSERT(msgHeader);
+	msgHeader->get_payload_ref<game_message_payload_match_ended>().winner_id = winner_id;
+
+	game_server_slot_broadcast(server, slot, *msgHeader);
+
 	return true;
 }
 
@@ -238,18 +317,19 @@ bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
 	match_slot& slot = server.match_slots[slot_index];
-	if (slot.state != MATCH_SLOT_STATE::MATCH_ENDED)
+	if (slot.state != MATCH_SLOT_STATE::MATCH_ENDED && slot.state != MATCH_SLOT_STATE::AWAITING_CLEANUP)
 	{
-		server.logf("MATCH", LOG_ERROR, "Attempted to reset match slot %d which wasn't and ended match.", slot_index);
+		server.logf("MATCH", LOG_ERROR, "Attempted to reset match slot %d which wasn't ended or awaiting cleanup.", slot_index);
 		return false;
 	}
 
 	server.logf("MATCH", LOG_NORMAL, "Resetting server match slot index %d.", slot_index);
 
-    // Boot out all attached clients if they're still here.
-    for (match_player_id playerID = 0; slot.match_params != nullptr && playerID < slot.match_params->player_count; playerID++)
+    // Detach all attached clients if they're still here, so they can be attached to a lobby again.
+    // Checked on the live client rather than bIsClientPlayer, which is only set once a match starts.
+    for (match_player_id playerID = 0; slot.match_params != nullptr && slot.players != nullptr && playerID < slot.match_params->player_count; playerID++)
     {
-        if (slot.players[playerID].bIsClientPlayer)
+        if (game_server_get_client_data(server, slot.players[playerID].client) != nullptr)
         {
             game_server_slot_detach_client(server, slot_index, slot.players[playerID].client);
         }
@@ -276,8 +356,8 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 	ASSERT(slot_index < server.init_params.match_slot_count);
 	match_slot& slot = server.match_slots[slot_index];
 
-	ASSERT(slot.state == MATCH_SLOT_STATE::IN_LOBBY
-		|| slot.state == MATCH_SLOT_STATE::MATCH_ONGOING);
+	// Only lobbies accept clients: the caller is free to try every slot.
+	if (slot.state != MATCH_SLOT_STATE::IN_LOBBY) return false;
 
 	game_server_client* clientPtr = game_server_get_client_data(server, client_handle);
 	ASSERT(clientPtr != nullptr);	
@@ -319,12 +399,35 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 
     slot.connection_count++;
 
+	// The first client to join starts the countdown.
+	if (!slot.countdown_active)
+	{
+		slot.countdown_active = true;
+		slot.countdown_end_ms = server.uptime_ms + LOBBY_COUNTDOWN_MS;
+	}
+
+	// All player indices filled: no reason to wait for the countdown.
+	if (slot.connection_count >= slot.match_params->player_count)
+	{
+		server.logf("MATCH", LOG_NORMAL, "Lobby on slot %d is full. Starting match immediately.", slot_index);
+		if (!game_server_start_match_slot(server, slot_index))
+		{
+			server.logf("MATCH", LOG_ERROR, "Failed to start match on slot %d !", slot_index);
+		}
+		return true; // The client is attached either way.
+	}
+
+	game_server_slot_send_lobby_state(server, slot, slot_index);
+
 	return true;
 }
 
 bool game_server_slot_detach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle)
 {
+    if (slot_index >= server.init_params.match_slot_count) return false; // Client isn't attached to any slot.
+
     match_slot& slot = server.match_slots[slot_index];
+    if (slot.match_params == nullptr || slot.players == nullptr) return false;
 
     match_player_id freedSlot = INVALID_MATCH_PLAYER_ID;
 
@@ -335,9 +438,11 @@ bool game_server_slot_detach_client(game_server& server, match_slot_index slot_i
     {
         if (clientPtr->type == game_server_client::TYPE::GAME_CLIENT 
         && clientPtr->game_client.match_slot == slot_index
-        && clientPtr->game_client.player_index <= slot.match_params->player_count
-        && slot.players[clientPtr->game_client.player_index].client.value == client_handle.value) 
+        && clientPtr->game_client.player_index < slot.match_params->player_count
+        && slot.players[clientPtr->game_client.player_index].client.value == client_handle.value)
         {
+            freedSlot = clientPtr->game_client.player_index;
+
             slot.players[clientPtr->game_client.player_index].client = {};
             slot.players[clientPtr->game_client.player_index].bIsClientPlayer = false;
 
@@ -353,6 +458,8 @@ bool game_server_slot_detach_client(game_server& server, match_slot_index slot_i
     {
         if (slot.players[playerID].bIsClientPlayer && slot.players[playerID].client.value == client_handle.value)
         {
+            freedSlot = playerID;
+
             slot.players[playerID].client = {};
             slot.players[playerID].bIsClientPlayer = false;
 
@@ -366,35 +473,30 @@ NO_PLAYER:
 SUCCESS:
     ASSERT(slot.connection_count > 0);
     slot.connection_count--;
-    // TODO: Spawn an AI player for freed player index if match is ongoing.
 
-    server.logf("MATCH", LOG_NORMAL, "Detached client %ud from match slot %d. Freed player index = %uh.", client_handle.value, freedSlot);
+    // In a lobby the seat is freed. An empty lobby resets its countdown, otherwise the others see the new player count.
+    // In a match the player index stays reserved with no input (no AI takeover).
+    if (slot.state == MATCH_SLOT_STATE::IN_LOBBY)
+    {
+        if (slot.connection_count == 0) slot.countdown_active = false;
+        else game_server_slot_send_lobby_state(server, slot, slot_index);
+    }
+
+    server.logf("MATCH", LOG_NORMAL, "Detached client %d from match slot %d. Freed player index = %hu.", client_handle.value, slot_index, freedSlot);
     return true;
 }
 
-// Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once enough are connected.
+// Ticks a match slot that is currently in its lobby, waiting for players. Starts the match once the countdown ends, with whoever is present.
 static void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index)
 {
-    // TEST: Count how many active connections there are. Once there are 2, start the match.
-    ui8 connectionCount = 0;
-
     match_slot& slot = server.match_slots[slot_index];
 
-    if (slot.state == MATCH_SLOT_STATE::IN_LOBBY || slot.state == MATCH_SLOT_STATE::MATCH_ONGOING)
-    {
-        for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
-        {
-            const game_server_client* playerClient = game_server_get_client_data(server, slot.players[playerID].client);
-            if (playerClient == nullptr || playerClient->type != game_server_client::TYPE::GAME_CLIENT) continue;
-            connectionCount++;
-        }
-    }
+	if (!slot.countdown_active || server.uptime_ms < slot.countdown_end_ms) return; // Countdown starts when the first player joins.
 
-	if (connectionCount < slot.match_params->player_count) return; // Wait until a player connects.
-
+	// On failure the slot goes to AWAITING_CLEANUP and gets reset.
 	if (!game_server_start_match_slot(server, slot_index))
     {
-        server.logf("Match", LOG_ERROR, "Failed to start match on slot %d !", slot_index);
+        server.logf("MATCH", LOG_ERROR, "Failed to start match on slot %d !", slot_index);
     }
 }
 
@@ -407,7 +509,7 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_in
 	if (slot.connection_count == 0)
 	{
 		server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slot_index);
-		game_server_end_match_slot(server, slot_index);
+		game_server_end_match_slot(server, slot_index, INVALID_MATCH_PLAYER_ID);
 		return;
 	}
 
@@ -453,6 +555,19 @@ static void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_in
 
 		// Perform server-side match tick.
 		match_tick(*slot.match.match_ptr, tickCommands);
+
+		// Placeholder end condition, checked every few ticks.
+		// Never with a single player: they would trivially hold 100% from the start.
+		if (slot.match_params->player_count > 1 && slot.match.match_ptr->tick % MATCH_END_CHECK_INTERVAL_TICKS == 0)
+		{
+			match_player_id winner = game_server_find_dominant_player(*slot.match.match_ptr->world);
+			if (winner != INVALID_MATCH_PLAYER_ID)
+			{
+				server.logf("MATCH", LOG_NORMAL, "Player %hu controls %llupct or more of the world population. Ending match on slot %d.", winner, MATCH_END_POPULATION_PERCENT, slot_index);
+				game_server_end_match_slot(server, slot_index, winner);
+				return;
+			}
+		}
 
         // Reset input commands memory & builder.
         slot.match.next_tick_commands_memory.clear();

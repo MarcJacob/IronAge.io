@@ -52,6 +52,10 @@ struct match_slot
 	match_player* players; // Array of match_params->player_count entries, indexed by player index. Allocated once match_params is known.
     ui16 connection_count; // Counts the number of clients connected to the match.
 
+	// Lobby countdown, started by the first client attaching. Kept outside the union below, which is zeroed at match start.
+	bool countdown_active;
+	time_ms countdown_end_ms; // Server uptime at which the match starts. Valid when countdown_active.
+
 	union
 	{
 		match_slot_lobby* lobby;	// Valid when the slot state is non MATCH_*
@@ -78,10 +82,10 @@ static constexpr match_slot_index INVALID_MATCH_SLOT_INDEX = ~0;
 
 struct game_server;
 
-// Attaches a client as the controller of a free player index in the slot. Writes the assigned index to out_player_index on success.
+// Attaches a client as the controller of a free player index in the slot. Fails if the slot isn't in lobby. Writes the assigned index to out_player_index on success.
 bool game_server_slot_attach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
 
-// Detaches the client from the match slot if it is attached, freeing its player index slot / replacing it with an AI player depending on slot state.
+// Detaches the client from the match slot if it is attached, freeing its player index. In a match the index stays reserved, with no input.
 // Returns whether the client was actually attached to the slot.
 bool game_server_slot_detach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle);
 
@@ -102,11 +106,12 @@ bool game_server_open_lobby(game_server& server, match_slot_index slot_index);
 // Begins the match associated to the slot with the slot's current parameters.
 bool game_server_start_match_slot(game_server& server, match_slot_index slot_index);
 
-// Sets a match slot as having ended. During that time the match is no longer ticking but its state is still available
-// for score-keeping and reporting.
-bool game_server_end_match_slot(game_server& server, match_slot_index slot_index);
+// Sets a match slot as having ended and notifies attached clients with MATCH_ENDED. During that time the match is no longer ticking
+// but its state is still available for score-keeping and reporting.
+// winner_id is INVALID_MATCH_PLAYER_ID if there is none.
+bool game_server_end_match_slot(game_server& server, match_slot_index slot_index, match_player_id winner_id);
 
-// Resets a match slot to its cleaned state for re-use.
+// Resets a match slot (ended, or awaiting cleanup after a failed start) to its cleaned state for re-use. Detaches any remaining clients.
 bool game_server_reset_match_slot(game_server& server, match_slot_index slot_index);
 
 #endif // MATCH_SLOTS_INCLUDED

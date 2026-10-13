@@ -7,11 +7,12 @@ import * as Core from "./core.js";
 // Mirrors GAME_MESSAGE_TYPE (include/game_common/game_messages.h). Update here if the enum changes.
 export enum MESSAGE_TYPE
 {
-    MATCH_JOINED = 0,
-    MATCH_ENDED = 1,
-    SERVER_TICK = 2,
-    SERVER_TICK_BUNDLE = 3,
-    CLIENT_TICK = 4,
+    LOBBY_JOINED = 0,
+    MATCH_STARTED = 1,
+    MATCH_ENDED = 2,
+    SERVER_TICK = 3,
+    SERVER_TICK_BUNDLE = 4,
+    CLIENT_TICK = 5,
 
     TYPE_COUNT,
     INVALID,
@@ -137,6 +138,65 @@ export function process_net_message(bytes: ByteBuffer)
 
     const messageType: MESSAGE_TYPE = CLIENT_BACKEND.client_process_net_message(bytes.length);
     return messageType;
+}
+
+// Payloads of the last processed message are read straight from the net message buffer (valid until the next process_net_message).
+// game_message_header is packed: message_type (ui8), payload_size (ui16), so payloads start at offset 3.
+const GAME_MESSAGE_PAYLOAD_OFFSET: number = 3;
+
+// Mirrors game_match_start_params (include/game_common/match/start_params.h).
+export interface MatchStartParams
+{
+    world_size_regions_x: number;
+    world_size_regions_y: number;
+    player_count: number;
+    tick_rate: number;
+    random_seed: number;
+}
+
+export interface LobbyState
+{
+    countdown_remaining_ms: number;
+    player_count: number; // Clients currently in the lobby.
+    match_slot_index: number;
+    match_start_params: MatchStartParams;
+}
+
+// Mirrors game_message_payload_lobby_joined (include/game_common/game_messages.h), packed, 18 bytes:
+// countdown_remaining_ms (ui32 @0), lobby_player_count (ui16 @4), match_slot_index (ui8 @6),
+// match_start_params @7: world_size_regions (2x ui16 @7, @9), player_count (ui16 @11), tick_rate (ui8 @13), random_seed (ui32 @14).
+// Only call after process_net_message returned LOBBY_JOINED.
+// NOTE: reading game state straight from TS is a stopgap. High-level game state should later be managed by the client backend.
+export function read_lobby_joined_payload(): LobbyState
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 18);
+    return {
+        countdown_remaining_ms: view.getUint32(0, true),
+        player_count: view.getUint16(4, true),
+        match_slot_index: view.getUint8(6),
+        match_start_params: {
+            world_size_regions_x: view.getUint16(7, true),
+            world_size_regions_y: view.getUint16(9, true),
+            player_count: view.getUint16(11, true),
+            tick_rate: view.getUint8(13),
+            random_seed: view.getUint32(14, true),
+        },
+    };
+}
+
+// Mirrors game_message_payload_match_ended: winner_id (ui16). Returns null if there is no winner (0xFFFF).
+// Only call after process_net_message returned MATCH_ENDED.
+export function read_match_ended_winner(): number | null
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 2);
+    const winnerId = view.getUint16(0, true);
+    return winnerId === 0xFFFF ? null : winnerId;
+}
+
+// Forgets the last render state, for when the local match is gone.
+export function clear_render_state(): void
+{
+    LAST_RENDER_STATE = null;
 }
 
 // Reads the message the backend built in response to the last process_net_message call, if any.
