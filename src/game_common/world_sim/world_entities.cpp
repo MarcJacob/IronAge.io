@@ -65,8 +65,7 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
                 {
                 .bounds_min = world.entities.settlements.locations[freeIndex],
                 .bounds_max = world.entities.settlements.locations[freeIndex],
-                .used = 0,
-                .capacity = 0,
+                .pressure = 0,
                 }));
 
     // Claim own tile and set it as border to begin influence field.
@@ -285,6 +284,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 	settlements.local_wealths = memory.alloc<ui32>(count);
 	if (settlements.local_wealths == nullptr) return false;
+
+    settlements.land_sizes = memory.alloc<ui32>(count);
+    if (settlements.land_sizes == nullptr) return false;
 
     settlements.land_outputs = memory.alloc<ui32>(count);
     if (settlements.land_outputs == nullptr) return false;

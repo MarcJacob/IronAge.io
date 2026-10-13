@@ -113,6 +113,7 @@ struct world_terrain
         {
             ui8 border_count : 3; // How many neighbouring tiles are unowned or owned by a different settlements ? Tile is considered to be a border if above 0.
             bool is_road : 1;
+            bool proximity_recalc : 1;
             // ...
         } status[REGION_TILE_COUNT]; // Various status values packed together in a byte.
         ui16 owners[REGION_TILE_COUNT]; // Tile owner if any, as a settlement slot index (see UNOWNED_TILE). Determines which settlement obtains the tile's production output.
@@ -175,13 +176,13 @@ struct world_entity_settlements : public world_entity_container
     // Base economic factors
 	ui32*				populations;
 	ui32*				local_wealths;
+    ui32*               land_sizes;
     ui32*               land_outputs; // Set by influence system according to terrain type, infrastructure...
 
     struct land_influence
     {
         world_location bounds_min, bounds_max; // Rectangle bounds of all currently claimed tiles.
-        ui32 used; // Total influence currently used for claiming land.
-        ui32 capacity; // Maximum influence budget for claiming land.
+        i32 pressure; // Population - land_output * 3. Positive = surplus wanting to expand.
     };
 	land_influence*				influences; // Influence values used to claim / lose land.
 

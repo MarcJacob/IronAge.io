@@ -279,11 +279,11 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 	ASSERT(slot.state == MATCH_SLOT_STATE::IN_LOBBY
 		|| slot.state == MATCH_SLOT_STATE::MATCH_ONGOING);
 
-    server.logf("MATCH", LOG_NORMAL, "Attaching client %d, PLAYER INDEX = %hu", client_handle.value, client.game_client.player_index);
 	game_server_client* clientPtr = game_server_get_client_data(server, client_handle);
 	ASSERT(clientPtr != nullptr);	
 	
 	game_server_client& client = *clientPtr;
+    server.logf("MATCH", LOG_NORMAL, "Attaching client %d, PLAYER INDEX = %hu", client_handle.value, client.game_client.player_index);
 
 	ASSERT(client.type == game_server_client::TYPE::GAME_CLIENT);
     ASSERT(client.game_client.match_slot == INVALID_MATCH_SLOT_INDEX);

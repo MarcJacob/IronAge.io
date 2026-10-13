@@ -107,6 +107,8 @@ void world_state_tick(match_world_state& world)
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
     world_system_economy_influence_spread(world);
+    world_system_economy_proximity_recalc(world);
+    world_system_economy_update_pressure(world);
     world_system_economy_contestation(world);
     world_system_economy_pop_growth(world);
 
