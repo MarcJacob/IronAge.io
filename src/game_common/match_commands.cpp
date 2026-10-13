@@ -28,7 +28,7 @@ bool command_server_spawn_player_apply(match_world_state& world, match_player_id
     world_entity_settlements::single startSettlement = {
         .owner = command.spawned_player,
         .location = command.spawn_location,
-        .population = 100,
+        .population = 500,
         .tier = 1,
     };
 
@@ -119,6 +119,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	newSettlement.location = armies.locations[armyIndex];
 	newSettlement.population = (ui32)composition.levies + composition.archers + composition.men_at_arms
 		+ composition.horsemen + composition.knights;
+    newSettlement.tier = 1;
 
 	world_spawn_settlement(world, newSettlement);
 	world_destroy_army(world, command.army);

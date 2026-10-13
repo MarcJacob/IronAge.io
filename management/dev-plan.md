@@ -110,7 +110,7 @@ work to a line or two.
      - [DONE] Flat terrain type buffer, TS colors it into an offscreen canvas, blitted
        aligned to the world. Remaining: dirty-rect updates (with influence).
    - [DONE] Village influence over terrain: claim / maintain automaton, borders,
-     contestation, takeover, rendering. Rework in backlog. (`village_influence`)
+     contestation, takeover, rendering. (`village_influence`)
    - Game server match lifecycle: open lobby, placement phase, match start / end,
      server stays up across matches. (`game_server_match_lifecycle`, with
      `lobby_system`, `start_location_choice`)

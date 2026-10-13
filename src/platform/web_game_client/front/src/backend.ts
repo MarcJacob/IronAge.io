@@ -62,7 +62,7 @@ interface ClientExports extends WebAssembly.Exports
     client_render_state_get_entity_count(): number; // Value (ui32).
 
     client_render_state_get_terrain_tiles(): number; // Pointer to TERRAIN_TILE_TYPE array (1 byte each).
-    client_render_state_get_influence_tiles(): number; // Pointer to byte array with influence values. 
+    client_render_state_get_owner_settlement_tiles(): number; // Pointer to ui16 array with owner settlement slot per tile (valid if TILE_FLAG_OWNED).
     client_render_state_get_contestation_tiles(): number; // Pointer to byte array with contestation values.
     client_render_state_get_tile_flags(): number; // Pointer to byte array with TILE_FLAGS bits.
 
@@ -280,7 +280,7 @@ export class RenderState
     entity_states: Array<RenderEntity> = [];
 
     terrain_tiles_pointer: number = 0; // WASM memory offset of the terrain tile type bytes.
-    influence_tiles_pointer: number = 0; // WASM memory offset of the tile influence bytes.
+    owner_settlement_tiles_pointer: number = 0; // WASM memory offset of the tile owner settlement ui16s.
     contestation_tiles_pointer: number = 0; // WASM memory offset of the tile contestation bytes.
     tile_flags_pointer: number = 0; // WASM memory offset of the tile flags bytes.
 }
@@ -296,15 +296,16 @@ export function get_terrain_tiles_view(): Uint8Array<ArrayBuffer> | null
     return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.terrain_tiles_pointer, length);
 }
 
-// Fresh view of tile influence bytes over wasm memory, or null if there is no match.
+// Fresh view of tile owner settlement slots (one ui16 per tile) over wasm memory, or null if there is no match.
+// Only meaningful for tiles with TILE_FLAG_OWNED set.
 // Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
-export function get_influence_tiles_view(): Uint8Array<ArrayBuffer> | null
+export function get_owner_settlement_tiles_view(): Uint16Array<ArrayBuffer> | null
 {
-    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.influence_tiles_pointer === 0) return null;
+    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.owner_settlement_tiles_pointer === 0) return null;
 
     const world = LAST_RENDER_STATE.world_size;
     const length = world.width * world.height;
-    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.influence_tiles_pointer, length);
+    return new Uint16Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.owner_settlement_tiles_pointer, length);
 }
 
 // Fresh view of tile contestation bytes over wasm memory, or null if there is no match.
@@ -353,7 +354,7 @@ function read_render_state()
     renderState.entity_count = CLIENT_BACKEND.client_render_state_get_entity_count();
 
     renderState.terrain_tiles_pointer = CLIENT_BACKEND.client_render_state_get_terrain_tiles();
-    renderState.influence_tiles_pointer = CLIENT_BACKEND.client_render_state_get_influence_tiles();
+    renderState.owner_settlement_tiles_pointer = CLIENT_BACKEND.client_render_state_get_owner_settlement_tiles();
     renderState.contestation_tiles_pointer = CLIENT_BACKEND.client_render_state_get_contestation_tiles();
     renderState.tile_flags_pointer = CLIENT_BACKEND.client_render_state_get_tile_flags();
 

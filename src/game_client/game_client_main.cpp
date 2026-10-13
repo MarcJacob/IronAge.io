@@ -72,8 +72,8 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
     backend.render_state.tiles.terrain_tiles = backend.memory->alloc<TERRAIN_TILE_TYPE>(tileCount);
     ASSERT(backend.render_state.tiles.terrain_tiles != nullptr);
 
-    backend.render_state.tiles.influence_tiles_bitmap = backend.memory->alloc<ui8>(tileCount);
-    ASSERT(backend.render_state.tiles.influence_tiles_bitmap != nullptr);
+    backend.render_state.tiles.owner_settlement_tiles_bitmap = backend.memory->alloc<ui16>(tileCount);
+    ASSERT(backend.render_state.tiles.owner_settlement_tiles_bitmap != nullptr);
 
     backend.render_state.tiles.contestation_tiles_bitmap = backend.memory->alloc<ui8>(tileCount);
     ASSERT(backend.render_state.tiles.contestation_tiles_bitmap != nullptr);
@@ -97,8 +97,8 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
         }
     }
 
-    // Init influence, contestation and tile flags buffers to 0.
-    ia_memzero(backend.render_state.tiles.influence_tiles_bitmap, tileCount);
+    // Init owner, contestation and tile flags buffers to 0.
+    ia_memzero(backend.render_state.tiles.owner_settlement_tiles_bitmap, tileCount * sizeof(ui16));
     ia_memzero(backend.render_state.tiles.contestation_tiles_bitmap, tileCount);
     ia_memzero(backend.render_state.tiles.tile_flags_bitmap, tileCount);
 

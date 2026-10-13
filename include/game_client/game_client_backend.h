@@ -32,6 +32,7 @@ enum class RENDER_TILE_FLAGS : ui8
 {
     IS_BORDER = 1 << 0,
     IS_ROAD = 1 << 1,
+    IS_OWNED = 1 << 2, // Tile has an owner settlement. Owner bitmaps are only meaningful when set.
     // ...
 };
 
@@ -62,8 +63,10 @@ struct client_render_state
     {
         // One TERRAIN_TILE_TYPE value per world tile. Row major.
         TERRAIN_TILE_TYPE* terrain_tiles;
-        // One byte value per world tile. Row major.
-        ui8* influence_tiles_bitmap;
+        // One ui16 per world tile: slot index of the settlement owning the tile. Only valid if IS_OWNED is set. Row major.
+        // Settlements whose influence bounds touch the viewport are always in the frame's render entities, so the
+        // frontend can resolve the owning player through them.
+        ui16* owner_settlement_tiles_bitmap;
         // One byte value per world tile. Row major.
         ui8* contestation_tiles_bitmap;
         // One RENDER_TILE_FLAGS bit set per world tile. Row major.

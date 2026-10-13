@@ -20,12 +20,12 @@ ends, the slot is reclaimed.
 - Match end and slot reclaim: arena reset, clients returned to the lobby.
 - Extended by `lobby_system_2026-09-27.md` (player list, ready-up), a separate unit.
 
-## Open design
+## Decisions
 
-- Start rule: headcount, ready-up, timer.
-- Match end conditions (placeholder until victory phase).
-- Multiple concurrent matches vs slot 0 hard-routing.
-- Client disconnect during lobby / placement / match.
+- Start rule: headcount (as now) plus a countdown, shown on the client screen.
+- Match end (placeholder): one player controls 80% of the world population.
+- Disconnect: lobby frees the seat; in match the player slot stays, no input.
+- Slot 0 hard-routing already replaced.
 
 ## Not included
 
@@ -34,4 +34,12 @@ ends, the slot is reclaimed.
 
 ## Progress
 
-Not started.
+- [DONE] Slots run in parallel; arena reset and reuse on reset (commit 2ba631d). Client attach is first-fit, marked @TEST.
+- Current state: start = 2 live clients (hard-coded test params), MATCH_JOINED sent at start, end = all humans left (MATCH_ENDED never sent), client has no lobby screen and ignores MATCH_ENDED.
+- Tasks:
+  - Bug fixes: detach with unattached client (match_slot 255, out-of-bounds); `player_index <= player_count` should be `<`; attach assert reachable on non-lobby slots (loop tries WAITING/ENDED slots); AWAITING_CLEANUP is a dead end; "slot 0" log text.
+  - Messages: LOBBY_JOINED (with lobby state), MATCH_STARTED rename, MATCH_ENDED sent; lobby refusal.
+  - Countdown after headcount reached, sent to clients, shown on client screen.
+  - Match end at 80% world population by one player; clients notified and returned to lobby; client resets local match state and hides canvas.
+  - Late attach to a MATCH_ONGOING slot: stop allowing it (no MATCH_JOINED sent).
+  - Placement phase: separate unit (`start_location_choice`).

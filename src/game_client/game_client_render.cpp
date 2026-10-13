@@ -14,6 +14,13 @@ static bool is_visible_in_viewport(vec2<float> loc, const client_render_state::v
         && (loc.y >= viewport.bottom_left.y && loc.y < viewport.bottom_left.y + viewport.dimensions.y);
 }
 
+// Whether the tiles within the given inclusive tile bounds overlap the viewport at all.
+static bool bounds_touch_viewport(world_location bounds_min, world_location bounds_max, const client_render_state::viewport_state& viewport)
+{
+    return (float)bounds_max.x + 1.f > viewport.bottom_left.x && (float)bounds_min.x < viewport.bottom_left.x + viewport.dimensions.x
+        && (float)bounds_max.y + 1.f > viewport.bottom_left.y && (float)bounds_min.y < viewport.bottom_left.y + viewport.dimensions.y;
+}
+
 client_render_state* game_client_get_render_state(game_client& backend)
 {
 	return &backend.render_state;
@@ -47,7 +54,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 		{
 			vec2<float> settlementLoc = settlements.locations[settlementIndex];
-			if (!settlements.guids[settlementIndex].is_valid() || !is_visible_in_viewport(settlementLoc, render_state.viewport)) continue;
+			// Settlements are visible if any of their territory is (the frontend resolves tile owners through them).
+			if (!settlements.guids[settlementIndex].is_valid()
+				|| !bounds_touch_viewport(settlements.influences[settlementIndex].bounds_min, settlements.influences[settlementIndex].bounds_max, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::SETTLEMENT;
@@ -116,14 +125,16 @@ void game_client_render_influence(client_render_state& render_state, const game_
                     ui16 worldY = regionY * world_terrain::REGION_SIZE + tileY;
                     ui64 worldTileIndex = (ui64)worldY * terrain.size_tiles.x + worldX;
 
-                    bool isOwned = terrain.regions[regionIndex].owners[tileIndex] != world_terrain::UNOWNED_TILE;
+                    ui16 ownerSettlement = terrain.regions[regionIndex].owners[tileIndex];
+                    bool isOwned = ownerSettlement != world_terrain::UNOWNED_TILE;
 
-                    render_state.tiles.influence_tiles_bitmap[worldTileIndex] = 255 * isOwned;
+                    render_state.tiles.owner_settlement_tiles_bitmap[worldTileIndex] = ownerSettlement;
                     render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
 
-                    bool isBorder = terrain.regions[regionIndex].status[tileIndex].border_count > 0 && isOwned; 
+                    bool isBorder = terrain.regions[regionIndex].status[tileIndex].border_count > 0 && isOwned;
 
-                    render_state.tiles.tile_flags_bitmap[worldTileIndex] = (ui8)RENDER_TILE_FLAGS::IS_BORDER * isBorder;
+                    render_state.tiles.tile_flags_bitmap[worldTileIndex] = (ui8)RENDER_TILE_FLAGS::IS_BORDER * isBorder
+                        | (ui8)RENDER_TILE_FLAGS::IS_OWNED * isOwned;
                 }
             }
         }

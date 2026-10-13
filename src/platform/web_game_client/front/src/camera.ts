@@ -23,7 +23,7 @@ export interface CameraFraction
 }
 
 // The view's height in world tiles is what zoom controls; its width follows from the canvas aspect ratio (square tiles).
-const MIN_VIEW_HEIGHT = 50;
+const MIN_VIEW_HEIGHT = 25;
 const MAX_VIEW_HEIGHT = 1000;
 const ZOOM_EASE_RATE = 12;
 const PAN_SPEED_FRACTION = 0.5;

@@ -10,7 +10,7 @@ import { get_selected_entity_guid } from "./input.js"
 let canvas: HTMLCanvasElement;
 
 let canvas_offscreen_tiles_terrain: OffscreenCanvas;
-let canvas_offscreen_tiles_influence: OffscreenCanvas;
+let canvas_offscreen_tiles_territory: OffscreenCanvas;
 
 let ctx: CanvasRenderingContext2D;
 
@@ -44,7 +44,7 @@ class RESOURCES_STORE
 let RESOURCES: RESOURCES_STORE | null = null; // Run constructor to load resources.
 
 let BACKBUFFER_TILES_TERRAIN: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent terrain.
-let BACKBUFFER_TILES_INFLUENCE: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent influence & contestation.
+let BACKBUFFER_TILES_TERRITORY: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent territory ownership & contestation.
 
 // Fill styles according to diplomatic status with local player.
 let DIPLOMATIC_TINTS =
@@ -57,6 +57,9 @@ let DIPLOMATIC_TINTS =
 
 // Minimum view size (in canvas pixels) of entities before scale multiplier is taken into account.
 let ENTITY_MIN_VIEW_SIZE = 10;
+
+// Entity size in tiles, per unit of scale multiplier. Halved to match the doubled tile scale (see MIN_VIEW_HEIGHT in camera.ts).
+const ENTITY_TILE_SCALE = 0.5;
 
 // Base scale value of entities according to their type.
 let ENTITY_BASE_SCALE_MULTIPLIERS =
@@ -80,8 +83,9 @@ const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 25
 // Fill style of the world tile under the mouse.
 const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
 
-// Mirrors TILE_FLAG_BORDER (TILE_FLAGS in include/game_common/match/world.h).
-const TILE_FLAG_BORDER = 1;
+// Mirror RENDER_TILE_FLAGS in include/game_client/game_client_backend.h.
+const TILE_FLAG_BORDER = 1 << 0;
+const TILE_FLAG_OWNED = 1 << 2;
 
 // Page position of the mouse over the canvas, or null if it isn't over it. Resolved to a tile every draw so the highlight follows camera moves too.
 let HOVER_PAGE_POS: { x: number, y: number } | null = null;
@@ -176,7 +180,7 @@ function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
     if (entity_type == Backend.ENTITY_TYPE.INVALID) return 0;
 
     const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[entity_type];
-    return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
+    return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
 
 function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
@@ -277,50 +281,76 @@ function draw_terrain()
 }
 
 // @TODO(Marc): Consider moving the logic to WASM and / or to GPU accelerated objects.
-function draw_influence(render_state: Backend.RenderState)
+function draw_territory(render_state: Backend.RenderState)
 {
     const tileCount = render_state.world_size.width * render_state.world_size.height;
-    const influenceBytes = Backend.get_influence_tiles_view();
+    const ownerSettlementBytes = Backend.get_owner_settlement_tiles_view();
     const contestationBytes = Backend.get_contestation_tiles_view();
 
     const flagBytes = Backend.get_tile_flags_view();
 
-    if (influenceBytes === null || contestationBytes === null || flagBytes === null || canvas_offscreen_tiles_influence === undefined) return;
+    if (ownerSettlementBytes === null || contestationBytes === null || flagBytes === null
+        || canvas_offscreen_tiles_territory === undefined) return;
 
-    // Build explicit RGBA bytes. Color is a straight (non-premultiplied) lerp from green to red
-    // by contestation fraction. Opacity is max(influence, contestation) scaled by INFLUENCE_MAX_ALPHA_FRACTION,
-    // so it never dips mid-transition and zero-valued tiles remain transparent over the terrain.
-    const INFLUENCE_COLOR_GREEN = [0, 255, 0];
-    const INFLUENCE_COLOR_RED = [255, 0, 0];
-    const INFLUENCE_MAX_ALPHA_FRACTION = 0.5;
+    // Owner player per settlement slot, from the visible settlement entities (-1 = unknown). The slot is the index
+    // part of the settlement's macro entity_guid (bits 8-19). Settlements touching the viewport are always visible.
+    const settlementOwners = new Int32Array(0x1000).fill(-1);
+    for (const entity of render_state.entity_states)
+    {
+        if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) settlementOwners[(entity.guid >>> 8) & 0xFFF] = entity.owner;
+    }
+
+    // Settlement owning the tile under the mouse, if any. All tiles of that settlement get highlighted.
+    let hoveredSettlement = -1;
+    if (HOVER_PAGE_POS !== null)
+    {
+        const hoveredTile = page_to_tile(HOVER_PAGE_POS.x, HOVER_PAGE_POS.y);
+        if (is_tile_in_world(hoveredTile))
+        {
+            const hoveredIndex = hoveredTile.y * render_state.world_size.width + hoveredTile.x;
+            if ((flagBytes[hoveredIndex] & TILE_FLAG_OWNED) !== 0) hoveredSettlement = ownerSettlementBytes[hoveredIndex];
+        }
+    }
+
+    // Build explicit RGBA bytes. Owned tiles are green if owned by the local player, grey otherwise.
+    // Color is a straight (non-premultiplied) lerp from that owner color to red by contestation fraction.
+    // Opacity is max(owned ? OWNED_ALPHA : 0, contestation scaled by OWNED_ALPHA), so it never dips mid-transition
+    // and unowned tiles remain transparent over the terrain. Tiles of the hovered settlement use HOVERED_ALPHA instead.
+    const OWNER_COLOR_LOCAL = [0, 255, 0];
+    const OWNER_COLOR_OTHER = [128, 128, 128];
+    const CONTESTATION_COLOR = [255, 0, 0];
+    const OWNED_ALPHA = 0.33;
+    const HOVERED_ALPHA = 0.5;
 
     const drawBytes = new Uint8ClampedArray(tileCount * 4);
     for (let i = 0; i < tileCount; i++)
     {
-        const influenceVal = influenceBytes[i];
+        const isOwned = (flagBytes[i] & TILE_FLAG_OWNED) !== 0;
+        const ownerColor = isOwned && settlementOwners[ownerSettlementBytes[i]] === render_state.controlled_player_id ? OWNER_COLOR_LOCAL : OWNER_COLOR_OTHER;
+        const ownedAlpha = isOwned && ownerSettlementBytes[i] === hoveredSettlement ? HOVERED_ALPHA : OWNED_ALPHA;
         const contestationVal = contestationBytes[i];
         const contestationFraction = contestationVal / 255;
         const pixelOffset = i * 4;
 
-        drawBytes[pixelOffset] = INFLUENCE_COLOR_GREEN[0] + (INFLUENCE_COLOR_RED[0] - INFLUENCE_COLOR_GREEN[0]) * contestationFraction;
-        drawBytes[pixelOffset + 1] = INFLUENCE_COLOR_GREEN[1] + (INFLUENCE_COLOR_RED[1] - INFLUENCE_COLOR_GREEN[1]) * contestationFraction;
-        drawBytes[pixelOffset + 2] = INFLUENCE_COLOR_GREEN[2] + (INFLUENCE_COLOR_RED[2] - INFLUENCE_COLOR_GREEN[2]) * contestationFraction;
-        drawBytes[pixelOffset + 3] = Math.max(influenceVal, contestationVal) * INFLUENCE_MAX_ALPHA_FRACTION;
+        drawBytes[pixelOffset] = ownerColor[0] + (CONTESTATION_COLOR[0] - ownerColor[0]) * contestationFraction;
+        drawBytes[pixelOffset + 1] = ownerColor[1] + (CONTESTATION_COLOR[1] - ownerColor[1]) * contestationFraction;
+        drawBytes[pixelOffset + 2] = ownerColor[2] + (CONTESTATION_COLOR[2] - ownerColor[2]) * contestationFraction;
+        drawBytes[pixelOffset + 3] = Math.max(isOwned ? 255 : 0, contestationVal) * ownedAlpha;
 
         if ((flagBytes[i] & TILE_FLAG_BORDER) !== 0)
         {
             drawBytes[pixelOffset] = 0;
             drawBytes[pixelOffset + 1] = 0;
             drawBytes[pixelOffset + 2] = 0;
-            drawBytes[pixelOffset + 3] = 255;
+            drawBytes[pixelOffset + 3] = 196;
         }
     }
 
-    const influenceImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
-    const offscreenCtx = canvas_offscreen_tiles_influence.getContext('2d') as OffscreenCanvasRenderingContext2D;
-    offscreenCtx.putImageData(influenceImg, 0, 0);
+    const territoryImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
+    const offscreenCtx = canvas_offscreen_tiles_territory.getContext('2d') as OffscreenCanvasRenderingContext2D;
+    offscreenCtx.putImageData(territoryImg, 0, 0);
 
-    draw_tile_layer(canvas_offscreen_tiles_influence);
+    draw_tile_layer(canvas_offscreen_tiles_territory);
 }
 
 // Highlights the world tile under the mouse, if any.
@@ -361,7 +391,7 @@ export function draw(render_state: Backend.RenderState | null)
     RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
     draw_terrain();
-    draw_influence(render_state);
+    draw_territory(render_state);
     draw_hovered_tile();
     draw_world_border();
 
@@ -423,10 +453,10 @@ function init_offscreen_canvases(render_state: Backend.RenderState)
     let offscreenCtx = canvas_offscreen_tiles_terrain.getContext('2d') as OffscreenCanvasRenderingContext2D;
     offscreenCtx.putImageData(BACKBUFFER_TILES_TERRAIN, 0, 0);
 
-    // INFLUENCE
+    // TERRITORY
 
     // Initialize offscreen canvas.
-    canvas_offscreen_tiles_influence = new OffscreenCanvas(render_state.world_size.width, render_state.world_size.height);
+    canvas_offscreen_tiles_territory =new OffscreenCanvas(render_state.world_size.width, render_state.world_size.height);
 }
 
 export function init_render(canvas_element : HTMLCanvasElement) {

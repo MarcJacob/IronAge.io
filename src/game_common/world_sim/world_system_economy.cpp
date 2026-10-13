@@ -167,6 +167,11 @@ void world_influence_unclaim_tile(const match_world_state& world, ui16 region_in
     ASSERT(landOutput >= tileOutput);
     landOutput -= tileOutput;
 
+    // Decrease land size.
+    auto& landSize = world.entities.settlements.land_sizes[settlement_index];
+    ASSERT(landSize > 0);
+    landSize--;
+
     // The tile is about to disappear from this settlement's graph. Recalculate all
     // neighbouring tiles that may have depended on it as their shortest path.
     world_influence_flag_same_settlement_neighbours(world, region_index, tile_index, settlement_index,
@@ -337,7 +342,7 @@ static bool world_influence_can_push(const match_world_state& world, ui16 border
     if (attackerPop == 0 || defenderPop == 0) return false;
 
     i32 defenderPressure = world.entities.settlements.influences[defenderIndex].pressure;
-    i32 effectiveDefenderPressure = defenderPressure;
+    i32 effectiveDefenderPressure = defenderPressure + POP_CAP_PER_TILE; // Give defender pressure as if they'd already lost the tile, for stability.
     i32 effectiveAttackerPressure = attacker_pressure;
 
     // Defense bonus: If defender pressure <= 0, flip it and add to attacker
@@ -351,16 +356,17 @@ static bool world_influence_can_push(const match_world_state& world, ui16 border
     i32 attackerRatio = (i32)((i64)effectiveAttackerPressure * 1000 / (i64)attackerPop);
     i32 defenderRatio = (i32)((i64)effectiveDefenderPressure * 1000 / (i64)defenderPop);
 
-    // Proximity ratio: (attacker_tile_proximity + 1) / (defender_tile_proximity + 1)
+    // Proximity ratio: (attacker_tile_claim_proximity) / (defender_tile_proximity + 1)
     // Add 1 to avoid division by zero
-    i64 attackerProximity = world.terrain.regions[border_region_index].proximities[border_tile_index] + 1;
+    i64 attackerProximity = world_influence_get_claim_proximity(world, target_region_index, target_tile_index, settlement_index);
     i64 defenderProximity = world.terrain.regions[target_region_index].proximities[target_tile_index] + 1;
+
     i64 proximityRatio = defenderProximity * 1000 / attackerProximity;
 
     // Compare: attacker_ratio * proximity_ratio > defender_ratio
     i64 attackerEffective = (i64)attackerRatio * proximityRatio;
     
-    return attackerEffective > (i64)defenderRatio * 1000;
+    return attackerEffective > (i64)defenderRatio * 1100; // Give slight advantage to defender.
 }
 
 // Returns true if the border tile has at least one non-diagonal neighbour the settlement could expand into.
@@ -457,7 +463,7 @@ void world_system_economy_influence_spread(match_world_state& world)
         world_entity_settlements::land_influence& settlementInfluence = world.entities.settlements.influences[settlementIndex];
         i32 pressure = settlementInfluence.pressure;
 
-        if (pressure <= 0) continue; // Low pressure doesn't automatically unclaim territory, but leaves it vulnerable for takeover.
+        // Low pressure doesn't automatically unclaim territory, but leaves it vulnerable for takeover. The bounds are still rescanned.
 
         // Scan the bounds for border tiles, keeping the INFLUENCE_CANDIDATE_COUNT lowest-proximity ones sorted (ascending) so expansion goes nearest-first
         // instead of following scan order. Ties keep the earliest found.
@@ -476,11 +482,11 @@ void world_system_economy_influence_spread(match_world_state& world)
 
                 if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) continue;
                 if (world.terrain.regions[regionIndex].status[tileIndex].border_count == 0) continue;
-                if (world.terrain.regions[regionIndex].proximities[tileIndex] >= MAX_EXPANSION_PROXIMITY) continue;
                 world_bounds_include(newBoundsMin, newBoundsMax, { x, y });
+                if (world.terrain.regions[regionIndex].proximities[tileIndex] >= MAX_EXPANSION_PROXIMITY) continue;
 
                 // Border tiles that can't expand anywhere are kept in the bounds but must not take up candidate slots.
-                if (!world_influence_can_expand(world, regionIndex, tileIndex, settlementIndex, pressure)) continue;
+                if (pressure <= 0 || !world_influence_can_expand(world, regionIndex, tileIndex, settlementIndex, pressure)) continue;
 
                 world_influence_candidate_insert(candidates, candidateCount,
                         { regionIndex, tileIndex, world.terrain.regions[regionIndex].proximities[tileIndex] });
