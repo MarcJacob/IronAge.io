@@ -22,12 +22,14 @@ export class WorldSize
 
 type FrameCallback = (delta_time_s: number) => void;
 type OnMatchJoinedCallback = () => void;
+type OnMatchEndedCallback = () => void;
 
 const FRAME_CALLBACKS: FrameCallback[] = [];
 let LAST_FRAME_TIME_MS: number | null = null;
 let FRAME_LOOP_STARTED = false;
 
 const ON_MATCH_JOINED_CALLBACKS: OnMatchJoinedCallback[] = [];
+const ON_MATCH_ENDED_CALLBACKS: OnMatchEndedCallback[] = [];
 
 export function register_frame_callback(callback: FrameCallback): void
 {
@@ -65,8 +67,13 @@ export function broadcast_on_match_joined(): void
     for (const callback of ON_MATCH_JOINED_CALLBACKS) callback();
 }
 
+export function register_on_match_ended_callback(callback: OnMatchEndedCallback): void
+{
+    ON_MATCH_ENDED_CALLBACKS.push(callback);
+}
+
 export function broadcast_on_match_ended(): void
 {
-    // ... (match ended event for cleanup / menu nav). No listeners yet: main.ts does the cleanup itself.
+    for (const callback of ON_MATCH_ENDED_CALLBACKS) callback();
 }
 

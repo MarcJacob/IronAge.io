@@ -9,6 +9,7 @@
 
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]
+// The placement phase is not a state of its own: it is the in_placement flag of a Match Ongoing slot.
 enum class MATCH_SLOT_STATE : ui8
 {
 	UNINITIALIZED,		// Slot was just created and requires initialization.
@@ -60,7 +61,7 @@ struct match_slot
 
 	union
 	{
-		match_slot_lobby* lobby;	// Valid when the slot state is non MATCH_*
+		match_slot_lobby* lobby;	// Valid when the slot state is WAITING or IN_LOBBY.
 
 		struct
 		{

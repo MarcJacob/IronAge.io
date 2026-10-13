@@ -38,6 +38,14 @@ Server component for handling HTTP & Websocket Clients. Can serve files and upgr
 
 See web_server folder.
 
+### Match slots
+
+Fixed set of match slots, each with its own memory arena, running matches in parallel. A slot goes through a lifecycle (waiting, lobby, ongoing match, ended, reset),
+and game clients are attached to lobby slots. A lobby starts its match on a countdown (or when full); the placement phase then runs inside the ongoing-match state until the first tick.
+Slot code is split by lifecycle stage (shared slot handling, lobby, ongoing match).
+
+See *match_slots* folder.
+
 ## Intention
 
 Most of the game server code should end up existing within this folder. The Game Server will handle the bulk of the work on a platform-independent level, such as:

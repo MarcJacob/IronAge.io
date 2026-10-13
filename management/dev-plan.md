@@ -23,9 +23,9 @@ when it finishes.
 - `work_units/string_pass_2026-10-03.md` [DONE]
 - `work_units/blit_canvas_2026-09-26.md` [DONE]
 - `work_units/village_influence_2026-10-03.md` [DONE]
-- `work_units/game_server_match_lifecycle_2026-10-03.md`
+- `work_units/game_server_match_lifecycle_2026-10-03.md` [DONE]
 - `work_units/lobby_system_2026-09-27.md`
-- `work_units/start_location_choice_2026-10-03.md`
+- `work_units/start_location_choice_2026-10-03.md` [DONE]
 - `work_units/settlement_trade_construction_2026-10-03.md`
 
 Finished units are moved to `management/archive/` after a time.
@@ -111,9 +111,9 @@ work to a line or two.
        aligned to the world. Remaining: dirty-rect updates (with influence).
    - [DONE] Village influence over terrain: claim / maintain automaton, borders,
      contestation, takeover, rendering. (`village_influence`)
-   - Game server match lifecycle: open lobby, placement phase, match start / end,
-     server stays up across matches. (`game_server_match_lifecycle`, with
-     `lobby_system`, `start_location_choice`)
+   - [DONE] Game server match lifecycle: open lobby with countdown, placement phase,
+     match start / end, server stays up across matches. (`game_server_match_lifecycle`,
+     `start_location_choice`; `lobby_system` remains separate)
    - [DONE] Population growth / shrinkage incl. land output from influence (inside
      `village_influence`).
    - Settlement trade and construction. (`settlement_trade_construction`)

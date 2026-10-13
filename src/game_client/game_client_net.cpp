@@ -97,16 +97,10 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 	// Same for placement picks.
 	case GAME_MESSAGE_TYPE::SERVER_PLACEMENT_PICK:
 		break;
-	// Drop the local match so no more ticking, input or queries happen on it, along with any stale output / queued input.
+	// Nothing to do here: the frontend reads the winner from the buffer, then calls game_client_end_local_match
+	// (through the platform) to drop the local match. Cleanup lives in that one place only.
 	case GAME_MESSAGE_TYPE::MATCH_ENDED:
-	{
-		backend.local_match = nullptr;
-		backend.local_match_mem.clear();
-		backend.net_output_msg_size = 0;
-		backend.input.command_queue.clear();
-		ASSERT(backend.input.command_queue_builder.init());
 		break;
-	}
 	// Input commands from the server, for the client to simulate the next match tick with.
 	case GAME_MESSAGE_TYPE::SERVER_TICK:
 	{

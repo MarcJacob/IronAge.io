@@ -48,6 +48,7 @@ interface ClientExports extends WebAssembly.Exports
 
     web_client_start(): number;
     web_client_tick(delta_time: number): void;
+    web_client_end_match(): void;
 
     // Net input & output
 
@@ -232,9 +233,11 @@ export function build_client_placement_pick(player_id: number, x: number, y: num
     return bytes;
 }
 
-// Forgets the last render state, for when the local match is gone.
-export function clear_render_state(): void
+// Has the backend drop the local match and free its resources, and forgets the last render state.
+// Call after process_net_message returned MATCH_ENDED (and after reading its payload).
+export function end_local_match(): void
 {
+    CLIENT_BACKEND.web_client_end_match();
     LAST_RENDER_STATE = null;
 }
 

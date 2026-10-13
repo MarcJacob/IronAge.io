@@ -33,8 +33,12 @@ game_client* game_client_init(mem_arena& backend_memory)
 	static constexpr ui64 LOCAL_MATCH_MEM_SIZE = MiB(64);
 	static constexpr ui64 RENDER_MEM_SIZE = KiB(64);
 	static constexpr ui64 COMMAND_QUEUE_MEM_SIZE = KiB(1);
+	static constexpr ui64 RENDER_TILES_MEM_SIZE = MiB(32); // 5 bytes per world tile.
+	static constexpr ui64 RENDER_FRAME_MEM_SIZE = MiB(16);
 
 	backend->local_match_mem = mem_arena_create_sub(*backend->memory, LOCAL_MATCH_MEM_SIZE);
+	backend->render_tiles_mem = mem_arena_create_sub(*backend->memory, RENDER_TILES_MEM_SIZE);
+	backend->render_state.frame.memory = mem_arena_create_sub(*backend->memory, RENDER_FRAME_MEM_SIZE);
 
 	backend->input.command_queue = mem_arena_create_sub(*backend->memory, COMMAND_QUEUE_MEM_SIZE);
 	backend->input.command_queue_builder.target_mem = &backend->input.command_queue;
@@ -68,17 +72,19 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
 
     ui64 tileCount = backend.render_state.world_size.x * backend.render_state.world_size.y;
 
-    // Initialize render state memory blocks & bitmaps.
-    backend.render_state.tiles.terrain_tiles = backend.memory->alloc<TERRAIN_TILE_TYPE>(tileCount);
+    // Initialize render state memory blocks & bitmaps, reusing the same backing memory every match.
+    backend.render_tiles_mem.clear();
+
+    backend.render_state.tiles.terrain_tiles = backend.render_tiles_mem.alloc<TERRAIN_TILE_TYPE>(tileCount);
     ASSERT(backend.render_state.tiles.terrain_tiles != nullptr);
 
-    backend.render_state.tiles.owner_settlement_tiles_bitmap = backend.memory->alloc<ui16>(tileCount);
+    backend.render_state.tiles.owner_settlement_tiles_bitmap = backend.render_tiles_mem.alloc<ui16>(tileCount);
     ASSERT(backend.render_state.tiles.owner_settlement_tiles_bitmap != nullptr);
 
-    backend.render_state.tiles.contestation_tiles_bitmap = backend.memory->alloc<ui8>(tileCount);
+    backend.render_state.tiles.contestation_tiles_bitmap = backend.render_tiles_mem.alloc<ui8>(tileCount);
     ASSERT(backend.render_state.tiles.contestation_tiles_bitmap != nullptr);
 
-    backend.render_state.tiles.tile_flags_bitmap = backend.memory->alloc<ui8>(tileCount);
+    backend.render_state.tiles.tile_flags_bitmap = backend.render_tiles_mem.alloc<ui8>(tileCount);
     ASSERT(backend.render_state.tiles.tile_flags_bitmap != nullptr);
 
     // Copy match terrain (stored region by region) into the row-major terrain bitmap.
@@ -102,8 +108,24 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
     ia_memzero(backend.render_state.tiles.contestation_tiles_bitmap, tileCount);
     ia_memzero(backend.render_state.tiles.tile_flags_bitmap, tileCount);
 
-    // Alloc per-frame memory.
-    backend.render_state.frame.memory = mem_arena_create_sub(*backend.memory, MiB(16));
-
+    // Per-frame memory is created once in game_client_init and cleared by the render rebuild.
 	return true;
+}
+
+void game_client_end_local_match(game_client& backend)
+{
+	backend.local_match = nullptr;
+	backend.local_match_mem.clear();
+
+	// Render state: forget the tile arrays (their memory is reused by the next match) and the frame's entities.
+	backend.render_tiles_mem.clear();
+	backend.render_state.tiles = {};
+	backend.render_state.frame.memory.clear();
+	backend.render_state.frame.entity_count = 0;
+	backend.render_state.frame.entity_states = nullptr;
+
+	// Stale output / queued input.
+	backend.net_output_msg_size = 0;
+	backend.input.command_queue.clear();
+	ASSERT(backend.input.command_queue_builder.init());
 }

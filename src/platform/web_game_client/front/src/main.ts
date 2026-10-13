@@ -54,7 +54,7 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         set_game_ui_visible(true);
     }
 
-    // The backend already dropped its local match: clear what the frontend holds of it and fall back to the lobby screen.
+    // Have the backend drop its local match, clear what the frontend holds of it and fall back to the lobby screen.
     if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
     {
         console.log("Match ended.");
@@ -62,12 +62,13 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         IN_A_MATCH = false;
         LOCAL_PLAYER_ID = null;
         exit_placement();
-        Backend.clear_render_state();
         clear_selected_entity();
 
         canvas.hidden = true;
         set_game_ui_visible(false);
-        show_match_ended(Backend.read_match_ended_winner());
+        show_match_ended(Backend.read_match_ended_winner()); // Reads the net buffer: keep before anything that could overwrite it.
+
+        Backend.end_local_match();
 
         Core.broadcast_on_match_ended();
     }

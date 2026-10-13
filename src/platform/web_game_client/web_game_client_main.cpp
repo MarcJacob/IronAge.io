@@ -49,6 +49,13 @@ WASM_EXPORT void web_client_tick(float delta_time)
 	game_client_tick(*WEB_CLIENT.backend, delta_time);
 }
 
+// Drops the local match and frees its resources. To be called by JS after it handled a MATCH_ENDED message.
+WASM_EXPORT void web_client_end_match()
+{
+	ASSERT(WEB_CLIENT.backend != nullptr);
+	game_client_end_local_match(*WEB_CLIENT.backend);
+}
+
 WASM_EXPORT world_dimensions* web_client_get_world_size()
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);

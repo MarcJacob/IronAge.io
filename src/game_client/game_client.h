@@ -71,6 +71,10 @@ void game_client_rebuild_render_state(client_render_state& render_state, const g
 // Creates a local match state using the provided start parameters.
 bool game_client_begin_match_with_params(game_client& backend, game_match_start_params& params, ui32 params_size);
 
+// Drops the local match and everything allocated for it (match memory, render state, queued input / output).
+// Safe to call with no match running.
+void game_client_end_local_match(game_client& backend);
+
 // END LOCAL MATCH CONTROL FUNCTIONS
 
 // BEGIN GAME MESSAGE FUNCTIONS
@@ -90,6 +94,7 @@ struct game_client
 {
 	mem_arena* memory; // All memory the client has to work with, provided by platform. 
 	mem_arena local_match_mem; // Memory used for running the local match simulation.
+	mem_arena render_tiles_mem; // Backing memory of the render state's per-tile arrays. Cleared on every match begin / end.
 
 	game_match* local_match; // Pointer to local match simulation if any.
 	match_player_id controlled_player_id; // ID of controlled player in active match.
