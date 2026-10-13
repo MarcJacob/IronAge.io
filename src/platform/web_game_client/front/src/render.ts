@@ -6,6 +6,7 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 import { get_selected_entity_guid } from "./input.js"
+import { get_placement_dots } from "./placement.js"
 
 let canvas: HTMLCanvasElement;
 
@@ -366,6 +367,20 @@ function draw_hovered_tile()
     ctx.fillRect(rect.x, rect.y, rect.size, rect.size);
 }
 
+// Draws a dot per placement pick (see placement.ts), at least a few px wide at any zoom.
+function draw_placement_dots()
+{
+    const radius = Math.max(6, 2 * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
+    for (const dot of get_placement_dots())
+    {
+        const center = world_to_canvas(dot.x + 0.5, dot.y + 0.5);
+        ctx.fillStyle = dot.color;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+}
+
 // Draws the world's edges, wherever they currently fall relative to the viewport (may be partly or fully off-canvas).
 function draw_world_border()
 {
@@ -394,6 +409,7 @@ export function draw(render_state: Backend.RenderState | null)
     draw_territory(render_state);
     draw_hovered_tile();
     draw_world_border();
+    draw_placement_dots(); // Empty outside the placement phase.
 
     const selectedGuid = get_selected_entity_guid();
 

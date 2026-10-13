@@ -5,6 +5,7 @@ import * as Backend from "./backend.js"
 import * as Render from "./render.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 import { get_local_player_id } from "./main.js"
+import { is_in_placement, send_pick } from "./placement.js"
 
 // Input sources (updated on events, used on tick)
 const KB_HELD_KEYS = new Set<string>();
@@ -158,12 +159,22 @@ function do_mouse_action(action: MOUSE_ACTION | null, clientX: number, clientY: 
 
 function on_pointer_click(clickEvent: MouseEvent)
 {
+    // Placement mode: a left click anywhere on the map picks the start location, nothing else is available.
+    if (is_in_placement())
+    {
+        if (clickEvent.button !== 0) return;
+        const tile = Render.page_to_tile(clickEvent.clientX, clickEvent.clientY);
+        if (Render.is_tile_in_world(tile)) send_pick(tile);
+        return;
+    }
+
     do_mouse_action(get_mouse_button_action(clickEvent.button), clickEvent.clientX, clickEvent.clientY);
 }
 
 function on_context_menu(menuEvent: MouseEvent)
 {
     menuEvent.preventDefault();
+    if (is_in_placement()) return;
     send_context_order(menuEvent.clientX, menuEvent.clientY);
 }
 

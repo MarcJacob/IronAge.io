@@ -62,6 +62,8 @@ struct game_message_payload_lobby_joined
 // Received by a client as instruction by the server of what the match starting / current state is, and what player ID they are in control of.
 struct game_message_payload_match_started
 {
+	ui32 placement_countdown_ms; // Indicative time in milliseconds before the placement phase ends (first SERVER_TICK), relative to message reception.
+
 	ui32 join_tick; // What tick the match is currently on as the client joins. Currently this means "You will have to catch up to this tick" if above 0.
 					// TODO: Allow this message (or an alternative form of it) to feature a snapshot of the game state to speedup mid-game joining process ?
 

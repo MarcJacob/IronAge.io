@@ -10,9 +10,11 @@ export enum MESSAGE_TYPE
     LOBBY_JOINED = 0,
     MATCH_STARTED = 1,
     MATCH_ENDED = 2,
-    SERVER_TICK = 3,
-    SERVER_TICK_BUNDLE = 4,
-    CLIENT_TICK = 5,
+    CLIENT_PLACEMENT_PICK = 3,
+    SERVER_PLACEMENT_PICK = 4,
+    SERVER_TICK = 5,
+    SERVER_TICK_BUNDLE = 6,
+    CLIENT_TICK = 7,
 
     TYPE_COUNT,
     INVALID,
@@ -191,6 +193,43 @@ export function read_match_ended_winner(): number | null
     const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 2);
     const winnerId = view.getUint16(0, true);
     return winnerId === 0xFFFF ? null : winnerId;
+}
+
+// Mirrors game_message_payload_match_started (game_messages.h), packed: placement_countdown_ms (ui32 @0), join_tick (ui32 @4),
+// controlled_player_id (ui16 @8), match_start_params @10.
+// Only call after process_net_message returned MATCH_STARTED.
+export function read_match_started_placement_countdown_ms(): number
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 4);
+    return view.getUint32(0, true);
+}
+
+export interface PlacementPick
+{
+    player_id: number;
+    x: number;
+    y: number;
+}
+
+// Mirrors game_message_payload_placement_pick, packed, 6 bytes: player_id (ui16 @0), picked_loc x / y (ui16 @2, @4), in tiles.
+// Only call after process_net_message returned SERVER_PLACEMENT_PICK.
+export function read_server_placement_pick(): PlacementPick
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 6);
+    return { player_id: view.getUint16(0, true), x: view.getUint16(2, true), y: view.getUint16(4, true) };
+}
+
+// Builds a CLIENT_PLACEMENT_PICK message (header: type ui8, payload_size ui16; payload as above) for the given tile.
+export function build_client_placement_pick(player_id: number, x: number, y: number): ByteBuffer
+{
+    const bytes = new ByteBuffer(9);
+    const view = new DataView(bytes.buffer);
+    view.setUint8(0, MESSAGE_TYPE.CLIENT_PLACEMENT_PICK);
+    view.setUint16(1, 6, true);
+    view.setUint16(3, player_id, true);
+    view.setUint16(5, x, true);
+    view.setUint16(7, y, true);
+    return bytes;
 }
 
 // Forgets the last render state, for when the local match is gone.

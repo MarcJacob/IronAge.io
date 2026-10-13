@@ -6,11 +6,12 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
-import { init_render, draw } from './render.js';
+import { init_render } from './render.js';
 import { init_input, clear_selected_entity } from './input.js';
-import { FRONTEND_CAMERA, init_camera_system } from './camera.js';
+import { init_camera_system } from './camera.js';
 import { init_game_ui, update_game_ui, set_game_ui_visible } from './game_ui.js';
 import { init_lobby_ui, show_lobby, show_match_ended, hide_lobby } from './lobby_ui.js';
+import { init_placement, enter_placement, exit_placement, set_pick, is_in_placement } from './placement.js';
 
 // Game / Client state
 
@@ -41,6 +42,18 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         show_lobby(Backend.read_lobby_joined_payload());
     }
 
+    if (messageType === Backend.MESSAGE_TYPE.SERVER_PLACEMENT_PICK)
+    {
+        set_pick(Backend.read_server_placement_pick()); // Ignored outside placement.
+    }
+
+    // The first tick ends the placement phase: the match proceeds as an ordinary one.
+    if (messageType === Backend.MESSAGE_TYPE.SERVER_TICK && is_in_placement())
+    {
+        exit_placement();
+        set_game_ui_visible(true);
+    }
+
     // The backend already dropped its local match: clear what the frontend holds of it and fall back to the lobby screen.
     if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
     {
@@ -48,6 +61,7 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
 
         IN_A_MATCH = false;
         LOCAL_PLAYER_ID = null;
+        exit_placement();
         Backend.clear_render_state();
         clear_selected_entity();
 
@@ -64,13 +78,15 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         console.log("Joined match.");
 
         hide_lobby();
-        set_game_ui_visible(true);
 
         // Perform the first render state update on the backend.
         Backend.update_render_state();
 
         // The local player's id only reaches the frontend through the render state.
         if (Backend.LAST_RENDER_STATE !== null) LOCAL_PLAYER_ID = Backend.LAST_RENDER_STATE.controlled_player_id;
+
+        // Placement phase until the first SERVER_TICK (HUD stays hidden until then).
+        if (LOCAL_PLAYER_ID !== null) enter_placement(LOCAL_PLAYER_ID, Backend.read_match_started_placement_countdown_ms());
 
         // Reveal game canvas
         canvas.hidden = false;
@@ -134,6 +150,7 @@ async function start()
     // Initialize websocket conneciton.
     const socket = new WebSocket(websocket_url());
     socket.binaryType = 'arraybuffer';
+    init_placement((bytes) => socket.send(bytes));
 
     socket.addEventListener("open", () => {
         console.log("WebSocket connection accepted by server. Waiting to join a match...");

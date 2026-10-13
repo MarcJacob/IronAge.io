@@ -26,6 +26,8 @@ struct match_slot_lobby
     ui64 alloc_start; // @TEMP(Marc): Where the lobby data allocation started, for clearing.
                       // Need to rethink the slot memory model.
 
+    time_ms lobby_state_refresh_time;
+
 	// Lobby countdown, started by the first client attaching. Kept outside the union below, which is zeroed at match start.
 	bool countdown_active;
 	time_ms countdown_end_ms; // Server uptime at which the match starts. Valid when countdown_active.
@@ -107,9 +109,6 @@ bool game_server_match_slot_handle_message(game_server& server, game_server_clie
 void game_server_slot_broadcast(game_server& server, match_slot& slot, const game_message_header& msg);
 
 // LOBBY STATE FUNCTIONS
-
-// Useable on Lobby slots, used to update all players in the lobby with the lobby's current state.
-void game_server_slot_send_lobby_state(game_server& server, match_slot& slot, match_slot_index slot_index);
 
 // Tick logic for a slot in LOBBY state.
 void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index);

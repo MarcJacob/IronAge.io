@@ -54,7 +54,6 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 	slot.match = {}; // Reset memory associated with the match state.
 
 	slot.match.match_ptr = slot.slot_memory.alloc<game_match>();
-	slot.match.last_tick_time = server.uptime_ms;
 
 	game_match& match = *slot.match.match_ptr;
 	if (!match_start(slot.slot_memory, server.uptime_ms, *slot.match_params, match))
@@ -79,6 +78,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
         auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_started>();
         joinMsgPayload = {};
+        joinMsgPayload.placement_countdown_ms = PLACEMENT_COUNTDOWN_MS;
 
         // Copy start params.
         ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params));
@@ -164,6 +164,8 @@ void match_slot_handle_message_client_placement_pick(game_server& server, match_
 {
     match_slot& slot = server.match_slots[slot_index];
 
+    if (slot.state != MATCH_SLOT_STATE::MATCH_ONGOING || !slot.match.in_placement) return;
+
     world_location pickedLoc;
 
     const auto& payload = msg.get_payload_ref<game_message_payload_placement_pick>();
@@ -239,6 +241,9 @@ static void match_begin(game_server& server, ui8 slot_index)
         spawnPlayer.spawned_player = playerID;
         spawnPlayer.spawn_location = startLoc;
     }
+
+    slot.match.last_tick_time = server.uptime_ms;
+    slot.match.in_placement = false;
 }
 
 // Ticks a match slot with an ongoing match: gathers input, simulates & relays as many ticks as have elapsed since last time.
@@ -259,7 +264,6 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
         if (slot.match.start_time <= server.uptime_ms)
         {
             match_begin(server, slot_index);
-            slot.match.in_placement = false;
         }
         return;
     }

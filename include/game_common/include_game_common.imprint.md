@@ -32,10 +32,16 @@ Game messages are implemented in three parts:
 
 Arrival:
 - Client connects and gets promoted to Game Client status on the server through a supported mechanism.
-- Server -> Client: "Join Match" message.
-	- Contains enough info to deterministically constitute (current or starting) match state on client, and what player the client is supposed to control.
-- Client -> Server: "Match Joined" message.
-	- Confirms the client has the match state ready.
+- Server -> Client: "Lobby Joined" message, on joining and whenever the lobby changes.
+	- Contains the lobby state: countdown before the match starts, player count, match slot, start params.
+- Server -> Client: "Match Started" message, when the lobby countdown ends.
+	- Contains enough info to deterministically constitute the starting match state on client, what player the client is supposed to control, and the (indicative) placement countdown.
+	- No reply from the client.
+
+Placement phase (from "Match Started" until the first "Server Tick"; there is no phase message):
+- Server -> Client: "Server Placement Pick" messages, for every player (pre-placed at random, then on every valid change).
+- Client -> Server: "Client Placement Pick" message, to change its own start location. Invalid picks and picks outside the phase are discarded silently.
+- The client stays in placement until the first "Server Tick", whatever the countdown says.
 
 On each Server tick until MATCH END:
 - IF Client is *late* = Server -> Client: "Server Tick Bundle" messages.

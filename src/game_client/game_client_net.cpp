@@ -94,6 +94,9 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 	// The frontend reads the lobby state straight from the net message buffer: nothing to do here.
 	case GAME_MESSAGE_TYPE::LOBBY_JOINED:
 		break;
+	// Same for placement picks.
+	case GAME_MESSAGE_TYPE::SERVER_PLACEMENT_PICK:
+		break;
 	// Drop the local match so no more ticking, input or queries happen on it, along with any stale output / queued input.
 	case GAME_MESSAGE_TYPE::MATCH_ENDED:
 	{

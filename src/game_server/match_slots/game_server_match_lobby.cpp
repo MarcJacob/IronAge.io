@@ -32,8 +32,10 @@ bool game_server_open_lobby(game_server& server, ui8 slot_index)
 }
 
 // Sends the lobby's state (countdown, player count, slot index, match params) to every client in it.
-void game_server_slot_send_lobby_state(game_server& server, match_slot& slot, match_slot_index slot_index)
+static void game_server_slot_send_lobby_state(game_server& server, match_slot_index slot_index)
 {
+    match_slot& slot = server.match_slots[slot_index];
+
 	ui8 msgBuff[64];
 	mem_arena msgMem = mem_arena_create(msgBuff, sizeof(msgBuff));
 
@@ -64,6 +66,7 @@ void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index)
 	{
 		slot.lobby->countdown_active = true;
 		slot.lobby->countdown_end_ms = server.uptime_ms + LOBBY_COUNTDOWN_MS;
+        game_server_slot_send_lobby_state(server, slot_index);
         return;
 	}
     // Reset countdown if it started and player count went back to 0.
@@ -74,7 +77,15 @@ void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index)
     }
     // In other situations, just wait until the countdown is passed.
     else if (!slot.lobby->countdown_active || server.uptime_ms < slot.lobby->countdown_end_ms) 
+    {
+        // Every second, broadcast current lobby state.
+        if (server.uptime_ms > slot.lobby->lobby_state_refresh_time)
+        {
+            slot.lobby->lobby_state_refresh_time = server.uptime_ms + 1000;
+            game_server_slot_send_lobby_state(server, slot_index);
+        }
         return;
+    }
 
 	// On failure the slot goes to AWAITING_CLEANUP and gets reset.
 	if (!game_server_start_match_slot(server, slot_index))

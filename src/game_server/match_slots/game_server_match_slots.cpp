@@ -73,12 +73,6 @@ bool game_server_slot_attach_client(game_server& server, ui8 slot_index, game_se
 	}
 
     slot.connection_count++;
-
-    if (slot.state == MATCH_SLOT_STATE::IN_LOBBY)
-    {
-	    game_server_slot_send_lobby_state(server, slot, slot_index);
-    }
-
 	return true;
 }
 
@@ -139,7 +133,6 @@ SUCCESS:
     if (slot.state == MATCH_SLOT_STATE::IN_LOBBY)
     {
         if (slot.connection_count == 0) slot.lobby->countdown_active = false;
-        else game_server_slot_send_lobby_state(server, slot, slot_index);
     }
 
     server.logf("MATCH", LOG_NORMAL, "Detached client %d from match slot %d. Freed player index = %hu.", client_handle.value, slot_index, freedSlot);
@@ -220,6 +213,7 @@ bool game_server_match_slot_handle_message(game_server& server, game_server_clie
     {
     case GAME_MESSAGE_TYPE::CLIENT_PLACEMENT_PICK:
         match_slot_handle_message_client_placement_pick(server, slotIndex, playerClient, msg);
+        return true;
     case GAME_MESSAGE_TYPE::CLIENT_TICK:
         match_slot_handle_message_client_tick(server, slotIndex, playerClient, msg);
         return true;
