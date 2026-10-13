@@ -14,6 +14,9 @@ enum class GAME_MESSAGE_TYPE : ui8
 	MATCH_STARTED,		// Server -> Client = Contains instructions on the match the client is in, including which player is controlled.
 	MATCH_ENDED,		// Server -> Client = Signal of match ending on the server, with result information.
 
+    CLIENT_PLACEMENT_PICK, // Client -> Server = Request to start the game at the provided location.
+    SERVER_PLACEMENT_PICK, // Server -> Client = Indicate the given player will start the game at the specified location.
+
 	SERVER_TICK,		// Server -> Client = Input sequence for a specific tick provided by the server to the client. Allows client to progress local match state.
 	SERVER_TICK_BUNDLE, // Server -> Client = Multiple ticks worth of input sequences. 
 	CLIENT_TICK,
@@ -79,6 +82,12 @@ struct game_message_payload_match_ended
 
 // BEGIN MATCH COMMAND MESSAGES
 
+struct game_message_payload_placement_pick
+{
+    match_player_id player_id;
+    world_location picked_loc;
+};
+
 // Server -> Client message payload.
 // Received by a client as the authoritative set of input command sequences applied over a specific match tick.
 struct game_message_payload_server_tick
@@ -123,16 +132,26 @@ static inline ui16 get_message_type_payload_size(GAME_MESSAGE_TYPE type)
 	{
 	case GAME_MESSAGE_TYPE::LOBBY_JOINED:
 		return sizeof(game_message_payload_lobby_joined);
+
 	case GAME_MESSAGE_TYPE::MATCH_STARTED:
 		return sizeof(game_message_payload_match_started);
+
 	case GAME_MESSAGE_TYPE::MATCH_ENDED:
 		return sizeof(game_message_payload_match_ended);
+
+    case GAME_MESSAGE_TYPE::CLIENT_PLACEMENT_PICK:
+    case GAME_MESSAGE_TYPE::SERVER_PLACEMENT_PICK:
+        return sizeof(game_message_payload_placement_pick);
+
 	case GAME_MESSAGE_TYPE::SERVER_TICK:
 		return sizeof(game_message_payload_server_tick);
+
 	case GAME_MESSAGE_TYPE::SERVER_TICK_BUNDLE:
 		return sizeof(game_message_payload_server_tick_bundle);
+
 	case GAME_MESSAGE_TYPE::CLIENT_TICK:
 		return sizeof(game_message_payload_client_tick);
+
 	default:
 		ASSERT_MSG(0, "Message type %d is missing a payload structure size association.", type);
 		return 0;
