@@ -49,11 +49,12 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 	}
 
 	// If the connection is still unrecognized and has lasted more than a second, drop it.
-	if (server.uptime_ms - client.connected_at_ms > UNKNOWN_CLIENT_TIMEOUT_MS)
+	if (!client.unknown.being_dropped && server.uptime_ms - client.connected_at_ms > UNKNOWN_CLIENT_TIMEOUT_MS)
 	{
 		server.logf("Clients", LOG_WARNING, "Dropping unrecognized client %d after %llu ms (received %llu bytes).",
 			client.handle.value, server.uptime_ms - client.connected_at_ms, client.unknown.traffic_size);
 		game_server_client_drop(server, client.handle);
+        client.unknown.being_dropped = true;
 	}
 }
 

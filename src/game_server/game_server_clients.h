@@ -61,6 +61,7 @@ struct game_server_client
 			// Track total received data. We don't store anything for unknown client and we may choose to kick them out after a point, or even blacklist their address.
 
 			ui64 traffic_size; // Total amount of bytes received from this client.
+            bool being_dropped;
 		} unknown;
 
         // 
