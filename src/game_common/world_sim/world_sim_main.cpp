@@ -11,7 +11,6 @@
 #include "world_system_combat.cpp"
 #include "world_system_movement.cpp"
 #include "world_system_economy.cpp"
-#include "world_pathfinding.cpp"
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
 {
@@ -34,10 +33,6 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 	newWorld->terrain.regions = memory.alloc<world_terrain::region>(regionCount);
 	if (newWorld->terrain.regions == nullptr) goto WORLD_INIT_FAIL;
 	ia_memzero(newWorld->terrain.regions, sizeof(world_terrain::region) * regionCount);
-
-	newWorld->paths = memory.alloc<world_path_store>();
-	if (newWorld->paths == nullptr) goto WORLD_INIT_FAIL;
-	world_path_store_init(*newWorld->paths);
 
 	// Alloc entities
 	{
@@ -127,7 +122,4 @@ void world_state_tick(match_world_state& world)
 
     // Increment world age.
     world.age++;
-
-    // Stored paths computed before this tick may not be valid anymore.
-    world.paths->epoch++;
 }

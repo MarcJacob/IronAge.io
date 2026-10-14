@@ -97,32 +97,6 @@ export function send_spawn_army(settlement_guid: number): void
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_ARMY);
 }
 
-// Orders the given settlement to build a road to a world tile.
-export function send_build_road(settlement_guid: number, tile: { x: number, y: number }): void
-{
-    // Layout of input_event_payload_build_road (game_client_backend.h): ui32 settlement guid, ui16 x, ui16 y (world tile).
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, settlement_guid, true);
-    view.setUint16(4, tile.x, true);
-    view.setUint16(6, tile.y, true);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.BUILD_ROAD);
-}
-
-// CONSTRUCTION MODE
-// Entered from the HUD: the next left click on the map requests a road from the origin settlement to the clicked tile, then the mode ends.
-// Right click or Escape cancels it.
-let ROAD_CONSTRUCTION_ORIGIN: number | null = null;
-
-export function enter_road_construction(settlement_guid: number): void
-{
-    ROAD_CONSTRUCTION_ORIGIN = settlement_guid;
-}
-
-export function is_in_construction(): boolean
-{
-    return ROAD_CONSTRUCTION_ORIGIN !== null;
-}
-
 // Orders the given army to chase and attack the given entity.
 export function send_attack_target(attacker_guid: number, target_guid: number): void
 {
@@ -194,17 +168,6 @@ function on_pointer_click(clickEvent: MouseEvent)
         return;
     }
 
-    // Construction mode: a left click on the map requests the road and ends the mode. Other buttons do nothing.
-    if (ROAD_CONSTRUCTION_ORIGIN !== null)
-    {
-        if (clickEvent.button !== 0) return;
-        const tile = Render.page_to_tile(clickEvent.clientX, clickEvent.clientY);
-        if (!Render.is_tile_in_world(tile)) return; // Stay in the mode, the click missed the map.
-        send_build_road(ROAD_CONSTRUCTION_ORIGIN, tile);
-        ROAD_CONSTRUCTION_ORIGIN = null;
-        return;
-    }
-
     do_mouse_action(get_mouse_button_action(clickEvent.button), clickEvent.clientX, clickEvent.clientY);
 }
 
@@ -212,11 +175,6 @@ function on_context_menu(menuEvent: MouseEvent)
 {
     menuEvent.preventDefault();
     if (is_in_placement()) return;
-    if (ROAD_CONSTRUCTION_ORIGIN !== null)
-    {
-        ROAD_CONSTRUCTION_ORIGIN = null; // Right click cancels the construction mode.
-        return;
-    }
     send_context_order(menuEvent.clientX, menuEvent.clientY);
 }
 
@@ -260,10 +218,7 @@ export function init_input(canvas_element: HTMLCanvasElement)
             keyEvent.preventDefault();
         }
     });
-    window.addEventListener('keydown', (keyEvent) => {
-        if (keyEvent.code === 'Escape') ROAD_CONSTRUCTION_ORIGIN = null;
-    });
-    window.addEventListener('keyup',(keyEvent) => KB_HELD_KEYS.delete(keyEvent.code));
+    window.addEventListener('keyup', (keyEvent) => KB_HELD_KEYS.delete(keyEvent.code));
     window.addEventListener('blur', () => KB_HELD_KEYS.clear());
 
     // Register tick function on frame callback.

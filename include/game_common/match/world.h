@@ -264,8 +264,6 @@ struct world_entity_caravans : public world_entity_container
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
 constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
 
-struct world_path_store; // Stored paths & pathfinding buffers, see world_sim.h.
-
 // Contains the match's world state, namely its active entities, and static elements such as tiles.
 // Overall this represents the "observable state" of the match that can be interacted with indirectly by sending input commands into the next tick.
 struct match_world_state
@@ -286,8 +284,6 @@ struct match_world_state
 		world_entity_armies armies;
 		world_entity_caravans caravans;
 	} entities;
-
-	world_path_store* paths;
 };
 
 // Initializes a full world state according to the passed parameters.

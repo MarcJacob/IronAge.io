@@ -148,7 +148,6 @@ enum class INPUT_EVENT_TYPE : ui16
 	FOUND_SETTLEMENT,
 	SPAWN_ARMY,
 	ATTACK_TARGET,
-	BUILD_ROAD,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -195,14 +194,6 @@ struct input_event_payload_attack_target
 	entity_guid target_entity; // Entity to attack.
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_attack_target);
-
-// Orders a settlement to build a road to a world tile.
-struct input_event_payload_build_road
-{
-	entity_guid settlement; // Settlement building the road.
-	ui16 x, y; // Target tile in world space.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_build_road);
 
 #pragma pack(pop)
 

@@ -20,7 +20,6 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
 	SPAWN_ARMY, // Spawns an army of levies from a settlement's population.
-	BUILD_ROAD, // Builds a road from a settlement (or its existing roads) to a target location, paid from the settlement's local wealth.
 
     // SERVER COMMANDS
 
@@ -96,19 +95,6 @@ bool command_spawn_army_validity_check(const match_world_state& world, match_pla
 
 void command_spawn_army_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
-
-// BUILD ROAD
-struct command_data_build_road
-{
-	entity_guid origin_settlement;
-	world_location target;
-};
-
-bool command_build_road_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_build_road& command);
-
-void command_build_road_apply(match_world_state& world, match_player_id player,
-	const command_data_build_road& command);
 
 // Header & command size mapping definitions.
 
@@ -196,8 +182,6 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_found_settlement);
 	case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 		return sizeof(command_data_spawn_army);
-	case MATCH_COMMAND_TYPE::BUILD_ROAD:
-		return sizeof(command_data_build_road);
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         return sizeof(command_data_server_spawn_player);
 	default:

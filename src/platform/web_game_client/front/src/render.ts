@@ -86,11 +86,7 @@ const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
 
 // Mirror RENDER_TILE_FLAGS in include/game_client/game_client_backend.h.
 const TILE_FLAG_BORDER = 1 << 0;
-const TILE_FLAG_ROAD = 1 << 1;
 const TILE_FLAG_OWNED = 1 << 2;
-
-// Color of road tiles, drawn opaque over the terrain and the territory tint.
-const ROAD_COLOR = [120, 115, 105];
 
 // Page position of the mouse over the canvas, or null if it isn't over it. Resolved to a tile every draw so the highlight follows camera moves too.
 let HOVER_PAGE_POS: { x: number, y: number } | null = null;
@@ -348,15 +344,6 @@ function draw_territory(render_state: Backend.RenderState)
             drawBytes[pixelOffset + 1] = 0;
             drawBytes[pixelOffset + 2] = 0;
             drawBytes[pixelOffset + 3] = 196;
-        }
-
-        // Roads replace the terrain color, so they come last and hide the territory tint and borders.
-        if ((flagBytes[i] & TILE_FLAG_ROAD) !== 0)
-        {
-            drawBytes[pixelOffset] = ROAD_COLOR[0];
-            drawBytes[pixelOffset + 1] = ROAD_COLOR[1];
-            drawBytes[pixelOffset + 2] = ROAD_COLOR[2];
-            drawBytes[pixelOffset + 3] = 255;
         }
     }
 

@@ -3,7 +3,16 @@
 #include "core/math/vec2.h"
 #include "game_common/match/world.h"
 #include "world_sim.h"
-#include "world_tile_travel.h"
+
+// Proximity / travel difficulty over each terrain type.
+static const ui8 TILE_TERRAIN_TRAVEL_COST[] = {
+    3, // LAND_PLAINS
+    5, // LAND_HILLS
+    10, // LAND_MOUNTAINS
+
+    1, // WATER_COAST
+    4, // WATER_SEA
+};
 
 // Food production for each terrain type.
 // 10 units = one supported pop.
@@ -27,6 +36,15 @@ static constexpr ui8 CONTESTATION_DECAY = 2; // Per tick.
 static constexpr ui8 CONTESTATION_FALLOFF = 32; // Lost per tile when spreading to neighbouring tiles of the same settlement.
 static constexpr ui8 CONTESTATION_MAX_FOREIGN_NEIGHBOURS = 7; // Number of foreign neighbours that gives full contestation. All 8 is a special case for later.
 
+// Proximity is measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).
+// Stepping to a tile adds its terrain travel cost times the weight.
+static constexpr ui16 PROXIMITY_WEIGHT_ORTHOGONAL = 5;
+static constexpr ui16 PROXIMITY_WEIGHT_DIAGONAL = 7;
+
+// Neighbour offsets, non-diagonal only or all 8.
+static const vec2<i8> NEIGHBOUR_OFFSETS_ORTHOGONAL[] = { {-1, 0}, {0, -1}, {0, 1}, {1, 0} };
+static const vec2<i8> NEIGHBOUR_OFFSETS_ALL[] = { {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1} };
+
 // Proximity at which land output is reduced to 90%, stacking.
 static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 20;
 // Proximity at which a border tile cannot expand into more tiles. 
@@ -46,6 +64,17 @@ static ui32 world_get_tile_land_output(const match_world_state& world, ui16 regi
     }
 
     return output;
+}
+
+// Gets the region and tile indices of the tile at the given offset from a world location. Returns false if that tile is off the map.
+static bool world_get_neighbour_tile(const world_terrain& terrain, world_location location, vec2<i8> offset, ui16& out_region_index, ui16& out_tile_index)
+{
+    i32 x = location.x + offset.x;
+    i32 y = location.y + offset.y;
+    if (x < 0 || x >= terrain.size_tiles.x || y < 0 || y >= terrain.size_tiles.y) return false;
+
+    world_get_tile(terrain, { (ui16)x, (ui16)y }, out_region_index, out_tile_index);
+    return true;
 }
 
 // Grows the bounds so they include the given location.
@@ -80,7 +109,7 @@ static void world_influence_update_tile_proximity(const match_world_state& world
 // Returns 0 if no neighbour is owned by the settlement (IE the settlement's own root tile).
 static ui16 world_influence_get_claim_proximity(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
 {
-    ui16 travelCost = world_get_tile_travel_cost(world.terrain, region_index, tile_index);
+    ui16 travelCost = TILE_TERRAIN_TRAVEL_COST[(ui8)world.terrain.regions[region_index].terrain_types[tile_index]];
     world_location tileWorldLocation = world_get_tile_location(world.terrain, region_index, tile_index);
     bool found = false;
     ui16 claimProximity = 0;
@@ -283,7 +312,8 @@ void world_system_economy_proximity_recalc(match_world_state& world)
                     continue;
                 }
 
-                ui8 travelCost = world_get_tile_travel_cost(terrain, regionIndex, tileIndex);
+                TERRAIN_TILE_TYPE tileTerrain = terrain.regions[regionIndex].terrain_types[tileIndex];
+                ui8 travelCost = TILE_TERRAIN_TRAVEL_COST[(ui8)tileTerrain];
                 bool isDiagonal = lowestNeighbourOffset.x != 0 && lowestNeighbourOffset.y != 0;
                 ui16 newProximity = lowestNeighbourProximity
                         + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
