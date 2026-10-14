@@ -4,16 +4,6 @@
 #include "game_common/match/world.h"
 #include "world_sim.h"
 
-// Proximity / travel difficulty over each terrain type.
-static const ui8 TILE_TERRAIN_TRAVEL_COST[] = {
-    3, // LAND_PLAINS
-    5, // LAND_HILLS
-    10, // LAND_MOUNTAINS
-
-    1, // WATER_COAST
-    4, // WATER_SEA
-};
-
 // Food production for each terrain type.
 // 10 units = one supported pop.
 static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
@@ -35,15 +25,6 @@ static constexpr ui8 CONTESTATION_GAIN = 24; // Per tick, per foreign neighbour 
 static constexpr ui8 CONTESTATION_DECAY = 2; // Per tick.
 static constexpr ui8 CONTESTATION_FALLOFF = 32; // Lost per tile when spreading to neighbouring tiles of the same settlement.
 static constexpr ui8 CONTESTATION_MAX_FOREIGN_NEIGHBOURS = 7; // Number of foreign neighbours that gives full contestation. All 8 is a special case for later.
-
-// Proximity is measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).
-// Stepping to a tile adds its terrain travel cost times the weight.
-static constexpr ui16 PROXIMITY_WEIGHT_ORTHOGONAL = 5;
-static constexpr ui16 PROXIMITY_WEIGHT_DIAGONAL = 7;
-
-// Neighbour offsets, non-diagonal only or all 8.
-static const vec2<i8> NEIGHBOUR_OFFSETS_ORTHOGONAL[] = { {-1, 0}, {0, -1}, {0, 1}, {1, 0} };
-static const vec2<i8> NEIGHBOUR_OFFSETS_ALL[] = { {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1} };
 
 // Proximity at which land output is reduced to 90%, stacking.
 static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 20;

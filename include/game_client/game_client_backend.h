@@ -11,6 +11,7 @@
 
 #include "game_common/game_messages.h"
 #include "game_common/match/world.h"
+#include "game_common/match/pathing.h"
 
 // Structure definitions for resources sent from the client backend to frontend.
 
@@ -220,6 +221,12 @@ client_render_state* game_client_get_render_state(game_client& backend);
 // Fills out_view with the current state of the entity if it exists in the local match and is of a supported type.
 // Returns false (leaving out_view untouched) if there is no local match, the GUID is invalid / stale, or its type is unsupported.
 bool game_client_query_entity(game_client& backend, entity_guid entity, entity_full_view& out_view);
+
+// PATH QUERY
+
+// Computes a land path between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
+// Leaves out_path empty (count 0) if there is no local match or a location is outside the world. See world_path_find for the rest.
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path);
 
 // MATCH
 

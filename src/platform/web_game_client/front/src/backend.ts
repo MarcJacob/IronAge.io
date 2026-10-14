@@ -84,6 +84,11 @@ interface ClientExports extends WebAssembly.Exports
     client_get_entity_view_buffer_offset(): number;
     client_get_entity_view_buffer_size(): number;
     client_query_entity(guid: number): number; // wasm bool: 0 or 1.
+
+    // Path query
+
+    client_get_path_buffer_offset(): number;
+    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number): number; // Waypoint count written to the path buffer.
 }
 
 let CLIENT_BACKEND: ClientExports;
@@ -283,6 +288,19 @@ export namespace ClientInput
         if (!valid) console.error(`Input event ${INPUT_EVENT_TYPE[code]} was rejected by the backend - is backend.ts out of sync with game_client_backend.h?`);
         return valid;
     }
+}
+
+// Asks the backend for a land path between two world tiles. Returns its waypoints in order, start tile excluded:
+// move in a straight line from the start to the first waypoint, then to the second, and so on. Empty if there is nothing to follow.
+// The path buffer holds (x, y) ui16 pairs (see web_game_client_query.cpp).
+export function query_path(start: { x: number, y: number }, end: { x: number, y: number }): { x: number, y: number }[]
+{
+    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y);
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_path_buffer_offset(), count * 4);
+
+    const points: { x: number, y: number }[] = [];
+    for (let i = 0; i < count; i++) points.push({ x: view.getUint16(i * 4, true), y: view.getUint16(i * 4 + 2, true) });
+    return points;
 }
 
 // Entity inspection. Buffer location / size cached once at start().

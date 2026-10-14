@@ -12,6 +12,21 @@ static void fill_movement_view(entity_full_view& view, const world_entity_moveme
 	view.target_location_y = movement.move_target.y;
 }
 
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path)
+{
+	out_path.count = 0;
+	out_path.length = 0;
+	out_path.partial = true;
+
+	if (backend.local_match == nullptr) return;
+	const world_terrain& terrain = backend.local_match->world->terrain;
+	if (start.x >= terrain.size_tiles.x || start.y >= terrain.size_tiles.y || end.x >= terrain.size_tiles.x || end.y >= terrain.size_tiles.y) return;
+
+	path_params params = { PATH_TERRAIN_LAND, false };
+	backend.path_scratch.clear();
+	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
+}
+
 bool game_client_query_entity(game_client& backend, entity_guid entity, entity_full_view& out_view)
 {
 	if (backend.local_match == nullptr) return false;

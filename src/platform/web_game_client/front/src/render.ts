@@ -5,7 +5,7 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import { FRONTEND_CAMERA } from "./camera.js"
-import { get_selected_entity_guid } from "./input.js"
+import { get_selected_entity_guid, get_selected_entity_view } from "./input.js"
 import { get_placement_dots } from "./placement.js"
 
 let canvas: HTMLCanvasElement;
@@ -83,6 +83,9 @@ const TERRAIN_COLOR_UNKNOWN: [number, number, number, number] = [255, 0, 255, 25
 
 // Fill style of the world tile under the mouse.
 const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
+
+// Stroke style of the path preview line.
+const PATH_PREVIEW_COLOR = 'rgba(255, 255, 255, 0.9)';
 
 // Mirror RENDER_TILE_FLAGS in include/game_client/game_client_backend.h.
 const TILE_FLAG_BORDER = 1 << 0;
@@ -367,6 +370,32 @@ function draw_hovered_tile()
     ctx.fillRect(rect.x, rect.y, rect.size, rect.size);
 }
 
+// With an entity selected, draws the path from it to the tile under the mouse (test of the pathfinding, will become the road preview).
+function draw_path_preview()
+{
+    if (HOVER_PAGE_POS === null) return;
+
+    const selected = get_selected_entity_view();
+    if (selected === null) return;
+
+    const hovered = page_to_tile(HOVER_PAGE_POS.x, HOVER_PAGE_POS.y);
+    if (!is_tile_in_world(hovered)) return;
+
+    const start = { x: selected.location_x, y: selected.location_y };
+    const startCenter = world_to_canvas(start.x + 0.5, start.y + 0.5);
+
+    ctx.strokeStyle = PATH_PREVIEW_COLOR;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(startCenter.x, startCenter.y);
+    for (const point of Backend.query_path(start, hovered))
+    {
+        const center = world_to_canvas(point.x + 0.5, point.y + 0.5);
+        ctx.lineTo(center.x, center.y);
+    }
+    ctx.stroke();
+}
+
 // Draws a dot per placement pick (see placement.ts), at least a few px wide at any zoom.
 function draw_placement_dots()
 {
@@ -408,6 +437,7 @@ export function draw(render_state: Backend.RenderState | null)
     draw_terrain();
     draw_territory(render_state);
     draw_hovered_tile();
+    draw_path_preview();
     draw_world_border();
     draw_placement_dots(); // Empty outside the placement phase.
 

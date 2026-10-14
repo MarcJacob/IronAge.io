@@ -95,6 +95,7 @@ struct game_client
 	mem_arena* memory; // All memory the client has to work with, provided by platform. 
 	mem_arena local_match_mem; // Memory used for running the local match simulation.
 	mem_arena render_tiles_mem; // Backing memory of the render state's per-tile arrays. Cleared on every match begin / end.
+	mem_arena path_scratch; // Search memory for path queries. Cleared by every query.
 
 	game_match* local_match; // Pointer to local match simulation if any.
 	match_player_id controlled_player_id; // ID of controlled player in active match.

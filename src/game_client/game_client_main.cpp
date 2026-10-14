@@ -35,8 +35,10 @@ game_client* game_client_init(mem_arena& backend_memory)
 	static constexpr ui64 COMMAND_QUEUE_MEM_SIZE = KiB(1);
 	static constexpr ui64 RENDER_TILES_MEM_SIZE = MiB(32); // 5 bytes per world tile.
 	static constexpr ui64 RENDER_FRAME_MEM_SIZE = MiB(16);
+	static constexpr ui64 PATH_SCRATCH_MEM_SIZE = KiB(256); // Limits how far a path query can search.
 
 	backend->local_match_mem = mem_arena_create_sub(*backend->memory, LOCAL_MATCH_MEM_SIZE);
+	backend->path_scratch = mem_arena_create_sub(*backend->memory, PATH_SCRATCH_MEM_SIZE);
 	backend->render_tiles_mem = mem_arena_create_sub(*backend->memory, RENDER_TILES_MEM_SIZE);
 	backend->render_state.frame.memory = mem_arena_create_sub(*backend->memory, RENDER_FRAME_MEM_SIZE);
 

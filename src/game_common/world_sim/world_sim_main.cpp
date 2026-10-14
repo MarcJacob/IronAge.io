@@ -11,6 +11,7 @@
 #include "world_system_combat.cpp"
 #include "world_system_movement.cpp"
 #include "world_system_economy.cpp"
+#include "world_pathing.cpp"
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
 {
