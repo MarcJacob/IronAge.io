@@ -1,6 +1,7 @@
 // Implementation file for the net communications component of the Win32 Game Server platform.
 
 #include "win32_game_server_platform.h"
+#include <WinSock2.h>
 
 // Net component logging: goes through the Win32 platform logging under the "NET" component.
 static inline void net_log(LOG_TYPE type, const char* msg) { win32_log("NET", type, msg); }
@@ -152,7 +153,7 @@ SOCKET create_listen_socket()
 	struct sockaddr_in bind_addr = {};
 	bind_addr.sin_family = AF_INET;
 	bind_addr.sin_port = htons(8000);
-	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK);
+	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
 
 	if (bind(listenSocket, (sockaddr*)&bind_addr, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
