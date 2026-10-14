@@ -76,7 +76,7 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		world.entities.armies.movements[command.entity.get_index()].move_target = command.move_target;
+		world.entities.armies.movements[command.entity.get_index()].destination = command.move_target;
 		// A new move order overrides any attack the army was committed to.
 		world.entities.armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
 		break;

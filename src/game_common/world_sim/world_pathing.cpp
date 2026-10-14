@@ -222,3 +222,36 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
     }
     out_path.count = total < out_path.points_capacity ? total : out_path.points_capacity;
 }
+
+world_path_store* world_path_store_init(mem_arena& memory)
+{
+    world_path_store* store = memory.alloc<world_path_store>();
+    if (store == nullptr) return nullptr;
+
+    ui8* scratchMemory = (ui8*)memory.alloc(WORLD_PATH_STORE_SCRATCH_SIZE);
+    if (scratchMemory == nullptr) return nullptr;
+
+    store->scratch = mem_arena_create(scratchMemory, WORLD_PATH_STORE_SCRATCH_SIZE);
+    store->last.points = store->points;
+    store->last.points_capacity = WORLD_PATH_STORE_MAX_WAYPOINTS;
+    return store;
+}
+
+void world_request_path(match_world_state& world, world_location start, world_location end, const path_params& params, path_result& out_result)
+{
+    out_result = {};
+    out_result.handle = INVALID_PATH_HANDLE; // The store only keeps the last path for now, so there is nothing to refer to later.
+
+    // Nothing to do, or an end outside the world (which the search can't handle).
+    if (start == end || end.x >= world.terrain.size_tiles.x || end.y >= world.terrain.size_tiles.y) return;
+
+    // Each request overwrites the previous path.
+    world_path_store& store = *world.path_store;
+    store.scratch.clear();
+    world_path_find(world.terrain, start, end, params, store.scratch, store.last);
+
+    out_result.count = store.last.count;
+    out_result.length = store.last.length;
+    out_result.partial = store.last.partial;
+    if (store.last.count > 0) out_result.next_point = store.last.points[0];
+}

@@ -51,14 +51,30 @@ static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region
 struct path_result
 {
     world_location next_point; // First waypoint after the start: the point to move straight towards.
+    ui16 count; // Number of waypoints. 0 = nothing to do (start == end, invalid end) or no progress possible.
     ui16 length; // Total length in tiles.
     bool partial; // The path ends at the closest reachable tile instead of at the requested target.
-    ui32 handle; // Identifies the stored path for later re-use. 0 = none (the store doesn't keep paths yet).
+    ui32 handle; // Identifies the stored path for later re-use. INVALID_PATH_HANDLE = none (the store doesn't keep paths yet).
 };
 
+// Size of the store's search memory. Fixed, as it limits how far a search goes and so must be the same on every machine.
+static constexpr ui64 WORLD_PATH_STORE_SCRATCH_SIZE = KiB(256);
+static constexpr ui16 WORLD_PATH_STORE_MAX_WAYPOINTS = 256;
+
+// The world's path store: for now only holds the last path calculated, which each request overwrites.
+struct world_path_store
+{
+    mem_arena scratch; // Search memory, cleared by every request.
+    world_location points[WORLD_PATH_STORE_MAX_WAYPOINTS]; // Waypoints of the last path.
+    path last; // The last path, its points being the array above.
+};
+
+// Allocates and initializes a path store from the given memory. Returns nullptr if there isn't enough.
+world_path_store* world_path_store_init(mem_arena& memory);
+
 // Requests a path from the world's path store, which may compute it or re-use a stored one. Simulation code only.
-// Returns false if no path (or partial path) could be found.
-bool world_request_path(match_world_state& world, world_location start, world_location end, const path_params& params, path_result& out_result);
+// out_result.count is 0 if there is nothing to follow.
+void world_request_path(match_world_state& world, world_location start, world_location end, const path_params& params, path_result& out_result);
 
 // ENTITIES
 
@@ -87,6 +103,14 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
 // SYSTEMS & HELPERS
+
+// Makes an entity stop where it is, dropping its path and the step it was making.
+static inline void world_movement_stop(world_entity_movement& movement, world_location location)
+{
+    movement.destination = location;
+    movement.move_target = location;
+    movement.path_handle = INVALID_PATH_HANDLE;
+}
 
 // Claims a tile in the world for the given settlement using the origin proximity value as proximity base.
 // Ensure settlement's influence bounds rectangle is kept up to date !

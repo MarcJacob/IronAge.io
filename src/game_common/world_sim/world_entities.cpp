@@ -105,6 +105,9 @@ entity_guid world_spawn_caravan(match_world_state& world, const world_entity_car
     SET_DEFAULT_VAL(world.entities.caravans.movements[freeIndex].travel_speed, 10);
     // ...
 
+    // Entities start standing on their move target, so the movement system fetches the first one from a path.
+    world.entities.caravans.movements[freeIndex].move_target = start_state.location;
+
 	return newID;
 }
 
@@ -136,7 +139,8 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 12);
-    SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].move_target, start_state.location);
+    SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].destination, start_state.location);
+    world.entities.armies.movements[freeIndex].move_target = start_state.location;
 
 	return newID;
 }

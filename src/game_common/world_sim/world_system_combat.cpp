@@ -129,7 +129,7 @@ void world_system_armies_target_reached(match_world_state& world)
 			> ATTACK_REACH_TILES * ATTACK_REACH_TILES) continue;
 
 		armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
-		armies.movements[armyIndex].move_target = armies.locations[armyIndex];
+		world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 		world_resolve_attack(world, armies.guids[armyIndex], target);
 	}
 }

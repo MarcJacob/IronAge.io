@@ -35,6 +35,9 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 	if (newWorld->terrain.regions == nullptr) goto WORLD_INIT_FAIL;
 	ia_memzero(newWorld->terrain.regions, sizeof(world_terrain::region) * regionCount);
 
+	newWorld->path_store = world_path_store_init(memory);
+	if (newWorld->path_store == nullptr) goto WORLD_INIT_FAIL;
+
 	// Alloc entities
 	{
 		const ui32 settlement_count = SETTLEMENTS_PER_REGION * regionCount;

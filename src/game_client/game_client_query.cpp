@@ -7,9 +7,9 @@
 static void fill_movement_view(entity_full_view& view, const world_entity_movement& movement)
 {
 	view.travel_speed = movement.travel_speed;
-	view.has_target_location = movement.move_target.x != INVALID_WORLD_LOCATION.x || movement.move_target.y != INVALID_WORLD_LOCATION.y;
-	view.target_location_x = movement.move_target.x;
-	view.target_location_y = movement.move_target.y;
+	view.has_target_location = movement.destination.x != INVALID_WORLD_LOCATION.x || movement.destination.y != INVALID_WORLD_LOCATION.y;
+	view.target_location_x = movement.destination.x;
+	view.target_location_y = movement.destination.y;
 }
 
 void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path)

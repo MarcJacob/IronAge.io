@@ -3,6 +3,10 @@
 #include "game_common/match/world.h"
 #include "world_sim.h"
 
+// What entities can cross for now: land only.
+static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND, false };
+
+// Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
 void process_entity_movement (world_entity_movement& movement, world_location& location)
 {
     if (movement.move_target == location) return;
@@ -56,6 +60,27 @@ void process_entity_movement (world_entity_movement& movement, world_location& l
 
 }
 
+// Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
+static void world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location)
+{
+    if (location == movement.move_target)
+    {
+        if (location == movement.destination) return; // Arrived.
+
+        // The path handle is always invalid for now, so the path is recalculated from the current tile every time.
+        path_result result;
+        world_request_path(world, location, movement.destination, ENTITY_PATH_PARAMS, result);
+        movement.path_handle = result.handle;
+
+        // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
+        if (result.count == 0) return;
+
+        movement.move_target = world_path_next_tile(location, result.next_point);
+    }
+
+    process_entity_movement(movement, location);
+}
+
 void world_system_entity_movement_decision(match_world_state& world)
 {
     const world_entity_settlements settlements = world.entities.settlements;
@@ -76,7 +101,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 		}
 
 		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
-		caravans.movements[caravanIndex].move_target = destLoc;
+		caravans.movements[caravanIndex].destination = destLoc;
 	}
 
     world_entity_armies& armies = world.entities.armies;
@@ -88,12 +113,12 @@ void world_system_entity_movement_decision(match_world_state& world)
 
 		if (world_entity_is_valid(world, armies.action_targets[armyIndex]))
 		{
-			armies.movements[armyIndex].move_target = world_get_entity_location(world, armies.action_targets[armyIndex]);
+			armies.movements[armyIndex].destination = world_get_entity_location(world, armies.action_targets[armyIndex]);
 		}
 		else
 		{
 			armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
-			armies.movements[armyIndex].move_target = armies.locations[armyIndex];
+			world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 		}
 	}
 }
@@ -107,13 +132,13 @@ void world_system_entity_movement(match_world_state& world)
 	{
 		if (!caravans.guids[caravanIndex].is_valid()) continue;
 
-		process_entity_movement(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+		world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
 	}
 
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
 
-		process_entity_movement(armies.movements[armyIndex], armies.locations[armyIndex]);
+		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}
 }

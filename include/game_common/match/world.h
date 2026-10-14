@@ -153,11 +153,16 @@ static inline world_location world_get_tile_location(const world_terrain& terrai
 
 // Reused entity sub-components
 
+// Identifies a path kept by the world's path store. Placeholder: always invalid until the store can keep several paths.
+static constexpr ui32 INVALID_PATH_HANDLE = 0;
+
 struct world_entity_movement
 {
 	ui8 travel_speed; // Speed in tenth of tile per tick.
 	vec2<i8> fractional_loc; // "In-tile location" of the entity. Affects movement.
-	world_location move_target; // Location the entity is moving towards.
+	world_location destination; // Tile the entity wants to reach. Set by orders and decisions.
+	world_location move_target; // Next tile of the path the entity is stepping to. Only set by the movement system.
+	ui32 path_handle; // Path the entity is following, INVALID_PATH_HANDLE if none.
 };
 
 struct world_entity_container
@@ -264,6 +269,8 @@ struct world_entity_caravans : public world_entity_container
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
 constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
 
+struct world_path_store; // Opaque outside the world simulation, see world_sim.h.
+
 // Contains the match's world state, namely its active entities, and static elements such as tiles.
 // Overall this represents the "observable state" of the match that can be interacted with indirectly by sending input commands into the next tick.
 struct match_world_state
@@ -273,6 +280,8 @@ struct match_world_state
     rand_generator_32 rand_gen; // Main random generator used by this world's systems.
 
 	world_terrain terrain; // World Terrain data.
+
+	world_path_store* path_store; // Paths calculated for entity movement.
 
 	// Holds all entity data for this world state.
 	// Currently is all pre-allocated for pre-estimated max possible usage.

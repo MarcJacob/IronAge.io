@@ -645,7 +645,7 @@ void world_system_settlement_spawn_caravans(match_world_state& world)
                 .location = settlements.locations[settlementIndex],
                 .movement =
                 {
-                    .move_target = settlements.locations[destRandIndex],
+                    .destination = settlements.locations[destRandIndex],
                 },
                 .origin_settlement = settlements.guids[settlementIndex],
                 .dest_settlement = settlements.guids[destRandIndex],

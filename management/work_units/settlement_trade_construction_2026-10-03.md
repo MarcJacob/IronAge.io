@@ -36,22 +36,30 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Tasks
 
-1. [ ] Read-only survey: current movement, tile travel cost, tile flags, any existing pathing.
-2. [ ] Pathfinding low layer (request API, caller memory).
+1. [DONE] Read-only survey.
+2. [DONE] Pathfinding low layer: stateless `world_path_find` ([pathing.h](include/game_common/match/pathing.h), [world_pathing.cpp](src/game_common/world_sim/world_pathing.cpp)); A* on 8 directions, 5/7 chamfer costs, scratch arena size = search budget, deterministic tie-break.
 3. [ ] Wire movement orders to it.
-4. [ ] Path cache layer.
+   - Entities store a waypoint; request a path only on target change or waypoint reached.
+   - Needs the world path store: opaque `world_path_store*` in `match_world_state`, fixed-size scratch arena (identical results on all machines), body of `world_request_path` (declaration likely becomes `void`, `count == 0` = nothing).
+4. [ ] Path cache layer (`path_result.handle` unused; open: key on (start, end) or on regions).
 5. [ ] Construction system (settlement-side) + road as first on-map type; input command only dispatches.
-6. [ ] Client preview of path / road.
+   - `world_tile_move_cost` already reads the unused `is_road` bit; nothing sets it yet.
+6. [DONE] Client preview of path (selected entity to hovered tile), via `game_client_query_path`, 256 KiB `path_scratch` arena. Road preview comes with task 5.
 
-## Peer brief
+## Decisions (pathing)
 
-- Goal: design discussion + read-only survey for task 1, then help the user define the pathfinding low-layer API (task 2). No source edits unless the user says so.
-- Scope: game common (shared sim, used by server and wasm client). Find the relevant folders via **/*.imprint.md; start from the imprints for game common and its sub-folders.
-- Survey, report to the user: how movement orders move entities today; where tile travel cost and tile flags live; entity and tile data layout; existing pathing, if any; the caller-supplied scratch memory pattern (arenas) in game common.
-- Decisions made: see Decisions above (two-layer pathfinding, tile-grid resolution, instant construction in a settlement construction system and not in the input command, roads first).
-- Constraints: no std library in game common / wasm; locality, simplicity, brevity; keep it simple, not road-specific (a previous attempt was too complex); small reviewable steps; flag multi-file architecture changes.
-- Done: user has a clear picture of the current state and an agreed pathfinding API sketch. Record it in this file only if the user asks.
-- Open questions: map size / grid dimensions; whether path cache keys on (start, end) or on regions.
+- Path = waypoints, each leg a run in one of 8 directions, start tile excluded; always returns a result (possibly empty / partial).
+- Functions about the world or its terrain get a `world_` prefix.
+- `world_request_path` store is for sim code only; the stateless tool is for anyone.
+
+## Known limitations / cleanups
+
+- Diagonals can cut between two blocked tiles.
+- Heuristic assumes min tile cost 1 (wide search on plains); improve if previews get slow.
+- Client ignores `partial`; preview buffer capped at 64 waypoints; single land mover type.
+- `PROXIMITY_WEIGHT_*` shared by economy and pathing: rename neutrally.
+- Off-by-one: move-target validity check in match_commands.cpp uses `>` instead of `>=`.
+- Nothing committed yet (user's call).
 
 ## Depends on
 
@@ -59,4 +67,4 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Progress
 
-Design phase. Next: survey (task 1).
+Pathing tool + client preview done. Next: task 3 (path store + movement wiring), or task 5 (construction), user's choice.
