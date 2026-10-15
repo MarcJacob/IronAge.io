@@ -90,7 +90,7 @@ static void world_influence_update_tile_proximity(const match_world_state& world
 // Returns 0 if no neighbour is owned by the settlement (IE the settlement's own root tile).
 static ui16 world_influence_get_claim_proximity(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
 {
-    ui16 travelCost = TILE_TERRAIN_TRAVEL_COST[(ui8)world.terrain.regions[region_index].terrain_types[tile_index]];
+    ui16 travelCost = world_tile_move_cost(world.terrain, region_index, tile_index, {}); // Determine travel cost based on pathing move cost with no default parameters.
     world_location tileWorldLocation = world_get_tile_location(world.terrain, region_index, tile_index);
     bool found = false;
     ui16 claimProximity = 0;

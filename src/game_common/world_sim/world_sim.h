@@ -31,17 +31,26 @@ static constexpr ui16 PROXIMITY_WEIGHT_DIAGONAL = 7;
 static const vec2<i8> NEIGHBOUR_OFFSETS_ORTHOGONAL[] = { {-1, 0}, {0, -1}, {0, 1}, {1, 0} };
 static const vec2<i8> NEIGHBOUR_OFFSETS_ALL[] = { {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1} };
 
-// Returns the travel cost of entering a tile for the given path parameters. 0 means impassable.
+// Returns the travel cost of entering a tile for the given path parameters. 0 means impassable / invalid for the given params.
 static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region_index, ui16 tile_index, const path_params& params)
 {
     const world_terrain::region& region = terrain.regions[region_index];
     TERRAIN_TILE_TYPE type = region.terrain_types[tile_index];
 
-    if ((params.passable_terrain & (1 << (ui8)type)) == 0) return 0;
+    // Check terrain flags. If all flags are at 0, then all terrains are allowed.
+    if (params.passable_terrain != 0 && (params.passable_terrain & (1 << (ui8)type)) == 0) return 0;
 
+    // Roads return the road travel cost no matter what.
     if (region.status[tile_index].is_road) return ROAD_TRAVEL_COST;
+
+    // Stop here if we can only path on roads.
     if (params.roads_only) return 0;
 
+    // If a valid "within settlement territory" guid was given, prevent pathing through any tile that isn't in the settlement.
+    if (params.within_settlement_territory.is_valid() 
+            && params.within_settlement_territory.get_index() != terrain.regions[region_index].owners[tile_index]) return 0;
+
+    // Default case: "native" terrain travel cost.
     return TILE_TERRAIN_TRAVEL_COST[(ui8)type];
 }
 
@@ -102,7 +111,49 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
+// Spawns a new builder in the world with the provided start state and returns its GUID.
+// Returns INVALID_ENTITY_GUID if the origin is not a valid entity. Asserts if its type is not the one the build type requires.
+entity_guid world_spawn_builder(match_world_state& world, const world_entity_builders::single& start_state);
+
+void world_destroy_builder(match_world_state& world, entity_guid builder);
+
+bool world_alloc_builders(match_world_state& world, mem_arena& memory, ui32 count);
+
+// BUILD TYPES
+
+// Everything that can be built.
+enum BUILD_TYPE : ui16
+{
+    BUILD_TYPE_ROAD,
+    BUILD_TYPE_COUNT,
+};
+
+// Common properties of a build type. Its progression logic is selected by the BUILD_TYPE in the construction system.
+struct build_type_definition
+{
+    ENTITY_TYPE origin_entity_type; // Type of entity a builder of this type must be tied to.
+};
+
+static const build_type_definition BUILD_TYPE_DEFINITIONS[BUILD_TYPE_COUNT] = {
+    { ENTITY_TYPE::SETTLEMENT }, // BUILD_TYPE_ROAD
+};
+
+// Layout of the action data of a road project.
+struct build_road_data
+{
+    world_location start; // Tile the road starts from.
+    world_location head; // Last tile built, which is where the road continues from.
+    world_location destination; // Tile the road is going towards.
+};
+static_assert(sizeof(build_road_data) <= WORLD_BUILD_ACTION_DATA_SIZE, "Road action data doesn't fit the builder's action data.");
+
 // SYSTEMS & HELPERS
+
+// Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
+void world_tile_set_road(match_world_state& world, world_location location);
+
+// Advances all construction projects (builders) by one tick, destroying the finished ones.
+void world_system_construction(match_world_state& world);
 
 // Makes an entity stop where it is, dropping its path and the step it was making.
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)

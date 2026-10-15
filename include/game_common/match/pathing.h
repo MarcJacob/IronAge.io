@@ -13,7 +13,9 @@ static constexpr ui8 PATH_TERRAIN_WATER = (1 << (ui8)TERRAIN_TILE_TYPE::WATER_CO
 struct path_params
 {
 	ui8 passable_terrain; // Bit per TERRAIN_TILE_TYPE (see PATH_TERRAIN_* masks).
-	bool roads_only; // Only road tiles are passable.
+
+	bool roads_only : 1; // Only road tiles are passable.
+    entity_guid within_settlement_territory; // If set to a settlement entity, will limit the search to the settlement's territory.
 };
 
 // In & Out structure for world_path_find. When processed, contains a computed path as a list of waypoints. 

@@ -25,6 +25,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
     SERVER_SPAWN_PLAYER, // Spawn starting entity/ies for a player. Called at game start.
 
+	BUILD_ROAD, // Has a settlement start building a road between two tiles, within its territory.
+
 	TYPE_COUNT,
 };
 
@@ -95,6 +97,22 @@ bool command_spawn_army_validity_check(const match_world_state& world, match_pla
 
 void command_spawn_army_apply(match_world_state& world, match_player_id player,
 	const command_data_spawn_army& command);
+
+// BUILD ROAD
+// @TODO(Marc): I'd like for there to be a single command (or at least, one per "archetype") for starting build projects.
+// Available build types is going to be a center piece of the entire game economy and the subject of a lot of iterations, so it needs to be a very flexible system.
+struct command_data_build_road
+{
+	entity_guid settlement;
+	world_location origin; // Must be the settlement's tile or a road tile in its territory.
+	world_location destination;
+};
+
+bool command_build_road_validity_check(const match_world_state& world, match_player_id player,
+	const command_data_build_road& command);
+
+void command_build_road_apply(match_world_state& world, match_player_id player,
+	const command_data_build_road& command);
 
 // Header & command size mapping definitions.
 
@@ -184,6 +202,8 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_spawn_army);
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         return sizeof(command_data_server_spawn_player);
+	case MATCH_COMMAND_TYPE::BUILD_ROAD:
+		return sizeof(command_data_build_road);
 	default:
 		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
 		return 0;

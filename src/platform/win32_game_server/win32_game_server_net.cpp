@@ -141,6 +141,8 @@ void win32_build_active_connections_table(win32_net_component& net_component, ui
 	}
 }
 
+static ui16 LISTEN_PORT = 8080;
+
 SOCKET create_listen_socket()
 {
 	SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -152,8 +154,8 @@ SOCKET create_listen_socket()
 
 	struct sockaddr_in bind_addr = {};
 	bind_addr.sin_family = AF_INET;
-	bind_addr.sin_port = htons(8080);
-	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
+	bind_addr.sin_port = htons(LISTEN_PORT);
+	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK); // Listen only on loopback so only local connections or connections going through the CloudFlared tunnel can come in.
 
 	if (bind(listenSocket, (sockaddr*)&bind_addr, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
@@ -469,6 +471,8 @@ unsigned long listen_thread_func(LPVOID context)
 
 	sockaddr_in newConnectionAddr = {};
 	i32 addrLen = sizeof(newConnectionAddr);
+
+    net_logf(LOG_SUCCESS, "Listening on port %hu", LISTEN_PORT);
 
 	// Main loop
 	for (;;)

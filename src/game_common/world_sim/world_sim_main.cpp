@@ -11,6 +11,7 @@
 #include "world_system_combat.cpp"
 #include "world_system_movement.cpp"
 #include "world_system_economy.cpp"
+#include "world_system_construction.cpp"
 #include "world_pathing.cpp"
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
@@ -46,6 +47,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_settlements(*newWorld, memory, settlement_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_armies(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_builders(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     // Generate terrain: ring of mountains then hills along the world border, plains elsewhere.
@@ -109,6 +111,8 @@ void world_state_tick(match_world_state& world)
     // This is some test sequential code loosely based on the game design ideas.
     // @TODO(Marc): Figure out an appropriate abstraction for systems 
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
+
+    world_system_construction(world); // Before proximity recalc, so new roads count this tick.
 
     world_system_economy_influence_spread(world);
     world_system_economy_proximity_recalc(world);

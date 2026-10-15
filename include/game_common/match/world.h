@@ -28,6 +28,7 @@ enum ENTITY_TYPE : ui8
 	MICRO_TYPES_START,
 	CARAVAN = MICRO_TYPES_START,
 	ARMY,
+	BUILDER,
 	// ...
 };
 
@@ -265,6 +266,31 @@ struct world_entity_caravans : public world_entity_container
 	};
 };
 
+// Small byte buffer for the data a build type keeps about its project. Its layout is entirely defined by the build type's logic.
+static constexpr ui8 WORLD_BUILD_ACTION_DATA_SIZE = 16;
+struct world_build_action_data
+{
+	alignas(4) ui8 bytes[WORLD_BUILD_ACTION_DATA_SIZE]; // Aligned so build types can overlay structures on it.
+};
+
+// Builders are the entities carrying out construction projects (roads, buildings...). Each is tied to an origin entity, and destroyed when it goes away.
+struct world_entity_builders : public world_entity_container
+{
+	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the build type. Locates the builder.
+	ui16* build_types; // What is being built (BUILD_TYPE, see world_sim.h).
+	ui32* build_times; // Ticks since the project started. How the build type uses it is up to it.
+	world_build_action_data* action_data;
+
+	// Consolidated representation of a single builder for viewing purposes.
+	struct single
+	{
+		entity_guid origin_entity;
+		ui16 build_type;
+		ui32 build_time;
+		world_build_action_data action_data;
+	};
+};
+
 // @TEMP(Marc): Static memory size / layout properties.
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
 constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
@@ -292,6 +318,7 @@ struct match_world_state
 		world_entity_settlements settlements;
 		world_entity_armies armies;
 		world_entity_caravans caravans;
+		world_entity_builders builders;
 	} entities;
 };
 
@@ -311,6 +338,8 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 bool query_entity_state_caravan(const match_world_state& world, entity_guid entity, world_entity_caravans::single& out_state);
 
 bool query_entity_state_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
+
+bool query_entity_state_builder(const match_world_state& world, entity_guid entity, world_entity_builders::single& out_state);
 
 bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player);
 

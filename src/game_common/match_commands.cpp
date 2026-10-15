@@ -198,6 +198,58 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 	world.entities.armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
 }
 
+// BUILD ROAD
+
+bool command_build_road_validity_check(const match_world_state& world, match_player_id player, const command_data_build_road& command)
+{
+    // Check validity of entity, it must be an active settlement.
+	if (!world_entity_is_valid(world, command.settlement)) return false;
+	if (command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
+
+    // The settlement must be owned by the player emitting the command.
+	ui16 settlementIndex = command.settlement.get_index();
+	const world_entity_settlements& settlements = world.entities.settlements;
+	if (settlements.owners[settlementIndex] != player) return false;
+
+    // The oriign and destination must be in the world.
+	const world_terrain& terrain = world.terrain;
+	if (command.origin.x >= terrain.size_tiles.x || command.origin.y >= terrain.size_tiles.y) return false;
+	if (command.destination.x >= terrain.size_tiles.x || command.destination.y >= terrain.size_tiles.y) return false;
+
+	// The road starts from the settlement itself, or from a road tile in its territory.
+	if (!(command.origin == settlements.locations[settlementIndex]))
+	{
+		ui16 regionIndex, tileIndex;
+		world_get_tile(terrain, command.origin, regionIndex, tileIndex);
+		if (!terrain.regions[regionIndex].status[tileIndex].is_road) return false;
+		if (terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) return false;
+	}
+
+	const world_entity_builders& builders = world.entities.builders;
+	return builders.active_count < builders.max_count;
+}
+
+// Spawns a road builder tied to the settlement. The road itself is built over the following ticks (see the construction system).
+void command_build_road_apply(match_world_state& world, match_player_id player, const command_data_build_road& command)
+{
+	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last builder slot.
+	if (!command_build_road_validity_check(world, player, command)) return;
+
+    // Initialize builder entity to build a road from origin to destination.
+	world_entity_builders::single builder = {};
+	builder.origin_entity = command.settlement;
+	builder.build_type = BUILD_TYPE_ROAD;
+    
+    // Init payload. @TODO: Could probably just init head on tick 0 of the build logic...
+	*(build_road_data*)builder.action_data.bytes = {
+        .start = command.origin,
+        .head = command.origin,
+        .destination = command.destination 
+    };
+
+	world_spawn_builder(world, builder);
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS
@@ -217,6 +269,8 @@ bool match_command_validity_check(const match_world_state& world, match_player_i
 			return command_spawn_army_validity_check(world, player, command.get_command_data<command_data_spawn_army>());
         case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
             return command_server_spawn_player_validity_check(world, player, command.get_command_data<command_data_server_spawn_player>());
+		case MATCH_COMMAND_TYPE::BUILD_ROAD:
+			return command_build_road_validity_check(world, player, command.get_command_data<command_data_build_road>());
 		default:
 			ASSERT_MSG(0, "No validity check logic associated with command type.");
 			return false;
@@ -245,6 +299,9 @@ inline void match_command_apply(match_world_state& world, match_player_id player
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         command_server_spawn_player_apply(world, player, command.get_command_data<command_data_server_spawn_player>());
         break;
+	case MATCH_COMMAND_TYPE::BUILD_ROAD:
+		command_build_road_apply(world, player, command.get_command_data<command_data_build_road>());
+		break;
 	default:
 		ASSERT_MSG(0, "No apply logic associated with command type.");
 	}
@@ -307,6 +364,10 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
 			isValid = command_spawn_army_validity_check(world, player_id,
 				commandHeader.get_command_data<command_data_spawn_army>());
+			break;
+		case MATCH_COMMAND_TYPE::BUILD_ROAD:
+			isValid = command_build_road_validity_check(world, player_id,
+				commandHeader.get_command_data<command_data_build_road>());
 			break;
 		default:
 			// Only assert if the command type IS valid but not handled.

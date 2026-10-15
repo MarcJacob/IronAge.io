@@ -22,7 +22,8 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	const world_terrain& terrain = backend.local_match->world->terrain;
 	if (start.x >= terrain.size_tiles.x || start.y >= terrain.size_tiles.y || end.x >= terrain.size_tiles.x || end.y >= terrain.size_tiles.y) return;
 
-	path_params params = { PATH_TERRAIN_LAND, false };
+	path_params params = {};
+	params.passable_terrain = PATH_TERRAIN_LAND;
 	backend.path_scratch.clear();
 	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
 }

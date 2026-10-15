@@ -132,8 +132,8 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
 {
     ASSERT(out_path.points != nullptr && out_path.points_capacity > 0);
 
-    ui32 width = terrain.size_tiles.x;
-    ui32 startTile = start.y * width + start.x, endTile = end.y * width + end.x;
+    ui32 world_width = terrain.size_tiles.x;
+    ui32 startTile = start.y * world_width + start.x, endTile = end.y * world_width + end.x;
 
     // Default result, kept if the scratch arena is too small to search at all.
     out_path.count = 0;
@@ -171,8 +171,8 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
 
         for (ui8 dir = 0; dir < 8; dir++)
         {
-            i32 x = (i32)(entry.tile % width) + NEIGHBOUR_OFFSETS_ALL[dir].x;
-            i32 y = (i32)(entry.tile / width) + NEIGHBOUR_OFFSETS_ALL[dir].y;
+            i32 x = (i32)(entry.tile % world_width) + NEIGHBOUR_OFFSETS_ALL[dir].x;
+            i32 y = (i32)(entry.tile / world_width) + NEIGHBOUR_OFFSETS_ALL[dir].y;
             if (x < 0 || y < 0 || x >= terrain.size_tiles.x || y >= terrain.size_tiles.y) continue;
 
             ui16 regionIndex, tileIndex;
@@ -183,7 +183,7 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
             bool isDiagonal = NEIGHBOUR_OFFSETS_ALL[dir].x != 0 && NEIGHBOUR_OFFSETS_ALL[dir].y != 0;
             ui32 g = entry.g + cost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
 
-            path_node* neighbour = path_node_get(s, y * width + x);
+            path_node* neighbour = path_node_get(s, y * world_width + x);
             if (neighbour == nullptr) continue; // Table full: this tile is simply never explored.
             if (neighbour->state == PATH_NODE_CLOSED || (neighbour->state == PATH_NODE_OPEN && neighbour->g <= g)) continue;
 
@@ -212,11 +212,11 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
             if (tile == bestTile || dir != laterDir)
             {
                 ui16 index = total - 1 - seen++; // Only meaningful on the second pass.
-                if (pass == 1 && index < out_path.points_capacity) out_path.points[index] = { (ui16)(tile % width), (ui16)(tile / width) };
+                if (pass == 1 && index < out_path.points_capacity) out_path.points[index] = { (ui16)(tile % world_width), (ui16)(tile / world_width) };
             }
 
             laterDir = dir;
-            tile = (ui32)((i32)tile - NEIGHBOUR_OFFSETS_ALL[dir].x - NEIGHBOUR_OFFSETS_ALL[dir].y * (i32)width);
+            tile = (ui32)((i32)tile - NEIGHBOUR_OFFSETS_ALL[dir].x - NEIGHBOUR_OFFSETS_ALL[dir].y * (i32)world_width);
         }
         total = seen;
     }

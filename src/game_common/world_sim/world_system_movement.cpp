@@ -4,7 +4,7 @@
 #include "world_sim.h"
 
 // What entities can cross for now: land only.
-static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND, false };
+static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
 
 // Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
 void process_entity_movement (world_entity_movement& movement, world_location& location)

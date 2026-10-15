@@ -52,6 +52,8 @@ It is hierarchical in the sense that every subfolder has a clear relationship wi
 
 Comments that are not more than a few lines long just use // for each line. Beyond that, use /* */ at your convenience.
 
+Whenever possible, practice "Zero Is Initialization", meaning that the zero-initialized state of a structure should be a functional default for it.
+
 ### Naming
 
 Symbols:
