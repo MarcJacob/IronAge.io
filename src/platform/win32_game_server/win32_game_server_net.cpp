@@ -152,7 +152,7 @@ SOCKET create_listen_socket()
 
 	struct sockaddr_in bind_addr = {};
 	bind_addr.sin_family = AF_INET;
-	bind_addr.sin_port = htons(8000);
+	bind_addr.sin_port = htons(8080);
 	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
 
 	if (bind(listenSocket, (sockaddr*)&bind_addr, sizeof(sockaddr_in)) == SOCKET_ERROR)
