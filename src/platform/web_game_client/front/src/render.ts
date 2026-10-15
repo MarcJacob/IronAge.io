@@ -28,6 +28,7 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.SETTLEMENT]: true,
         [Backend.ENTITY_TYPE.CARAVAN]: true,
         [Backend.ENTITY_TYPE.ARMY]: true,
+        [Backend.ENTITY_TYPE.BATTLE]: true,
     } as Record<number, boolean>,
 
     tint_entities: true, // Tint entities by ownership (own / other).
@@ -97,6 +98,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
     [Backend.ENTITY_TYPE.CARAVAN]: 2,
     [Backend.ENTITY_TYPE.ARMY]: 2,
+    [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
 }
 

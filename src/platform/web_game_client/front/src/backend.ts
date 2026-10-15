@@ -50,7 +50,8 @@ export enum ENTITY_TYPE
     SETTLEMENT = 1,
     CARAVAN = 2,
     ARMY = 3,
-    BATTLE = 4,
+    BUILDER = 4,
+    BATTLE = 5,
 };
 
 interface ClientExports extends WebAssembly.Exports
