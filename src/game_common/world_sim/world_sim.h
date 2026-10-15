@@ -164,6 +164,9 @@ void world_tile_set_road(match_world_state& world, world_location location);
 // Advances all construction projects (builders) by one tick, destroying the finished ones.
 void world_system_construction(match_world_state& world);
 
+// Armies in a battle move towards the battle location until they are this many tiles from it, then stay pinned.
+constexpr i32 BATTLE_ARMY_DISTANCE = 2;
+
 // Makes an entity stop where it is, dropping its path and the step it was making.
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)
 {

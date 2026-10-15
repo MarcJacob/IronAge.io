@@ -7,6 +7,11 @@
 // An army reaches its attack target when within this many tiles of it.
 constexpr i32 ATTACK_REACH_TILES = 5;
 
+static inline world_location world_location_midpoint(world_location a, world_location b)
+{
+	return { (ui16)(((ui32)a.x + b.x) / 2), (ui16)(((ui32)a.y + b.y) / 2) };
+}
+
 static inline ui64 army_total_manpower(const world_entity_armies::comp& composition)
 {
 	return (ui64)composition.levies + composition.archers + composition.men_at_arms + composition.horsemen + composition.knights;
@@ -40,7 +45,7 @@ static inline void army_unit_counts(const world_entity_armies::comp& composition
 	out_counts[4] = composition.knights;
 }
 
-// Makes an army fight in a battle on the given side: its men are added to the side and it stops moving.
+// Makes an army fight in a battle on the given side: its men are added to the side and it stops its orders (the movement system walks it to the battle).
 static void battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)
 {
 	world_entity_armies& armies = world.entities.armies;
@@ -100,7 +105,7 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		entity_guid defenderArmy = world_spawn_army(world, defenders);
 
 		world_entity_battles::state start = {};
-		start.location = settlements.locations[targetIndex];
+		start.location = world_location_midpoint(armies.locations[attackerIndex], settlements.locations[targetIndex]);
 		start.siege_settlement = target;
 		start.siege_owner = attackerOwner;
 		start.siege_defenders = defenderArmy;
@@ -138,9 +143,9 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		}
 		else
 		{
-			// Both armies start a new battle at the target's location, the attacker on side 0.
+			// Both armies start a new battle halfway between them, the attacker on side 0. The battle never moves afterwards.
 			world_entity_battles::state start = {};
-			start.location = armies.locations[targetIndex];
+			start.location = world_location_midpoint(armies.locations[attackerIndex], armies.locations[targetIndex]);
 			battle = world_spawn_battle(world, start);
 			battle_join(world, battle, attacker, 0);
 			battle_join(world, battle, target, 1);

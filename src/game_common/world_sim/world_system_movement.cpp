@@ -137,7 +137,15 @@ void world_system_entity_movement(match_world_state& world)
 
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
-		if (!armies.guids[armyIndex].is_valid() || armies.battles[armyIndex].is_valid()) continue; // Armies in a battle are pinned.
+		if (!armies.guids[armyIndex].is_valid()) continue;
+
+		// Armies in a battle walk to the battle location, and are pinned once close enough.
+		if (armies.battles[armyIndex].is_valid())
+		{
+			world_location battleLoc = world.entities.battles.states[armies.battles[armyIndex].get_index()].location;
+			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
+			armies.movements[armyIndex].destination = battleLoc;
+		}
 
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}

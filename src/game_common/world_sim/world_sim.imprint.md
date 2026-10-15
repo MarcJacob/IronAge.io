@@ -14,7 +14,8 @@ Army catching an army creates a BATTLE entity (micro entity type, fixed-size sta
 - Battles only run a round every `BATTLE_TICK_INTERVAL` (10) world ticks (`world.age % interval == 0`); `duration` counts rounds.
 - Round (`world_system_battles`): each side rolls damage (1-10% of its men, rounded up). Each army takes enemy damage * (army men / side men), removed cheapest unit first, and subtracted from battle `men`. Army at 0 men is destroyed.
 - A side at 0 men ends the battle: survivors are released, battle destroyed.
-- Armies with a battle are skipped by entity movement (pinned) and cannot leave. To the death only.
+- Battle location is fixed at spawn: midpoint of the two starting armies (attacker and settlement for a siege). It never moves.
+- Armies in a battle walk to the battle location through normal movement; within `BATTLE_ARMY_DISTANCE` (2 tiles) they are pinned. They cannot leave (move orders ignored). To the death only.
 - Selecting a battle shows type, guid, location, attacker / defender men. A red / blue balance bar is drawn above the marker (`draw_battle_balance` in `render.ts`).
 
 ### Siege
