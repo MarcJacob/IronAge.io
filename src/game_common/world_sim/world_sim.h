@@ -107,6 +107,9 @@ void world_destroy_caravan(match_world_state& world, entity_guid caravan);
 void world_destroy_army(match_world_state& world, entity_guid army);
 void world_destroy_battle(match_world_state& world, entity_guid battle);
 
+// Destroys an army and adds its men to the settlement's population.
+void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
+
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
 
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count);

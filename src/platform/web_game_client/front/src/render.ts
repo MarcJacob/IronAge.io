@@ -512,8 +512,23 @@ export function draw(render_state: Backend.RenderState | null)
             const size = compute_entity_canvas_size(entity.entity_type);
             ctx.fillStyle = 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+            draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
         }
     }
+}
+
+// Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
+function draw_battle_balance(x: number, y: number, width: number, battle_guid: number)
+{
+    const battle = Backend.query_entity(battle_guid)?.battle;
+    if (battle === undefined) return;
+
+    const total = battle.attacker_men + battle.defender_men;
+    const redWidth = total > 0 ? width * battle.attacker_men / total : width / 2;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(x - width / 2, y - 6, redWidth, 4);
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(x - width / 2 + redWidth, y - 6, width - redWidth, 4);
 }
 
 // Matches the canvas's pixel size to its container's, and tells the camera. The container (not the canvas) is measured since

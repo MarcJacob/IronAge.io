@@ -295,7 +295,7 @@ struct world_entity_builders : public world_entity_container
 	};
 };
 
-// A battle between two sides of armies. Fixed size: it doesn't know which armies are in it, armies point to it instead.
+// A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_battles : public world_entity_container
 {
 	static constexpr ui8 UNIT_TYPES = 5; // Army unit types, in comp order: levies, archers, men at arms, horsemen, knights.
@@ -303,11 +303,12 @@ struct world_entity_battles : public world_entity_container
 	struct state
 	{
 		world_location location;
-		match_player_id side_owners[2]; // Owner of the army that started each side. Joining armies of other owners go to side 1.
 		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
 		ui32 damage[2]; // Men killed this tick BY each side.
 		ui32 duration; // Ticks since the battle started.
 		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
+		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
+		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.
 	} *states;
 };
 

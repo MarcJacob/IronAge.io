@@ -59,7 +59,7 @@ function entity_view_text(view: Backend.EntityView): string
     rows.push(["travel_speed", view.travel_speed]);
 
     // Only the block matching entity_type is set (see backend.EntityView). Null fields (no target) are skipped.
-    const typeBlock = view.settlement ?? view.caravan ?? view.army ?? {};
+    const typeBlock = view.settlement ?? view.caravan ?? view.army ?? view.battle ?? {};
     for (const [name, value] of Object.entries(typeBlock))
     {
         if (value !== undefined && value != null) rows.push([name, value as string | number]);

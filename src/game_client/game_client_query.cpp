@@ -112,6 +112,22 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 		out_view.extra.army.arrows_target = army.arrows_target;
 		break;
 	}
+	case ENTITY_TYPE::BATTLE:
+	{
+		if (!world_entity_is_valid(world, entity)) return false;
+		const world_entity_battles::state& battle = world.entities.battles.states[entity.get_index()];
+
+		out_view = {};
+		out_view.location_x = battle.location.x;
+		out_view.location_y = battle.location.y;
+		out_view.owner = INVALID_MATCH_PLAYER_ID;
+		for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+		{
+			out_view.extra.battle.attacker_men += battle.men[0][unitType];
+			out_view.extra.battle.defender_men += battle.men[1][unitType];
+		}
+		break;
+	}
 	default:
 		return false;
 	}

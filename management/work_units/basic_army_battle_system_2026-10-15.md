@@ -17,9 +17,11 @@ Armies catching armies create a Battle entity (static layout, no army list). Arm
 
 ## Decisions
 
-- Join side: owner matches side_owners[0] -> side 0, else side 1. Attacking an army already in a battle joins it against that army.
+- Battles cannot be targeted. Army reaching an army joins the side against it. Siege: targeting settlement or defending army joins attackers.
+- `world_disband_army` returns men to a settlement; used when defenders win a siege (only the `siege_defenders` levy army).
+- Selecting a battle shows attacker / defender men; balance bar via `draw_battle_balance` (render.ts, replaceable).
 - Damage 1-10% of side men per tick, rounded up. Battle spawns at target location. Army speed 12 -> 4.
-- No battle view in UI query (selecting a battle shows nothing). Pinned armies cannot leave.
+- Pinned armies cannot leave.
 - New imprint: src/game_common/world_sim/world_sim.imprint.md (no existing imprint modified).
 
 ## Tasks
@@ -31,8 +33,7 @@ Armies catching armies create a Battle entity (static layout, no army list). Arm
 
 ## Open
 
-- Third-party attackers on a siege always join side 0. Surviving levies are not returned to population. Existing-siege join path untested.
-- Not tried in the real client / server.
+- Not tried in the real client / server; battle UI panel and balance bar built (tsc) but never run in a browser.
 
 ## Next
 

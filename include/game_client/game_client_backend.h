@@ -133,6 +133,12 @@ struct entity_full_view
 			ui16 knights;
 			entity_guid arrows_target; // 0 if none.
 		} army;
+
+		struct
+		{
+			ui32 attacker_men; // Side 0.
+			ui32 defender_men; // Side 1.
+		} battle;
 	} extra;
 };
 static_assert(sizeof(entity_full_view) == 38, "entity_full_view layout is read by backend.ts at fixed offsets (size 38).");

@@ -345,6 +345,7 @@ export class EntityView
     settlement?: { population: number, local_wealth: number, tier: number, trade_attractivity: number, influence_capacity: number };
     caravan?: { origin_settlement: number };
     army?: { levies: number, archers: number, men_at_arms: number, horsemen: number, knights: number, arrows_target: number | null };
+    battle?: { attacker_men: number, defender_men: number };
 }
 
 // Queries the current state of an entity. Returns null if it doesn't exist (anymore) or can't be inspected.
@@ -394,6 +395,9 @@ export function query_entity(guid: number): EntityView | null
             };
             break;
         }
+        case ENTITY_TYPE.BATTLE:
+            out.battle = { attacker_men: view.getUint32(22, true), defender_men: view.getUint32(26, true) };
+            break;
     }
 
     return out;

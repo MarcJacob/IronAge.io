@@ -101,9 +101,9 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 
 		world_entity_battles::state start = {};
 		start.location = settlements.locations[targetIndex];
-		start.side_owners[0] = attackerOwner;
-		start.side_owners[1] = defenders.owner;
 		start.siege_settlement = target;
+		start.siege_owner = attackerOwner;
+		start.siege_defenders = defenderArmy;
 		entity_guid battle = world_spawn_battle(world, start);
 		battle_join(world, battle, attacker, 0);
 		battle_join(world, battle, defenderArmy, 1);
@@ -133,7 +133,7 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		entity_guid battle = armies.battles[targetIndex];
 		if (battle.is_valid())
 		{
-			// The target is already fighting: join its battle against it.
+			// The target is already fighting: join its battle on the side against it.
 			battle_join(world, battle, attacker, armies.battle_sides[targetIndex] ^ 1);
 		}
 		else
@@ -141,19 +141,10 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 			// Both armies start a new battle at the target's location, the attacker on side 0.
 			world_entity_battles::state start = {};
 			start.location = armies.locations[targetIndex];
-			start.side_owners[0] = attackerOwner;
-			start.side_owners[1] = armies.owners[targetIndex];
 			battle = world_spawn_battle(world, start);
 			battle_join(world, battle, attacker, 0);
 			battle_join(world, battle, target, 1);
 		}
-		break;
-	}
-	case ENTITY_TYPE::BATTLE:
-	{
-		// Join the side of the attacker's owner, or side 1 if it owns neither.
-		ui8 side = world.entities.battles.states[targetIndex].side_owners[0] == attackerOwner ? 0 : 1;
-		battle_join(world, target, attacker, side);
 		break;
 	}
 	default:
@@ -228,6 +219,12 @@ void world_system_battles(match_world_state& world)
 			if (over)
 			{
 				armies.battles[armyIndex] = INVALID_ENTITY_GUID;
+
+				// Defenders winning a siege: the levy army goes back to the settlement's population.
+				if (sideMen[1] > 0 && armies.guids[armyIndex] == battle.siege_defenders && world_entity_is_valid(world, battle.siege_settlement))
+				{
+					world_disband_army(world, armies.guids[armyIndex], battle.siege_settlement);
+				}
 				continue;
 			}
 
@@ -248,7 +245,7 @@ void world_system_battles(match_world_state& world)
 		// Attackers wiping the defenders of a siege take the settlement.
 		if (over && sideMen[0] > 0 && battle.siege_settlement.is_valid() && world_entity_is_valid(world, battle.siege_settlement))
 		{
-			world.entities.settlements.owners[battle.siege_settlement.get_index()] = battle.side_owners[0];
+			world.entities.settlements.owners[battle.siege_settlement.get_index()] = battle.siege_owner;
 		}
 
 		if (over) world_destroy_battle(world, battles.guids[battleIndex]);

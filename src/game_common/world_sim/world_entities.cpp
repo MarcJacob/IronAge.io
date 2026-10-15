@@ -241,6 +241,15 @@ void world_destroy_builder(match_world_state& world, entity_guid builder)
 	builders.active_count--;
 }
 
+void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
+{
+	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	const world_entity_armies::comp& men = world.entities.armies.compositions[army.get_index()];
+
+	world.entities.settlements.populations[settlement.get_index()] += (ui32)men.levies + men.archers + men.men_at_arms + men.horsemen + men.knights;
+	world_destroy_army(world, army);
+}
+
 void world_destroy_battle(match_world_state& world, entity_guid battle)
 {
 	ASSERT(world_entity_is_valid(world, battle) && battle.get_type() == ENTITY_TYPE::BATTLE);
