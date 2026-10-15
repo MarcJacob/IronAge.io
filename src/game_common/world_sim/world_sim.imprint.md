@@ -11,7 +11,8 @@ Army catching an army creates a BATTLE entity (micro entity type, fixed-size sta
 - Battles cannot be targeted. An army reaching a target army (`world_system_combat.cpp`) joins the side against it via `battle_join` (adds its men to the side, sets its battle / side, stops it).
   - Target not in a battle: a new battle starts, attacker side 0, target side 1.
   - Otherwise: joins the target's battle on the opposite side.
-- Tick (`world_system_battles`): each side rolls damage (1-10% of its men, rounded up). Each army takes enemy damage * (army men / side men), removed cheapest unit first, and subtracted from battle `men`. Army at 0 men is destroyed.
+- Battles only run a round every `BATTLE_TICK_INTERVAL` (10) world ticks (`world.age % interval == 0`); `duration` counts rounds.
+- Round (`world_system_battles`): each side rolls damage (1-10% of its men, rounded up). Each army takes enemy damage * (army men / side men), removed cheapest unit first, and subtracted from battle `men`. Army at 0 men is destroyed.
 - A side at 0 men ends the battle: survivors are released, battle destroyed.
 - Armies with a battle are skipped by entity movement (pinned) and cannot leave. To the death only.
 - Selecting a battle shows type, guid, location, attacker / defender men. A red / blue balance bar is drawn above the marker (`draw_battle_balance` in `render.ts`).

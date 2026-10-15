@@ -180,8 +180,13 @@ void world_system_armies_target_reached(match_world_state& world)
 // Each side's damage per tick is this many percent of its men at most.
 constexpr ui32 BATTLE_MAX_DAMAGE_PERCENT = 10;
 
+// Battles resolve one round every this many world ticks (1 = every tick). Battle duration counts rounds.
+constexpr ui32 BATTLE_TICK_INTERVAL = 10;
+
 void world_system_battles(match_world_state& world)
 {
+	if (world.age % BATTLE_TICK_INTERVAL != 0) return;
+
 	world_entity_battles& battles = world.entities.battles;
 	world_entity_armies& armies = world.entities.armies;
 
