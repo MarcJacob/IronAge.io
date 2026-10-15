@@ -307,6 +307,7 @@ struct world_entity_battles : public world_entity_container
 		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
 		ui32 damage[2]; // Men killed this tick BY each side.
 		ui32 duration; // Ticks since the battle started.
+		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
 	} *states;
 };
 

@@ -14,3 +14,9 @@ Army catching an army creates a BATTLE entity (micro entity type, fixed-size sta
 - Tick (`world_system_battles`): each side rolls damage (1-10% of its men, rounded up). Each army takes enemy damage * (army men / side men), removed cheapest unit first, and subtracted from battle `men`. Army at 0 men is destroyed.
 - A side at 0 men ends the battle: survivors are released, battle destroyed.
 - Armies with a battle are skipped by entity movement (pinned) and cannot leave. To the death only.
+
+### Siege
+
+- An army reaching an enemy settlement spawns a defending levy army (10% of population, at least 1, taken from the population) at the settlement and starts a battle with `siege_settlement` set. Attacker is side 0, defenders side 1.
+- Further attackers reaching the settlement join side 0.
+- Battle ends with side 0 alive: settlement changes owner to `side_owners[0]`. Defenders win: nothing changes.

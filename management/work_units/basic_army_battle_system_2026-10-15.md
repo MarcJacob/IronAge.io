@@ -26,9 +26,14 @@ Armies catching armies create a Battle entity (static layout, no army list). Arm
 
 - [DONE] Core: Battle entity, join, tick damage, pinning, speed change (builder-verified by headless harness, not in real client)
 - [DONE] Imprint in world_sim folder
-- [ ] Bonus: siege
-- [ ] Commits
+- [DONE] Bonus: siege (flag = `siege_settlement` guid in battle state; verified win/loss in headless harness; full build passes)
+- [DONE] Commits
+
+## Open
+
+- Third-party attackers on a siege always join side 0. Surviving levies are not returned to population. Existing-siege join path untested.
+- Not tried in the real client / server.
 
 ## Next
 
-Siege builder.
+User review.

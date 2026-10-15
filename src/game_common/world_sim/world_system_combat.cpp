@@ -73,8 +73,42 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	switch (target.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
-		settlements.owners[targetIndex] = attackerOwner;
+	{
+		if (settlements.owners[targetIndex] == attackerOwner) break;
+
+		// Join the siege of this settlement if there is one.
+		world_entity_battles& battles = world.entities.battles;
+		for (ui32 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+		{
+			if (battles.guids[battleIndex].is_valid() && battles.states[battleIndex].siege_settlement == target)
+			{
+				battle_join(world, battles.guids[battleIndex], attacker, 0);
+				return;
+			}
+		}
+
+		// Otherwise the settlement raises levies (10% of its population, at least 1) and the siege begins.
+		ui32& population = settlements.populations[targetIndex];
+		ui32 levies = population / 10 > 0 ? population / 10 : 1;
+		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
+		population -= levies < population ? levies : population;
+
+		world_entity_armies::single defenders = {};
+		defenders.owner = settlements.owners[targetIndex];
+		defenders.location = settlements.locations[targetIndex];
+		defenders.composition.levies = (ui16)levies;
+		entity_guid defenderArmy = world_spawn_army(world, defenders);
+
+		world_entity_battles::state start = {};
+		start.location = settlements.locations[targetIndex];
+		start.side_owners[0] = attackerOwner;
+		start.side_owners[1] = defenders.owner;
+		start.siege_settlement = target;
+		entity_guid battle = world_spawn_battle(world, start);
+		battle_join(world, battle, attacker, 0);
+		battle_join(world, battle, defenderArmy, 1);
 		break;
+	}
 	case ENTITY_TYPE::CARAVAN:
 	{
 		// The caravan is redirected to the closest settlement of the attacker. Without one, it is left alone.
@@ -209,6 +243,12 @@ void world_system_battles(match_world_state& world)
 			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= before[unitType] - after[unitType];
 
 			if (army_total_manpower(composition) == 0) world_destroy_army(world, armies.guids[armyIndex]);
+		}
+
+		// Attackers wiping the defenders of a siege take the settlement.
+		if (over && sideMen[0] > 0 && battle.siege_settlement.is_valid() && world_entity_is_valid(world, battle.siege_settlement))
+		{
+			world.entities.settlements.owners[battle.siege_settlement.get_index()] = battle.side_owners[0];
 		}
 
 		if (over) world_destroy_battle(world, battles.guids[battleIndex]);
