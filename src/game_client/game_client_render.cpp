@@ -34,6 +34,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	const world_entity_settlements& settlements = world.entities.settlements;
 	const world_entity_caravans& caravans = world.entities.caravans;
 	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_battles& battles = world.entities.battles;
 
 	render_state.frame.entity_count = 0;
 	render_state.frame.entity_states = nullptr;
@@ -43,7 +44,8 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 
 	ui32 totalEntityCount = settlements.active_count
 		+ caravans.active_count
-		+ armies.active_count;
+		+ armies.active_count
+		+ battles.active_count;
 
 	if (totalEntityCount > 0)
 	{
@@ -97,6 +99,21 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = armies.owners[armyIndex];
 			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = armyLoc - render_state.viewport.bottom_left;
+
+			visibleCount++;
+		}
+
+		// BATTLES
+		for (ui16 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+		{
+			vec2<float> battleLoc = battles.states[battleIndex].location;
+			if (!battles.guids[battleIndex].is_valid() || !is_visible_in_viewport(battleLoc, render_state.viewport)) continue;
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::BATTLE;
+			outEntity.owner = INVALID_MATCH_PLAYER_ID;
+			outEntity.guid = battles.guids[battleIndex];
+			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
 
 			visibleCount++;
 		}

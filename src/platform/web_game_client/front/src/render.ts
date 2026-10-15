@@ -97,6 +97,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
     [Backend.ENTITY_TYPE.CARAVAN]: 2,
     [Backend.ENTITY_TYPE.ARMY]: 2,
+    [Backend.ENTITY_TYPE.BATTLE]: 3,
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
@@ -504,6 +505,13 @@ export function draw(render_state: Backend.RenderState | null)
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
             draw_entity_army(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
+        }
+        else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
+            // Simple red marker.
+            const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+            const size = compute_entity_canvas_size(entity.entity_type);
+            ctx.fillStyle = 'red';
+            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
         }
     }
 }

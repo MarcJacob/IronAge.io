@@ -184,6 +184,8 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 		return entities.armies.owners[targetIndex] != player;
 	case ENTITY_TYPE::CARAVAN:
 		return !world_caravan_is_owned_by(world, command.target_entity, player);
+	case ENTITY_TYPE::BATTLE:
+		return true; // Join it.
 	default:
 		return false;
 	}

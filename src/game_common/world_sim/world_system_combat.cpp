@@ -30,12 +30,33 @@ static inline void army_remove_manpower(world_entity_armies::comp& composition, 
 	army_take_manpower(composition.knights, amount);
 }
 
-// Effective manpower of an army for a fight, in hundredths: manpower x a random 50% to 150% advantage.
-static inline ui64 army_roll_effective_manpower(rand_generator_32 rand_gen, ui64 manpower)
+// Man count of each unit type of an army, in the order of world_entity_battles::UNIT_TYPES.
+static inline void army_unit_counts(const world_entity_armies::comp& composition, ui32 out_counts[world_entity_battles::UNIT_TYPES])
 {
-	ui32 advantagePercent = rand_gen.next_range<ui32>(50, 151);
-	if (advantagePercent > 150) advantagePercent = 150; // The range function may land on its max.
-	return manpower * advantagePercent;
+	out_counts[0] = composition.levies;
+	out_counts[1] = composition.archers;
+	out_counts[2] = composition.men_at_arms;
+	out_counts[3] = composition.horsemen;
+	out_counts[4] = composition.knights;
+}
+
+// Makes an army fight in a battle on the given side: its men are added to the side and it stops moving.
+static void battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)
+{
+	world_entity_armies& armies = world.entities.armies;
+	ui16 armyIndex = army.get_index();
+
+	ui32 counts[world_entity_battles::UNIT_TYPES];
+	army_unit_counts(armies.compositions[armyIndex], counts);
+	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+	{
+		world.entities.battles.states[battle.get_index()].men[side][unitType] += counts[unitType];
+	}
+
+	armies.battles[armyIndex] = battle;
+	armies.battle_sides[armyIndex] = side;
+	armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+	world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 }
 
 // Resolves an attack of an army that reached its target. The attacker is destroyed here if it loses.
@@ -75,36 +96,30 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	}
 	case ENTITY_TYPE::ARMY:
 	{
-		ui64 attackerManpower = army_total_manpower(armies.compositions[attackerIndex]);
-		ui64 defenderManpower = army_total_manpower(armies.compositions[targetIndex]);
-
-		// Roll attacker first, then defender. Manpower is assumed to stay under ~1e8 so the loss computation below can't overflow.
-		ui64 attackerEffective = army_roll_effective_manpower(world.rand_gen, attackerManpower);
-		ui64 defenderEffective = army_roll_effective_manpower(world.rand_gen, defenderManpower);
-
-		if (attackerEffective == defenderEffective)
+		entity_guid battle = armies.battles[targetIndex];
+		if (battle.is_valid())
 		{
-			world_destroy_army(world, attacker);
-			world_destroy_army(world, target);
+			// The target is already fighting: join its battle against it.
+			battle_join(world, battle, attacker, armies.battle_sides[targetIndex] ^ 1);
 		}
 		else
 		{
-			// The winner, whichever side, loses winner_manpower x (loser_eff / winner_eff), rounded up so a fight always costs something.
-			// The ratio is below 1 here, but the loss is still capped at the winner's manpower.
-			bool attackerWins = attackerEffective > defenderEffective;
-			entity_guid winner = attackerWins ? attacker : target;
-			entity_guid loser = attackerWins ? target : attacker;
-			ui64 winnerManpower = attackerWins ? attackerManpower : defenderManpower;
-			ui64 winnerEffective = attackerWins ? attackerEffective : defenderEffective;
-			ui64 loserEffective = attackerWins ? defenderEffective : attackerEffective;
-
-			ui64 loss = (winnerManpower * loserEffective + winnerEffective - 1) / winnerEffective;
-			if (loss > winnerManpower) loss = winnerManpower;
-
-			world_destroy_army(world, loser);
-			army_remove_manpower(armies.compositions[winner.get_index()], loss);
-			if (loss == winnerManpower) world_destroy_army(world, winner);
+			// Both armies start a new battle at the target's location, the attacker on side 0.
+			world_entity_battles::state start = {};
+			start.location = armies.locations[targetIndex];
+			start.side_owners[0] = attackerOwner;
+			start.side_owners[1] = armies.owners[targetIndex];
+			battle = world_spawn_battle(world, start);
+			battle_join(world, battle, attacker, 0);
+			battle_join(world, battle, target, 1);
 		}
+		break;
+	}
+	case ENTITY_TYPE::BATTLE:
+	{
+		// Join the side of the attacker's owner, or side 1 if it owns neither.
+		ui8 side = world.entities.battles.states[targetIndex].side_owners[0] == attackerOwner ? 0 : 1;
+		battle_join(world, target, attacker, side);
 		break;
 	}
 	default:
@@ -120,6 +135,7 @@ void world_system_armies_target_reached(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
+		if (armies.battles[armyIndex].is_valid()) continue; // Already fighting.
 
 		// An earlier resolution this tick may have destroyed the target.
 		entity_guid target = armies.action_targets[armyIndex];
@@ -131,5 +147,70 @@ void world_system_armies_target_reached(match_world_state& world)
 		armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
 		world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 		world_resolve_attack(world, armies.guids[armyIndex], target);
+	}
+}
+
+// BATTLES
+
+// Each side's damage per tick is this many percent of its men at most.
+constexpr ui32 BATTLE_MAX_DAMAGE_PERCENT = 10;
+
+void world_system_battles(match_world_state& world)
+{
+	world_entity_battles& battles = world.entities.battles;
+	world_entity_armies& armies = world.entities.armies;
+
+	for (ui32 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+	{
+		if (!battles.guids[battleIndex].is_valid()) continue;
+
+		world_entity_battles::state& battle = battles.states[battleIndex];
+
+		// Men per side at the start of the tick. Armies take damage in proportion to their share of it.
+		ui64 sideMen[2] = {};
+		for (ui8 side = 0; side < 2; side++)
+		{
+			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) sideMen[side] += battle.men[side][unitType];
+		}
+
+		// A wiped side means the battle is over: its armies are already dead, the others are released below.
+		bool over = sideMen[0] == 0 || sideMen[1] == 0;
+
+		if (!over)
+		{
+			battle.duration++;
+			for (ui8 side = 0; side < 2; side++)
+			{
+				ui32 percent = world.rand_gen.next_range<ui32>(1, BATTLE_MAX_DAMAGE_PERCENT + 1);
+				if (percent > BATTLE_MAX_DAMAGE_PERCENT) percent = BATTLE_MAX_DAMAGE_PERCENT; // The range function may land on its max.
+				battle.damage[side] = (ui32)((sideMen[side] * percent + 99) / 100); // Rounded up so a fight always costs something.
+			}
+		}
+
+		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+		{
+			if (!armies.guids[armyIndex].is_valid() || !(armies.battles[armyIndex] == battles.guids[battleIndex])) continue;
+
+			if (over)
+			{
+				armies.battles[armyIndex] = INVALID_ENTITY_GUID;
+				continue;
+			}
+
+			// Take the enemy side's damage, proportionally to this army's share of its side (rounded up).
+			ui8 side = armies.battle_sides[armyIndex];
+			world_entity_armies::comp& composition = armies.compositions[armyIndex];
+			ui64 taken = ((ui64)battle.damage[side ^ 1] * army_total_manpower(composition) + sideMen[side] - 1) / sideMen[side];
+
+			ui32 before[world_entity_battles::UNIT_TYPES], after[world_entity_battles::UNIT_TYPES];
+			army_unit_counts(composition, before);
+			army_remove_manpower(composition, taken);
+			army_unit_counts(composition, after);
+			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= before[unitType] - after[unitType];
+
+			if (army_total_manpower(composition) == 0) world_destroy_army(world, armies.guids[armyIndex]);
+		}
+
+		if (over) world_destroy_battle(world, battles.guids[battleIndex]);
 	}
 }

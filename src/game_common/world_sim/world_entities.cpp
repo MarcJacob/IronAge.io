@@ -28,6 +28,9 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::BUILDER:
 		container = &world.entities.builders;
 		break;
+	case ENTITY_TYPE::BATTLE:
+		container = &world.entities.battles;
+		break;
 	default:
 		return false;
 	}
@@ -141,9 +144,32 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
 
     // Init default values if they weren't specified by start state.
-    SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 12);
+    SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 4);
     SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].destination, start_state.location);
     world.entities.armies.movements[freeIndex].move_target = start_state.location;
+
+	// Not in a battle (the slot may have been used before).
+	world.entities.armies.battles[freeIndex] = INVALID_ENTITY_GUID;
+
+	return newID;
+}
+
+// Spawns a new battle in the world with the provided start state and returns its GUID.
+entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state)
+{
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.battles.max_count && world.entities.battles.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.battles.max_count);
+
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::BATTLE, freeIndex, world.age % 0x100); // 8-bit extra field.
+
+	world.entities.battles.guids[freeIndex] = newID;
+	world.entities.battles.active_count++;
+	world.entities.battles.states[freeIndex] = start_state;
 
 	return newID;
 }
@@ -215,6 +241,15 @@ void world_destroy_builder(match_world_state& world, entity_guid builder)
 	builders.active_count--;
 }
 
+void world_destroy_battle(match_world_state& world, entity_guid battle)
+{
+	ASSERT(world_entity_is_valid(world, battle) && battle.get_type() == ENTITY_TYPE::BATTLE);
+	world_entity_battles& battles = world.entities.battles;
+
+	battles.guids[battle.get_index()] = INVALID_ENTITY_GUID;
+	battles.active_count--;
+}
+
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
@@ -242,6 +277,8 @@ world_location world_get_entity_location(const match_world_state& world, entity_
 	case ENTITY_TYPE::BUILDER:
 		// Builders have no location of their own for now: they are where their origin is.
 		return world_get_entity_location(world, world.entities.builders.origin_entity[entity.get_index()]);
+	case ENTITY_TYPE::BATTLE:
+		return world.entities.battles.states[entity.get_index()].location;
 	default:
 		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
 		return INVALID_WORLD_LOCATION;
@@ -472,6 +509,27 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 	armies.arrows_targets = memory.alloc<entity_guid>(count);
 	if (armies.arrows_targets == nullptr) return false;
+
+	armies.battles = memory.alloc<entity_guid>(count);
+	if (armies.battles == nullptr) return false;
+
+	armies.battle_sides = memory.alloc<ui8>(count);
+	if (armies.battle_sides == nullptr) return false;
+
+	return true;
+}
+
+bool world_alloc_battles(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_battles& battles = world.entities.battles;
+
+	battles.max_count = count;
+
+	battles.guids = memory.alloc<entity_guid>(count);
+	if (battles.guids == nullptr) return false;
+
+	battles.states = memory.alloc<world_entity_battles::state>(count);
+	if (battles.states == nullptr) return false;
 
 	return true;
 }

@@ -29,6 +29,7 @@ when it finishes.
 - `work_units/settlement_trade_construction_2026-10-03.md`
 - `work_units/placement_pick_validity_2026-10-13.md` [DONE]
 - `work_units/win32_reverse_proxy_2026-10-15.md`
+- `work_units/basic_army_battle_system_2026-10-15.md` [WIP]
 
 Finished units are moved to `management/archive/` after a time.
 

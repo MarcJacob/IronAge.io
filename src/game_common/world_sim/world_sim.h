@@ -99,9 +99,13 @@ entity_guid world_spawn_caravan(match_world_state& world, const world_entity_car
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state);
 
+// Spawns a new battle in the world with the provided start state and returns its GUID.
+entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state);
+
 void world_destroy_settlement(match_world_state& world, entity_guid settlement);
 void world_destroy_caravan(match_world_state& world, entity_guid caravan);
 void world_destroy_army(match_world_state& world, entity_guid army);
+void world_destroy_battle(match_world_state& world, entity_guid battle);
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
 
@@ -110,6 +114,8 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 count);
 
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
+
+bool world_alloc_battles(match_world_state& world, mem_arena& memory, ui32 count);
 
 // Spawns a new builder in the world with the provided start state and returns its GUID.
 // Returns INVALID_ENTITY_GUID if the origin is not a valid entity. Asserts if its type is not the one the build type requires.
@@ -184,6 +190,8 @@ void world_system_entity_movement(match_world_state& world);
 void world_system_caravan_arrivals(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
+
+void world_system_battles(match_world_state& world);
 
 // LIFECYCLE
 

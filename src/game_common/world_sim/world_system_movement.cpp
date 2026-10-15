@@ -137,7 +137,7 @@ void world_system_entity_movement(match_world_state& world)
 
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
-		if (!armies.guids[armyIndex].is_valid()) continue;
+		if (!armies.guids[armyIndex].is_valid() || armies.battles[armyIndex].is_valid()) continue; // Armies in a battle are pinned.
 
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}

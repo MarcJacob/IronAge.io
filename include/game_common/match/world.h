@@ -29,6 +29,7 @@ enum ENTITY_TYPE : ui8
 	CARAVAN = MICRO_TYPES_START,
 	ARMY,
 	BUILDER,
+	BATTLE,
 	// ...
 };
 
@@ -235,6 +236,9 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* action_targets; // What entity this army is currently engaging or following, if any.
 	entity_guid* arrows_targets; // What entity this army last shot at, if any.
 
+	entity_guid* battles; // Battle this army is fighting in, if any. An army in a battle is pinned in place.
+	ui8* battle_sides; // Side (0 or 1) of the battle the army is on. Only relevant while in a battle.
+
 	// Consolidated representation of a single army for viewing purposes.
 	struct single
 	{
@@ -291,6 +295,21 @@ struct world_entity_builders : public world_entity_container
 	};
 };
 
+// A battle between two sides of armies. Fixed size: it doesn't know which armies are in it, armies point to it instead.
+struct world_entity_battles : public world_entity_container
+{
+	static constexpr ui8 UNIT_TYPES = 5; // Army unit types, in comp order: levies, archers, men at arms, horsemen, knights.
+
+	struct state
+	{
+		world_location location;
+		match_player_id side_owners[2]; // Owner of the army that started each side. Joining armies of other owners go to side 1.
+		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
+		ui32 damage[2]; // Men killed this tick BY each side.
+		ui32 duration; // Ticks since the battle started.
+	} *states;
+};
+
 // @TEMP(Marc): Static memory size / layout properties.
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
 constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
@@ -319,6 +338,7 @@ struct match_world_state
 		world_entity_armies armies;
 		world_entity_caravans caravans;
 		world_entity_builders builders;
+		world_entity_battles battles;
 	} entities;
 };
 
