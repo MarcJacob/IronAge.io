@@ -55,6 +55,18 @@ void game_client_input_attack_target(game_client& backend, entity_guid attacker_
 	payload->target_entity = target_entity;
 }
 
+void game_client_input_build_road(game_client& backend, entity_guid settlement, world_location origin, world_location destination)
+{
+	if (backend.local_match == nullptr) return;
+
+	auto* payload = backend.input.command_queue_builder.push_command<command_data_build_road>(MATCH_COMMAND_TYPE::BUILD_ROAD);
+	if (payload == nullptr) return; // Queue full - drop the command.
+
+	payload->settlement = settlement;
+	payload->origin = origin;
+	payload->destination = destination;
+}
+
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
 {
 	game_client_input_state::viewport& viewportInput = backend.input.viewport_control;
@@ -99,6 +111,13 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 		game_client_input_attack_target(backend, payload.attacker_entity, payload.target_entity);
 		return true;
     }
+	case INPUT_EVENT_TYPE::BUILD_ROAD:
+	{
+		auto& payload = *(input_event_payload_build_road*)payload_bytes;
+		game_client_input_build_road(backend, payload.settlement,
+			world_location{ payload.origin_x, payload.origin_y }, world_location{ payload.destination_x, payload.destination_y });
+		return true;
+	}
 	default:
 		return false;
 	}

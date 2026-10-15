@@ -5,8 +5,37 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import { FRONTEND_CAMERA } from "./camera.js"
-import { get_selected_entity_guid, get_selected_entity_view } from "./input.js"
-import { get_placement_dots } from "./placement.js"
+
+// A filled dot drawn over the map, at least a few px wide at any zoom.
+export interface OverlayDot
+{
+    x: number; // Tile.
+    y: number;
+    color: string; // CSS color, alpha included.
+}
+
+// What gets drawn. Set from the outside (modes), read by draw() every frame. Defaults draw the full game view.
+export const RENDER_CONFIG =
+{
+    show_terrain: true,
+    show_territory: true,
+    show_hover_tile: true,
+    show_world_border: true,
+    show_infrastructure: true, // Roads.
+
+    // Which entity types are drawn.
+    show_entity_type: {
+        [Backend.ENTITY_TYPE.SETTLEMENT]: true,
+        [Backend.ENTITY_TYPE.CARAVAN]: true,
+        [Backend.ENTITY_TYPE.ARMY]: true,
+    } as Record<number, boolean>,
+
+    tint_entities: true, // Tint entities by ownership (own / other).
+    outlined_entity: null as number | null, // GUID of the entity drawn with a selection outline.
+    // If set, draws the path from start through points (waypoints, as returned by Backend.query_path). Drawn red if not valid.
+    path_preview: null as { start: { x: number, y: number }, points: { x: number, y: number }[], valid: boolean } | null,
+    overlay_dots: [] as OverlayDot[],
+};
 
 let canvas: HTMLCanvasElement;
 
@@ -86,10 +115,12 @@ const HOVERED_TILE_COLOR = 'rgba(255, 255, 0, 0.35)';
 
 // Stroke style of the path preview line.
 const PATH_PREVIEW_COLOR = 'rgba(255, 255, 255, 0.9)';
+const PATH_PREVIEW_COLOR_INVALID = 'rgba(255, 40, 40, 0.9)';
 
 // Mirror RENDER_TILE_FLAGS in include/game_client/game_client_backend.h.
-const TILE_FLAG_BORDER = 1 << 0;
-const TILE_FLAG_OWNED = 1 << 2;
+export const TILE_FLAG_BORDER = 1 << 0;
+export const TILE_FLAG_ROAD = 1 << 1;
+export const TILE_FLAG_OWNED = 1 << 2;
 
 // Page position of the mouse over the canvas, or null if it isn't over it. Resolved to a tile every draw so the highlight follows camera moves too.
 let HOVER_PAGE_POS: { x: number, y: number } | null = null;
@@ -195,22 +226,23 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
 
     ctx.drawImage(entity_img, drawX, drawY, size, size);
 
-    if (tintCanvas === null || tintCtx === null) return;
+    if (RENDER_CONFIG.tint_entities && tintCanvas !== null && tintCtx !== null)
+    {
+        const tintWidth = Math.max(1, Math.ceil(size));
+        const tintHeight = Math.max(1, Math.ceil(size));
+        tintCanvas.width = tintWidth;
+        tintCanvas.height = tintHeight;
 
-    const tintWidth = Math.max(1, Math.ceil(size));
-    const tintHeight = Math.max(1, Math.ceil(size));
-    tintCanvas.width = tintWidth;
-    tintCanvas.height = tintHeight;
+        tintCtx.clearRect(0, 0, tintWidth, tintHeight);
+        tintCtx.globalCompositeOperation = 'source-over';
+        tintCtx.drawImage(entity_img, 0, 0, tintWidth, tintHeight);
+        tintCtx.globalCompositeOperation = 'source-in';
+        tintCtx.fillStyle = owned_by_local_player ? DIPLOMATIC_TINTS.OWN : DIPLOMATIC_TINTS.ENEMY;
+        tintCtx.fillRect(0, 0, tintWidth, tintHeight);
+        tintCtx.globalCompositeOperation = 'source-over';
 
-    tintCtx.clearRect(0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'source-over';
-    tintCtx.drawImage(entity_img, 0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'source-in';
-    tintCtx.fillStyle = owned_by_local_player ? DIPLOMATIC_TINTS.OWN : DIPLOMATIC_TINTS.ENEMY;
-    tintCtx.fillRect(0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'source-over';
-
-    ctx.drawImage(tintCanvas, drawX, drawY, size, size);
+        ctx.drawImage(tintCanvas, drawX, drawY, size, size);
+    }
 
     // Selection indicator: green outline around the image, constant width in screen pixels.
     if (is_selected)
@@ -348,6 +380,15 @@ function draw_territory(render_state: Backend.RenderState)
             drawBytes[pixelOffset + 2] = 0;
             drawBytes[pixelOffset + 3] = 196;
         }
+
+        // Roads: translucent gray over the whole tile, on top of everything including borders.
+        if (RENDER_CONFIG.show_infrastructure && (flagBytes[i] & TILE_FLAG_ROAD) !== 0)
+        {
+            drawBytes[pixelOffset] = 150;
+            drawBytes[pixelOffset + 1] = 150;
+            drawBytes[pixelOffset + 2] = 150;
+            drawBytes[pixelOffset + 3] = 170;
+        }
     }
 
     const territoryImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
@@ -370,25 +411,28 @@ function draw_hovered_tile()
     ctx.fillRect(rect.x, rect.y, rect.size, rect.size);
 }
 
-// With an entity selected, draws the path from it to the tile under the mouse (test of the pathfinding, will become the road preview).
+// World tile under the mouse, or null if the mouse isn't over the canvas or the tile is outside the world.
+export function get_hovered_tile(): { x: number, y: number } | null
+{
+    if (HOVER_PAGE_POS === null) return null;
+
+    const tile = page_to_tile(HOVER_PAGE_POS.x, HOVER_PAGE_POS.y);
+    return is_tile_in_world(tile) ? tile : null;
+}
+
+// Draws the configured path preview, if any.
 function draw_path_preview()
 {
-    if (HOVER_PAGE_POS === null) return;
+    const preview = RENDER_CONFIG.path_preview;
+    if (preview === null) return;
 
-    const selected = get_selected_entity_view();
-    if (selected === null) return;
+    const startCenter = world_to_canvas(preview.start.x + 0.5, preview.start.y + 0.5);
 
-    const hovered = page_to_tile(HOVER_PAGE_POS.x, HOVER_PAGE_POS.y);
-    if (!is_tile_in_world(hovered)) return;
-
-    const start = { x: selected.location_x, y: selected.location_y };
-    const startCenter = world_to_canvas(start.x + 0.5, start.y + 0.5);
-
-    ctx.strokeStyle = PATH_PREVIEW_COLOR;
+    ctx.strokeStyle = preview.valid ? PATH_PREVIEW_COLOR : PATH_PREVIEW_COLOR_INVALID;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(startCenter.x, startCenter.y);
-    for (const point of Backend.query_path(start, hovered))
+    for (const point of preview.points)
     {
         const center = world_to_canvas(point.x + 0.5, point.y + 0.5);
         ctx.lineTo(center.x, center.y);
@@ -396,11 +440,11 @@ function draw_path_preview()
     ctx.stroke();
 }
 
-// Draws a dot per placement pick (see placement.ts), at least a few px wide at any zoom.
-function draw_placement_dots()
+// Draws the configured overlay dots.
+function draw_overlay_dots()
 {
     const radius = Math.max(6, 2 * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
-    for (const dot of get_placement_dots())
+    for (const dot of RENDER_CONFIG.overlay_dots)
     {
         const center = world_to_canvas(dot.x + 0.5, dot.y + 0.5);
         ctx.fillStyle = dot.color;
@@ -434,18 +478,19 @@ export function draw(render_state: Backend.RenderState | null)
     RENDER_PARAMS.viewportBottomLeftY = render_state.viewport_bottom_left_y;
     RENDER_PARAMS.WORLD_SIZE = render_state.world_size;
 
-    draw_terrain();
-    draw_territory(render_state);
-    draw_hovered_tile();
-    draw_path_preview();
-    draw_world_border();
-    draw_placement_dots(); // Empty outside the placement phase.
+    if (RENDER_CONFIG.show_terrain) draw_terrain();
+    if (RENDER_CONFIG.show_territory) draw_territory(render_state);
+    if (RENDER_CONFIG.show_hover_tile) draw_hovered_tile();
+    draw_path_preview(); // Only draws with a path_preview_start.
+    if (RENDER_CONFIG.show_world_border) draw_world_border();
+    draw_overlay_dots();
 
-    const selectedGuid = get_selected_entity_guid();
+    const selectedGuid = RENDER_CONFIG.outlined_entity;
 
     for (let i = 0; i < render_state.entity_count; i++)
     {
         const entity = render_state.entity_states[i];
+        if (!RENDER_CONFIG.show_entity_type[entity.entity_type]) continue;
         const isSelected = selectedGuid !== null && entity.guid === selectedGuid;
 
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {

@@ -44,7 +44,7 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
    - Path recalculated at every tile (to be removed by the cache, task 4).
    - No-path behavior left as is (stays put, retries every tick): unreachable destination will be handled later as a cross-system concern, not in movement.
 4. Moved to backlog: `backlog/path_store_cache_2026-10-15.md` (store, handles, cache). Straight-line movement: `backlog/straight_line_movement_2026-10-15.md`.
-5. [ ] Construction system (settlement-side) + road as first on-map type; input command only dispatches.
+5. [WIP] Construction system (settlement-side) + road as first on-map type; input command only dispatches.
    - `world_tile_move_cost` already reads the unused `is_road` bit; nothing sets it yet.
    - Steps (survey done; territory = per-tile `owners[]` slot index in region):
      - 5a-5d [DONE] Server side (peer): construction system + `BUILD_ROAD` command (enum 5, 12 bytes, wired in all 3 switches). Construction system tested by a temporary trigger (removed); the command itself is built but untested until a client sends it. Wire change: client / server builds must match.
@@ -52,11 +52,11 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
        - `world_system_construction.cpp` runs first in `world_state_tick`: re-paths every tick, sets one road tile per tick inside the origin's territory; ends on destination reached or no progress.
        - Territory limit = `path_params::within_settlement_territory`, checked in `world_tile_move_cost` (replaced the planned result filtering; so no public prefix filter).
        - `world_tile_move_cost` is the shared cost (road = 1).
-     - 5e [ ] Client input path: input event, handler, backend.ts mirror, `send_build_road`.
-     - 5f [ ] Render roads: `IS_ROAD` flag in `game_client_render_influence` + TS flag and pixel in `draw_territory`.
-     - 5g [ ] Road mode UX via the entity action system (design first, with client-side command validity query; flag: multi-file client architecture change).
-     - 5h [ ] Client preview of the road path using `within_settlement_territory`; raise preview cap to 256.
-     - Another peer takes the front (5e-5h).
+     - 5e-5h [DONE] Front (peer), pending user's hand check of the full flow:
+       - Modal system in front/src/modes/ (`Mode` class in core.ts, mode stack; input to top mode only, frame updates and net messages to the whole stack): LobbyBase, GameBase, SpawnPick, MainPlay, SettlementSelected, RoadBuilding. UI files moved to front/src/ui/.
+       - `BUILD_ROAD` client input path; `game_client_query_command_valid` (+ wasm export) reuses the server's `match_command_validity_check`.
+       - Roads rendered via `RENDER_CONFIG.show_infrastructure`; preview limited to the territory, red when invalid, 256 waypoints.
+       - Road mode: selected own settlement, key `1` or button; `1` again or Escape leaves; stays active after an order.
    - Notes: tiles not in snapshot / hash (roads arrive via commands); influence proximity ignores roads (leave); no dirty-rect system, territory layer redrawn every frame; terrain layer drawn once.
 6. [DONE] Client preview of path (selected entity to hovered tile), via `game_client_query_path`, 256 KiB `path_scratch` arena. Road preview comes with task 5.
 
@@ -89,13 +89,15 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Known limitations / cleanups
 
-- Verify influence proximity (world_system_economy.cpp ~297) now uses `world_tile_move_cost`; peer was unsure.
-- `BUILD_ROAD` with origin == destination is not refused (builder ends on its first tick, no road); decide.
+- BUG (confirmed): `world_system_economy_proximity_recalc` (world_system_economy.cpp:297) still uses `TILE_TERRAIN_TRAVEL_COST`, so roads never change proximity. Fix: use `world_tile_move_cost(..., {})` there. Expect a small, slow effect afterwards (10% output per 20 proximity, pop target recomputed every 10 ticks).
+- `BUILD_ROAD` origin == destination must be invalid: user adds it to the validity check himself.
 - Builder slots use `MICRO_ENTITIES_PER_TYPE_PER_REGION` (32/region); make dynamic eventually. `match_get_required_mem` does not count builders (32 MiB headroom covers it for now).
 - Nothing of task 5 committed yet (user's call).
 - Diagonals can cut between two blocked tiles.
 - Heuristic assumes min tile cost 1 (wide search on plains); improve if previews get slow.
-- Client ignores `partial`; preview buffer capped at 64 waypoints; single land mover type.
+- Client ignores `partial`; single land mover type.
+- Road mode hint text hardcodes "[1]"; settlement bar only has "Build Road" (spawn army / found settlement still in the old panel).
+- Cleanup: stale deployed files in web_root/src/ (game_ui.js, lobby_ui.js, placement.js, maybe debug.js / websocket_tests.js); dead front/src/placement.ts.
 - `PROXIMITY_WEIGHT_*` shared by economy and pathing: rename neutrally.
 - Off-by-one: move-target validity check in match_commands.cpp uses `>` instead of `>=`.
 - Nothing committed yet (user's call).
@@ -106,4 +108,4 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Progress
 
-Pathing tool, client preview and movement wiring done. Task 5 server side (5a-5d) done. Next: front peer for 5e-5h; entity action system + client command validity query need design first (5g).
+Pathing tool, client preview and movement wiring done. Task 5 (roads) built end to end: server 5a-5d, front 5e-5h (modal system, validity query). Next: user hand-tests the flow, then close task 5; then trade (open design).

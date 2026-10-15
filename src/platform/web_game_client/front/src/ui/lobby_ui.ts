@@ -1,8 +1,7 @@
 // Lobby screen: countdown to match start, lobby player count, and the notice of the previous match's end.
 // Same approach as game_ui.ts (static DOM in index.html, refreshed from here). DOM is only touched when the text actually changed.
 
-import * as Core from "./core.js"
-import * as Backend from "./backend.js"
+import * as Backend from "../backend.js"
 
 let lobbyElement: HTMLElement | null = null;
 let noticeElement: HTMLElement | null = null;
@@ -18,8 +17,6 @@ export function init_lobby_ui(): void
     noticeElement = document.getElementById("lobby_ui_notice") as HTMLElement;
     countdownElement = document.getElementById("lobby_ui_countdown") as HTMLElement;
     playersElement = document.getElementById("lobby_ui_players") as HTMLElement;
-
-    Core.register_frame_callback(update_lobby_ui);
 }
 
 function set_text(element: HTMLElement, text: string): void
@@ -63,7 +60,7 @@ export function hide_lobby(): void
 }
 
 // Per-frame refresh of the countdown (mm:ss, rounded up).
-function update_lobby_ui(): void
+export function update_lobby_ui(): void
 {
     if (countdownElement === null || countdownEndMs === null) return;
 

@@ -132,8 +132,10 @@ void game_client_render_influence(client_render_state& render_state, const game_
                     render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
 
                     bool isBorder = terrain.regions[regionIndex].status[tileIndex].border_count > 0 && isOwned;
+                    bool isRoad = terrain.regions[regionIndex].status[tileIndex].is_road;
 
                     render_state.tiles.tile_flags_bitmap[worldTileIndex] = (ui8)RENDER_TILE_FLAGS::IS_BORDER * isBorder
+                        | (ui8)RENDER_TILE_FLAGS::IS_ROAD * isRoad
                         | (ui8)RENDER_TILE_FLAGS::IS_OWNED * isOwned;
                 }
             }

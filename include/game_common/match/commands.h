@@ -315,6 +315,9 @@ struct command_sequence_builder
 	}
 };
 
+// Checks that an input command would be valid to apply to the match over its next tick.
+bool match_command_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command);
+
 // Outputs a clone of the passed unvalidated command sequence structure into the given builder, with only valid commands for the specified target match.
 // Returns whether the unvalidated sequence could be fully validated (IE no corrupted / "fatally invalid" command was present to prevent reading the whole sequence).
 bool match_command_sequence_output_validated(const game_match& target_match, const match_command_sequence& unvalidated,

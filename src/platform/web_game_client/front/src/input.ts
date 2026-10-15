@@ -1,11 +1,11 @@
-// Browser input events, translated into calls the rest of the client understands.
+// Browser input events, forwarded to the current mode (see core.ts), plus a library of input state and input command senders
+// (selection, camera input, send_*) the modes build on.
 
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 import { get_local_player_id } from "./main.js"
-import { is_in_placement, send_pick } from "./placement.js"
 
 // Input sources (updated on events, used on tick)
 const KB_HELD_KEYS = new Set<string>();
@@ -19,6 +19,11 @@ let SELECTED_ENTITY_GUID: number | null = null;
 export function get_selected_entity_guid(): number | null
 {
     return SELECTED_ENTITY_GUID;
+}
+
+export function set_selected_entity_guid(guid: number | null): void
+{
+    SELECTED_ENTITY_GUID = guid;
 }
 
 export function clear_selected_entity(): void
@@ -107,9 +112,36 @@ export function send_attack_target(attacker_guid: number, target_guid: number): 
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.ATTACK_TARGET);
 }
 
+// Orders the given settlement to build a road from origin to destination (world tiles). The server validates and computes the path.
+export function send_build_road(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
+{
+    write_build_road_payload(settlement_guid, origin, destination);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.BUILD_ROAD);
+}
+
+// Whether the same build road order would currently be valid (same check as the server's).
+export function is_build_road_valid(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): boolean
+{
+    write_build_road_payload(settlement_guid, origin, destination);
+    return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.BUILD_ROAD);
+}
+
+// Writes the build road payload in the input event buffer. Same layout for the input event and the command it queues.
+function write_build_road_payload(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
+{
+    // Layout of input_event_payload_build_road (game_client_backend.h) / command_data_build_road (commands.h):
+    // ui32 settlement guid, ui16 origin x, y, ui16 destination x, y.
+    const view = Backend.ClientInput.begin_input_event();
+    view.setUint32(0, settlement_guid, true);
+    view.setUint16(4, origin.x, true);
+    view.setUint16(6, origin.y, true);
+    view.setUint16(8, destination.x, true);
+    view.setUint16(10, destination.y, true);
+}
+
 // Right-click order: attack the entity not owned by the local player under the cursor if the selection is a local army
 // and there is one, otherwise move.
-function send_context_order(clientX: number, clientY: number)
+export function send_context_order(clientX: number, clientY: number)
 {
     const localPlayerId = get_local_player_id();
     const selected = get_selected_entity_view();
@@ -128,54 +160,16 @@ function send_context_order(clientX: number, clientY: number)
 
 // EVENT HANDLERS
 
-// What a mouse button press does.
-enum MOUSE_ACTION
-{
-    SELECT,
-    SET_MOVE_TARGET,
-}
-
-// Maps a mouse button to what it does. The only place to change when input becomes contextual.
-function get_mouse_button_action(button: number): MOUSE_ACTION | null
-{
-    if (button === 0) return MOUSE_ACTION.SELECT;
-    if (button === 2) return MOUSE_ACTION.SET_MOVE_TARGET;
-    return null;
-}
-
-function do_mouse_action(action: MOUSE_ACTION | null, clientX: number, clientY: number)
-{
-    if (action == null) return;
-
-    switch (action) {
-        case MOUSE_ACTION.SELECT:
-            SELECTED_ENTITY_GUID = Render.pick_entity_at(clientX, clientY, SELECTED_ENTITY_GUID); // Empty space clears the selection.
-            break;
-        case MOUSE_ACTION.SET_MOVE_TARGET:
-            send_set_target_loc(clientX, clientY);
-            break;
-    }
-}
-
+// What mouse clicks and keys mean is up to the current mode: these handlers only forward to it.
 function on_pointer_click(clickEvent: MouseEvent)
 {
-    // Placement mode: a left click anywhere on the map picks the start location, nothing else is available.
-    if (is_in_placement())
-    {
-        if (clickEvent.button !== 0) return;
-        const tile = Render.page_to_tile(clickEvent.clientX, clickEvent.clientY);
-        if (Render.is_tile_in_world(tile)) send_pick(tile);
-        return;
-    }
-
-    do_mouse_action(get_mouse_button_action(clickEvent.button), clickEvent.clientX, clickEvent.clientY);
+    Core.get_top_mode()?.on_click(clickEvent);
 }
 
 function on_context_menu(menuEvent: MouseEvent)
 {
     menuEvent.preventDefault();
-    if (is_in_placement()) return;
-    send_context_order(menuEvent.clientX, menuEvent.clientY);
+    Core.get_top_mode()?.on_context_menu(menuEvent);
 }
 
 function on_mouse_move(moveEvent: MouseEvent)
@@ -217,15 +211,16 @@ export function init_input(canvas_element: HTMLCanvasElement)
             KB_HELD_KEYS.add(keyEvent.code);
             keyEvent.preventDefault();
         }
+
+        if (keyEvent.code === 'Escape') Core.get_top_mode()?.on_escape();
+        else Core.get_top_mode()?.on_key_down(keyEvent);
     });
     window.addEventListener('keyup', (keyEvent) => KB_HELD_KEYS.delete(keyEvent.code));
     window.addEventListener('blur', () => KB_HELD_KEYS.clear());
-
-    // Register tick function on frame callback.
-    Core.register_frame_callback(tick_input);
 }
 
-function tick_input(delta_time: number)
+// Applies held camera keys, updates the camera and sends the resulting viewport to the backend. Call once per frame in modes with a map view.
+export function update_camera_input(delta_time: number)
 {
     FRONTEND_CAMERA.pan(update_viewport_move_input(), delta_time);
     

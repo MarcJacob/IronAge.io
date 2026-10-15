@@ -294,7 +294,7 @@ void world_system_economy_proximity_recalc(match_world_state& world)
                 }
 
                 TERRAIN_TILE_TYPE tileTerrain = terrain.regions[regionIndex].terrain_types[tileIndex];
-                ui8 travelCost = TILE_TERRAIN_TRAVEL_COST[(ui8)tileTerrain];
+                ui8 travelCost = world_tile_move_cost(world.terrain, regionIndex, tileIndex, {});
                 bool isDiagonal = lowestNeighbourOffset.x != 0 && lowestNeighbourOffset.y != 0;
                 ui16 newProximity = lowestNeighbourProximity
                         + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
@@ -464,7 +464,6 @@ void world_system_economy_influence_spread(match_world_state& world)
                 if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) continue;
                 if (world.terrain.regions[regionIndex].status[tileIndex].border_count == 0) continue;
                 world_bounds_include(newBoundsMin, newBoundsMax, { x, y });
-                if (world.terrain.regions[regionIndex].proximities[tileIndex] >= MAX_EXPANSION_PROXIMITY) continue;
 
                 // Border tiles that can't expand anywhere are kept in the bounds but must not take up candidate slots.
                 if (pressure <= 0 || !world_influence_can_expand(world, regionIndex, tileIndex, settlementIndex, pressure)) continue;

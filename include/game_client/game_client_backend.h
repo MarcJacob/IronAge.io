@@ -149,6 +149,7 @@ enum class INPUT_EVENT_TYPE : ui16
 	FOUND_SETTLEMENT,
 	SPAWN_ARMY,
 	ATTACK_TARGET,
+	BUILD_ROAD,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -196,6 +197,15 @@ struct input_event_payload_attack_target
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_attack_target);
 
+// Has a settlement build a road between two tiles, within its territory.
+struct input_event_payload_build_road
+{
+	entity_guid settlement; // Settlement building the road.
+	ui16 origin_x, origin_y; // Tile the road starts from: the settlement's tile or a road tile in its territory.
+	ui16 destination_x, destination_y; // Tile the road leads to.
+};
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_build_road);
+
 #pragma pack(pop)
 
 #undef INPUT_EVENT_PAYLOAD_SIZE_GUARD
@@ -226,7 +236,15 @@ bool game_client_query_entity(game_client& backend, entity_guid entity, entity_f
 
 // Computes a land path between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
 // Leaves out_path empty (count 0) if there is no local match or a location is outside the world. See world_path_find for the rest.
-void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path);
+// If within_settlement_territory is a settlement, the path is limited to its territory (as roads are built).
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path,
+	entity_guid within_settlement_territory = INVALID_ENTITY_GUID);
+
+// COMMAND VALIDITY QUERY
+
+// Whether a command of the given type (a MATCH_COMMAND_TYPE value) with the given payload bytes (command payload layout, see commands.h)
+// would currently be valid for the controlled player. Same check the server applies. False if there is no local match or the type is unknown.
+bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes);
 
 // MATCH
 

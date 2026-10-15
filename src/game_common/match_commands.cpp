@@ -211,7 +211,9 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 	const world_entity_settlements& settlements = world.entities.settlements;
 	if (settlements.owners[settlementIndex] != player) return false;
 
-    // The oriign and destination must be in the world.
+    // The origin and destination must be in the world, and not be equal to eachother.
+    if (command.origin == command.destination) return false;
+
 	const world_terrain& terrain = world.terrain;
 	if (command.origin.x >= terrain.size_tiles.x || command.origin.y >= terrain.size_tiles.y) return false;
 	if (command.destination.x >= terrain.size_tiles.x || command.destination.y >= terrain.size_tiles.y) return false;

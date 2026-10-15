@@ -12,7 +12,28 @@ static void fill_movement_view(entity_full_view& view, const world_entity_moveme
 	view.target_location_y = movement.destination.y;
 }
 
-void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path)
+bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes)
+{
+	if (backend.local_match == nullptr) return false;
+	if (command_type >= (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT) return false;
+
+	MATCH_COMMAND_TYPE type = (MATCH_COMMAND_TYPE)command_type;
+	ui8 payloadSize = get_command_data_size(type);
+	if (payloadSize > INPUT_EVENT_MAX_PAYLOAD_SIZE) return false;
+
+	// Rebuild the command as it would sit in a command buffer: header, then payload.
+	ui8 commandBuffer[sizeof(match_command_header) + INPUT_EVENT_MAX_PAYLOAD_SIZE];
+	match_command_header& header = *(match_command_header*)commandBuffer;
+	header.type = type;
+#ifdef MATCH_COMMAND_DEBUG
+	header._data_size = payloadSize;
+#endif
+	ia_memcpy(header.command_data, payload_bytes, payloadSize);
+
+	return match_command_validity_check(*backend.local_match->world, backend.controlled_player_id, header);
+}
+
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory)
 {
 	out_path.count = 0;
 	out_path.length = 0;
@@ -24,6 +45,7 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 
 	path_params params = {};
 	params.passable_terrain = PATH_TERRAIN_LAND;
+	params.within_settlement_territory = within_settlement_territory;
 	backend.path_scratch.clear();
 	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
 }

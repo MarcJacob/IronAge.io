@@ -59,6 +59,41 @@ body {
     pointer-events: auto;
 }
 
+/* Makes room for the settlement bar. */
+#game_hud.has_bottom_bar #game_hud_selected_panel {
+    bottom: 64px;
+}
+
+/* Actions of the selected settlement, full width along the bottom, buttons from the left. */
+#game_hud_settlement_bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    border-top: 1px solid #c7cbd1;
+    font-family: monospace;
+    pointer-events: auto;
+}
+
+/* What the current mode is and what to do, top center. Passes mouse input through. */
+#game_hud_mode_hint {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: monospace;
+    font-size: 1.2rem;
+    text-shadow: 0 0 4px #000;
+    pointer-events: none;
+}
+
 #game_hud_selected_text {
     margin: 0 0 8px;
     white-space: pre-wrap;

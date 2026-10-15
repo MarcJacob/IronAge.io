@@ -7,11 +7,14 @@ import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 
 import { init_render } from './render.js';
-import { init_input, clear_selected_entity } from './input.js';
+import { init_input } from './input.js';
 import { init_camera_system } from './camera.js';
-import { init_game_ui, update_game_ui, set_game_ui_visible } from './game_ui.js';
-import { init_lobby_ui, show_lobby, show_match_ended, hide_lobby } from './lobby_ui.js';
-import { init_placement, enter_placement, exit_placement, set_pick, is_in_placement } from './placement.js';
+import { init_game_ui } from './ui/game_ui.js';
+import { init_lobby_ui } from './ui/lobby_ui.js';
+import { init_placement_ui } from './ui/placement_ui.js';
+import { init_settlement_bar_ui } from './ui/settlement_bar_ui.js';
+import { init_mode_hint_ui } from './ui/mode_hint_ui.js';
+import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
 
@@ -35,59 +38,18 @@ function websocket_url() {
 function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCanvasElement, socket: WebSocket)
 {
     const messageType = Backend.process_net_message(new Core.ByteBuffer(event.data));
-    if (messageType === Backend.MESSAGE_TYPE.INVALID) return; // Message could not be processed: nothing changed.
-
-    if (messageType === Backend.MESSAGE_TYPE.LOBBY_JOINED)
-    {
-        show_lobby(Backend.read_lobby_joined_payload());
-    }
-
-    if (messageType === Backend.MESSAGE_TYPE.SERVER_PLACEMENT_PICK)
-    {
-        set_pick(Backend.read_server_placement_pick()); // Ignored outside placement.
-    }
-
-    // The first tick ends the placement phase: the match proceeds as an ordinary one.
-    if (messageType === Backend.MESSAGE_TYPE.SERVER_TICK && is_in_placement())
-    {
-        exit_placement();
-        set_game_ui_visible(true);
-    }
-
-    // Have the backend drop its local match, clear what the frontend holds of it and fall back to the lobby screen.
-    if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
-    {
-        console.log("Match ended.");
-
-        IN_A_MATCH = false;
-        LOCAL_PLAYER_ID = null;
-        exit_placement();
-        clear_selected_entity();
-
-        canvas.hidden = true;
-        set_game_ui_visible(false);
-        show_match_ended(Backend.read_match_ended_winner()); // Reads the net buffer: keep before anything that could overwrite it.
-
-        Backend.end_local_match();
-
-        Core.broadcast_on_match_ended();
-    }
+    if (messageType === null || messageType === Backend.MESSAGE_TYPE.INVALID) return; // Message could not be processed: nothing changed.
 
     // On joining a match, reveal the canvas and start drawing. Rendering/input were already set up at start().
     if (messageType === Backend.MESSAGE_TYPE.MATCH_STARTED)
     {
         console.log("Joined match.");
 
-        hide_lobby();
-
         // Perform the first render state update on the backend.
         Backend.update_render_state();
 
         // The local player's id only reaches the frontend through the render state.
         if (Backend.LAST_RENDER_STATE !== null) LOCAL_PLAYER_ID = Backend.LAST_RENDER_STATE.controlled_player_id;
-
-        // Placement phase until the first SERVER_TICK (HUD stays hidden until then).
-        if (LOCAL_PLAYER_ID !== null) enter_placement(LOCAL_PLAYER_ID, Backend.read_match_started_placement_countdown_ms());
 
         // Reveal game canvas
         canvas.hidden = false;
@@ -98,6 +60,27 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
         // Broadcast to event handlers and flag app as In A Match.
         Core.broadcast_on_match_joined();
         IN_A_MATCH = true;
+    }
+
+    // Modes react to the message: the lobby / game base modes switch on match start / end, the placement mode on picks and the first tick.
+    // Before the match is dropped below: modes may read the net buffer.
+    if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
+    {
+        console.log("Match ended.");
+
+        IN_A_MATCH = false;
+        LOCAL_PLAYER_ID = null;
+        canvas.hidden = true;
+    }
+
+    Core.dispatch_net_message(messageType);
+
+    // Have the backend drop its local match and clear what the frontend holds of it.
+    if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
+    {
+        Backend.end_local_match();
+
+        Core.broadcast_on_match_ended();
     }
 
     // The backend may have built a reply (e.g. pending input) in response to the message just processed.
@@ -115,7 +98,6 @@ function tick(dt: number)
     {
         Backend.tick_web_client(dt);
         Backend.update_render_state();
-        update_game_ui();
     }
 }
 
@@ -147,11 +129,17 @@ async function start()
     // Initialize in-match HUD.
     init_game_ui();
     init_lobby_ui();
+    init_placement_ui();
+    init_settlement_bar_ui();
+    init_mode_hint_ui();
+
+    // Nothing but the lobby until the server says otherwise.
+    Core.start_mode_stack(new LobbyBase());
 
     // Initialize websocket conneciton.
     const socket = new WebSocket(websocket_url());
     socket.binaryType = 'arraybuffer';
-    init_placement((bytes) => socket.send(bytes));
+    Core.set_message_sender((bytes) => socket.send(bytes));
 
     socket.addEventListener("open", () => {
         console.log("WebSocket connection accepted by server. Waiting to join a match...");

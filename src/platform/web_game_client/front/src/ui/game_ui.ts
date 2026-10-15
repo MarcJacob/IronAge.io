@@ -2,9 +2,9 @@
 // generates signals (e.g. button clicks calling input.ts's send_* functions). It never writes input events itself.
 // DOM is only touched when the text / visibility actually changed.
 
-import * as Backend from "./backend.js"
-import { get_selected_entity_guid, get_selected_entity_view, send_found_settlement, send_spawn_army } from "./input.js"
-import { get_local_player_id } from "./main.js"
+import * as Backend from "../backend.js"
+import { get_selected_entity_guid, get_selected_entity_view, send_found_settlement, send_spawn_army } from "../input.js"
+import { get_local_player_id } from "../main.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;

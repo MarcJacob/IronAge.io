@@ -33,6 +33,9 @@ void game_client_input_attack_target(game_client& backend, entity_guid attacker_
 // Queues a command to have a settlement spawn an army from its population.
 void game_client_input_spawn_army(game_client& backend, entity_guid settlement);
 
+// Queues a command to have a settlement build a road from origin to destination (world tiles).
+void game_client_input_build_road(game_client& backend, entity_guid settlement, world_location origin, world_location destination);
+
 // Queues a command to have a settlement spawn a caravan from its local wealth.
 void game_client_input_spawn_caravan(game_client& backend, entity_guid settlement);
 

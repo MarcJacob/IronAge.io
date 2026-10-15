@@ -19,7 +19,7 @@ static constexpr ui64 WEB_SERVER_TOTAL_FILE_DATA_MEM = MiB(96);
 static constexpr char WEB_ROOT_FOLDER[] = "./web_root/"; // Resources-folder-relative path of serveable files.
 
 static constexpr ui16 WEB_SERVER_MAX_CLIENTS = 64;
-static constexpr ui16 WEB_SERVER_MAX_FILES = 32; // Max number of files that can be preloaded for serving.
+static constexpr ui16 WEB_SERVER_MAX_FILES = 256; // Max number of files that can be preloaded for serving.
 
 static constexpr ui32 WEB_CLIENT_RECEPTION_BUFFER_SIZE = 2048;
 static constexpr ui32 WEBSOCKET_CLIENT_MESSAGES_RECEPTION_BUFFER_SIZE = 1024;

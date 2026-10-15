@@ -29,6 +29,18 @@ export enum INPUT_EVENT_TYPE
     FOUND_SETTLEMENT,
     SPAWN_ARMY,
     ATTACK_TARGET,
+    BUILD_ROAD,
+};
+
+// Mirrors MATCH_COMMAND_TYPE (include/game_common/match/commands.h). Update here if the enum changes.
+export enum MATCH_COMMAND_TYPE
+{
+    SET_ENTITY_MOVE_TARGET,
+    SET_ENTITY_ATTACK_TARGET,
+    FOUND_SETTLEMENT,
+    SPAWN_ARMY,
+    SERVER_SPAWN_PLAYER,
+    BUILD_ROAD,
 };
 
 // Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
@@ -78,6 +90,7 @@ interface ClientExports extends WebAssembly.Exports
     client_get_input_event_buffer_offset(): number;
     client_get_input_event_buffer_size(): number;
     client_send_input_event(code: INPUT_EVENT_TYPE): number; // wasm bool: 0 or 1.
+    client_query_command_valid(command_type: MATCH_COMMAND_TYPE): number; // wasm bool: 0 or 1. Reads the command payload from the input event buffer.
 
     // Entity inspection
 
@@ -88,7 +101,7 @@ interface ClientExports extends WebAssembly.Exports
     // Path query
 
     client_get_path_buffer_offset(): number;
-    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number): number; // Waypoint count written to the path buffer.
+    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number, territory_guid: number): number; // Waypoint count written to the path buffer.
 }
 
 let CLIENT_BACKEND: ClientExports;
@@ -288,14 +301,22 @@ export namespace ClientInput
         if (!valid) console.error(`Input event ${INPUT_EVENT_TYPE[code]} was rejected by the backend - is backend.ts out of sync with game_client_backend.h?`);
         return valid;
     }
+
+    // Asks whether the command of the given type, whose payload (command layout, see commands.h) was written in the view
+    // given by begin_input_event, would currently be valid for the local player. Does not send anything.
+    export function query_command_valid(command_type: MATCH_COMMAND_TYPE): boolean
+    {
+        return CLIENT_BACKEND.client_query_command_valid(command_type) !== 0;
+    }
 }
 
 // Asks the backend for a land path between two world tiles. Returns its waypoints in order, start tile excluded:
 // move in a straight line from the start to the first waypoint, then to the second, and so on. Empty if there is nothing to follow.
+// If territory_guid is a settlement's guid, the path is limited to that settlement's territory.
 // The path buffer holds (x, y) ui16 pairs (see web_game_client_query.cpp).
-export function query_path(start: { x: number, y: number }, end: { x: number, y: number }): { x: number, y: number }[]
+export function query_path(start: { x: number, y: number }, end: { x: number, y: number }, territory_guid: number = 0): { x: number, y: number }[]
 {
-    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y);
+    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y, territory_guid);
     const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_path_buffer_offset(), count * 4);
 
     const points: { x: number, y: number }[] = [];
