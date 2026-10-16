@@ -24,7 +24,7 @@ CLAUDE.md
 
 # Ignore all folders starting with '.'
 
-/.*/
+.*/
 
 # ... Except for .nvim, the project nvim config.
 !/.nvim/

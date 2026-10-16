@@ -19,7 +19,11 @@ Win32 scripts:
 
 - **win32_build_all.cmd**   = rebuilds every single application in the project. Good for a first time build or when you've made changes to common code.
 
-- **win32_launch_server.cmd** = launches the built game server, optionally with a given executable and resources folder.
+- **win32_launch_server_instance.cmd** = launches one instance of the built game server, optionally with a given executable and resources folder (and `-port=<NUM>`, default 8080).
+
+- **win32_start_supervisor_game_server.ps1** = PowerShell, the one exception to the batch convention (ops script, not a dev tool).
+                                - Made to be launched on boot on the online hosting box: monitors the game server process and automatically updates it from the git depot's release-alpha branch.
+                                - See *management/work_units/public_hosting_2026-10-15.md*.
 
 - **full_ship.cmd**         = @TODO Triggers a full rebuild in release mode and packs everything together neatly in an archive at <Build Folder>/Ship.
 

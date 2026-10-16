@@ -79,12 +79,13 @@ if errorLevel 1 (
 
 pushd "%SCRIPT_FOLDER%front/"
 call npm run build
+:: Capture the result before popd, which may overwrite the error level.
+set "TSC_EXIT_CODE=%errorLevel%"
 popd
 
-if errorLevel 1 (
+if not "%TSC_EXIT_CODE%"=="0" (
     echo Web Game Client TSC build ended with errors.
-    endlocal
-    exit /b %errorLevel%
+    endlocal & exit /b %TSC_EXIT_CODE%
 )
 
 :: /Web/ -> Output dir copy
