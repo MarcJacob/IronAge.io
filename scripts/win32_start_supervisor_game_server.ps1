@@ -13,6 +13,9 @@ param
     [int]$MaxRestarts = 5
 )
 
+# Remove previous Dev Setup.
+Remove-Item Env:IRONAGE_DEV_SETUP -ErrorAction SilentlyContinue
+
 $LogDir = Join-Path $PSScriptRoot ".logs" # Build path to logging directory
 
 if (-not (Test-Path $LogDir)) 
@@ -54,7 +57,7 @@ function Get-AvailableUpdate
 # Returns $true if successful, $false otherwise.
 function Invoke-FullBuild
 {
-    $BuildScript = Join-Path $RepoPath "scripts/win32_build_all.cmd"
+    $BuildScript = Join-Path $RepoPath "scripts\win32_build_all.cmd"
     $BuildLog = Join-Path $LogDir "build.log"
 
     cmd /c "`"$BuildScript`" < NUL > `"$BuildLog`" 2>&1"    # Run full build command, disable stdin, 
@@ -110,6 +113,7 @@ while($true)
         }
 
         # Perform full build. $BuildFailed will be set with the result.
+        Write-SupervisorLog "Starting full build..."
         $BuildFailed = -not(Invoke-FullBuild)
 
         if ($BuildFailed -eq $false)
@@ -147,6 +151,7 @@ while($true)
 
         $ExeDir = Split-Path $Exe -Parent
 
+        Write-SupervisorLog "Starting Server..."
         $ServerProcess = Start-Process -FilePath $Exe -ArgumentList "-port=$Port" -WorkingDirectory $ExeDir -PassThru
     }
 }

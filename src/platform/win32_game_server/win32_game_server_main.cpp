@@ -530,6 +530,12 @@ void win32_reload_game_server_program()
         // Add folder.
         dllFileNameBuilder.push_front("./HOT_RELOAD_TEMP/");
 
+        // (Ensure the folder actually exists...)
+        if (!CreateDirectory("./HOT_RELOAD_TEMP", NULL))
+        {
+            ASSERT_MSG(GetLastError() == ERROR_ALREADY_EXISTS, "Failed to create HOT_RELOAD_TEMP folder (required by Dev mode hot reload system).");
+        }
+
         // Perform copy, assert on failure (server has to be fully restarted).
         BOOL copySuccess = CopyFile(SERVER_PROGRAM_FILENAME_BASE, dllFileNameBuilder.string._str, 0);
         ASSERT_MSG(copySuccess, "DLL file copy failed on hot reload. Base name = %s | Copy name = %s | Error Code = %d", 
