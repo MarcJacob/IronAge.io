@@ -1,6 +1,9 @@
-:: Launches the game server.
+:: Launches a single server instance.
 :: Arg %1 = game server executable location.
-:: Arg %2 = game server resources path (absolute or relative to CD)
+:: Further args are passed to the server as-is.
+:: At the time of writing this:
+:: -port=<Num> = Listen port for game server. 8080 by default.
+:: @TODO(Marc): Add more CLA + robust config system.
 
 @echo off
 if not defined IRONAGE_DEV_SETUP (
@@ -25,15 +28,9 @@ if not exist "%GAME_SERVER_EXE_PATH%" (
 
 for %%i in ("%GAME_SERVER_EXE_PATH%") do set "GAME_SERVER_DIR=%%~dpi"
 
-set "GAME_SERVER_RESOURCES_DIR=%GAME_SERVER_DIR%game_server_resources\"
-if not "%~2"=="" (
-    set "GAME_SERVER_RESOURCES_DIR=%~2"
-    echo Using Resources path = %GAME_SERVER_RESOURCES_DIR%
-) else echo Using default Resources path = %GAME_SERVER_RESOURCES_DIR%
-
 :: Launch with cd = exe file.
 pushd %GAME_SERVER_DIR%
-call %GAME_SERVER_EXE_PATH% %GAME_SERVER_RESOURCES_DIR%
+call %GAME_SERVER_EXE_PATH% %*
 popd
 
 endlocal
