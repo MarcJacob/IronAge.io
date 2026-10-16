@@ -12,13 +12,10 @@ vim.env.MYVIMRC = debug.getinfo(1, "S").source:sub(2)
 -- Config functions, called at the end of the file if IronAge dev env was correctly setup.
 
 local run_command_term = function(cmd, auto_close, switch_modes)
-    print("Running full build...")
+    print("Running command terminal:" .. cmd)
 
     local buf = vim.api.nvim_create_buf(false, true)
     vim.cmd("rightbelow vsplit")
-    if (switch_modes) then
-        vim.cmd("startinsert")
-    end
     local win = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(win, buf)
     vim.keymap.set({ "n", "t" }, "<CR>", "<cmd>bdelete!<CR>", { buffer = buf }) -- Make it so pressing <CR> in the buffer closes it.
@@ -35,6 +32,10 @@ local run_command_term = function(cmd, auto_close, switch_modes)
         })
     end)
 
+    if (switch_modes) then
+        vim.cmd("startinsert")
+    end
+
     return jobID, buf
 end
 
@@ -48,7 +49,7 @@ local game_server_build_hotreload = function()
     vim.cmd("silent !" .. GAME_SERVER_BUILD_HOTRELOAD_CMD, true, false)
 end
 
-local TEST_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_launch_server.cmd"
+local TEST_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_launch_server_instance.cmd"
 local test = function ()
     run_command_term(TEST_CMD, false, true)
 end

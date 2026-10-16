@@ -439,7 +439,7 @@ static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
       return FALSE;
 }
 
-void win32_platform_init()
+void win32_platform_init(const win32_startup_args& startup_args)
 {
 	ASSERT(WIN32_PLATFORM.initialized == false);
 
@@ -458,7 +458,7 @@ void win32_platform_init()
 	WIN32_PLATFORM.write_resource_file_func = win32_write_resource_file;
 	WIN32_PLATFORM.list_resource_files_func = win32_list_resource_files;
 
-	WIN32_PLATFORM.net_component = win32_net_start(); // Start networking capabilities.
+	WIN32_PLATFORM.net_component = win32_net_start(startup_args); // Start networking capabilities.
 	ASSERT_MSG(WIN32_PLATFORM.net_component != nullptr, "Win32: Failed to start Net Component.");
 
 	// ... TODO(Marc) Many more platform functions / properties to add !
@@ -595,6 +595,60 @@ void win32_platform_shutdown()
 	WIN32_PLATFORM = {};
 }
 
+void win32_parse_startup_args(int argc, char** argv, win32_startup_args& out_args)
+{
+    // Look, for each arg, the format -<Arg Name>=<Arg Value>.
+    // If an argument does not follow this format, log and ignore.
+    
+    ui8 parsedArgCount = 0;
+    for (ui8 argIndex = 1; argIndex < argc; argIndex++) // Skip the first argument which is just the program name.
+    {
+        ia_static_string<512> readStr = argv[argIndex];
+
+        ia_string_view argNameView = ia_string_get_until(readStr, '=');
+        if (argNameView.length == 512)
+        {
+            continue;
+        }
+
+        if (argNameView.length == readStr.length)
+        {
+            // Invalid format, no '=' found to separate name and value.
+            win32_logf("CLA", LOG_WARNING, "Invalid argument '%s' ignored.", readStr._str);
+            continue;
+        }
+
+        // The rest of the string is the value, not including the '='.
+        ia_string_view argValueView = readStr;
+        ia_string_chop_right(argValueView, argNameView.length + 1); // Contents of arg name + '=' character.
+        if (argValueView.is_empty())
+        {
+            // Invalid format, no value found after '='.
+            win32_logf("CLA", LOG_WARNING, "Invalid argument '%s' ignored.", readStr._str);
+            continue;
+        }
+
+        out_args.str_args[parsedArgCount++] = win32_arg_str {
+            .arg_name = argNameView,
+            .arg_val = argValueView,
+        };
+
+        // Parse standard param.
+        if (argNameView == "-port")
+        {
+            ui16 outPort;
+            if (!ia_string_to_integer(argValueView, outPort))
+            {
+                win32_log("CLA", LOG_ERROR, "Failed to parse value of argument -port: not a number.");
+                continue;
+            }
+
+            out_args.SERVER_LISTEN_PORT = outPort;
+        }
+        // ... Add more standard arguments.
+    }
+}
+
 // Main entry point.
 int main(int argc, char** argv)
 {	
@@ -615,28 +669,26 @@ int main(int argc, char** argv)
 	InitializeCriticalSection(&CS_WIN32_STDOUT);
 	InitializeCriticalSection(&CS_WIN32_STDERR);
 
+    // Parse startup args.
+    win32_startup_args startupArgs = {};
+    win32_parse_startup_args(argc, argv, startupArgs);
+
 	win32_log("", "Initializing IronAge.io Game Server.\nPlatform = Win32 x64\n");
 
-    char RESOURCES_DIR_ABSOLUTE[MAX_PATH];
-    if (argc > 1)
-    {
-        GetFullPathName(argv[1], sizeof(RESOURCES_DIR_ABSOLUTE) - 1, RESOURCES_DIR_ABSOLUTE, NULL);
-    }
-    else
+    if (startupArgs.RESOURCES_PATH.length == 0)
     {
         const char* RESOURCES_DIR_DEFAULT = "./game_server_resources/";
-
-        GetFullPathName(RESOURCES_DIR_DEFAULT, sizeof(RESOURCES_DIR_ABSOLUTE) - 1, RESOURCES_DIR_ABSOLUTE, NULL);
+        GetFullPathName(RESOURCES_DIR_DEFAULT, sizeof(startupArgs.RESOURCES_PATH._str) - 1, startupArgs.RESOURCES_PATH._str, NULL);
     }
-    win32_logf("", "Server resources DIR path = %s", RESOURCES_DIR_ABSOLUTE); // @TODO(Marc): Check that directory exists.
+    win32_logf("", "Server resources DIR path = %s", startupArgs.RESOURCES_PATH._str); // @TODO(Marc): Check that directory exists.
 
-    GAME_SERVER_RESOURCES_DIR = RESOURCES_DIR_ABSOLUTE; // The buffer will outlive any usage of this variable.
+    GAME_SERVER_RESOURCES_DIR = startupArgs.RESOURCES_PATH._str; // The buffer will outlive any usage of this variable.
 
 	// Initialize win32 platform structure.
 
 	win32_logf("", "Allocating Game Server memory. Memory size = %llu bytes", GAME_SERVER_MEM_SIZE);
 
-	win32_platform_init();
+	win32_platform_init(startupArgs);
 	ASSERT(WIN32_PLATFORM.initialized);
 
 	ui8* game_server_mem = (ui8*)VirtualAlloc(NULL, GAME_SERVER_MEM_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);

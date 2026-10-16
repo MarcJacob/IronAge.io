@@ -66,8 +66,10 @@ struct win32_net_component
 	struct listen_thread_context
 	{
 		win32_active_connections_table* connections_table; // Connections table to register new connections into.
-		volatile SOCKET socket; // Socket to use for accepting new connections. Close to stop the thread.
-		volatile bool err_signal; // Set to true by the thread if it encountered a fatal error.
+        
+        ui16 listen_port;           // Port the listen socket was bound to.
+		volatile SOCKET socket;     // Socket to use for accepting new connections. Close to stop the thread.
+		volatile bool err_signal;   // Set to true by the thread if it encountered a fatal error.
 
 		DWORD thread_id;
 		HANDLE thread_handle;
@@ -103,7 +105,7 @@ static constexpr ui16 MAX_ACTIVE_CONNECTIONS = 1024;
 static constexpr ui16 ACTIVE_CONNECTION_RECEPTION_BUFFERS_SIZE = KiB(32);
 static constexpr ui16 ACTIVE_CONNECTION_SEND_BUFFERS_SIZE = KiB(32);
 
-SOCKET create_listen_socket();
+SOCKET create_listen_socket(ui16 listen_port);
 
 unsigned long listen_thread_func(LPVOID context);
 unsigned long reception_thread_func(LPVOID context);
@@ -141,9 +143,9 @@ void win32_build_active_connections_table(win32_net_component& net_component, ui
 	}
 }
 
-static ui16 LISTEN_PORT = 8080;
+static ui16 DEFAULT_LISTEN_PORT = 8080;
 
-SOCKET create_listen_socket()
+SOCKET create_listen_socket(ui16 in_listen_port, ui16& out_listen_port)
 {
 	SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET)
@@ -154,7 +156,9 @@ SOCKET create_listen_socket()
 
 	struct sockaddr_in bind_addr = {};
 	bind_addr.sin_family = AF_INET;
-	bind_addr.sin_port = htons(LISTEN_PORT);
+
+    out_listen_port = in_listen_port == 0 ? DEFAULT_LISTEN_PORT : in_listen_port;
+	bind_addr.sin_port = htons(out_listen_port);
 	bind_addr.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK); // Listen only on loopback so only local connections or connections going through the CloudFlared tunnel can come in.
 
 	if (bind(listenSocket, (sockaddr*)&bind_addr, sizeof(sockaddr_in)) == SOCKET_ERROR)
@@ -174,7 +178,7 @@ SOCKET create_listen_socket()
 	return listenSocket;
 }
 
-win32_net_component* win32_net_start()
+win32_net_component* win32_net_start(const win32_startup_args& startup_args)
 {
 	net_log("Starting net component...");
 
@@ -200,7 +204,8 @@ win32_net_component* win32_net_start()
 	win32_build_active_connections_table(*netComponent, MAX_ACTIVE_CONNECTIONS);
 
 	// Create listen server thread.
-	SOCKET listenSocket = create_listen_socket();
+    ui16 listenPort;
+	SOCKET listenSocket = create_listen_socket(startup_args.SERVER_LISTEN_PORT, listenPort);
 	if (listenSocket == INVALID_SOCKET)
 	{
 		net_log(LOG_ERROR, "Failed to create listen socket.");
@@ -211,6 +216,7 @@ win32_net_component* win32_net_start()
 	// Create listen thread context and start it.
 	netComponent->listen_thread = {
 		.connections_table = &netComponent->active_connections_table,
+        .listen_port = listenPort,
 		.socket = listenSocket,
 
 		.thread_handle = CreateThread(NULL, NULL, listen_thread_func, &netComponent->listen_thread,
@@ -472,7 +478,7 @@ unsigned long listen_thread_func(LPVOID context)
 	sockaddr_in newConnectionAddr = {};
 	i32 addrLen = sizeof(newConnectionAddr);
 
-    net_logf(LOG_SUCCESS, "Listening on port %hu", LISTEN_PORT);
+    net_logf(LOG_SUCCESS, "Listening on port %hu", listenThread.listen_port);
 
 	// Main loop
 	for (;;)

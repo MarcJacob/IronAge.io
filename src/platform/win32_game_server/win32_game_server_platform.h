@@ -16,6 +16,28 @@
 
 // Platform & components structures
 
+// Contains a name / value pair found in the Command Line Arguments the app was started with.
+struct win32_arg_str
+{
+    ia_static_string<32> arg_name;
+    ia_static_string<256> arg_val;
+};
+
+// Contains all parsed startup arguments for the Win32 Game Server app.
+// Standard parameters that aren't specified in the command line are zero-initialized. Whatever reads them should interpret 0 as "default value".
+struct win32_startup_args
+{
+    win32_arg_str str_args[16]; // The passed startup arguments.
+
+    ia_static_string<MAX_PATH> RESOURCES_PATH; // -resources="<PATH>" (@TODO(Marc))
+                                               // Resource path to use, either absolute or relative to working directory.
+
+    ui16 SERVER_LISTEN_PORT; // -port=<INTEGER>
+                             // Port the server's listen socket should bind to.
+
+    // ...
+};
+
 // Components are forward-declared here and implemented in their relevant file.
 struct win32_net_component;
 
@@ -75,7 +97,7 @@ struct win32_in_connection
 
 // Creates, starts and returns a net component which takes care of setting up the app as a server with a listening thread as well as the ability to receive and send data.
 // Creates background threads, non-blocking beyond setup.
-win32_net_component* win32_net_start();
+win32_net_component* win32_net_start(const win32_startup_args& startup_args);
 
 // Main loop update of the net component.
 void win32_net_update_connections(win32_net_component& net_component);

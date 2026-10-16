@@ -476,6 +476,30 @@ static ia_string ia_string_from_integer(mem_arena& memory, Numeric val, ui8 base
 	return builder.string;
 }
 
+// Attempts to parse a string to an integer of the provided type.
+// @TODO(Marc): Add support for other bases.
+// @TODO(Marc): Add an equivalent for floats / doubles.
+template<typename Numeric>
+static bool ia_string_to_integer(const ia_string_view& str, Numeric& out_integer)
+{
+    out_integer = 0;
+    if (str.is_empty()) return false;
+
+    static Numeric MAX_VAL = ~(Numeric)0;
+
+    ui32 multiplicator = 1;
+    for (i16 charIndex = str.length - 1; charIndex >= 0; charIndex--)
+    {
+        char character = str[charIndex];
+        if (character < '0' || character > '9') { out_integer = 0; return false; } // Not an integer number.
+
+        out_integer += (int)(character - '0') * multiplicator;
+        multiplicator *= 10;
+    }
+
+    return true;
+}
+
 // Builds a string representation of the passed float value into the memory.
 // precision is the number of digits of the fractional part to print.
 // The string is returned in ia_string format.
