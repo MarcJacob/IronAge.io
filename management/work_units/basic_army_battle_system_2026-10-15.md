@@ -33,8 +33,8 @@ Armies catching armies create a Battle entity (static layout, no army list). Arm
 
 ## Open
 
-- Not tried in the real client / server; battle UI panel and balance bar built (tsc) but never run in a browser.
+None. Battle UI hand-tested OK (2026-10-16).
 
 ## Next
 
-User review.
+Done.

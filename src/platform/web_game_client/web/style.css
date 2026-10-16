@@ -59,26 +59,43 @@ body {
     pointer-events: auto;
 }
 
-/* Makes room for the settlement bar. */
+/* Makes room for the action bar (matters on narrow screens, where they could overlap). */
 #game_hud.has_bottom_bar #game_hud_selected_panel {
-    bottom: 64px;
+    bottom: 112px;
 }
 
-/* Actions of the selected settlement, full width along the bottom, buttons from the left. */
+/* Action bar: actions of the selected settlement / army. Floating, centered, a third of the screen wide, buttons from the left.
+   Actions without a hotkey (committed actions) go to the right. */
 #game_hud_settlement_bar {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 20px;
+    width: 33.333%;
+    min-width: 22rem;
+    max-width: calc(100% - 24px);
     display: flex;
     justify-content: flex-start;
-    gap: 8px;
+    align-items: stretch;
+    gap: 12px;
     box-sizing: border-box;
-    padding: 8px 12px;
+    padding: 16px 20px;
     background: rgba(36, 39, 45, 0.9);
-    border-top: 1px solid #c7cbd1;
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
     font-family: monospace;
     pointer-events: auto;
+}
+
+#game_hud_settlement_bar button {
+    min-height: 3rem;
+    padding: 8px 18px;
+    font-family: inherit;
+    font-size: 1.1rem;
+}
+
+#game_hud_settlement_bar .bar_right {
+    margin-left: auto;
 }
 
 /* What the current mode is and what to do, top center. Passes mouse input through. */

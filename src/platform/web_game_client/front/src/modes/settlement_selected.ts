@@ -6,14 +6,16 @@ import { get_selected_entity_guid, get_selected_entity_view, clear_selected_enti
 import { show_settlement_bar, hide_settlement_bar } from "../ui/settlement_bar_ui.js"
 import { is_own_settlement, play_click, play_context_menu } from "./play_common.js"
 import { RoadBuilding } from "./road_building.js"
+import { ArmyRaising } from "./army_raising.js"
 
 const KEY_BUILD_ROAD = 'Digit1';
+const KEY_RAISE_ARMY = 'Digit2';
 
 export class SettlementSelected extends Core.Mode
 {
     on_entry(): void
     {
-        show_settlement_bar(() => this.start_road_building());
+        show_settlement_bar(() => this.start_road_building(), () => this.start_army_raising());
     }
 
     on_exit(): void
@@ -29,7 +31,7 @@ export class SettlementSelected extends Core.Mode
 
     on_resumed(): void
     {
-        show_settlement_bar(() => this.start_road_building());
+        show_settlement_bar(() => this.start_road_building(), () => this.start_army_raising());
     }
 
     on_frame_update(delta_time_s: number): void
@@ -57,12 +59,20 @@ export class SettlementSelected extends Core.Mode
 
     on_key_down(event: KeyboardEvent): void
     {
-        if (event.code === KEY_BUILD_ROAD && !event.repeat) this.start_road_building();
+        if (event.repeat) return;
+        if (event.code === KEY_BUILD_ROAD) this.start_road_building();
+        else if (event.code === KEY_RAISE_ARMY) this.start_army_raising();
     }
 
     private start_road_building(): void
     {
         const guid = get_selected_entity_guid();
         if (guid !== null) Core.push_mode(new RoadBuilding(guid, KEY_BUILD_ROAD));
+    }
+
+    private start_army_raising(): void
+    {
+        const guid = get_selected_entity_guid();
+        if (guid !== null) Core.push_mode(new ArmyRaising(guid, KEY_RAISE_ARMY));
     }
 }

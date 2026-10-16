@@ -153,7 +153,7 @@ enum class INPUT_EVENT_TYPE : ui16
 	VIEWPORT_CONTROL,
 	SET_TARGET_LOC,
 	FOUND_SETTLEMENT,
-	SPAWN_ARMY,
+	RAISE_ARMY,
 	ATTACK_TARGET,
 	BUILD_ROAD,
 };
@@ -188,12 +188,13 @@ struct input_event_payload_found_settlement
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_found_settlement);
 
-// Has a settlement spawn an army from its population.
-struct input_event_payload_spawn_army
+// Has a settlement raise an army from its population, moving to the raise location.
+struct input_event_payload_raise_army
 {
-	entity_guid settlement; // Settlement to spawn the army from.
+	entity_guid settlement; // Settlement to raise the army from.
+	ui16 raise_x, raise_y; // Tile the army moves to.
 };
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_spawn_army);
+INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_raise_army);
 
 // Orders an army to chase and attack another entity.
 struct input_event_payload_attack_target

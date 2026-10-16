@@ -128,29 +128,35 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	world_destroy_army(world, command.army);
 }
 
-// SPAWN ARMY
+// RAISE ARMY
 
-constexpr ui32 SPAWN_ARMY_POPULATION_COST = 100;
+constexpr ui32 RAISE_ARMY_POPULATION_COST = 100;
 
-bool command_spawn_army_validity_check(const match_world_state& world, match_player_id player, const command_data_spawn_army& command)
+bool command_raise_army_validity_check(const match_world_state& world, match_player_id player, const command_data_raise_army& command)
 {
 	if (!world_entity_is_valid(world, command.settlement)) return false;
 	if (command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
+	if (command.raise_location.x >= world.terrain.size_tiles.x || command.raise_location.y >= world.terrain.size_tiles.y) return false;
 
 	ui16 settlementIndex = command.settlement.get_index();
 	const world_entity_settlements& settlements = world.entities.settlements;
 	if (settlements.owners[settlementIndex] != player) return false;
-	if (settlements.populations[settlementIndex] < SPAWN_ARMY_POPULATION_COST) return false;
+	if (settlements.populations[settlementIndex] < RAISE_ARMY_POPULATION_COST) return false;
+
+	// The raise location must be in the settlement's territory.
+	ui16 regionIndex, tileIndex;
+	world_get_tile(world.terrain, command.raise_location, regionIndex, tileIndex);
+	if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) return false;
 
 	const world_entity_armies& armies = world.entities.armies;
 	return armies.active_count < armies.max_count;
 }
 
-// Takes levies out of the settlement's population and spawns them as an army at its location.
-void command_spawn_army_apply(match_world_state& world, match_player_id player, const command_data_spawn_army& command)
+// Takes levies out of the settlement's population and raises them as an army at its location, moving to the raise location.
+void command_raise_army_apply(match_world_state& world, match_player_id player, const command_data_raise_army& command)
 {
 	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last army slot.
-	if (!command_spawn_army_validity_check(world, player, command)) return;
+	if (!command_raise_army_validity_check(world, player, command)) return;
 
 	ui16 settlementIndex = command.settlement.get_index();
 	const world_entity_settlements& settlements = world.entities.settlements;
@@ -158,11 +164,13 @@ void command_spawn_army_apply(match_world_state& world, match_player_id player, 
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owners[settlementIndex];
 	newArmy.location = settlements.locations[settlementIndex];
-	newArmy.composition.levies = SPAWN_ARMY_POPULATION_COST;
+	newArmy.composition.levies = RAISE_ARMY_POPULATION_COST;
 
 	// Spawn first: decreasing the population may destroy the settlement.
-	world_spawn_army(world, newArmy);
-	world_settlement_decrease_population(world, command.settlement, SPAWN_ARMY_POPULATION_COST);
+	entity_guid armyGuid = world_spawn_army(world, newArmy);
+	// Set after spawning: the spawn function defaults an all-zero destination to the army's location.
+	world.entities.armies.movements[armyGuid.get_index()].destination = command.raise_location;
+	world_settlement_decrease_population(world, command.settlement, RAISE_ARMY_POPULATION_COST);
 }
 
 // ENTITY SET ATTACK TARGET
@@ -267,8 +275,8 @@ bool match_command_validity_check(const match_world_state& world, match_player_i
 			return command_set_entity_attack_target_validity_check(world, player, command.get_command_data<command_data_set_entity_attack_target>());
 		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 			return command_found_settlement_validity_check(world, player, command.get_command_data<command_data_found_settlement>());
-		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
-			return command_spawn_army_validity_check(world, player, command.get_command_data<command_data_spawn_army>());
+		case MATCH_COMMAND_TYPE::RAISE_ARMY:
+			return command_raise_army_validity_check(world, player, command.get_command_data<command_data_raise_army>());
         case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
             return command_server_spawn_player_validity_check(world, player, command.get_command_data<command_data_server_spawn_player>());
 		case MATCH_COMMAND_TYPE::BUILD_ROAD:
@@ -295,8 +303,8 @@ inline void match_command_apply(match_world_state& world, match_player_id player
 	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 		command_found_settlement_apply(world, player, command.get_command_data<command_data_found_settlement>());
 		break;
-	case MATCH_COMMAND_TYPE::SPAWN_ARMY:
-		command_spawn_army_apply(world, player, command.get_command_data<command_data_spawn_army>());
+	case MATCH_COMMAND_TYPE::RAISE_ARMY:
+		command_raise_army_apply(world, player, command.get_command_data<command_data_raise_army>());
 		break;
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         command_server_spawn_player_apply(world, player, command.get_command_data<command_data_server_spawn_player>());
@@ -363,9 +371,9 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 			isValid = command_found_settlement_validity_check(world, player_id,
 				commandHeader.get_command_data<command_data_found_settlement>());
 			break;
-		case MATCH_COMMAND_TYPE::SPAWN_ARMY:
-			isValid = command_spawn_army_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_spawn_army>());
+		case MATCH_COMMAND_TYPE::RAISE_ARMY:
+			isValid = command_raise_army_validity_check(world, player_id,
+				commandHeader.get_command_data<command_data_raise_army>());
 			break;
 		case MATCH_COMMAND_TYPE::BUILD_ROAD:
 			isValid = command_build_road_validity_check(world, player_id,

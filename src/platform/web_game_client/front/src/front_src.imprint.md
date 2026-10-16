@@ -13,6 +13,8 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
 - *render.ts* draws the match from the backend's render state and a configuration object. It never decides what to show.
 - *ui/* holds DOM widgets (static markup lives in *web/index.html*). They show / hide / refresh themselves from what they are told,
   and only emit signals back (callbacks). They never send input commands or switch modes.
+  The bottom bar is called the **action bar** (*ui/settlement_bar_ui.ts*, markup in *web/index.html*, style in *web/style.css*):
+  modes show their actions there, hotkeyed ones on the left, committed ones (no hotkey) on the right.
 - *input.ts* is a library plus the DOM listener registration. It forwards clicks, keys and Escape to the current mode
   and holds input state (selection, held keys, camera input) and the *send_** functions that build input events.
 - *camera.ts* is the frontend camera.
@@ -27,7 +29,11 @@ The current tree (extend it, keep it as a tree):
 - Lobby base: no match running.
 - Game base: a match is running, until it ends. Runs the camera. Has one child at a time:
   - Spawn pick: placement phase.
-  - Main play: ordinary gameplay. Its child, Settlement selected, has its own child, Road building.
+  - Main play: ordinary gameplay. Has one child at a time:
+    - Settlement selected: actions with hotkeys. Has one child at a time:
+      - Road building: stays active after an order.
+      - Army raising: one click raises one army, then the mode exits.
+    - Army selected: committed action (Settle), no hotkey.
 
 ### Events
 

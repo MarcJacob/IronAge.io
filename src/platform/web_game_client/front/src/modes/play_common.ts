@@ -11,6 +11,12 @@ export function is_own_settlement(view: Backend.EntityView | null): boolean
     return view !== null && view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === get_local_player_id();
 }
 
+// Whether the view is of an army of the local player.
+export function is_own_army(view: Backend.EntityView | null): boolean
+{
+    return view !== null && view.entity_type === Backend.ENTITY_TYPE.ARMY && view.owner === get_local_player_id();
+}
+
 // Left click: selects the entity under the cursor. Empty space clears the selection.
 export function play_click(event: MouseEvent): void
 {

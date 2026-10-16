@@ -93,13 +93,29 @@ export function send_found_settlement(army_guid: number): void
     Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.FOUND_SETTLEMENT);
 }
 
-// Orders the given settlement to spawn an army from its population.
-export function send_spawn_army(settlement_guid: number): void
+// Orders the given settlement to raise an army from its population, moving to the raise location (world tile).
+export function send_raise_army(settlement_guid: number, raise_location: { x: number, y: number }): void
 {
-    // Layout of input_event_payload_spawn_army (game_client_backend.h): ui32 settlement guid.
+    write_raise_army_payload(settlement_guid, raise_location);
+    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.RAISE_ARMY);
+}
+
+// Whether the same raise army order would currently be valid (same check as the server's).
+export function is_raise_army_valid(settlement_guid: number, raise_location: { x: number, y: number }): boolean
+{
+    write_raise_army_payload(settlement_guid, raise_location);
+    return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.RAISE_ARMY);
+}
+
+// Writes the raise army payload in the input event buffer. Same layout for the input event and the command it queues.
+function write_raise_army_payload(settlement_guid: number, raise_location: { x: number, y: number }): void
+{
+    // Layout of input_event_payload_raise_army (game_client_backend.h) / command_data_raise_army (commands.h):
+    // ui32 settlement guid, ui16 raise location x, y.
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, settlement_guid, true);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SPAWN_ARMY);
+    view.setUint16(4, raise_location.x, true);
+    view.setUint16(6, raise_location.y, true);
 }
 
 // Orders the given army to chase and attack the given entity.

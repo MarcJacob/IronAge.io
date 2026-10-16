@@ -1,11 +1,12 @@
-// Ordinary gameplay: HUD, entity selection and orders. Selecting an own settlement enters the settlement selected mode.
+// Ordinary gameplay: HUD, entity selection and orders. Selecting an own settlement enters the settlement selected mode, an own army the army selected mode.
 
 import * as Core from "../core.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, get_selected_entity_view } from "../input.js"
 import { set_game_ui_visible, update_game_ui } from "../ui/game_ui.js"
-import { is_own_settlement, play_click, play_context_menu, update_army_path_preview } from "./play_common.js"
+import { is_own_army, is_own_settlement, play_click, play_context_menu, update_army_path_preview } from "./play_common.js"
 import { SettlementSelected } from "./settlement_selected.js"
+import { ArmySelected } from "./army_selected.js"
 
 export class MainPlay extends Core.Mode
 {
@@ -35,7 +36,9 @@ export class MainPlay extends Core.Mode
 
         update_army_path_preview();
 
-        if (is_own_settlement(get_selected_entity_view())) Core.push_mode(new SettlementSelected());
+        const selected = get_selected_entity_view();
+        if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected());
+        else if (is_own_army(selected)) Core.push_mode(new ArmySelected());
     }
 
     // The mode right above the game base: leaving it would leave the match without a play mode.

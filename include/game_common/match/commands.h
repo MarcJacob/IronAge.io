@@ -19,7 +19,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
-	SPAWN_ARMY, // Spawns an army of levies from a settlement's population.
+	RAISE_ARMY, // Raises an army of levies from a settlement's population, moving to a raise location.
 
     // SERVER COMMANDS
 
@@ -86,17 +86,18 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 void command_found_settlement_apply(match_world_state& world, match_player_id player,
 	const command_data_found_settlement& command);
 
-// SPAWN ARMY
-struct command_data_spawn_army
+// RAISE ARMY
+struct command_data_raise_army
 {
 	entity_guid settlement;
+	world_location raise_location; // Tile the new army starts moving to.
 };
 
-bool command_spawn_army_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_spawn_army& command);
+bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
+	const command_data_raise_army& command);
 
-void command_spawn_army_apply(match_world_state& world, match_player_id player,
-	const command_data_spawn_army& command);
+void command_raise_army_apply(match_world_state& world, match_player_id player,
+	const command_data_raise_army& command);
 
 // BUILD ROAD
 // @TODO(Marc): I'd like for there to be a single command (or at least, one per "archetype") for starting build projects.
@@ -198,8 +199,8 @@ static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
 		return sizeof(command_data_set_entity_attack_target);
 	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
 		return sizeof(command_data_found_settlement);
-	case MATCH_COMMAND_TYPE::SPAWN_ARMY:
-		return sizeof(command_data_spawn_army);
+	case MATCH_COMMAND_TYPE::RAISE_ARMY:
+		return sizeof(command_data_raise_army);
     case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
         return sizeof(command_data_server_spawn_player);
 	case MATCH_COMMAND_TYPE::BUILD_ROAD:

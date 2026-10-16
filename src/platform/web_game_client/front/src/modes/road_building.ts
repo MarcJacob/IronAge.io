@@ -63,6 +63,12 @@ export class RoadBuilding extends Core.Mode
         if (event.code === this.exit_key && !event.repeat) Core.pop_mode();
     }
 
+    // Right click leaves, like Escape (the browser menu is already suppressed by input.ts).
+    on_context_menu(event: MouseEvent): void
+    {
+        Core.pop_mode();
+    }
+
     on_click(event: MouseEvent): void
     {
         if (event.button !== 0) return;
