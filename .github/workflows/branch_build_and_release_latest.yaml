@@ -1,0 +1,44 @@
+name: Branch Latest Build & Release
+permissions:
+  contents: write
+on:
+  workflow_dispatch:
+  push:
+    branches: [release-alpha] # The release branches perform this workflow automatically whenever something is pushed to them.
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check toolchain
+        shell: cmd
+        run: |
+          clang++ --version
+          where lld-link wasm-ld
+          node --version
+          npm --version
+          where tsc
+      
+      - name: Install web client dependencies
+        working-directory: src/platform/web_game_client/front/
+        run: npm ci
+
+      - name: Run full build
+        shell: cmd
+        run: scripts\win32_build_all.cmd < NUL
+
+      - name: Package output
+        shell: pwsh
+        run: |
+          Get-ChildItem build\Win32_Game_Server -Recurse | Select-Object -First 40 FullName
+          Compress-Archive -Path build\Win32_Game_Server\* -DestinationPath IronAge_Win32_Game_Server.zip
+
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete build-${{ github.ref_name }}-latest --yes --cleanup-tag
+          gh release create build-${{ github.ref_name }}-latest IronAge_Win32_Game_Server.zip --target ${{ github.sha }} --prerelease --title "${{ github.ref_name }} build (latest)" --notes "Built from ${{ github.sha }}"
+        

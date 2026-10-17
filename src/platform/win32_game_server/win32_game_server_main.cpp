@@ -14,10 +14,12 @@
 #include "win32_game_server_net.cpp"
 
 // Include standard library stuff.
+#include <errhandlingapi.h>
 #include <minwindef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <wingdi.h>
 
 static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
 static ia_string_view GAME_SERVER_RESOURCES_DIR = {};   // Filled in from first parameter. 
@@ -433,6 +435,16 @@ static BOOL WINAPI win32_console_ctrl_handler(DWORD ctrl_type)
 		  {
 			  win32_log("SIGNAL", LOG_WARNING, "!! SHUTDOWN SIGNAL RECEIVED !!");
 			  WIN32_PLATFORM.shutdown(1);
+
+			  // Windows kills the process as soon as this handler returns for these events (or after ~5s).
+			  // Hold it here until the main thread has completed its shutdown routine (which zeroes the platform).
+			  if (ctrl_type == CTRL_CLOSE_EVENT || ctrl_type == CTRL_LOGOFF_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT)
+			  {
+				  while (WIN32_PLATFORM.initialized)
+				  {
+					  Sleep(10);
+				  }
+			  }
 			return TRUE;
 		  }
       }
@@ -477,24 +489,65 @@ static ia_static_string<256> SERVER_PROGRAM_FILENAME; // Filepath of file the se
 static ia_static_string<256> SERVER_PROGRAM_PDB_FILENAME; // Filepath of the PDB copy made for the loaded program (empty if none). Kept null-terminated.
 static ui64 SERVER_PROGRAM_FILE_CREATION_TIME; // Creation time of currently-loaded server program dll file.
 
+// Deletes every file in the Hot Reload temp folder, then the folder itself.
+// Nothing in there may still be loaded. Files held by a debugger (PDBs) fail harmlessly, and so does the folder removal.
+static void win32_delete_hot_reload_temp()
+{
+    WIN32_FIND_DATA findData;
+    HANDLE findHandle = FindFirstFile("./HOT_RELOAD_TEMP/*", &findData);
+    if (findHandle != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                continue; // Skips "." and ".." too.
+            }
+
+            static_mem_arena<512> pathMem;
+            pathMem.reset();
+            ia_string_builder pathBuilder(&pathMem);
+            pathBuilder.push_back("./HOT_RELOAD_TEMP/");
+            pathBuilder.push_back((const char*)findData.cFileName);
+            pathBuilder.push_back('\0');
+
+            if (!DeleteFile(pathBuilder.string._str))
+            {
+                win32_logf("", LOG_WARNING, "Failed to delete \"%s\" from Hot Reload temp directory. Error = %d", pathBuilder.string._str, GetLastError());
+            }
+        } while (FindNextFile(findHandle, &findData));
+        FindClose(findHandle);
+    }
+
+    if (!RemoveDirectory("./HOT_RELOAD_TEMP") && GetLastError() != ERROR_FILE_NOT_FOUND && GetLastError() != ERROR_PATH_NOT_FOUND)
+    {
+        win32_logf("", LOG_WARNING, "Failed to remove Hot Reload temp directory. Error = %d", GetLastError());
+    }
+}
+
+// Unloads the running server program (if any) and releases its DLL, so that its files can be deleted.
+static void win32_unload_game_server_program()
+{
+    if (!SERVER_PROGRAM._is_loaded)
+    {
+        return;
+    }
+
+    win32_log("Win32", "Unloading existing server program...");
+    SERVER_PROGRAM.unload();
+
+    FreeLibrary(SERVER_PROGRAM_MODULE);
+    SERVER_PROGRAM_MODULE = NULL;
+    SERVER_PROGRAM_FILENAME = ia_static_string<256>();
+    SERVER_PROGRAM_PDB_FILENAME = ia_static_string<256>();
+}
+
 // (Re)Loads the Game Server program dll if it is newer than what is currently loaded.
 // Returns whether the program was successfully loaded.
 void win32_reload_game_server_program()
 {
     ASSERT(!SERVER_PROGRAM._is_loaded || DEV_MODE); // Check that we're not attempting a hot reload without being a dev mode.
-    if (SERVER_PROGRAM._is_loaded)
-    {
-        win32_log("Win32", "Unloading existing server program...");
-        SERVER_PROGRAM.unload();
-
-        // Unload library and delete old program file.
-        FreeLibrary(SERVER_PROGRAM_MODULE);
-        SERVER_PROGRAM_MODULE = NULL;
-        DeleteFile(SERVER_PROGRAM_FILENAME._str);
-        DeleteFile(SERVER_PROGRAM_PDB_FILENAME._str); // Fails harmlessly if a debugger still holds it.
-        SERVER_PROGRAM_FILENAME = ia_static_string<256>();
-        SERVER_PROGRAM_PDB_FILENAME = ia_static_string<256>();
-    }
+    win32_unload_game_server_program();
 
     // Load Game Server dll. It is expected to live next to the executable. 
     win32_logf("", "Loading Game Server program...");
@@ -530,7 +583,8 @@ void win32_reload_game_server_program()
         // Add folder.
         dllFileNameBuilder.push_front("./HOT_RELOAD_TEMP/");
 
-        // (Ensure the folder actually exists...)
+        // Clear the folder of old copies (previous reloads, or leftovers of a run that was killed), then make sure it exists.
+        win32_delete_hot_reload_temp();
         if (!CreateDirectory("./HOT_RELOAD_TEMP", NULL))
         {
             ASSERT_MSG(GetLastError() == ERROR_ALREADY_EXISTS, "Failed to create HOT_RELOAD_TEMP folder (required by Dev mode hot reload system).");
@@ -593,6 +647,13 @@ void win32_platform_shutdown()
 	win32_net_free(*WIN32_PLATFORM.net_component);
 
 	win32_log("", LOG_SUCCESS, "Platform shutdown complete.");
+
+    // The loaded DLL copy locks the temp folder: release it before deleting.
+    win32_unload_game_server_program();
+    if (DEV_MODE)
+    {
+        win32_delete_hot_reload_temp();
+    }
 
 	// Delete logging critical sections.
 	DeleteCriticalSection(&CS_WIN32_STDOUT);

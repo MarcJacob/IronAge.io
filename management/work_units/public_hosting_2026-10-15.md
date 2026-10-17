@@ -14,68 +14,62 @@ Input date: 2026-10-15
 - Domain `ironage.dev` bought and set up on Cloudflare; named tunnel set up, server self-hosted for now.
 - No TLS code in the server; it speaks plain HTTP / WS. Origin check compares Origin to Host: don't set `httpHostHeader`.
 - Server binds loopback only; no router port forward.
-- Server stays on port 8080 everywhere (tunnel is outbound-only, no 443 needed). `-port=<n>` param (default 8080) added by the user, for running several instances.
+- Server stays on port 8080 everywhere (tunnel is outbound-only, no 443 needed). `-port=<n>` param (default 8080) for running several instances.
 - `ironage.dev` -> rented box's tunnel; dev PC on `test.ironage.dev` via its own tunnel (path routing across machines is not possible).
-- Branches: `master` becomes `dev`; `release-alpha` is advanced onto `dev` by hand (crude versioning), some tagged for major advancements.
-- Box update loop: one long-lived script started at boot (Task Scheduler minimum is 1 min), sleeping ~15 s per cycle: compare local vs origin commit; if different `git fetch` + `reset --hard origin/release-alpha`, stop server, build, start server. Otherwise check the process is alive.
-- Crash handling: restart up to N times, then stop until manually fixed.
-- "Obtain a new build" is a swappable step: local build first; GitHub Actions release download is the alternative if the box toolchain is painful.
-- Repo access from the box: read-only deploy key / token. No server authentication, intended.
+- Branches: `master` became `dev`; `release-alpha` is advanced onto `dev` by hand (crude versioning), some tagged for major advancements.
+- Supervisor: PowerShell script started at boot, loops ~15 s; update check, build, restart, crash restart cap. Calls the existing `.cmd` scripts.
+- "Obtain a new build" is a swappable step (`Invoke-FullBuild`): local build first; GitHub Actions release download is the alternative if the box toolchain is painful.
+- Build mode: GitHub Actions builds the release; box downloads it (public repo, no token). Box needs no toolchain / git. Falls back to building on the box if the runner can't build.
+- No server authentication, intended.
+- Release URL: `https://github.com/<owner>/<repo>/releases/download/build-release-alpha-latest/IronAge_Win32_Game_Server.zip`. Zip is the only deliverable (no workflow artifact). Runner has LLVM 20 (not 18); builds pass with it.
+- `front/package.json` now has a real `typescript` dependency (no global `tsc` needed).
 
 ## Tasks
 
 1. [DONE] Read-only survey: no code change needed for the tunnel.
 2. [DONE] Quick tunnel tested in game.
 3. [DONE] Domain + named tunnel, self-hosted.
-4. [DONE] Git: rename `master` -> `dev`, create `release-alpha` (user).
-5. [DONE] `-port=<n>` server param (user).
-6. [ ] Loop script (update check, build, restart, crash cap), tested on the dev PC against a second instance.
-7. [ ] Rent the Windows box; install toolchain / git / `cloudflared`; second tunnel for `ironage.dev`; move the dev PC tunnel to its subdomain.
-8. [ ] Run the script on the box at boot.
-9. [ ] Release tags in the management docs (after all works).
+4. [DONE] Git: rename `master` -> `dev`, create `release-alpha`.
+5. [DONE] `-port=<n>` server param.
+6. [DONE] Supervisor `scripts/win32_start_supervisor_game_server.ps1`, verified on the dev PC (update, crash restart + cap, graceful stop).
+7. [DONE] GitHub Actions workflow `.github/workflows/branch_build_and_release_latest.yaml`: on push to `release-alpha` (or manual on any branch), runs `scripts\win32_build_all.cmd`, publishes `IronAge_Win32_Game_Server.zip` to a rolling pre-release `build-<branch>-latest` (deleted and recreated each run). Tested via manual `dev` run (downloaded and ran locally). Still to check: a real `release-alpha` push produces `build-release-alpha-latest`.
+8. [ ] Supervisor: `Invoke-FullBuild` downloads and unpacks the latest release instead of building.
+9. [ ] Rent the Windows box; install `cloudflared`; second tunnel for `ironage.dev`; move the dev PC tunnel to its subdomain.
+10. [ ] Run the script on the box at boot.
+11. [ ] Release tags in the management docs (after all works).
 
 ## Open questions
 
-- Loop script language: PowerShell recommended, C (user's idea) as possible later pass.
-- Hosting provider / box size (depends on build toolchain).
-- Build on the host vs GitHub Actions release; needs the build's toolchain requirements.
-- Poll with a token if using the GitHub API (rate limit).
+- Hosting provider / box size (small is enough now).
+- Release polling: unauthenticated GitHub API is 60 req/h per IP; poll rarely or use the releases/latest redirect URL.
+- Update path: stop, swap files, restart vs DLL hot reload.
+- Zip entry path separators when unpacking (Compress-Archive may store backslashes).
 
 ## Notes
 
 - Possible failure signs: 403 "Origin doesn't match Host"; 431 if request head > 2048 bytes (`WEB_CLIENT_RECEPTION_BUFFER_SIZE`, web_server.h:24, shared with WS reception buffer); rare 502 from the 2 s HTTP idle close.
-- Limit tweaks belong to `backlog/server_configuration_2026-10-15.md` (its text says port 8000, now 8080; bind address now done; `-port` overlaps it).
-- Supervisor script: `scripts/win32_start_supervisor_game_server.ps1` (documented in scripts imprint).
-- Build survey: needs `clang++` (LLVM 18) on PATH + MSVC/WinSDK libs, Node, global `tsc` (nothing installs them). Run set = `build/Win32_Game_Server/` (exe, `game_server.dll`, `game_server_resources/web_root`).
-- Unattended: build error paths `pause` unconditionally (supervisor: stdin from NUL); exe locked while running, stop before full build; launch the exe directly (`win32_game_server.exe`, instances differ by `-port`); ignored build outputs survive `git reset --hard`.
-- To verify: `web_game_client_build.cmd:80-84` may swallow `tsc` failure; linker/SDK discovery on a clean box; graceful stop vs console handler.
+- Limit tweaks belong to `backlog/server_configuration_2026-10-15.md`.
+- Build needs `clang++` (LLVM 18) on PATH + MSVC/WinSDK libs, Node, global `tsc` (nothing installs them). Run set = `build/Win32_Game_Server/` (exe, `game_server.dll`, `game_server_resources/web_root`).
+- Build scripts skip env setup when `IRONAGE_DEV_SETUP` is inherited (they build whatever repo it points at); supervisor clears it. Same trap for any future script launching a build from an existing shell.
+- `web_game_client_build.cmd` swallowing `tsc` failures was fixed (lines 80-88, not yet run).
 - Related: `dev_iteration_loop_2026-10-03.md` (build / deploy / hot-reload; the server DLL hot reload may suit updates without restart).
 
-## Peer brief
+## Box setup (tasks 7-8)
 
-Goal: write `scripts/win32_start_supervisor_game_server.ps1` with the user, who wants to learn the PowerShell / Windows process mechanics. Explain as you go; let the user write parts.
+Do after tasks 7-8 work. Decide provider / size first (small box, no toolchain).
 
-Behavior (decided):
-- Started once at boot; loops forever, ~15 s sleep per cycle.
-- Each cycle: compare local commit with `origin/release-alpha`. On difference: `git fetch`, `git reset --hard origin/release-alpha`, stop server, full build, start server.
-- Otherwise check the server process is alive; if not, restart up to N consecutive times, then stop restarting and log until fixed by hand.
-- "Obtain a new build" step must be swappable (local build first; GitHub release download maybe later, undecided).
-- Log to file + console. Run with `powershell -ExecutionPolicy Bypass -File`.
+Steps (user, on the box):
+1. Rent box, RDP, strong admin password.
+2. Copy the supervisor script (and the `.cmd` scripts it needs, if any) onto the box.
+3. One manual run to prove download + start.
+4. `cloudflared` as a service (`cloudflared service install`), tunnel for `ironage.dev` -> `localhost:8080`. Move dev PC tunnel to `test.ironage.dev`.
+5. Task Scheduler: trigger at startup, `powershell -ExecutionPolicy Bypass -File <repo>\scripts\win32_start_supervisor_game_server.ps1`, run whether logged on or not.
+6. Reboot test: tunnel, supervisor, server all come up unattended.
 
-Constraints:
-- Never duplicate build / launch logic: call `scripts/win32_build_all.cmd` etc. Redirect stdin from NUL on those (error paths `pause` unconditionally).
-- Be careful with build exit codes: `web_game_client_build.cmd:80-84` may swallow a `tsc` failure. Flag to the user, don't fix silently.
-- Stop the server before a full build (exe locked while running).
-- Launch `build/Win32_Game_Server/win32_game_server.exe` directly, exe folder as working directory, `-port=<n>` (default 8080). Port, repo path, branch are parameters.
-- A failed build must not start a stale mix of leftover outputs; a failed update must not crash-loop.
-- Test on the user's PC against a second instance on another port, never the user's running server. No git writes: use a throwaway local remote / branch the user sets up.
-
-Imprints: `scripts/scripts.imprint.md`, `src/platform/win32_game_server/` chain. Scripts: `scripts/win32_build_all.cmd`, `scripts/win32_launch_server_instance.cmd`. Build survey findings: Notes above.
-
-Done when: script updates + restarts on a new commit, restarts a killed server, stops after N failures; all verified on the user's PC; user reviewed.
-
-Open: N and sleep interval values; graceful stop vs hard kill (does a graceful stop reach the console handler? unknown); log file location.
+To verify on the box:
+- Graceful stop needs a console window (`CloseMainWindow`); with no logged-in session it may fall back to `Kill()` (shutdown handler skipped). Test under Task Scheduler.
+- First run needs a successful release download before the server exists.
 
 ## Next step
 
-Design the supervisor (task 6): local-build mode first, update step swappable.
+Task 8: supervisor `Invoke-FullBuild` downloads and unpacks the release zip. Settle polling method and file-swap-while-running first.

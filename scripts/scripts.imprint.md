@@ -27,6 +27,12 @@ Win32 scripts:
 
 - **full_ship.cmd**         = @TODO Triggers a full rebuild in release mode and packs everything together neatly in an archive at <Build Folder>/Ship.
 
+## Build & Deployment Github Workflow
+
+This project uses Github workflows (*.github/workflows/*) to build and publish the game server run set without a local toolchain.
+The workflow in *branch_build_and_release_latest.yaml* is available for manual launch on any branch (Actions tab > Run workflow), and runs automatically on every push to a release branch (currently just *release-alpha*).
+It reuses *win32_build_all.cmd*, zips *build/Win32_Game_Server/* and publishes the zip as the rolling pre-release *build-<branch>-latest* (asset *IronAge_Win32_Game_Server.zip*), replaced on each run.
+
 ## MacOS
 
 @TODO (God help us)

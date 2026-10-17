@@ -44,7 +44,7 @@ struct win32_net_component;
 // Win32-specific extension of the game server platform. Anything available in there is available to all platform functions handed to the server.
 struct win32_platform : public game_server_platform
 {
-	bool initialized; 
+	volatile bool initialized;
     volatile bool exitRequested; // Set to true when the application wants to cleanly exit.
 
     char exec_filename[512];
