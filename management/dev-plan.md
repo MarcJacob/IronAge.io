@@ -26,7 +26,18 @@ when it finishes.
 - `work_units/game_server_match_lifecycle_2026-10-03.md` [DONE]
 - `work_units/lobby_system_2026-09-27.md`
 - `work_units/start_location_choice_2026-10-03.md` [DONE]
-- `work_units/settlement_trade_construction_2026-10-03.md`
+- `work_units/road_construction_2026-10-03.md` [DONE]
+- `work_units/straight_line_movement_2026-10-15.md`
+- `work_units/command_wiring_simplification_2026-10-18.md`
+- `work_units/world_sim_reorganization_2026-10-18.md`
+- `work_units/alpha_wealth_treasury_2026-10-18.md`
+- `work_units/alpha_settlement_buildings_2026-10-18.md`
+- `work_units/alpha_trade_2026-10-18.md`
+- `work_units/alpha_troops_recruitment_2026-10-18.md`
+- `work_units/alpha_war_extensions_2026-10-18.md`
+- `work_units/alpha_diplomacy_chat_2026-10-18.md`
+- `work_units/alpha_vassalization_2026-10-18.md`
+- `work_units/alpha_victory_score_2026-10-18.md`
 - `work_units/placement_pick_validity_2026-10-13.md` [DONE]
 - `work_units/public_hosting_2026-10-15.md` [DONE]
 - `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
@@ -38,7 +49,7 @@ Finished units are moved to `management/archive/` after a time.
 High-level sequencing, not a scope commitment. Mark `[WIP]`/`[DONE]`; keep finished
 work to a line or two.
 
-1. **Architecture Skeleton** - thin end-to-end slice, no real game rules yet. Expected
+1. [DONE] **Architecture Skeleton** - thin end-to-end slice, no real game rules yet. Expected
    result: browser shows a visible element changing in sync, driven by a lockstep-ticked
    GameCommon instance, relayed through the Game Server, rendered via the current JS
    canvas (with the blit canvas deferred).
@@ -82,7 +93,7 @@ work to a line or two.
        agree on layout byte-for-byte; sizes are unconditional even in debug builds.
      - No input log, no catch-up / bundling, no tick staleness gating yet - see Backlog.
 
-2. **Dev infrastructure & cleanup** - overhauls to speed up iteration before main game
+2. [DONE] **Dev infrastructure & cleanup** - overhauls to speed up iteration before main game
    development. Backlog files in `management/backlog/` hold the details.
    - [DONE] Server resource discovery: platform call listing resource files, web server
      loading serveable files from the discovered list.
@@ -92,7 +103,7 @@ work to a line or two.
      constant strings and direct platform calls that require them.
      - Platform resource paths not null-terminated.
    - Server dev mode: admin-authenticated dev messages (first action: reload resources).
-     (`server_dev_mode`)
+     (`server_dev_mode`) Deferred to phase 4: current setup is enough until the game matures.
    - Live resource reload at runtime (in-flight responses, re-listing, auto-reload on
      change; TODO in web server). (`web_server_file_auto_reload`)
      - [DONE] Crude version: resources rediscovered / reloaded on the first tick after a
@@ -100,36 +111,31 @@ work to a line or two.
    - [DONE] Build system revamp: off CMake, Game Common as a static library, server as a
      hot-reloadable dynamic library. (`build_system_revamp`)
    - Dev iteration loop: one-step build / deploy / hot-reload / resource reload.
-     (`dev_iteration_loop`)
+     (`dev_iteration_loop`) Deferred to phase 4, same reason.
 
-3. **World & settlements simulation** through **12. Ops & hardening** - phases from the
-   previous plan version (world/settlements, trade, war, diplomacy, victory & scoring,
-   persistence & master server, ops & hardening) still look like roughly the right
-   sequence, but haven't been re-specified against the architecture above yet. Revisit
-   phase by phase in a future pass.
-   Phase 3 sequence:
-   - [DONE] Blit canvas: earliest terrain bitmap generated client-side (wasm) from terrain
-     tiles, blitted efficiently to the page. (`blit_canvas`)
-     - [DONE] Flat terrain type buffer, TS colors it into an offscreen canvas, blitted
-       aligned to the world. Remaining: dirty-rect updates (with influence).
-   - [DONE] Village influence over terrain: claim / maintain automaton, borders,
-     contestation, takeover, rendering. (`village_influence`)
-   - [DONE] Game server match lifecycle: open lobby with countdown, placement phase,
-     match start / end, server stays up across matches. (`game_server_match_lifecycle`,
-     `start_location_choice`; `lobby_system` remains separate)
-   - [DONE] Population growth / shrinkage incl. land output from influence (inside
-     `village_influence`).
-   - Settlement trade and construction. (`settlement_trade_construction`)
-   - [DONE] 2026-10-01/02: world entity storage, spawning, and rendering for
-     settlements/armies/caravans.
-     Real world-simulation mechanics (growth, caravan trade, combat) remain
-     unstarted beyond placeholder test code; a future work unit should pick
-     that up.
-   - [DONE] 2026-09/10 supporting work (details in `archive/`): TypeScript
-     frontend migration, game client / platform split, deterministic random
-     generation, client input & camera (selection, move orders, entity query),
-     in-match HUD (`game_ui`), window-fit canvas, and test-only commands
-     (found settlement, spawn army) and population growth.
+3. **Alpha gameplay & framework** - gameplay additions forming a coherent "Mini" version
+   of the game (design doc's Alpha section, to be written), plus game-framework work.
+   Ends with the last Alpha version.
+   - Preparation, before any feature work below:
+     - Simplify command wiring: fewer places to touch to go from a game feature to a
+       command to a client modal control scheme. (`command_wiring_simplification`)
+     - Reorganize world simulation code: one implementation file per system, helper
+       headers per theme. (`world_sim_reorganization`)
+   - Alpha features, in this order, after the preparation: `alpha_wealth_treasury`,
+     `alpha_settlement_buildings`, `alpha_trade`, `alpha_troops_recruitment`,
+     `alpha_war_extensions`, `alpha_diplomacy_chat`, `alpha_vassalization`,
+     `alpha_victory_score` (plus `straight_line_movement`).
+   - Formalize the feature-branch workflow.
+   - Later, once an example of each kind of feature exists end-to-end: formalize how
+     mechanics get added, and write artisan pipelines from those working code shapes.
+
+4. **Infrastructure** - tidy server hot reload / resources design (room for larger files:
+   music, advanced graphics; includes deferred dev mode and iteration loop), proper
+   logging system, Linux game server platform layer (cheaper, more powerful hosting).
+
+5. **Beta** - starts marketing and community building; more mechanics (longer games, more
+   complexity per the design doc's Beta section) and user-facing features, incl. proper
+   user accounts.
 
 ## Backlog
 

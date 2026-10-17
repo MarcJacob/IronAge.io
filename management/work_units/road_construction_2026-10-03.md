@@ -1,11 +1,12 @@
-# Settlement trade and construction
+# Road construction
 
-Started: 2026-10-03 (as `settlement_econ_tick`, renamed 2026-10-12)
+Started: 2026-10-03 (as `settlement_econ_tick`, then `settlement_trade_construction`; renamed 2026-10-18)
 
 ## Goal
 
-Next settlement economy mechanics on top of the existing population growth / land output:
-trade and construction (e.g. infrastructure such as roads, using tile flags).
+Pathfinding and road building. Ended up serving as the preliminary design of the construction
+system (builder entity, build type table, territory-limited paths); trade and buildings are
+separate work units, planned from the Alpha design doc.
 
 ## Done (from the former econ tick scope)
 
@@ -38,13 +39,13 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 1. [DONE] Read-only survey.
 2. [DONE] Pathfinding low layer: stateless `world_path_find` ([pathing.h](include/game_common/match/pathing.h), [world_pathing.cpp](src/game_common/world_sim/world_pathing.cpp)); A* on 8 directions, 5/7 chamfer costs, scratch arena size = search budget, deterministic tie-break.
-3. [WIP] Wire movement orders to it. First part DONE, user-tested: entities follow paths.
+3. [DONE] Wire movement orders to it: entities follow paths. Remainder (straight-line movement, cost-based speed, direct-movement order) moved to `straight_line_movement_2026-10-15.md`.
    - Entity movement = `destination` + `move_target` (next tile) + `path_handle` (always `INVALID_PATH_HANDLE` for now). Orders write only `destination`.
    - Minimal `world_path_store` (opaque ptr in `match_world_state`, fixed 256 KiB arena, last path only); `world_request_path` is `void`, `path_result.count == 0` = no path.
    - Path recalculated at every tile (to be removed by the cache, task 4).
    - No-path behavior left as is (stays put, retries every tick): unreachable destination will be handled later as a cross-system concern, not in movement.
 4. Moved to backlog: `backlog/path_store_cache_2026-10-15.md` (store, handles, cache). Straight-line movement: `backlog/straight_line_movement_2026-10-15.md`.
-5. [WIP] Construction system (settlement-side) + road as first on-map type; input command only dispatches.
+5. [DONE] (user-verified) Construction system (settlement-side) + road as first on-map type; input command only dispatches.
    - `world_tile_move_cost` already reads the unused `is_road` bit; nothing sets it yet.
    - Steps (survey done; territory = per-tile `owners[]` slot index in region):
      - 5a-5d [DONE] Server side (peer): construction system + `BUILD_ROAD` command (enum 5, 12 bytes, wired in all 3 switches). Construction system tested by a temporary trigger (removed); the command itself is built but untested until a client sends it. Wire change: client / server builds must match.
@@ -89,7 +90,7 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Known limitations / cleanups
 
-- BUG (confirmed): `world_system_economy_proximity_recalc` (world_system_economy.cpp:297) still uses `TILE_TERRAIN_TRAVEL_COST`, so roads never change proximity. Fix: use `world_tile_move_cost(..., {})` there. Expect a small, slow effect afterwards (10% output per 20 proximity, pop target recomputed every 10 ticks).
+- Proximity recalc now uses `world_tile_move_cost` (fixed). Unverified: road build flags tiles for proximity recalc. Possibly unused `tileTerrain` at world_system_economy.cpp:296.
 - `BUILD_ROAD` origin == destination must be invalid: user adds it to the validity check himself.
 - Builder slots use `MICRO_ENTITIES_PER_TYPE_PER_REGION` (32/region); make dynamic eventually. `match_get_required_mem` does not count builders (32 MiB headroom covers it for now).
 - Nothing of task 5 committed yet (user's call).
@@ -108,4 +109,4 @@ trade and construction (e.g. infrastructure such as roads, using tile flags).
 
 ## Progress
 
-Pathing tool, client preview and movement wiring done. Task 5 (roads) built end to end: server 5a-5d, front 5e-5h (modal system, validity query). Next: user hand-tests the flow, then close task 5; then trade (open design).
+Pathing tool, client preview and movement wiring done. Task 5 (roads) built end to end: server 5a-5d, front 5e-5h (modal system, validity query). Complete. Trade / buildings continue in new work units.

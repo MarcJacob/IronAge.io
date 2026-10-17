@@ -11,7 +11,7 @@ change organically over time (wanted).
 ## Decisions
 
 - Influence lives in GameCommon sim state. It feeds the settlement econ tick
-  (now `settlement_trade_construction_2026-10-03.md`).
+  (now `road_construction_2026-10-03.md`).
 - Update every tick, deterministic (double-buffered or fixed scan order), simple first:
   no staggering / threading / SIMD (region-by-region work later).
 - Tile planes (separate): owner, influence (ui8, 0 = unowned), contestation (ui8).
