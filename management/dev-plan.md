@@ -28,7 +28,7 @@ when it finishes.
 - `work_units/start_location_choice_2026-10-03.md` [DONE]
 - `work_units/settlement_trade_construction_2026-10-03.md`
 - `work_units/placement_pick_validity_2026-10-13.md` [DONE]
-- `work_units/public_hosting_2026-10-15.md`
+- `work_units/public_hosting_2026-10-15.md` [DONE]
 - `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
 
 Finished units are moved to `management/archive/` after a time.

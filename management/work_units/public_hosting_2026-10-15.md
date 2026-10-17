@@ -38,9 +38,9 @@ Input date: 2026-10-15
 6. [DONE] Supervisor `scripts/win32_start_supervisor_game_server.ps1`, verified on the dev PC (update, crash restart + cap, graceful stop).
 7. [DONE] GitHub Actions workflow `.github/workflows/branch_build_and_release_latest.yaml`: on push to `release-alpha` (or manual on any branch), runs `scripts\win32_build_all.cmd`, publishes `IronAge_Win32_Game_Server.zip` to a rolling pre-release `build-<branch>-latest` (deleted and recreated each run). Tested via manual `dev` run (downloaded and ran locally). Still to check: a real `release-alpha` push produces `build-release-alpha-latest`.
 8. [DONE] Supervisor downloads / swaps the latest release (`scripts\.deploy`). Verified on the dev PC with a real `release-alpha` push (workflow trigger, download, swap, restart). `CloseMainWindow` fails when the supervisor spawns the server, so the stop falls back to `Kill()` (shutdown handler skipped); accepted for now. `.deploy` to gitignore (user).
-9. [ ] Rent the Windows box; install `cloudflared`; second tunnel for `ironage.dev`; move the dev PC tunnel to its subdomain.
-10. [ ] Run the script on the box at boot.
-11. [ ] Release tags in the management docs (after all works).
+9. [DONE] OVH Windows box rented; `cloudflared` tunnel for `ironage.dev`; dev PC tunnel moved to `test.ironage.dev`.
+10. [DONE] Task Scheduler boot task on the box ("Run whether user is logged on or not" required); reboot test passed, unattended; a release-alpha update reaches the live server.
+11. [DONE] Release tags: informal, no doc (convention to be written when the first tag is made).
 
 ## Open questions
 
@@ -74,4 +74,4 @@ To verify on the box:
 
 ## Next step
 
-Task 9: pick provider / size, rent the box, set up per the Box setup section.
+Unit complete.
