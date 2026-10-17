@@ -21,7 +21,7 @@
 #include <signal.h>
 #include <wingdi.h>
 
-static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(4);
+static constexpr ui64 GAME_SERVER_MEM_SIZE = GiB(3);
 static ia_string_view GAME_SERVER_RESOURCES_DIR = {};   // Filled in from first parameter. 
                                                         // @TODO(Marc): Just a temporary adaptation,
                                                         // CMake was providing a full absolute path I'd rather not put in a script,
