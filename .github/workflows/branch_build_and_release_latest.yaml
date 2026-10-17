@@ -40,5 +40,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete build-${{ github.ref_name }}-latest --yes --cleanup-tag
-          gh release create build-${{ github.ref_name }}-latest IronAge_Win32_Game_Server.zip --target ${{ github.sha }} --prerelease --title "${{ github.ref_name }} build (latest)" --notes "Built from ${{ github.sha }}"
+          gh release create build-${{ github.ref_name }}-latest IronAge_Win32_Game_Server.zip --target ${{ github.sha }} --title "${{ github.ref_name }} build (latest)" --notes "Built from ${{ github.sha }}"
         

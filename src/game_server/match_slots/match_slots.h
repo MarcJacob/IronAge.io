@@ -90,8 +90,8 @@ static constexpr match_slot_index INVALID_MATCH_SLOT_INDEX = ~0;
 
 struct game_server;
 
-static constexpr time_ms LOBBY_COUNTDOWN_MS = 60000; // Time between the first client joining a lobby and its match starting.
-static constexpr time_ms PLACEMENT_COUNTDOWN_MS = 15000; // Time between start of the match and first tick during which players can pick a start location.
+static constexpr time_ms LOBBY_COUNTDOWN_MS = 30000; // Time between the first client joining a lobby and its match starting.
+static constexpr time_ms PLACEMENT_COUNTDOWN_MS = 10000; // Time between start of the match and first tick during which players can pick a start location.
 
 static constexpr ui32 MATCH_END_CHECK_INTERVAL_TICKS = 30; // Placeholder end condition is checked every this many ticks.
 static constexpr ui64 MATCH_END_POPULATION_PERCENT = 80; // Placeholder end condition: one player controls this much of the world population.

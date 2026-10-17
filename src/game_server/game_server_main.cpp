@@ -4,7 +4,6 @@
 // Main "chaining" of game server platform and game server internals.
 #include "core/assert.h"
 #include "core/math/random.h"
-#include "game_common/match/start_params.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -110,6 +109,17 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
 
 // BEGIN GAME SERVER PROGRAM FUNCTIONS
 
+// SERVER CONFIG
+
+static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
+static constexpr ui64 MATCH_SLOT_MEMORY = MiB(64);  // Memory assigned to each match slot. 
+                                                    // @TODO(Marc): There should be a single big pool matches allocate from according to their parameters.
+
+static constexpr ui16 PLAYERS_PER_MATCH = 6;        // @TEMP(Marc): Max players per lobby / match. Later this will depend on lobby properties / map size...
+
+static constexpr ui64 GAME_SERVER_MIN_MEMORY = GiB(2); // Minimum memory the platform must give to the server for it to initialize.
+                                                  // @TODO(Marc): This should be computed from server parameters.
+
 #define GAME_SERVER_PROGRAM_EXPORT extern "C" __declspec(dllexport)
 
 // Implementation of global assertion handler declared in assert.h
@@ -149,7 +159,6 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_on_program_unloaded()
     // ...
 }
 
-static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
 
 // Lists the platform's resource files into the server's (already allocated) resource files buffer.
 static void game_server_discover_resources(game_server& server)
@@ -166,7 +175,7 @@ static void game_server_discover_resources(game_server& server)
 
 GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size)
 {
-	ASSERT_MSG(memory != nullptr && memory_size > GiB(2), "Game server requires at least 2 Gibibytes of memory !");
+	ASSERT_MSG(memory != nullptr && memory_size > GAME_SERVER_MIN_MEMORY, "Game server requires at least %d bytes of memory !", GAME_SERVER_MIN_MEMORY);
 
 	// Check init params.
 	if (init_params.match_slot_count == 0)
@@ -200,10 +209,9 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	// Initialize all match slots.
 	newServer->match_slots = newServer->main_memory.alloc<match_slot>(newServer->init_params.match_slot_count);
 
-	constexpr ui64 MEM_PER_SLOT = MiB(64); // TEMP(Marc): Just keep this number above the required memory for a match or a lobby, whichever is larger.
 	for (ui8 matchSlotIndex = 0; matchSlotIndex < init_params.match_slot_count; matchSlotIndex++)
 	{
-		mem_arena slot_mem = mem_arena_create_sub(newServer->main_memory, MEM_PER_SLOT);	
+		mem_arena slot_mem = mem_arena_create_sub(newServer->main_memory, MATCH_SLOT_MEMORY);	
 		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
 	}
 
@@ -309,8 +317,8 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 
         if (slot.state == MATCH_SLOT_STATE::WAITING)
         {
-            // Test parameters, 2 players, random seed.
-            slot.match_params = match_test_scenario_get_params(slot.slot_memory, ia_xorshift_i32(), 2);
+            // Test parameters, random seed.
+            slot.match_params = match_test_scenario_get_params(slot.slot_memory, ia_xorshift_i32(), PLAYERS_PER_MATCH);
             game_server_open_lobby(server, slotIndex);
         }
     }
