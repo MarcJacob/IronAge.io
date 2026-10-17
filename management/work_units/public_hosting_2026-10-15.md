@@ -22,6 +22,8 @@ Input date: 2026-10-15
 - Build mode: GitHub Actions builds the release; box downloads it (public repo, no token). Box needs no toolchain / git. Falls back to building on the box if the runner can't build.
 - No server authentication, intended.
 - Release URL: `https://github.com/<owner>/<repo>/releases/download/build-release-alpha-latest/IronAge_Win32_Game_Server.zip`. Zip is the only deliverable (no workflow artifact). Runner has LLVM 20 (not 18); builds pass with it.
+- Update check: poll the release asset download URL (not the API) every ~1-2 min; last-seen ETag/Last-Modified kept in a supervisor variable (no file). Supervisor start therefore always downloads and swaps.
+- Swap: hard swap every time. Stop server fully, active dir -> backup (previous backup deleted), staged download -> active dir, launch. No rollback for now: on a failed swap or launch the server stays down (running a backup silently would need a visible indicator; later).
 - `front/package.json` now has a real `typescript` dependency (no global `tsc` needed).
 
 ## Tasks
@@ -33,7 +35,7 @@ Input date: 2026-10-15
 5. [DONE] `-port=<n>` server param.
 6. [DONE] Supervisor `scripts/win32_start_supervisor_game_server.ps1`, verified on the dev PC (update, crash restart + cap, graceful stop).
 7. [DONE] GitHub Actions workflow `.github/workflows/branch_build_and_release_latest.yaml`: on push to `release-alpha` (or manual on any branch), runs `scripts\win32_build_all.cmd`, publishes `IronAge_Win32_Game_Server.zip` to a rolling pre-release `build-<branch>-latest` (deleted and recreated each run). Tested via manual `dev` run (downloaded and ran locally). Still to check: a real `release-alpha` push produces `build-release-alpha-latest`.
-8. [ ] Supervisor: `Invoke-FullBuild` downloads and unpacks the latest release instead of building.
+8. [WIP] Supervisor downloads / swaps the latest release (`scripts\.deploy`), built; needs manual check on the dev PC: first install starts the server, ETag stable across checks (no repeat swap), re-run workflow triggers swap, bad `-Branch` logs and retries, zip unpacks with real folders. `.deploy` to gitignore.
 9. [ ] Rent the Windows box; install `cloudflared`; second tunnel for `ironage.dev`; move the dev PC tunnel to its subdomain.
 10. [ ] Run the script on the box at boot.
 11. [ ] Release tags in the management docs (after all works).
@@ -41,8 +43,6 @@ Input date: 2026-10-15
 ## Open questions
 
 - Hosting provider / box size (small is enough now).
-- Release polling: unauthenticated GitHub API is 60 req/h per IP; poll rarely or use the releases/latest redirect URL.
-- Update path: stop, swap files, restart vs DLL hot reload.
 - Zip entry path separators when unpacking (Compress-Archive may store backslashes).
 
 ## Notes
@@ -72,4 +72,4 @@ To verify on the box:
 
 ## Next step
 
-Task 8: supervisor `Invoke-FullBuild` downloads and unpacks the release zip. Settle polling method and file-swap-while-running first.
+Task 8: manual check on the dev PC (list in the task), add `.deploy` to `.gitignore`, then task 9 (box).

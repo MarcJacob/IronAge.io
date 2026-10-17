@@ -22,7 +22,9 @@ Win32 scripts:
 - **win32_launch_server_instance.cmd** = launches one instance of the built game server, optionally with a given executable and resources folder (and `-port=<NUM>`, default 8080).
 
 - **win32_start_supervisor_game_server.ps1** = PowerShell, the one exception to the batch convention (ops script, not a dev tool).
-                                - Made to be launched on boot on the online hosting box: monitors the game server process and automatically updates it from the git depot's release-alpha branch.
+                                - Made to be launched on boot on the online hosting box: monitors the game server process and automatically updates it by polling the *build-release-alpha-latest* release asset (see the workflow section below).
+                                - On a new release: downloads and unpacks it to a staging folder, stops the server, swaps it into the *.deploy* folder (previous run set kept as a backup) and relaunches.
+                                - Needs no local toolchain or git.
                                 - See *management/work_units/public_hosting_2026-10-15.md*.
 
 - **full_ship.cmd**         = @TODO Triggers a full rebuild in release mode and packs everything together neatly in an archive at <Build Folder>/Ship.
