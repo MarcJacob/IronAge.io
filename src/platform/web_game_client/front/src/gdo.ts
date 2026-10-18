@@ -80,10 +80,11 @@ export function read_GDO_properties(gdo_offset: number, schema?: GDOPropDef[]): 
 }
 
 // Reads the value of every numeric property of the GDO at the given wasm memory offset, by property name.
-export function read_GDO_values(gdo_offset: number): { [name: string]: number }
+// schema: the GDO's property definitions if the caller already has them (they never change for a GDO type), saving reading them each time.
+export function read_GDO_values(gdo_offset: number, schema?: GDOPropDef[]): { [name: string]: number }
 {
     const values: { [name: string]: number } = {};
-    for (const property of read_GDO_properties(gdo_offset))
+    for (const property of read_GDO_properties(gdo_offset, schema))
     {
         if (typeof property.value === "number") values[property.name] = property.value;
     }

@@ -58,7 +58,8 @@ Nothing about byte offsets lives in TS. Call sites build the property object the
    `values` being the fields of the command's validity feedback struct by name
    (`error_flags`, `invalid_path_reason`, `population_needed`, ...). Flag bits are mirrored by
    hand in *input.ts* (`COMMAND_ERROR_*`): keep them in sync with *commands.h*. No flag set means
-   valid. How to show the feedback is decided per mode / action (not used by any mode yet).
+   valid. How to show the feedback is decided per mode / action; the raise army mode
+   (`army_raising.ts`) is an example of using it.
    Unset properties of a half-built command are zero.
 8. State helpers: `get_local_player_id()`, `is_own_settlement` / `is_own_army` (*main.ts*),
    `query_entity(guid)` (*gdo.ts*: `EntityData` with `entity_type`, `get_number(name)`,

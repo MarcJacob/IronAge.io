@@ -5,11 +5,26 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
+import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR, type CommandFeedback } from "../input.js"
 import { submit_hint } from "../ui/ui_element_hint.js"
 import { hotkey_text } from "../ui/ui_element_action_bar.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
+
+// Whether the path preview is drawn as acceptable (green) or refused (red), from the validity feedback of the order.
+// Example of using the feedback: each flag can be given its own treatment here (for now every error makes it red).
+function is_preview_valid(feedback: CommandFeedback, points: { x: number, y: number }[]): boolean
+{
+    const flags = feedback.values.error_flags ?? 0;
+
+    // A raise location outside the settlement's territory: the path is shown, but red.
+    if ((flags & COMMAND_ERROR.TARGET_OUT_OF_TERRITORY) !== 0) return false;
+
+    // Any other error (not enough population, army limit...) also refuses the order.
+    if (!feedback.valid) return false;
+
+    return points.length > 0;
+}
 
 export class ArmyRaising extends Core.Mode
 {
@@ -44,10 +59,12 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
+        // The path is computed to any hovered tile (no territory limit), so the player sees where an order outside the territory would go.
+        // Whether the order is acceptable comes from the validity feedback, not from the path.
         const start = view.get_location("location");
-        const points = Backend.query_path(start, hovered, this.settlement_guid);
-        const valid = points.length > 0 && is_command_valid("RAISE_ARMY", { settlement: this.settlement_guid, raise_location: hovered });
-        Render.RENDER_CONFIG.path_preview = { start, points, valid };
+        const points = Backend.query_path(start, hovered);
+        const feedback = get_command_feedback("RAISE_ARMY", { settlement: this.settlement_guid, raise_location: hovered });
+        Render.RENDER_CONFIG.path_preview = { start, points, valid: is_preview_valid(feedback, points) };
     }
 
     // Only the exit key is handled here: other keys (e.g. the hotkey of a sibling mode) fall through to the modes below.

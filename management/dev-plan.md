@@ -28,8 +28,8 @@ when it finishes.
 - `work_units/start_location_choice_2026-10-03.md` [DONE]
 - `work_units/road_construction_2026-10-03.md` [DONE]
 - `work_units/straight_line_movement_2026-10-15.md`
-- `work_units/command_wiring_simplification_2026-10-18.md`
-- `work_units/world_sim_reorganization_2026-10-18.md`
+- `work_units/command_wiring_simplification_2026-10-18.md` [DONE]
+- `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/alpha_wealth_treasury_2026-10-18.md`
 - `work_units/alpha_settlement_buildings_2026-10-18.md`
 - `work_units/alpha_trade_2026-10-18.md`

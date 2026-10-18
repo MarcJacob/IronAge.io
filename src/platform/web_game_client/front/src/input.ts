@@ -4,7 +4,7 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
-import { read_GDO_schema, read_GDO_values, query_entity, GAME_DATA_PROP_TYPE, type EntityData } from "./gdo.js"
+import { read_GDO_schema, read_GDO_values, query_entity, GAME_DATA_PROP_TYPE, type EntityData, type GDOPropDef } from "./gdo.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 
 // Input sources (updated on events, used on tick)
@@ -172,13 +172,20 @@ export const COMMAND_INVALID_PATH = {
 // plus valid (no error flag set). Empty values (valid false only) if the command could not be built.
 export type CommandFeedback = { valid: boolean, values: { [name: string]: number } };
 
+let FEEDBACK_SCHEMA: GDOPropDef[] | null = null;
+
 // Asks the validity check why the named command with the given properties would or would not be valid for the local player.
 export function get_command_feedback(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): CommandFeedback
 {
     if (!build_command(command, props)) return { valid: false, values: {} };
 
     Backend.ClientInput.command_query_valid();
-    const values = read_GDO_values(Backend.ClientInput.command_get_feedback_offset());
+
+    // The feedback's schema never changes: read it once.
+    const offset = Backend.ClientInput.command_get_feedback_offset();
+    if (FEEDBACK_SCHEMA === null) FEEDBACK_SCHEMA = read_GDO_schema(offset);
+
+    const values = read_GDO_values(offset, FEEDBACK_SCHEMA);
     return { valid: values.error_flags === 0, values };
 }
 
