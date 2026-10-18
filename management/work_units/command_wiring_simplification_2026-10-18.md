@@ -22,7 +22,18 @@ Stays explicit (real design content): validity / apply functions, payload struct
 
 ## Tasks
 
-Not broken down yet.
+1. [DONE, unverified in game] Sequence validator calls `match_command_validity_check` (type guard kept).
+2. [DONE, unverified in game] Client input dedupe: per-command input events removed; `client_send_match_command(type)` wasm export reads the bare command struct from the input buffer (same layout as the validity query); `INPUT_EVENT_TYPE` keeps VIEWPORT_CONTROL and SET_TARGET_LOC only.
+3. Drive TS enums / payload layouts from C++ (Game Data Object?): design pending.
+4. Table-driven HUD / modal declaration.
+5. Update `artisan_skills/add_command.md` (builder suggestions available from the step 1-2 report: 2 dispatch switches, no client payload steps, `send_match_command`, HUD in `settlement_bar_ui.ts`, RAISE_ARMY).
+6. Server-validity-driven UI: last, needs its own design (button-level queries have no payload).
+
+## Decisions
+
+- Client does not filter command types (incl. SERVER_SPAWN_PLAYER); server-side protections handle it; special commands may be exposed in some contexts later.
+- Client check on send: type < TYPE_COUNT and command size <= 64 (no length available).
+- X-macro: skipped for now; revisit after step 3.
 
 ## Notes
 
@@ -31,6 +42,16 @@ Not broken down yet.
 - Update `artisan_skills/add_command.md` when the process changes.
 - Multi-file architecture change: survey and design before editing.
 
+## Survey findings (done)
+
+- Adding a command today: ~12 steps over 3 layers (game common enum / struct / size / validity / apply / 3 dispatch switches; client enum / payload struct / `game_client_input_*` / switch case; TS 2 enum mirrors / `write_*_payload` / HUD / mode).
+- Silent failures: sequence validator switch (release `default` drops the rest of the sequence), size switch (size 0), validity / apply switches (no-op); TS enum mirrors and payload offsets unchecked.
+- Client input payload structs duplicate command structs (pure field copies); only VIEWPORT_CONTROL and SET_TARGET_LOC are real input events.
+- `game_data_object.h` (commit f1cbb07) is a demo: enumerates props of a packed struct (name / type / offset). No consumer. No `entity_guid` / `world_location` prop types.
+- HUD buttons hand-coded in `index.html` + `settlement_bar_ui.ts`; `road_building.ts` / `army_raising.ts` share one shape.
+- UI never uses validity to show / enable buttons; no TS cost constants exist yet.
+- `artisan_skills/add_command.md` is stale (SPAWN_ARMY -> RAISE_ARMY; HUD in `settlement_bar_ui.ts`, not `game_ui.ts`). `game_client_input_spawn_caravan` declared, never defined.
+
 ## Next step
 
-Survey (builder, read-only): every place touched when adding a command today, game common to front; then propose a design.
+User checks tasks 1-2 in game; then design task 3 (role of Game Data Object: commands only or messages too; runtime schema from wasm vs generated file).

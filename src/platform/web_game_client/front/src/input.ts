@@ -87,17 +87,17 @@ function send_set_target_loc(clientX: number, clientY: number)
 // Orders the given army to found a settlement at its location.
 export function send_found_settlement(army_guid: number): void
 {
-    // Layout of input_event_payload_found_settlement (game_client_backend.h): ui32 army guid.
+    // Layout of command_data_found_settlement (commands.h): ui32 army guid.
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, army_guid, true);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.FOUND_SETTLEMENT);
+    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.FOUND_SETTLEMENT);
 }
 
 // Orders the given settlement to raise an army from its population, moving to the raise location (world tile).
 export function send_raise_army(settlement_guid: number, raise_location: { x: number, y: number }): void
 {
     write_raise_army_payload(settlement_guid, raise_location);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.RAISE_ARMY);
+    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.RAISE_ARMY);
 }
 
 // Whether the same raise army order would currently be valid (same check as the server's).
@@ -107,11 +107,10 @@ export function is_raise_army_valid(settlement_guid: number, raise_location: { x
     return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.RAISE_ARMY);
 }
 
-// Writes the raise army payload in the input event buffer. Same layout for the input event and the command it queues.
+// Writes the raise army command payload in the input event buffer, for both sending it and querying its validity.
 function write_raise_army_payload(settlement_guid: number, raise_location: { x: number, y: number }): void
 {
-    // Layout of input_event_payload_raise_army (game_client_backend.h) / command_data_raise_army (commands.h):
-    // ui32 settlement guid, ui16 raise location x, y.
+    // Layout of command_data_raise_army (commands.h): ui32 settlement guid, ui16 raise location x, y.
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, settlement_guid, true);
     view.setUint16(4, raise_location.x, true);
@@ -121,18 +120,18 @@ function write_raise_army_payload(settlement_guid: number, raise_location: { x: 
 // Orders the given army to chase and attack the given entity.
 export function send_attack_target(attacker_guid: number, target_guid: number): void
 {
-    // Layout of input_event_payload_attack_target (game_client_backend.h): ui32 attacker guid, ui32 target guid.
+    // Layout of command_data_set_entity_attack_target (commands.h): ui32 attacker guid, ui32 target guid.
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, attacker_guid, true);
     view.setUint32(4, target_guid, true);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.ATTACK_TARGET);
+    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.SET_ENTITY_ATTACK_TARGET);
 }
 
 // Orders the given settlement to build a road from origin to destination (world tiles). The server validates and computes the path.
 export function send_build_road(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
 {
     write_build_road_payload(settlement_guid, origin, destination);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.BUILD_ROAD);
+    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.BUILD_ROAD);
 }
 
 // Whether the same build road order would currently be valid (same check as the server's).
@@ -142,11 +141,10 @@ export function is_build_road_valid(settlement_guid: number, origin: { x: number
     return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.BUILD_ROAD);
 }
 
-// Writes the build road payload in the input event buffer. Same layout for the input event and the command it queues.
+// Writes the build road command payload in the input event buffer, for both sending it and querying its validity.
 function write_build_road_payload(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
 {
-    // Layout of input_event_payload_build_road (game_client_backend.h) / command_data_build_road (commands.h):
-    // ui32 settlement guid, ui16 origin x, y, ui16 destination x, y.
+    // Layout of command_data_build_road (commands.h): ui32 settlement guid, ui16 origin x, y, ui16 destination x, y.
     const view = Backend.ClientInput.begin_input_event();
     view.setUint32(0, settlement_guid, true);
     view.setUint16(4, origin.x, true);

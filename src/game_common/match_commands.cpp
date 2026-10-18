@@ -355,41 +355,11 @@ bool match_command_sequence_output_validated(const game_match& target_match, con
 		const match_command_header& commandHeader = unvalidated.get_sequence_at(sequenceBufferPos);
 		sequenceBufferPos += sizeof(match_command_header);
 
-		// Route to type-specific logic.
-		bool isValid = false;
-		switch (commandHeader.type)
-		{
-		case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-			isValid = command_set_entity_move_target_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_set_entity_move_target>());
-			break;
-		case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
-			isValid = command_set_entity_attack_target_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_set_entity_attack_target>());
-			break;
-		case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
-			isValid = command_found_settlement_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_found_settlement>());
-			break;
-		case MATCH_COMMAND_TYPE::RAISE_ARMY:
-			isValid = command_raise_army_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_raise_army>());
-			break;
-		case MATCH_COMMAND_TYPE::BUILD_ROAD:
-			isValid = command_build_road_validity_check(world, player_id,
-				commandHeader.get_command_data<command_data_build_road>());
-			break;
-		default:
-			// Only assert if the command type IS valid but not handled.
-			if ((i8)commandHeader.type >= 0 && (i8)commandHeader.type < (i8)MATCH_COMMAND_TYPE::TYPE_COUNT)
-			{
-				ASSERT_MSG(0, "No validity check logic associated with command type %d.", commandHeader.type);
-			}
+		// An unknown type has no known data size: the whole unvalidated sequence becomes impossible to keep reading safely.
+		// Stop process now and signal caller that the sequence couldn't be fully validated.
+		if ((ui8)commandHeader.type >= (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT) return false;
 
-			// From there the whole unvalidated sequence becomes impossible to keep reading safely.
-			// Stop process now and signal caller that the sequence couldn't be fully validated.
-			return false;
-		}
+		bool isValid = match_command_validity_check(world, player_id, commandHeader);
 		sequenceBufferPos += get_command_data_size(commandHeader.type);
 
 		// If command is valid, add it to the output sequence. Otherwise discard it.

@@ -24,48 +24,21 @@ void game_client_input_set_target_loc(game_client& backend, entity_guid entity, 
 	payload->move_target = { (ui16)(worldX + 0.5f), (ui16)(worldY + 0.5f) };
 }
 
-void game_client_input_found_settlement(game_client& backend, entity_guid army)
+bool game_client_input_push_match_command(game_client& backend, ui8 match_command_type, const ui8* payload_bytes)
 {
-	if (backend.local_match == nullptr) return;
+	if (match_command_type >= (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT) return false;
 
-	auto* payload = backend.input.command_queue_builder.push_command<command_data_found_settlement>(MATCH_COMMAND_TYPE::FOUND_SETTLEMENT);
-	if (payload == nullptr) return; // Queue full - drop the command.
+	MATCH_COMMAND_TYPE type = (MATCH_COMMAND_TYPE)match_command_type;
+	ui8 payloadSize = get_command_data_size(type);
+	if (payloadSize > INPUT_EVENT_MAX_PAYLOAD_SIZE) return false;
 
-	payload->army = army;
-}
+	if (backend.local_match == nullptr) return true;
 
-void game_client_input_raise_army(game_client& backend, entity_guid settlement, world_location raise_location)
-{
-	if (backend.local_match == nullptr) return;
+	void* payload = backend.input.command_queue_builder.push_command(type);
+	if (payload == nullptr) return true; // Queue full - drop the command.
 
-	auto* payload = backend.input.command_queue_builder.push_command<command_data_raise_army>(MATCH_COMMAND_TYPE::RAISE_ARMY);
-	if (payload == nullptr) return; // Queue full - drop the command.
-
-	payload->settlement = settlement;
-	payload->raise_location = raise_location;
-}
-
-void game_client_input_attack_target(game_client& backend, entity_guid attacker_entity, entity_guid target_entity)
-{
-	if (backend.local_match == nullptr) return;
-
-	auto* payload = backend.input.command_queue_builder.push_command<command_data_set_entity_attack_target>(MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET);
-	if (payload == nullptr) return; // Queue full - drop the command.
-
-	payload->attacker_entity = attacker_entity;
-	payload->target_entity = target_entity;
-}
-
-void game_client_input_build_road(game_client& backend, entity_guid settlement, world_location origin, world_location destination)
-{
-	if (backend.local_match == nullptr) return;
-
-	auto* payload = backend.input.command_queue_builder.push_command<command_data_build_road>(MATCH_COMMAND_TYPE::BUILD_ROAD);
-	if (payload == nullptr) return; // Queue full - drop the command.
-
-	payload->settlement = settlement;
-	payload->origin = origin;
-	payload->destination = destination;
+	ia_memcpy(payload, payload_bytes, payloadSize);
+	return true;
 }
 
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max)
@@ -92,31 +65,6 @@ bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code
 	{
 		auto& payload = *(input_event_payload_set_target_loc*)payload_bytes;
 		game_client_input_set_target_loc(backend, payload.entity, payload.x, payload.y);
-		return true;
-	}
-	case INPUT_EVENT_TYPE::FOUND_SETTLEMENT:
-	{
-		auto& payload = *(input_event_payload_found_settlement*)payload_bytes;
-		game_client_input_found_settlement(backend, payload.army);
-		return true;
-	}
-	case INPUT_EVENT_TYPE::RAISE_ARMY:
-	{
-		auto& payload = *(input_event_payload_raise_army*)payload_bytes;
-		game_client_input_raise_army(backend, payload.settlement, { payload.raise_x, payload.raise_y });
-		return true;
-	}
-	case INPUT_EVENT_TYPE::ATTACK_TARGET:
-	{
-		auto& payload = *(input_event_payload_attack_target*)payload_bytes;
-		game_client_input_attack_target(backend, payload.attacker_entity, payload.target_entity);
-		return true;
-    }
-	case INPUT_EVENT_TYPE::BUILD_ROAD:
-	{
-		auto& payload = *(input_event_payload_build_road*)payload_bytes;
-		game_client_input_build_road(backend, payload.settlement,
-			world_location{ payload.origin_x, payload.origin_y }, world_location{ payload.destination_x, payload.destination_y });
 		return true;
 	}
 	default:

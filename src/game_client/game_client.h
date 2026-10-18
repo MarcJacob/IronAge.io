@@ -26,19 +26,6 @@ void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, v
 // (whole world tiles from the viewport's bottom-left corner). The location is clamped inside the world.
 void game_client_input_set_target_loc(game_client& backend, entity_guid entity, int viewport_x, int viewport_y);
 
-// Queues a command to turn an army into a settlement at its location.
-void game_client_input_found_settlement(game_client& backend, entity_guid army);
-void game_client_input_attack_target(game_client& backend, entity_guid attacker_entity, entity_guid target_entity);
-
-// Queues a command to have a settlement raise an army from its population, moving to the raise location.
-void game_client_input_raise_army(game_client& backend, entity_guid settlement, world_location raise_location);
-
-// Queues a command to have a settlement build a road from origin to destination (world tiles).
-void game_client_input_build_road(game_client& backend, entity_guid settlement, world_location origin, world_location destination);
-
-// Queues a command to have a settlement spawn a caravan from its local wealth.
-void game_client_input_spawn_caravan(game_client& backend, entity_guid settlement);
-
 // Applies current viewport input state onto the render viewport.
 void game_client_apply_viewport_input(game_client& backend, float delta_time);
 

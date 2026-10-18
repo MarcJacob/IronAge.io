@@ -152,10 +152,6 @@ enum class INPUT_EVENT_TYPE : ui16
 {
 	VIEWPORT_CONTROL,
 	SET_TARGET_LOC,
-	FOUND_SETTLEMENT,
-	RAISE_ARMY,
-	ATTACK_TARGET,
-	BUILD_ROAD,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -181,38 +177,6 @@ struct input_event_payload_set_target_loc
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_set_target_loc);
 
-// Turns an army into a settlement at its location.
-struct input_event_payload_found_settlement
-{
-	entity_guid army; // Army to found the settlement with.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_found_settlement);
-
-// Has a settlement raise an army from its population, moving to the raise location.
-struct input_event_payload_raise_army
-{
-	entity_guid settlement; // Settlement to raise the army from.
-	ui16 raise_x, raise_y; // Tile the army moves to.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_raise_army);
-
-// Orders an army to chase and attack another entity.
-struct input_event_payload_attack_target
-{
-	entity_guid attacker_entity; // Army to order.
-	entity_guid target_entity; // Entity to attack.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_attack_target);
-
-// Has a settlement build a road between two tiles, within its territory.
-struct input_event_payload_build_road
-{
-	entity_guid settlement; // Settlement building the road.
-	ui16 origin_x, origin_y; // Tile the road starts from: the settlement's tile or a road tile in its territory.
-	ui16 destination_x, destination_y; // Tile the road leads to.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_build_road);
-
 #pragma pack(pop)
 
 #undef INPUT_EVENT_PAYLOAD_SIZE_GUARD
@@ -228,7 +192,13 @@ struct game_match_start_params;
 // matching code, and applies it. Returns false if code isn't recognized (frontend out of sync with this header).
 bool game_client_process_input_event(game_client& backend, INPUT_EVENT_TYPE code, ui8 payload_bytes[INPUT_EVENT_MAX_PAYLOAD_SIZE]);
 
-// RENDERING 
+// Queues a match command of the given type (a MATCH_COMMAND_TYPE value), whose payload bytes (command payload layout, see commands.h,
+// at most INPUT_EVENT_MAX_PAYLOAD_SIZE bytes, owned by the caller) are copied as is. The server validates it.
+// Returns false if the type is unknown or its payload doesn't fit in an input event payload (frontend out of sync with this header).
+// With no local match or a full queue the command is silently dropped.
+bool game_client_input_push_match_command(game_client& backend, ui8 match_command_type, const ui8* payload_bytes);
+
+// RENDERING
 
 // Gets current render state for presentation.
 client_render_state* game_client_get_render_state(game_client& backend);

@@ -26,10 +26,6 @@ export enum INPUT_EVENT_TYPE
     VIEWPORT_CONTROL,
 
     SET_TARGET_LOC,
-    FOUND_SETTLEMENT,
-    RAISE_ARMY,
-    ATTACK_TARGET,
-    BUILD_ROAD,
 };
 
 // Mirrors MATCH_COMMAND_TYPE (include/game_common/match/commands.h). Update here if the enum changes.
@@ -92,6 +88,7 @@ interface ClientExports extends WebAssembly.Exports
     client_get_input_event_buffer_offset(): number;
     client_get_input_event_buffer_size(): number;
     client_send_input_event(code: INPUT_EVENT_TYPE): number; // wasm bool: 0 or 1.
+    client_send_match_command(match_command_type: MATCH_COMMAND_TYPE): number; // wasm bool: 0 or 1. Reads the command payload from the input event buffer.
     client_query_command_valid(command_type: MATCH_COMMAND_TYPE): number; // wasm bool: 0 or 1. Reads the command payload from the input event buffer.
 
     // Entity inspection
@@ -301,6 +298,15 @@ export namespace ClientInput
     {
         const valid = CLIENT_BACKEND.client_send_input_event(code) !== 0;
         if (!valid) console.error(`Input event ${INPUT_EVENT_TYPE[code]} was rejected by the backend - is backend.ts out of sync with game_client_backend.h?`);
+        return valid;
+    }
+
+    // Queues the match command of the given type, whose payload (command layout, see commands.h) was written in the view given by begin_input_event.
+    // Returns whether the backend accepted the type. If it didn't, it's likely backend.ts is out of sync with commands.h.
+    export function send_match_command(match_command_type: MATCH_COMMAND_TYPE): boolean
+    {
+        const valid = CLIENT_BACKEND.client_send_match_command(match_command_type) !== 0;
+        if (!valid) console.error(`Match command ${MATCH_COMMAND_TYPE[match_command_type]} was rejected by the backend - is backend.ts out of sync with commands.h?`);
         return valid;
     }
 
