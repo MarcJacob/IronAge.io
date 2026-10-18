@@ -24,10 +24,52 @@ enum class GAME_DATA_PROP_TYPE : ui8
     UI8, UI16, UI32, UI64,
     I8, I16, I32, I64,
 
-    // VEC 2 types
+    // Vec2 types
     VEC2_UI8, VEC2_UI16, VEC2_UI32,
     VEC2_I8, VEC2_I16, VEC2_I32,
+
+    // Game types
+    GAME_TYPES_BEGIN,
+    WORLD_LOCATION,
+    ENTITY_GUID,
+    PLAYER_ID,
 };
+
+inline ui32 get_data_prop_size(GAME_DATA_PROP_TYPE prop_type)
+{
+    switch(prop_type)
+    {
+        case GAME_DATA_PROP_TYPE::UI8:
+        case GAME_DATA_PROP_TYPE::I8:
+            return 1;
+
+        case GAME_DATA_PROP_TYPE::UI16:
+        case GAME_DATA_PROP_TYPE::I16:
+        case GAME_DATA_PROP_TYPE::VEC2_I8:
+        case GAME_DATA_PROP_TYPE::VEC2_UI8:
+            return 2;
+
+        case GAME_DATA_PROP_TYPE::UI32:
+        case GAME_DATA_PROP_TYPE::I32:
+        case GAME_DATA_PROP_TYPE::VEC2_I16:
+        case GAME_DATA_PROP_TYPE::VEC2_UI16:
+            return 4;
+
+        case GAME_DATA_PROP_TYPE::UI64:
+        case GAME_DATA_PROP_TYPE::I64:
+        case GAME_DATA_PROP_TYPE::VEC2_I32:
+        case GAME_DATA_PROP_TYPE::VEC2_UI32:
+            return 8;
+
+        case GAME_DATA_PROP_TYPE::WORLD_LOCATION: return 4;
+        case GAME_DATA_PROP_TYPE::PLAYER_ID: return 2;
+        case GAME_DATA_PROP_TYPE::ENTITY_GUID: return 4;
+
+        default:
+            ASSERT_MSG(0, "Invalid game data property type.");
+            return 0;
+    }
+}
 
 // GDO & Property definitions are packed to ensure GDO structs have predictable layouts.
 #pragma pack(push, 1)
@@ -59,13 +101,82 @@ struct game_data_object
         return (_totalSize - _propsOffset) / sizeof(GAME_DATA_PROP_DEF);
     }
 
-    inline const GAME_DATA_PROP_DEF* get_property(ui16 propIndex) const
+    inline const GAME_DATA_PROP_DEF* get_property_def(ui16 prop_index) const
     {
-        void* propPtr = (ui8*)this + _propsOffset + (sizeof(GAME_DATA_PROP_DEF) * propIndex);
+        void* propPtr = (ui8*)this + _propsOffset + (sizeof(GAME_DATA_PROP_DEF) * prop_index);
         ASSERT((iptr)propPtr < (iptr)((ui8*)this + _totalSize));
 
         const GAME_DATA_PROP_DEF* propDefPtr = (const GAME_DATA_PROP_DEF*)propPtr;
         return propDefPtr;
+    }
+
+    inline const GAME_DATA_PROP_DEF* get_property_def(const ia_string_view& prop_name)
+    {
+        for (ui16 propIndex = 0; propIndex < get_prop_count(); propIndex++)
+        {
+            const GAME_DATA_PROP_DEF* prop = get_property_def(propIndex);
+            if (prop_name == prop->name) return prop;
+        }
+
+        return nullptr;
+    }
+
+    // Returns a reference to the value of the given property, interpreted as the given type.
+    // @TODO(Marc): Add some security in there. For now we assume the property exists and has the correct offset, AND correct underlying type.
+    template<typename ValType>
+    inline ValType& access_property_val(const GAME_DATA_PROP_DEF& prop)
+    {
+        ASSERT_MSG(sizeof(ValType) == get_data_prop_size(prop.type), "Invalid access type to property. Access Type size = %d, Property Value size = %d", sizeof(ValType), get_data_prop_size(prop.type));
+
+        ui8* dataPtr = (ui8*)this + sizeof(game_data_object) + prop.offset; // With a standard layout, the data lives right after the structure data.
+        return *(ValType*)dataPtr;
+    }
+
+    // Outputs the value associated with the given property index, interpreted with the given type.
+    // Returns whether the property existed.
+    template<typename ValType>
+    inline bool get_property_val(ui16 prop_index, ValType& out_val)
+    {
+        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_index);
+        if (propDef == nullptr) return false;
+
+        return access_property_val<ValType>(*propDef);
+    }
+
+    // Returns a reference to the value of the given property, interpreted as the given type.
+    template<typename ValType>
+    inline bool get_property_def(const ia_string_view& prop_name, ValType& out_val)
+    {
+        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
+        if (propDef == nullptr) return false;
+
+        return access_property_val<ValType>(*propDef);
+    }
+
+    // Sets the internal value associated with the given property index.
+    // Returns whether the property did exist and was set.
+    template<typename ValType>
+    inline bool set_property_val(ui16 prop_index, ValType value)
+    {
+        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_index);
+        if (propDef == nullptr) return false;
+
+        ValType& val = access_property_val<ValType>(*propDef);
+        val = value;
+        return true;
+    }
+
+    // Sets the internal value associated with the given property index.
+    // Returns whether the property did exist and was set.
+    template<typename ValType>
+    inline bool set_property_val(const ia_string_view& prop_name, ValType value)
+    {
+        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
+        if (propDef == nullptr) return false;
+
+        ValType& val = access_property_val<ValType>(*propDef);
+        val = value;
+        return true;
     }
 };
 #pragma pack(pop)
@@ -100,19 +211,21 @@ struct GameStuff
 GAME_DATA_OBJECT_DEF_BEGIN(GameStuff)
     GAME_DATA_PROPERTY(a, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(b, GAME_DATA_PROP_TYPE::I32)
-    GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::VEC2_I32)
 GAME_DATA_OBJECT_DEF_END()
 
 inline void stuff_get_prop_names_list(ia_string_builder& str_builder)
 {
     gdo_GameStuff gdo; // Create GDO of specific type with default data.
 
+    gdo.set_property_val("a", 32);
+    gdo.set_property_val("b", -13);
+
     for (ui16 propIndex = 0; propIndex < gdo.get_prop_count(); propIndex++)
     {
-        const GAME_DATA_PROP_DEF* prop = gdo.get_property(propIndex);
+        const GAME_DATA_PROP_DEF* prop = gdo.get_property_def(propIndex);
         ASSERT_MSG(prop != nullptr, "Invalid property name ! Index = %hu", propIndex);
 
-        str_builder.push_back(prop->name);
+        str_builder.push_back_format("[%cs] = %d", prop->name, gdo.access_property_val<i32>(*prop));
         str_builder.push_back('\n');
     }
 }

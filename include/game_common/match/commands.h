@@ -1,6 +1,6 @@
 // Symbol declarations for commands that can be sent into a match to affect its next tick.
 // Each command type is built in four parts: its initial declaration in the types enumeration, the definition of a payload structure,
-// the type-to-payload-size matching in the function, and the declaration & implementation of its Sanity Check and Apply functions.
+// the declaration & implementation of its Sanity Check and Apply functions, and its row in the command table (name, size, functions).
 
 #ifndef GAME_COMMANDS_INCLUDED
 #define GAME_COMMANDS_INCLUDED
@@ -30,7 +30,12 @@ enum class MATCH_COMMAND_TYPE : ui8
 	TYPE_COUNT,
 };
 
-// COMMAND DATA STRUCTURES & FUNCTIONS 
+// COMMAND DATA STRUCTURES & FUNCTIONS
+// Every command has the same two functions, taking the command header (type + data) and reading their own data struct from it:
+// bool <name>_validity_check(const match_world_state&, match_player_id, const match_command_header&)
+// void <name>_apply(match_world_state&, match_player_id, const match_command_header&)
+
+struct match_command_header;
 
 // All structures must be aligned to 1 since they must exist in packed contexts for network transmission and structured reading.
 #pragma pack(push, 1)
@@ -43,10 +48,10 @@ struct command_data_server_spawn_player
 };
 
 bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
-        const command_data_server_spawn_player& command);
+        const match_command_header& command_header);
 
-bool command_server_spawn_player_apply(match_world_state& world, match_player_id player,
-        const command_data_server_spawn_player& command);
+void command_server_spawn_player_apply(match_world_state& world, match_player_id player,
+        const match_command_header& command_header);
 
 // SET ENTITY MOVE TARGET
 struct command_data_set_entity_move_target
@@ -56,10 +61,10 @@ struct command_data_set_entity_move_target
 };
 
 bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_set_entity_move_target& command);
+	const match_command_header& command_header);
 
 void command_set_entity_move_target_apply(match_world_state& world, match_player_id player,
-	const command_data_set_entity_move_target& command);
+	const match_command_header& command_header);
 
 // SET ENTITY ATTACK TARGET
 struct command_data_set_entity_attack_target
@@ -69,10 +74,10 @@ struct command_data_set_entity_attack_target
 };
 
 bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_set_entity_attack_target& command);
+	const match_command_header& command_header);
 
 void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player,
-	const command_data_set_entity_attack_target& command);
+	const match_command_header& command_header);
 
 // FOUND SETTLEMENT
 struct command_data_found_settlement
@@ -81,10 +86,10 @@ struct command_data_found_settlement
 };
 
 bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_found_settlement& command);
+	const match_command_header& command_header);
 
 void command_found_settlement_apply(match_world_state& world, match_player_id player,
-	const command_data_found_settlement& command);
+	const match_command_header& command_header);
 
 // RAISE ARMY
 struct command_data_raise_army
@@ -94,10 +99,10 @@ struct command_data_raise_army
 };
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_raise_army& command);
+	const match_command_header& command_header);
 
 void command_raise_army_apply(match_world_state& world, match_player_id player,
-	const command_data_raise_army& command);
+	const match_command_header& command_header);
 
 // BUILD ROAD
 // @TODO(Marc): I'd like for there to be a single command (or at least, one per "archetype") for starting build projects.
@@ -110,10 +115,10 @@ struct command_data_build_road
 };
 
 bool command_build_road_validity_check(const match_world_state& world, match_player_id player,
-	const command_data_build_road& command);
+	const match_command_header& command_header);
 
 void command_build_road_apply(match_world_state& world, match_player_id player,
-	const command_data_build_road& command);
+	const match_command_header& command_header);
 
 // Header & command size mapping definitions.
 
@@ -188,41 +193,81 @@ struct match_tick_commands
 
 #pragma pack(pop)
 
-// Mapping between command type and size.
-static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
+// COMMAND TABLE
+// One row per command type, in MATCH_COMMAND_TYPE order (enforced by static_asserts below).
+
+struct match_command_def
 {
-	switch (type)
+	const char* name; // Bare enum identifier of the command type.
+	MATCH_COMMAND_TYPE type;
+	ui8 data_size;
+	bool (*validity_check)(const match_world_state&, match_player_id, const match_command_header&);
+	void (*apply)(match_world_state&, match_player_id, const match_command_header&);
+};
+
+// WARNING: pointers to this table or its rows, or to the validity / apply functions themselves, are NOT stable across server hot reloads
+// (the table lives in the reloadable DLL's static data). Never store them in match state or any persistent memory:
+// keep the command type and look the row up at call time with match_command_get_def().
+static constexpr match_command_def MATCH_COMMAND_TABLE[] =
+{
+	{ "SET_ENTITY_MOVE_TARGET", MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET, sizeof(command_data_set_entity_move_target),
+		command_set_entity_move_target_validity_check, command_set_entity_move_target_apply },
+	{ "SET_ENTITY_ATTACK_TARGET", MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET, sizeof(command_data_set_entity_attack_target),
+		command_set_entity_attack_target_validity_check, command_set_entity_attack_target_apply },
+	{ "FOUND_SETTLEMENT", MATCH_COMMAND_TYPE::FOUND_SETTLEMENT, sizeof(command_data_found_settlement),
+		command_found_settlement_validity_check, command_found_settlement_apply },
+	{ "RAISE_ARMY", MATCH_COMMAND_TYPE::RAISE_ARMY, sizeof(command_data_raise_army),
+		command_raise_army_validity_check, command_raise_army_apply },
+	{ "SERVER_SPAWN_PLAYER", MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER, sizeof(command_data_server_spawn_player),
+		command_server_spawn_player_validity_check, command_server_spawn_player_apply },
+	{ "BUILD_ROAD", MATCH_COMMAND_TYPE::BUILD_ROAD, sizeof(command_data_build_road),
+		command_build_road_validity_check, command_build_road_apply },
+};
+
+constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);
+
+static constexpr bool match_command_table_is_valid()
+{
+	for (ui8 row = 0; row < MATCH_COMMAND_TABLE_COUNT; row++)
 	{
-	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET:
-		return sizeof(command_data_set_entity_move_target);
-	case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET:
-		return sizeof(command_data_set_entity_attack_target);
-	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT:
-		return sizeof(command_data_found_settlement);
-	case MATCH_COMMAND_TYPE::RAISE_ARMY:
-		return sizeof(command_data_raise_army);
-    case MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER:
-        return sizeof(command_data_server_spawn_player);
-	case MATCH_COMMAND_TYPE::BUILD_ROAD:
-		return sizeof(command_data_build_road);
-	default:
-		ASSERT_MSG(0, "Command type %d is missing a data struct size association.", type);
-		return 0;
+		if ((ui8)MATCH_COMMAND_TABLE[row].type != row) return false;
+		if (MATCH_COMMAND_TABLE[row].data_size == 0) return false;
 	}
+	return true;
 }
 
-#ifndef NDEBUG
-// Simple testing function to ensure all declared command types have an associated size,
-// and by extension, a payload structure.
-static inline void TEST_COMMAND_SIZES_CHECK()
+static_assert(MATCH_COMMAND_TABLE_COUNT == (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT, "Command table row count differs from MATCH_COMMAND_TYPE::TYPE_COUNT: a command is missing its row.");
+static_assert(match_command_table_is_valid(), "Command table rows must be in MATCH_COMMAND_TYPE order and have a non-zero data size.");
+
+// Returns the table row of a command type. Asserts and returns nullptr on an unknown type.
+// Untrusted types must be range-checked against TYPE_COUNT BEFORE calling this, without asserting.
+static inline const match_command_def* match_command_get_def(MATCH_COMMAND_TYPE type)
 {
-	ui16 sum = 0;
-	for (ui8 commandTypeIndex = 0; commandTypeIndex < (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT; commandTypeIndex++)
+	if ((ui8)type >= (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT)
 	{
-		sum += get_command_data_size((MATCH_COMMAND_TYPE)commandTypeIndex);
+		ASSERT_MSG(0, "Command type %d is not in the command table.", (int)type);
+		return nullptr;
 	}
+	return &MATCH_COMMAND_TABLE[(ui8)type];
 }
-#endif
+
+// Returns the command type with the given name. Asserts and returns TYPE_COUNT if there is none.
+static inline MATCH_COMMAND_TYPE match_command_type_from_name(const char* name)
+{
+	for (ui8 row = 0; row < MATCH_COMMAND_TABLE_COUNT; row++)
+	{
+		if (ia_str_equal(MATCH_COMMAND_TABLE[row].name, name)) return MATCH_COMMAND_TABLE[row].type;
+	}
+	ASSERT_MSG(0, "No command type has the given name.");
+	return MATCH_COMMAND_TYPE::TYPE_COUNT;
+}
+
+// Mapping between command type and size. Asserts and returns 0 on an unknown type (see match_command_get_def).
+static inline ui8 get_command_data_size(MATCH_COMMAND_TYPE type)
+{
+	const match_command_def* def = match_command_get_def(type);
+	return def != nullptr ? def->data_size : 0;
+}
 
 // Convenience tool for building a sequence of inputs inside a memory arena.
 struct command_sequence_builder
