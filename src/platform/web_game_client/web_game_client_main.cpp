@@ -15,6 +15,7 @@
 
 // Unity-compile components of the WASM platform code.
 #include "web_game_client_input.cpp"
+#include "web_game_client_input_commands.cpp"
 #include "web_game_client_query.cpp"
 
 web_client_state WEB_CLIENT;

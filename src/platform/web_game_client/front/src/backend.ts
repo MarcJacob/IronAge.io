@@ -24,19 +24,6 @@ export enum MESSAGE_TYPE
 export enum INPUT_EVENT_TYPE
 {
     VIEWPORT_CONTROL,
-
-    SET_TARGET_LOC,
-};
-
-// Mirrors MATCH_COMMAND_TYPE (include/game_common/match/commands.h). Update here if the enum changes.
-export enum MATCH_COMMAND_TYPE
-{
-    SET_ENTITY_MOVE_TARGET,
-    SET_ENTITY_ATTACK_TARGET,
-    FOUND_SETTLEMENT,
-    RAISE_ARMY,
-    SERVER_SPAWN_PLAYER,
-    BUILD_ROAD,
 };
 
 // Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
@@ -88,8 +75,14 @@ interface ClientExports extends WebAssembly.Exports
     client_get_input_event_buffer_offset(): number;
     client_get_input_event_buffer_size(): number;
     client_send_input_event(code: INPUT_EVENT_TYPE): number; // wasm bool: 0 or 1.
-    client_send_match_command(match_command_type: MATCH_COMMAND_TYPE): number; // wasm bool: 0 or 1. Reads the command payload from the input event buffer.
-    client_query_command_valid(command_type: MATCH_COMMAND_TYPE): number; // wasm bool: 0 or 1. Reads the command payload from the input event buffer.
+
+    // Commands built by property name (see gdo.ts). Names are NUL-terminated bytes written in the input event buffer.
+
+    client_command_create(): number; // COMMAND_CREATE_RESULT, see gdo.ts.
+    client_command_get_buffer_offset(): number;
+    client_command_set_property(x: number, y: number): number; // wasm bool: 0 or 1.
+    client_command_send(): number; // wasm bool: 0 or 1.
+    client_command_query_valid(): number; // wasm bool: 0 or 1.
 
     // Entity inspection
 
@@ -301,21 +294,20 @@ export namespace ClientInput
         return valid;
     }
 
-    // Queues the match command of the given type, whose payload (command layout, see commands.h) was written in the view given by begin_input_event.
-    // Returns whether the backend accepted the type. If it didn't, it's likely backend.ts is out of sync with commands.h.
-    export function send_match_command(match_command_type: MATCH_COMMAND_TYPE): boolean
-    {
-        const valid = CLIENT_BACKEND.client_send_match_command(match_command_type) !== 0;
-        if (!valid) console.error(`Match command ${MATCH_COMMAND_TYPE[match_command_type]} was rejected by the backend - is backend.ts out of sync with commands.h?`);
-        return valid;
-    }
+    // Commands built by property name: thin wrappers over the exports, see gdo.ts for how they are used.
+    // The names (command, property) must have been written in the input event buffer with begin_input_event first.
+    // Returns a COMMAND_CREATE_RESULT.
+    export function command_create(): number { return CLIENT_BACKEND.client_command_create(); }
+    export function command_set_property(x: number, y: number): boolean { return CLIENT_BACKEND.client_command_set_property(x, y) !== 0; }
+    export function command_send(): boolean { return CLIENT_BACKEND.client_command_send() !== 0; }
+    export function command_query_valid(): boolean { return CLIENT_BACKEND.client_command_query_valid() !== 0; }
+    export function command_get_buffer_offset(): number { return CLIENT_BACKEND.client_command_get_buffer_offset(); }
+}
 
-    // Asks whether the command of the given type, whose payload (command layout, see commands.h) was written in the view
-    // given by begin_input_event, would currently be valid for the local player. Does not send anything.
-    export function query_command_valid(command_type: MATCH_COMMAND_TYPE): boolean
-    {
-        return CLIENT_BACKEND.client_query_command_valid(command_type) !== 0;
-    }
+// Fresh view of the whole wasm memory. Do NOT hold the result across calls into the backend, as memory growth detaches it.
+export function get_memory_bytes(): Uint8Array<ArrayBuffer>
+{
+    return new Uint8Array(CLIENT_BACKEND.memory.buffer);
 }
 
 // Asks the backend for a land path between two world tiles. Returns its waypoints in order, start tile excluded:

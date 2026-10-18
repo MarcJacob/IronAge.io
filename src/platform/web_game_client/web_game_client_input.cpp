@@ -24,17 +24,3 @@ WASM_EXPORT bool client_send_input_event(INPUT_EVENT_TYPE code)
 	return game_client_process_input_event(*WEB_CLIENT.backend, code, INPUT_EVENT_BUFFER);
 }
 
-// Queues the match command (MATCH_COMMAND_TYPE value) whose payload JS wrote into the input event buffer.
-// The buffer is read as the command's payload layout (see commands.h), not as an input event. Same layout as the validity query below.
-WASM_EXPORT bool client_send_match_command(ui32 match_command_type)
-{
-	return game_client_input_push_match_command(*WEB_CLIENT.backend, (ui8)match_command_type, INPUT_EVENT_BUFFER);
-}
-
-// Asks whether the command (MATCH_COMMAND_TYPE value) whose payload JS wrote into the input event buffer would be valid right now.
-// The buffer is read as the command's payload layout (see commands.h), not as an input event.
-WASM_EXPORT bool client_query_command_valid(ui32 command_type)
-{
-	return game_client_query_command_valid(*WEB_CLIENT.backend, (ui8)command_type, INPUT_EVENT_BUFFER);
-}
-

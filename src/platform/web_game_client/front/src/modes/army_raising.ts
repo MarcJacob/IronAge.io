@@ -5,9 +5,9 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, send_raise_army, is_raise_army_valid } from "../input.js"
+import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
 import { show_mode_hint, hide_mode_hint } from "../ui/mode_hint_ui.js"
-import { is_own_settlement } from "./play_common.js"
+import { is_own_settlement } from "../main.js"
 
 const HINT = "Raise Army: click a tile to raise an army that moves there. Esc or [2] to cancel.";
 
@@ -46,32 +46,40 @@ export class ArmyRaising extends Core.Mode
 
         const start = { x: view.location_x, y: view.location_y };
         const points = Backend.query_path(start, hovered, this.settlement_guid);
-        const valid = points.length > 0 && is_raise_army_valid(this.settlement_guid, hovered);
+        const valid = points.length > 0 && is_command_valid("RAISE_ARMY", { settlement: this.settlement_guid, raise_location: hovered });
         Render.RENDER_CONFIG.path_preview = { start, points, valid };
     }
 
-    on_key_down(event: KeyboardEvent): void
+    // Only the exit key is handled here: other keys (e.g. the hotkey of a sibling mode) fall through to the modes below.
+    // Clicks and right clicks are handled actions of this mode.
+    on_key_down(event: KeyboardEvent): boolean
     {
-        if (event.code === this.exit_key && !event.repeat) Core.pop_mode();
+        if (event.code !== this.exit_key) return false;
+
+        if (!event.repeat) Core.pop_mode();
+        return true;
     }
 
     // Right click leaves, like Escape (the browser menu is already suppressed by input.ts).
-    on_context_menu(event: MouseEvent): void
+    on_context_menu(event: MouseEvent): boolean
     {
         Core.pop_mode();
+        return true;
     }
 
-    on_click(event: MouseEvent): void
+    on_click(event: MouseEvent): boolean
     {
-        if (event.button !== 0) return;
+        if (event.button !== 0) return true;
 
         const tile = Render.page_to_tile(event.clientX, event.clientY);
-        if (!Render.is_tile_in_world(tile)) return;
+        if (!Render.is_tile_in_world(tile)) return true;
 
         // Refused orders are not sent and the mode stays.
-        if (!is_raise_army_valid(this.settlement_guid, tile)) return;
+        const raiseArmy = { settlement: this.settlement_guid, raise_location: tile };
+        if (!is_command_valid("RAISE_ARMY", raiseArmy)) return true;
 
-        send_raise_army(this.settlement_guid, tile);
+        send_command("RAISE_ARMY", raiseArmy);
         Core.pop_mode();
+        return true;
     }
 }

@@ -22,10 +22,6 @@ struct game_client;
 // Sets current viewport control input state.
 void game_client_set_viewport_input(game_client& backend, vec2f view_rect_min, vec2f view_rect_max);
 
-// Queues a command to move an entity to the world location under the cursor, given in viewport space
-// (whole world tiles from the viewport's bottom-left corner). The location is clamped inside the world.
-void game_client_input_set_target_loc(game_client& backend, entity_guid entity, int viewport_x, int viewport_y);
-
 // Applies current viewport input state onto the render viewport.
 void game_client_apply_viewport_input(game_client& backend, float delta_time);
 
@@ -39,7 +35,7 @@ struct game_client_input_state
 		vec2f view_rect_max; // Max rectangle corner of the world area the frontend wants to view, in world tiles.
 	} viewport_control;
 
-	// Queue of match commands built by input events (e.g. game_client_input_set_target_loc), drained into the next
+	// Queue of match commands built by game_client_input_push_match_command, drained into the next
 	// CLIENT_TICK message by game_client_output_client_tick_message. command_queue_builder wraps command_queue and
 	// always has a sequence ready to push commands into - reset (re-init'd) right after each drain.
 	mem_arena command_queue;

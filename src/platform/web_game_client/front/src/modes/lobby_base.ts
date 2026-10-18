@@ -27,7 +27,7 @@ export class LobbyBase extends Core.Mode
     }
 
     // The base mode can't be escaped out of.
-    on_escape(): void {}
+    on_escape(): boolean { return true; }
 
     on_net_message(message_type: number): void
     {

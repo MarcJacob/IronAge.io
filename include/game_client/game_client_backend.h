@@ -151,7 +151,6 @@ static_assert(sizeof(entity_full_view) == 38, "entity_full_view layout is read b
 enum class INPUT_EVENT_TYPE : ui16
 {
 	VIEWPORT_CONTROL,
-	SET_TARGET_LOC,
 };
 
 // Max size in bytes of any one input event's payload.
@@ -168,14 +167,6 @@ struct input_event_payload_viewport_control
 	float view_rect_max_x, view_rect_max_y;
 };
 INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_viewport_control);
-
-// Orders an entity to move to the location under the cursor.
-struct input_event_payload_set_target_loc
-{
-	entity_guid entity; // Entity to order.
-	i32 x, y; // Cursor position in viewport space: whole world tiles from the viewport's bottom-left corner.
-};
-INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_set_target_loc);
 
 #pragma pack(pop)
 

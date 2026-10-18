@@ -35,7 +35,10 @@ Each input command type is structured this way:
 - Entry in the COMMAND_TYPES enumeration.
 - Payload structure (with rare cases of re-use of the same structure, although inheritance is recommended).
 - Implementation functions: Validity Check (checking if it can validly apply over the match from the given player) and Apply (modify world state).
-	- For now each of those must be added to the relevant switch statement located in game_common_match_command.cpp, and should probably be implemented there too.
+	- Both take the command header and read their payload structure from it. They are implemented in *match_commands.cpp*.
+- Row in the command table (*commands.h*): name, enum value, payload size, Validity Check and Apply, all in enum order.
+	- The table lives in the DLL's static data: pointers to rows or functions are not stable across server hot reloads, never store them. Store the command type and look the row up.
+- For commands sent from the web client: a Game Data Object definition below the payload structure, and a case in the web client's GDO creation (see *web_game_client* sources).
 
 Then the functions must be used in the appropriate match host and match tick code (early tick function when all input sequences are processed).
 
@@ -46,13 +49,6 @@ Guidelines:
 - Validity Check must adopt a "return false as soon as possible" mindset.
 - Apply must do its work as quickly as possible as each command is run sequentially pre-tick.
 	- Do not mix up what should be in the match's tick work and what should be in the Apply function !
-
-Later on, we may want to make the registration of commands more convenient and centralized, in the sense that we should be able to see every element of a command
-together in one place. This could be done with a macro whose role is to output a command to some static buffer any program could choose to place in their static memory where they wish.
-Then a command's *code* could be related to its index in that collection instead of its command type enumeration value (which could even be replaced with a string name).
-
-Another advantage of a more data-oriented approach like that would be that the match code could loop over all commands abstractly, such that match code wouldn't need to be touched
-to implement the effects of a command.
 
 #### Structuring for input into match tick
 

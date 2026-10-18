@@ -6,9 +6,9 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, send_build_road, is_build_road_valid } from "../input.js"
+import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
 import { show_mode_hint, hide_mode_hint } from "../ui/mode_hint_ui.js"
-import { is_own_settlement } from "./play_common.js"
+import { is_own_settlement } from "../main.js"
 
 const HINT = "Build Road: click a tile to build a road to it. Click the settlement or a road tile to start from there. Esc or [1] to cancel.";
 
@@ -54,37 +54,45 @@ export class RoadBuilding extends Core.Mode
 
         // The preview is limited to the settlement's territory, as the build will be.
         const points = Backend.query_path(this.origin, hovered, this.settlement_guid);
-        const valid = points.length > 0 && is_build_road_valid(this.settlement_guid, this.origin, hovered);
+        const valid = points.length > 0 && is_command_valid("BUILD_ROAD", { settlement: this.settlement_guid, origin: this.origin, destination: hovered });
         Render.RENDER_CONFIG.path_preview = { start: this.origin, points, valid };
     }
 
-    on_key_down(event: KeyboardEvent): void
+    // Only the exit key is handled here: other keys (e.g. the hotkey of a sibling mode) fall through to the modes below.
+    // Clicks and right clicks are handled actions of this mode.
+    on_key_down(event: KeyboardEvent): boolean
     {
-        if (event.code === this.exit_key && !event.repeat) Core.pop_mode();
+        if (event.code !== this.exit_key) return false;
+
+        if (!event.repeat) Core.pop_mode();
+        return true;
     }
 
     // Right click leaves, like Escape (the browser menu is already suppressed by input.ts).
-    on_context_menu(event: MouseEvent): void
+    on_context_menu(event: MouseEvent): boolean
     {
         Core.pop_mode();
+        return true;
     }
 
-    on_click(event: MouseEvent): void
+    on_click(event: MouseEvent): boolean
     {
-        if (event.button !== 0) return;
+        if (event.button !== 0) return true;
 
         const tile = Render.page_to_tile(event.clientX, event.clientY);
-        if (!Render.is_tile_in_world(tile)) return;
+        if (!Render.is_tile_in_world(tile)) return true;
 
         // Settlement or road tile of its territory: new origin.
         if (this.is_origin_candidate(tile))
         {
             this.origin = tile;
-            return;
+            return true;
         }
 
         // Anything else: destination. Refused orders are not sent.
-        if (is_build_road_valid(this.settlement_guid, this.origin, tile)) send_build_road(this.settlement_guid, this.origin, tile);
+        const buildRoad = { settlement: this.settlement_guid, origin: this.origin, destination: tile };
+        if (is_command_valid("BUILD_ROAD", buildRoad)) send_command("BUILD_ROAD", buildRoad);
+        return true;
     }
 
     // Whether a road can start from the tile: the settlement's own tile, or a road tile in the settlement's territory.

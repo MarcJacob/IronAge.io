@@ -48,13 +48,7 @@ bool command_set_entity_move_target_validity_check(const match_world_state& worl
 	if (!world_entity_is_valid(world, command.entity)) return false;
 
 	// Check that target coordinates are inside the world.
-	if (command.move_target.x < 0 
-		|| command.move_target.x > world.terrain.size_tiles.x
-		|| command.move_target.y < 0 
-		|| command.move_target.y > world.terrain.size_tiles.y)
-	{
-		return false;
-	}
+	if (command.move_target.x >= world.terrain.size_tiles.x || command.move_target.y >= world.terrain.size_tiles.y) return false;
 
 	ENTITY_TYPE entityType = command.entity.get_type();
 	switch (entityType)

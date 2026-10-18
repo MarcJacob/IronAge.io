@@ -13,7 +13,7 @@ export class GameBase extends Core.Mode
 
     on_entry(): void
     {
-        Core.push_mode(new SpawnPick(this.local_player_id, this.placement_countdown_ms));
+        Core.push_mode(new SpawnPick(this.local_player_id, this.placement_countdown_ms), this);
     }
 
     on_exit(): void
@@ -27,7 +27,7 @@ export class GameBase extends Core.Mode
     }
 
     // The base mode can't be escaped out of.
-    on_escape(): void {}
+    on_escape(): boolean { return true; }
 
     on_net_message(message_type: number): void
     {

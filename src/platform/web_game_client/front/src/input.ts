@@ -4,8 +4,8 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
+import { read_GDO_schema, GAME_DATA_PROP_TYPE } from "./gdo.js"
 import { FRONTEND_CAMERA } from "./camera.js"
-import { get_local_player_id } from "./main.js"
 
 // Input sources (updated on events, used on tick)
 const KB_HELD_KEYS = new Set<string>();
@@ -64,126 +64,102 @@ export function get_selected_entity_view(): Backend.EntityView | null
 }
 
 
-// INPUT FUNCTIONS
+// COMMANDS BUILT BY PROPERTY NAME
+// A command is built in the backend through a Game Data Object (see gdo.ts), identified by its bare enum name (see
+// MATCH_COMMAND_TABLE in commands.h) with its properties named after the command struct's members. Each sender supplies the names it expects:
+// a name the backend does not know is logged and the call fails, which means the front end is out of date with commands.h.
 
-// Sets target location / entity for currently selected entity.
-function send_set_target_loc(clientX: number, clientY: number)
+// Value of a command property: a number, or a pair of numbers for vec2 and world location types.
+type COMMAND_PROP_VALUE = number | { x: number, y: number };
+
+// Mirrors COMMAND_CREATE_RESULT (src/platform/web_game_client/web_game_client_input_commands.cpp).
+enum COMMAND_CREATE_RESULT
 {
-    if (SELECTED_ENTITY_GUID === null) return;
-
-    // The backend adds the viewport's bottom-left to these offsets and rounds to a tile (clamped in the world), so the rounded offset
-    // to the tile lands back on it. Tile i's location is i (entities are drawn at i + 0.5).
-    const tile = Render.page_to_tile(clientX, clientY);
-    const viewportLocation = Render.world_to_viewport(tile.x, tile.y);
-
-    // Layout of input_event_payload_set_target_loc (game_client_backend.h): ui32 entity guid, i32 x, i32 y (viewport space, whole tiles).
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, SELECTED_ENTITY_GUID, true);
-    view.setInt32(4, Math.round(viewportLocation.x), true);
-    view.setInt32(8, Math.round(viewportLocation.y), true);
-    Backend.ClientInput.commit_input_event(Backend.INPUT_EVENT_TYPE.SET_TARGET_LOC);
+    OK,
+    UNKNOWN_NAME,
+    NO_GDO,
+    TOO_LARGE,
 }
 
-// Orders the given army to found a settlement at its location.
-export function send_found_settlement(army_guid: number): void
+const TEXT_ENCODER = new TextEncoder();
+
+// Writes a name as NUL-terminated bytes in the input event buffer. Returns false if it does not fit.
+function write_name(name: string): boolean
 {
-    // Layout of command_data_found_settlement (commands.h): ui32 army guid.
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, army_guid, true);
-    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.FOUND_SETTLEMENT);
+    const view = Backend.ClientInput.begin_input_event(); // Zeroed, so the name is terminated as long as it leaves room.
+    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    return TEXT_ENCODER.encodeInto(name, bytes.subarray(0, bytes.length - 1)).read === name.length;
 }
 
-// Orders the given settlement to raise an army from its population, moving to the raise location (world tile).
-export function send_raise_army(settlement_guid: number, raise_location: { x: number, y: number }): void
+// Starts building the named command in the backend, replacing any command in progress. Returns false (and logs why) if the backend refused.
+function create_command(command: string): boolean
 {
-    write_raise_army_payload(settlement_guid, raise_location);
-    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.RAISE_ARMY);
-}
+    if (!write_name(command)) { console.error(`Command name "${command}" does not fit in the input event buffer.`); return false; }
 
-// Whether the same raise army order would currently be valid (same check as the server's).
-export function is_raise_army_valid(settlement_guid: number, raise_location: { x: number, y: number }): boolean
-{
-    write_raise_army_payload(settlement_guid, raise_location);
-    return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.RAISE_ARMY);
-}
-
-// Writes the raise army command payload in the input event buffer, for both sending it and querying its validity.
-function write_raise_army_payload(settlement_guid: number, raise_location: { x: number, y: number }): void
-{
-    // Layout of command_data_raise_army (commands.h): ui32 settlement guid, ui16 raise location x, y.
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, settlement_guid, true);
-    view.setUint16(4, raise_location.x, true);
-    view.setUint16(6, raise_location.y, true);
-}
-
-// Orders the given army to chase and attack the given entity.
-export function send_attack_target(attacker_guid: number, target_guid: number): void
-{
-    // Layout of command_data_set_entity_attack_target (commands.h): ui32 attacker guid, ui32 target guid.
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, attacker_guid, true);
-    view.setUint32(4, target_guid, true);
-    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.SET_ENTITY_ATTACK_TARGET);
-}
-
-// Orders the given settlement to build a road from origin to destination (world tiles). The server validates and computes the path.
-export function send_build_road(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
-{
-    write_build_road_payload(settlement_guid, origin, destination);
-    Backend.ClientInput.send_match_command(Backend.MATCH_COMMAND_TYPE.BUILD_ROAD);
-}
-
-// Whether the same build road order would currently be valid (same check as the server's).
-export function is_build_road_valid(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): boolean
-{
-    write_build_road_payload(settlement_guid, origin, destination);
-    return Backend.ClientInput.query_command_valid(Backend.MATCH_COMMAND_TYPE.BUILD_ROAD);
-}
-
-// Writes the build road command payload in the input event buffer, for both sending it and querying its validity.
-function write_build_road_payload(settlement_guid: number, origin: { x: number, y: number }, destination: { x: number, y: number }): void
-{
-    // Layout of command_data_build_road (commands.h): ui32 settlement guid, ui16 origin x, y, ui16 destination x, y.
-    const view = Backend.ClientInput.begin_input_event();
-    view.setUint32(0, settlement_guid, true);
-    view.setUint16(4, origin.x, true);
-    view.setUint16(6, origin.y, true);
-    view.setUint16(8, destination.x, true);
-    view.setUint16(10, destination.y, true);
-}
-
-// Right-click order: attack the entity not owned by the local player under the cursor if the selection is a local army
-// and there is one, otherwise move.
-export function send_context_order(clientX: number, clientY: number)
-{
-    const localPlayerId = get_local_player_id();
-    const selected = get_selected_entity_view();
-    if (selected !== null && localPlayerId !== null
-        && selected.entity_type === Backend.ENTITY_TYPE.ARMY && selected.owner === localPlayerId)
+    const result: COMMAND_CREATE_RESULT = Backend.ClientInput.command_create();
+    if (result !== COMMAND_CREATE_RESULT.OK)
     {
-        const targetGuid = Render.pick_entity_at(clientX, clientY, SELECTED_ENTITY_GUID, localPlayerId);
-        if (targetGuid !== null)
-        {
-            send_attack_target(selected.guid, targetGuid);
-            return;
-        }
+        console.error(`Command ${command} could not be created (${COMMAND_CREATE_RESULT[result]}) - is the front end out of sync with commands.h?`);
+        return false;
     }
-    send_set_target_loc(clientX, clientY);
+    return true;
+}
+
+// Sets a property of the command in progress. Returns false (and logs why) if the backend refused.
+function set_command_property(name: string, value: COMMAND_PROP_VALUE): boolean
+{
+    const x = typeof value === "number" ? value : value.x;
+    const y = typeof value === "number" ? 0 : value.y;
+
+    if (!write_name(name) || !Backend.ClientInput.command_set_property(x, y))
+    {
+        const schema = read_GDO_schema(Backend.ClientInput.command_get_buffer_offset());
+        console.error(`Command property "${name}" was rejected by the backend - is the front end out of sync with commands.h? The command has: `
+            + schema.map(prop => `${prop.name} (${GAME_DATA_PROP_TYPE[prop.type]} @${prop.offset})`).join(", "));
+        return false;
+    }
+    return true;
+}
+
+// Builds the named command in the backend from name: value pairs. Unset properties are zero. Returns false if anything was refused.
+function build_command(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): boolean
+{
+    if (!create_command(command)) return false;
+    for (const name in props)
+    {
+        if (!set_command_property(name, props[name])) return false;
+    }
+    return true;
+}
+
+// Queues the named command with the given properties.
+export function send_command(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): boolean
+{
+    if (!build_command(command, props)) return false;
+
+    const accepted = Backend.ClientInput.command_send();
+    if (!accepted) console.error(`Command ${command} was rejected by the backend.`);
+    return accepted;
+}
+
+// Whether the named command with the given properties would currently be valid for the local player (same check as the server's).
+export function is_command_valid(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): boolean
+{
+    return build_command(command, props) && Backend.ClientInput.command_query_valid();
 }
 
 // EVENT HANDLERS
 
-// What mouse clicks and keys mean is up to the current mode: these handlers only forward to it.
+// What mouse clicks and keys mean is up to the modes: these handlers only forward to them (see the dispatch functions in core.ts).
 function on_pointer_click(clickEvent: MouseEvent)
 {
-    Core.get_top_mode()?.on_click(clickEvent);
+    Core.dispatch_click(clickEvent);
 }
 
 function on_context_menu(menuEvent: MouseEvent)
 {
     menuEvent.preventDefault();
-    Core.get_top_mode()?.on_context_menu(menuEvent);
+    Core.dispatch_context_menu(menuEvent);
 }
 
 function on_mouse_move(moveEvent: MouseEvent)
@@ -226,8 +202,8 @@ export function init_input(canvas_element: HTMLCanvasElement)
             keyEvent.preventDefault();
         }
 
-        if (keyEvent.code === 'Escape') Core.get_top_mode()?.on_escape();
-        else Core.get_top_mode()?.on_key_down(keyEvent);
+        if (keyEvent.code === 'Escape') Core.dispatch_escape();
+        else Core.dispatch_key_down(keyEvent);
     });
     window.addEventListener('keyup', (keyEvent) => KB_HELD_KEYS.delete(keyEvent.code));
     window.addEventListener('blur', () => KB_HELD_KEYS.clear());

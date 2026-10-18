@@ -52,12 +52,13 @@ export class Mode
     // Called once per frame on every mode of the stack, bottom first.
     on_frame_update(delta_time_s: number): void {}
 
-    // Input events, sent to the top mode only.
-    on_click(event: MouseEvent): void {}
-    on_context_menu(event: MouseEvent): void {}
-    on_key_down(event: KeyboardEvent): void {}
-    // Escape pressed. Returns to the previous mode by default. The base mode overrides it to do nothing.
-    on_escape(): void { pop_mode(); }
+    // Input events, offered to the modes from the top of the stack down until one returns true (handled).
+    // Returning false (the default: no handler) passes the event to the mode below. A mode that must keep an event from reaching the modes below returns true.
+    on_click(event: MouseEvent): boolean { return false; }
+    on_context_menu(event: MouseEvent): boolean { return false; }
+    on_key_down(event: KeyboardEvent): boolean { return false; }
+    // Escape pressed. Returns to the previous mode by default (handled). The base mode overrides it to do nothing (still handled).
+    on_escape(): boolean { pop_mode(); return true; }
 
     // Server message received (see Backend.MESSAGE_TYPE). Sent to every mode of the stack, top first.
     on_net_message(message_type: number): void {}
@@ -85,9 +86,19 @@ export function start_mode_stack(base_mode: Mode): void
     base_mode.on_entry();
 }
 
-// Puts a mode on top of the stack.
-export function push_mode(mode: Mode): void
+// Puts a mode on top of the stack, started by the given parent mode (the mode calling this, which must be in the stack).
+// Modes above the parent are popped first, one at a time (pop_mode: on_exit, then on_resumed of the one below), so a mode never ends up
+// stacked on top of a sibling. If the parent is not in the stack, logs an error and pushes nothing.
+export function push_mode(mode: Mode, parent: Mode): void
 {
+    if (!MODE_STACK.includes(parent))
+    {
+        console.error("push_mode: the parent mode is not in the mode stack, the mode was not pushed.");
+        return;
+    }
+
+    while (get_top_mode() !== parent) pop_mode();
+
     const previousTop = get_top_mode();
     if (previousTop !== null)
     {
@@ -134,6 +145,21 @@ export function dispatch_frame_update(delta_time_s: number): void
     const modes = MODE_STACK.slice();
     for (const mode of modes) mode.on_frame_update(delta_time_s);
 }
+
+// Offers an input event to the modes of the stack, top first, until one handles it. Iterates over a copy: modes may change the stack while handling it.
+function dispatch_input_event(handler: (mode: Mode) => boolean): void
+{
+    const modes = MODE_STACK.slice().reverse();
+    for (const mode of modes)
+    {
+        if (handler(mode)) return;
+    }
+}
+
+export function dispatch_click(event: MouseEvent): void { dispatch_input_event(mode => mode.on_click(event)); }
+export function dispatch_context_menu(event: MouseEvent): void { dispatch_input_event(mode => mode.on_context_menu(event)); }
+export function dispatch_key_down(event: KeyboardEvent): void { dispatch_input_event(mode => mode.on_key_down(event)); }
+export function dispatch_escape(): void { dispatch_input_event(mode => mode.on_escape()); }
 
 // Sends a server message to every mode of the stack, top first. Iterates over a copy: modes may change the stack while handling it.
 export function dispatch_net_message(message_type: number): void

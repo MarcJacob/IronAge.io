@@ -4,7 +4,7 @@
 import * as Core from "../core.js"
 import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity } from "../input.js"
 import { show_settlement_bar, hide_settlement_bar } from "../ui/settlement_bar_ui.js"
-import { is_own_settlement, play_click, play_context_menu } from "./play_common.js"
+import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
 
@@ -41,38 +41,36 @@ export class SettlementSelected extends Core.Mode
         if (!is_own_settlement(get_selected_entity_view())) Core.pop_mode();
     }
 
-    on_escape(): void
+    on_escape(): boolean
     {
         clear_selected_entity();
         Core.pop_mode();
+        return true;
     }
 
-    on_click(event: MouseEvent): void
-    {
-        play_click(event);
-    }
+    // Clicks fall through to main play (selection).
 
-    on_context_menu(event: MouseEvent): void
+    on_key_down(event: KeyboardEvent): boolean
     {
-        play_context_menu(event);
-    }
+        if (event.code !== KEY_BUILD_ROAD && event.code !== KEY_RAISE_ARMY) return false;
 
-    on_key_down(event: KeyboardEvent): void
-    {
-        if (event.repeat) return;
-        if (event.code === KEY_BUILD_ROAD) this.start_road_building();
-        else if (event.code === KEY_RAISE_ARMY) this.start_army_raising();
+        if (!event.repeat)
+        {
+            if (event.code === KEY_BUILD_ROAD) this.start_road_building();
+            else this.start_army_raising();
+        }
+        return true;
     }
 
     private start_road_building(): void
     {
         const guid = get_selected_entity_guid();
-        if (guid !== null) Core.push_mode(new RoadBuilding(guid, KEY_BUILD_ROAD));
+        if (guid !== null) Core.push_mode(new RoadBuilding(guid, KEY_BUILD_ROAD), this);
     }
 
     private start_army_raising(): void
     {
         const guid = get_selected_entity_guid();
-        if (guid !== null) Core.push_mode(new ArmyRaising(guid, KEY_RAISE_ARMY));
+        if (guid !== null) Core.push_mode(new ArmyRaising(guid, KEY_RAISE_ARMY), this);
     }
 }

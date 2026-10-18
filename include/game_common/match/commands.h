@@ -10,6 +10,7 @@
 #endif
 
 #include "core.h"
+#include "game_common/game_data_object.h"
 #include "match.h"
 #include "world.h"
 
@@ -60,6 +61,11 @@ struct command_data_set_entity_move_target
 	world_location move_target;
 };
 
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_entity_move_target)
+	GAME_DATA_PROPERTY(entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_OBJECT_DEF_END()
+
 bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
@@ -73,6 +79,11 @@ struct command_data_set_entity_attack_target
 	entity_guid target_entity;
 };
 
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_entity_attack_target)
+	GAME_DATA_PROPERTY(attacker_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(target_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
 bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
@@ -84,6 +95,10 @@ struct command_data_found_settlement
 {
 	entity_guid army;
 };
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_found_settlement)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
 
 bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -97,6 +112,11 @@ struct command_data_raise_army
 	entity_guid settlement;
 	world_location raise_location; // Tile the new army starts moving to.
 };
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(raise_location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -113,6 +133,12 @@ struct command_data_build_road
 	world_location origin; // Must be the settlement's tile or a road tile in its territory.
 	world_location destination;
 };
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_build_road)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(origin, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY(destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_OBJECT_DEF_END()
 
 bool command_build_road_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -251,14 +277,14 @@ static inline const match_command_def* match_command_get_def(MATCH_COMMAND_TYPE 
 	return &MATCH_COMMAND_TABLE[(ui8)type];
 }
 
-// Returns the command type with the given name. Asserts and returns TYPE_COUNT if there is none.
+// Returns the command type with the given name, or TYPE_COUNT if there is none.
+// Does not assert on purpose: names come from the web front end (TS), and a failed assert traps the whole wasm client. Callers must check for TYPE_COUNT.
 static inline MATCH_COMMAND_TYPE match_command_type_from_name(const char* name)
 {
 	for (ui8 row = 0; row < MATCH_COMMAND_TABLE_COUNT; row++)
 	{
 		if (ia_str_equal(MATCH_COMMAND_TABLE[row].name, name)) return MATCH_COMMAND_TABLE[row].type;
 	}
-	ASSERT_MSG(0, "No command type has the given name.");
 	return MATCH_COMMAND_TYPE::TYPE_COUNT;
 }
 

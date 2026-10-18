@@ -223,13 +223,6 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 #ifndef NDEBUG
 	TEST_MESSAGE_TYPE_SIZES_CHECK();
 
-    static_mem_arena<512> test_mem;
-    ia_string_builder test_props_string(&test_mem);
-
-    stuff_get_prop_names_list(test_props_string);
-
-    newServer->log("TEST", LOG_NORMAL, test_props_string.string);
-
 #endif
 
 	// Initialize Web Server.

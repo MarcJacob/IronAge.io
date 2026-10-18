@@ -97,8 +97,13 @@ struct game_data_object
     // Returns the number of properties this gdo type has.
     inline ui32 get_prop_count() const
     {
-        // Assumes the structure follows the proper internal layout: a copy of the covered data, followed by GAME_DATA_PROP_DEF structures.
+        // Assumes the structure follows the proper internal layout: own fields, a copy of the covered data, followed by GAME_DATA_PROP_DEF structures.
         return (_totalSize - _propsOffset) / sizeof(GAME_DATA_PROP_DEF);
+    }
+
+    inline ui8* get_data() const
+    {
+        return (ui8*)this + sizeof(game_data_object);
     }
 
     inline const GAME_DATA_PROP_DEF* get_property_def(ui16 prop_index) const
@@ -132,6 +137,17 @@ struct game_data_object
         return *(ValType*)dataPtr;
     }
 
+    // Returns a reference to the value of the given property, interpreted as the given type.
+    template<typename ValType>
+    inline bool get_property_def(const ia_string_view& prop_name, ValType& out_val)
+    {
+        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
+        if (propDef == nullptr) return false;
+
+        out_val = access_property_val<ValType>(*propDef);
+        return true;
+    }
+
     // Outputs the value associated with the given property index, interpreted with the given type.
     // Returns whether the property existed.
     template<typename ValType>
@@ -140,17 +156,8 @@ struct game_data_object
         const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_index);
         if (propDef == nullptr) return false;
 
-        return access_property_val<ValType>(*propDef);
-    }
-
-    // Returns a reference to the value of the given property, interpreted as the given type.
-    template<typename ValType>
-    inline bool get_property_def(const ia_string_view& prop_name, ValType& out_val)
-    {
-        const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
-        if (propDef == nullptr) return false;
-
-        return access_property_val<ValType>(*propDef);
+        out_val = access_property_val<ValType>(*propDef);
+        return true;
     }
 
     // Sets the internal value associated with the given property index.
@@ -198,7 +205,7 @@ struct game_data_object
         _Pragma("pack(pop)")
 
 // Example:
-#if 1
+#if 0
 
 #pragma pack(push, 1)
 struct GameStuff

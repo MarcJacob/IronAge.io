@@ -43,15 +43,16 @@ export class SpawnPick extends Core.Mode
     }
 
     // Placement can't be escaped out of.
-    on_escape(): void {}
+    on_escape(): boolean { return true; }
 
     // A left click anywhere on the map picks the start location, nothing else is available.
-    on_click(event: MouseEvent): void
+    on_click(event: MouseEvent): boolean
     {
-        if (event.button !== 0) return;
+        if (event.button !== 0) return true;
 
         const tile = Render.page_to_tile(event.clientX, event.clientY);
         if (Render.is_tile_in_world(tile)) this.send_pick(tile);
+        return true;
     }
 
     on_net_message(message_type: number): void

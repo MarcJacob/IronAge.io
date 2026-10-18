@@ -27,6 +27,18 @@ export function get_local_player_id(): number | null
 {
     return LOCAL_PLAYER_ID;
 }
+
+// Whether the view is of a settlement of the local player.
+export function is_own_settlement(view: Backend.EntityView | null)
+{
+    return view !== null && view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === LOCAL_PLAYER_ID;
+}
+
+// Whether the view is of an army of the local player.
+export function is_own_army(view: Backend.EntityView | null)
+{
+    return view !== null && view.entity_type === Backend.ENTITY_TYPE.ARMY && view.owner === LOCAL_PLAYER_ID;
+}
 // ...
 
 function websocket_url() {
