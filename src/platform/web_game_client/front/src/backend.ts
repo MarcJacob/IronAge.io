@@ -82,7 +82,8 @@ interface ClientExports extends WebAssembly.Exports
     client_command_get_buffer_offset(): number;
     client_command_set_property(x: number, y: number): number; // wasm bool: 0 or 1.
     client_command_send(): number; // wasm bool: 0 or 1.
-    client_command_query_valid(): number; // wasm bool: 0 or 1.
+    client_command_query_valid(): number; // wasm bool: 0 or 1. Also fills the feedback GDO.
+    client_command_get_feedback_offset(): number; // Offset of the match_command_validity_feedback GDO filled by the last query.
 
     // Entity inspection
 
@@ -302,6 +303,7 @@ export namespace ClientInput
     export function command_send(): boolean { return CLIENT_BACKEND.client_command_send() !== 0; }
     export function command_query_valid(): boolean { return CLIENT_BACKEND.client_command_query_valid() !== 0; }
     export function command_get_buffer_offset(): number { return CLIENT_BACKEND.client_command_get_buffer_offset(); }
+    export function command_get_feedback_offset(): number { return CLIENT_BACKEND.client_command_get_feedback_offset(); }
 }
 
 // Fresh view of the whole wasm memory. Do NOT hold the result across calls into the backend, as memory growth detaches it.

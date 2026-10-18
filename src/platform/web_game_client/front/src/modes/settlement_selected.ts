@@ -1,37 +1,36 @@
-// An own settlement is selected: play goes on as usual, and a bottom bar offers what the settlement can do.
+// An own settlement is selected: play goes on as usual, and the action bar offers what the settlement can do.
 // Leaves when the selection stops being an own settlement. Escape clears the selection.
+// The bar state is kept here. While an action's mode is active (a child of this mode) its item shows as selected.
 
 import * as Core from "../core.js"
 import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity } from "../input.js"
-import { show_settlement_bar, hide_settlement_bar } from "../ui/settlement_bar_ui.js"
+import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
 import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
 
-const KEY_BUILD_ROAD = 'Digit1';
-const KEY_RAISE_ARMY = 'Digit2';
-
 export class SettlementSelected extends Core.Mode
 {
+    private bar: ActionBarState = { items: [
+        this.make_item("Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
+        this.make_item("Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key)),
+    ] };
+
     on_entry(): void
     {
-        show_settlement_bar(() => this.start_road_building(), () => this.start_army_raising());
+        submit_action_bar(this.bar);
     }
 
     on_exit(): void
     {
-        hide_settlement_bar();
+        submit_action_bar(null);
     }
 
-    // A child mode takes over the bottom of the screen.
-    on_suspended(): void
-    {
-        hide_settlement_bar();
-    }
-
+    // The mode of the active action was left: nothing is selected anymore.
     on_resumed(): void
     {
-        show_settlement_bar(() => this.start_road_building(), () => this.start_army_raising());
+        for (const item of this.bar.items) item.state = 'selectable';
+        submit_action_bar(this.bar);
     }
 
     on_frame_update(delta_time_s: number): void
@@ -50,27 +49,44 @@ export class SettlementSelected extends Core.Mode
 
     // Clicks fall through to main play (selection).
 
+    // Hotkeys of the bar items run the same action as their button.
     on_key_down(event: KeyboardEvent): boolean
     {
-        if (event.code !== KEY_BUILD_ROAD && event.code !== KEY_RAISE_ARMY) return false;
+        const item = this.bar.items.find(candidate => candidate.hotkey === event.code);
+        if (item === undefined) return false;
 
-        if (!event.repeat)
-        {
-            if (event.code === KEY_BUILD_ROAD) this.start_road_building();
-            else this.start_army_raising();
-        }
+        if (!event.repeat) item.on_activate();
         return true;
     }
 
-    private start_road_building(): void
+    // An item that starts a child mode. hotkey: shown on the button, also the key the child mode is left with.
+    private make_item(name: string, hotkey: string, make_mode: (settlement_guid: number, exit_key: string) => Core.Mode): ActionBarItem
     {
-        const guid = get_selected_entity_guid();
-        if (guid !== null) Core.push_mode(new RoadBuilding(guid, KEY_BUILD_ROAD), this);
+        const item: ActionBarItem = { name, hotkey, state: 'selectable', on_activate: () => this.activate(item, hotkey, make_mode) };
+        return item;
     }
 
-    private start_army_raising(): void
+    private activate(item: ActionBarItem, hotkey: string, make_mode: (settlement_guid: number, exit_key: string) => Core.Mode): void
     {
+        if (item.state === 'unselectable') return;
+
+        // Pressing the button of the active action leaves its mode (the child mode is on top, and resets the bar when popped).
+        if (item.state === 'selected')
+        {
+            Core.pop_mode();
+            return;
+        }
+
         const guid = get_selected_entity_guid();
-        if (guid !== null) Core.push_mode(new ArmyRaising(guid, KEY_RAISE_ARMY), this);
+        if (guid === null) return;
+
+        // Pops the mode of another action first if there is one (which resets the bar), then pushes the new one.
+        Core.push_mode(make_mode(guid, hotkey), this);
+
+        // The new mode may have left right away (then this mode resumed and reset the bar).
+        if (this.is_top) return;
+
+        for (const other of this.bar.items) other.state = other === item ? 'selected' : 'selectable';
+        submit_action_bar(this.bar);
     }
 }

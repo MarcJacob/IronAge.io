@@ -4,7 +4,7 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
-import { read_GDO_schema, GAME_DATA_PROP_TYPE } from "./gdo.js"
+import { read_GDO_schema, read_GDO_values, GAME_DATA_PROP_TYPE } from "./gdo.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 
 // Input sources (updated on events, used on tick)
@@ -146,6 +146,40 @@ export function send_command(command: string, props: { [name: string]: COMMAND_P
 export function is_command_valid(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): boolean
 {
     return build_command(command, props) && Backend.ClientInput.command_query_valid();
+}
+
+// Bits of the feedback's error_flags. Mirrors COMMAND_ERROR (commands.h) by hand: keep both in sync.
+export const COMMAND_ERROR = {
+    UNSPECIFIED: 1 << 0,
+    INVALID_ENTITY: 1 << 1,
+    NOT_OWNER: 1 << 2,
+    TARGET_OUT_OF_BOUNDS: 1 << 3,
+    INVALID_PATH: 1 << 4,
+    TARGET_OUT_OF_TERRITORY: 1 << 5,
+    NOT_ENOUGH_POPULATION: 1 << 6,
+    ENTITY_LIMIT_REACHED: 1 << 7,
+} as const;
+
+// Values of the feedback's invalid_path_reason. Mirrors COMMAND_INVALID_PATH_REASON (commands.h) by hand.
+export const COMMAND_INVALID_PATH = {
+    NONE: 0,
+    ORIGIN_IS_DESTINATION: 1,
+    ORIGIN_INVALID: 2,
+    DESTINATION_INVALID: 3,
+} as const;
+
+// What the validity check found out about a command: every property of match_command_validity_feedback (commands.h) by name (error_flags, ...),
+// plus valid (no error flag set). Empty values (valid false only) if the command could not be built.
+export type CommandFeedback = { valid: boolean, values: { [name: string]: number } };
+
+// Asks the validity check why the named command with the given properties would or would not be valid for the local player.
+export function get_command_feedback(command: string, props: { [name: string]: COMMAND_PROP_VALUE }): CommandFeedback
+{
+    if (!build_command(command, props)) return { valid: false, values: {} };
+
+    Backend.ClientInput.command_query_valid();
+    const values = read_GDO_values(Backend.ClientInput.command_get_feedback_offset());
+    return { valid: values.error_flags === 0, values };
 }
 
 // EVENT HANDLERS

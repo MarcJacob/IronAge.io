@@ -6,21 +6,25 @@ import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
 import { get_local_player_id, is_own_army } from "../main.js"
-import { show_army_bar, hide_settlement_bar } from "../ui/settlement_bar_ui.js"
+import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
 
 export class ArmySelected extends Core.Mode
 {
     // army_guid: the selected own army this mode is about.
     constructor(private army_guid: number) { super(); }
 
+    private bar: ActionBarState = { items: [
+        { name: "Settle", state: 'selectable', on_activate: () => this.settle() },
+    ] };
+
     on_entry(): void
     {
-        show_army_bar(() => this.settle());
+        submit_action_bar(this.bar);
     }
 
     on_exit(): void
     {
-        hide_settlement_bar();
+        submit_action_bar(null);
     }
 
     on_frame_update(delta_time_s: number): void

@@ -128,11 +128,26 @@ WASM_EXPORT bool client_command_send()
 	return game_client_input_push_match_command(*WEB_CLIENT.backend, (ui8)GDO_COMMAND_TYPE, gdo->get_data());
 }
 
+// Feedback of the last client_command_query_valid call, as a match_command_validity_feedback GDO (plain bytes, see the global constructor note in web_game_client.h).
+static ui8 FEEDBACK_BUFFER[sizeof(gdo_match_command_validity_feedback)];
+
+// Offset of the feedback GDO buffer. Its schema and values are read by JS (all zero before the first query).
+WASM_EXPORT ui8* client_command_get_feedback_offset()
+{
+	return FEEDBACK_BUFFER;
+}
+
 // Asks whether the command of the GDO in progress would be valid right now. Unset fields are zero.
+// Also fills the feedback GDO buffer with what the check found out.
 WASM_EXPORT bool client_command_query_valid()
 {
-	game_data_object* gdo = gdo_get_current();
-	if (gdo == nullptr) return false;
+	gdo_match_command_validity_feedback feedbackGdo; // Built on the stack then copied, as for the command GDO.
+	bool isValid = false;
 
-	return game_client_query_command_valid(*WEB_CLIENT.backend, (ui8)GDO_COMMAND_TYPE, gdo->get_data());
+	game_data_object* gdo = gdo_get_current();
+	if (gdo == nullptr) feedbackGdo._data.error_flags = COMMAND_ERROR_UNSPECIFIED;
+	else isValid = game_client_query_command_valid(*WEB_CLIENT.backend, (ui8)GDO_COMMAND_TYPE, gdo->get_data(), &feedbackGdo._data);
+
+	ia_memcpy(FEEDBACK_BUFFER, &feedbackGdo, sizeof(gdo_match_command_validity_feedback));
+	return isValid;
 }

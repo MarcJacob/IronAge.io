@@ -24,8 +24,11 @@ running on the server only.
 
 The Input Command system is based on identifiable *Command Types* each associated with a *payload size*, *payload structure* and two fundamental functions:
 - Apply, which takes in the appropriate emitting player ID and payload structure and applies it over a specified match's state.
-- Validity Check, which takes in the same parameters and estimates whether the command is valid (mostly that the parameters are coherent and that the emitting player is
-	actually allowed to do that).
+- Validity Check, which takes in the same parameters plus an optional feedback structure (*match_command_validity_feedback*) and returns whether the command is valid
+	(mostly that the parameters are coherent and that the emitting player is actually allowed to do that).
+	Without feedback (the server's path) it returns false at the first error. With feedback it may keep checking and records error flags and detail values
+	(what is wrong, what it will cost), which the client shows to the player. A check only sets what it is interested in, the rest stays zero; no error flag means valid.
+	Feedback is output only and must never influence the simulation.
 
 Outside their final applications commands usually exist in simple byte buffers along with a command count, to be parsed read command-by-command.
 
@@ -46,7 +49,7 @@ Guidelines:
 - They must be entirely implemented within the Game Common codebase.
 - Payload structures must have consistent padding behavior, with no padding at all preferably (for compatibility across machines).
 - Payload structures must be as small as possible (striking a good balance with parsing work).
-- Validity Check must adopt a "return false as soon as possible" mindset.
+- Validity Check must adopt a "return false as soon as possible" mindset when no feedback is requested.
 - Apply must do its work as quickly as possible as each command is run sequentially pre-tick.
 	- Do not mix up what should be in the match's tick work and what should be in the Apply function !
 

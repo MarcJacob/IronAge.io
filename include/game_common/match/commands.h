@@ -33,13 +33,63 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 // COMMAND DATA STRUCTURES & FUNCTIONS
 // Every command has the same two functions, taking the command header (type + data) and reading their own data struct from it:
-// bool <name>_validity_check(const match_world_state&, match_player_id, const match_command_header&)
+// bool <name>_validity_check(const match_world_state&, match_player_id, const match_command_header&, match_command_validity_feedback*)
 // void <name>_apply(match_world_state&, match_player_id, const match_command_header&)
+//
+// Validity check contract:
+// - Returns true if the command is valid. With a non-null feedback, the result must equal (feedback->error_flags == 0).
+// - feedback is null on the server hot path: then return false as soon as the command is known to be invalid.
+//   When non-null (the client asking why a command is invalid) the function may keep checking and collect several errors.
+// - It only sets the feedback fields it is interested in, the rest stays zero. Any order of checks works, but a check that needs
+//   an earlier one to hold (e.g. a valid entity before reading it) must stop when that one fails.
+// - Feedback is output only: it must never influence the result, nor the simulation. Apply functions pass null.
+// A function that sets no flag while returning false is given COMMAND_ERROR_UNSPECIFIED by match_command_validity_check.
 
 struct match_command_header;
 
 // All structures must be aligned to 1 since they must exist in packed contexts for network transmission and structured reading.
 #pragma pack(push, 1)
+
+// VALIDITY FEEDBACK
+// What a validity check found out about a command, for the front end. Zero = nothing set. Mirrored by hand in input.ts.
+
+// Bits of match_command_validity_feedback::error_flags. No flag set = valid.
+enum COMMAND_ERROR : ui32
+{
+	COMMAND_ERROR_UNSPECIFIED = 1 << 0, // Invalid, no detail available.
+	COMMAND_ERROR_INVALID_ENTITY = 1 << 1, // An entity is missing or not of the expected type.
+	COMMAND_ERROR_NOT_OWNER = 1 << 2, // The player does not own the entity.
+	COMMAND_ERROR_TARGET_OUT_OF_BOUNDS = 1 << 3, // A target location is outside the world.
+	COMMAND_ERROR_INVALID_PATH = 1 << 4, // See match_command_validity_feedback::invalid_path_reason.
+	COMMAND_ERROR_TARGET_OUT_OF_TERRITORY = 1 << 5, // A target location is outside the settlement's territory.
+	COMMAND_ERROR_NOT_ENOUGH_POPULATION = 1 << 6, // See population_needed / population_current.
+	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 7, // No free slot for the entity the command would create.
+};
+
+// Values of match_command_validity_feedback::invalid_path_reason.
+enum COMMAND_INVALID_PATH_REASON : ui8
+{
+	COMMAND_INVALID_PATH_NONE,
+	COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION, // Origin and destination are the same tile.
+	COMMAND_INVALID_PATH_ORIGIN_INVALID, // The origin is not usable: neither the settlement nor a road tile in its territory.
+	COMMAND_INVALID_PATH_DESTINATION_INVALID, // The destination is not usable. Nothing sets it yet (the destination is only checked for bounds).
+};
+
+struct match_command_validity_feedback
+{
+	ui32 error_flags; // COMMAND_ERROR bits.
+
+	ui8 invalid_path_reason; // With COMMAND_ERROR_INVALID_PATH: a COMMAND_INVALID_PATH_REASON.
+	ui32 population_needed; // Population the command costs. Set whenever the command has a cost, valid or not.
+	ui32 population_current; // Population available, set with population_needed.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(match_command_validity_feedback)
+	GAME_DATA_PROPERTY(error_flags, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(invalid_path_reason, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(population_needed, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(population_current, GAME_DATA_PROP_TYPE::UI32)
+GAME_DATA_OBJECT_DEF_END()
 
 // SERVER SPAWN PLAYER
 struct command_data_server_spawn_player
@@ -49,7 +99,7 @@ struct command_data_server_spawn_player
 };
 
 bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
-        const match_command_header& command_header);
+        const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_server_spawn_player_apply(match_world_state& world, match_player_id player,
         const match_command_header& command_header);
@@ -67,7 +117,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_entity_move_target)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player,
-	const match_command_header& command_header);
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_set_entity_move_target_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -85,7 +135,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_entity_attack_target)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player,
-	const match_command_header& command_header);
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -101,7 +151,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_found_settlement)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
-	const match_command_header& command_header);
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_found_settlement_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -119,7 +169,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
-	const match_command_header& command_header);
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_raise_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -141,7 +191,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_build_road)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_build_road_validity_check(const match_world_state& world, match_player_id player,
-	const match_command_header& command_header);
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_build_road_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
@@ -227,7 +277,7 @@ struct match_command_def
 	const char* name; // Bare enum identifier of the command type.
 	MATCH_COMMAND_TYPE type;
 	ui8 data_size;
-	bool (*validity_check)(const match_world_state&, match_player_id, const match_command_header&);
+	bool (*validity_check)(const match_world_state&, match_player_id, const match_command_header&, match_command_validity_feedback*);
 	void (*apply)(match_world_state&, match_player_id, const match_command_header&);
 };
 
@@ -388,7 +438,10 @@ struct command_sequence_builder
 };
 
 // Checks that an input command would be valid to apply to the match over its next tick.
-bool match_command_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command);
+// If feedback is given it is zeroed then filled with what the check found out (see the contract above), and the result equals (error_flags == 0).
+// Without it the check stops at the first error.
+bool match_command_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command,
+	match_command_validity_feedback* feedback = nullptr);
 
 // Outputs a clone of the passed unvalidated command sequence structure into the given builder, with only valid commands for the specified target match.
 // Returns whether the unvalidated sequence could be fully validated (IE no corrupted / "fatally invalid" command was present to prevent reading the whole sequence).

@@ -6,10 +6,34 @@
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
+// Validity check helpers (see the contract in commands.h).
+
+// Records an error in the feedback if there is one. Returns whether the check can stop now (nobody asked for the other errors).
+static inline bool command_add_error(match_command_validity_feedback* feedback, COMMAND_ERROR error)
+{
+	if (feedback == nullptr) return true;
+
+	feedback->error_flags |= error;
+	return false;
+}
+
+// Same for an invalid path error, keeping the first reason found.
+static inline bool command_add_path_error(match_command_validity_feedback* feedback, COMMAND_INVALID_PATH_REASON reason)
+{
+	if (feedback != nullptr && feedback->invalid_path_reason == COMMAND_INVALID_PATH_NONE) feedback->invalid_path_reason = reason;
+	return command_add_error(feedback, COMMAND_ERROR_INVALID_PATH);
+}
+
+// Result of a check that went through to its end: valid unless an error was recorded.
+static inline bool command_is_valid(const match_command_validity_feedback* feedback)
+{
+	return feedback == nullptr || feedback->error_flags == 0;
+}
+
 // SERVER SPAWN PLAYER
 
 bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
-        const match_command_header& command_header)
+        const match_command_header& command_header, match_command_validity_feedback* feedback)
 {
     // Check that command was emitted by the server itself (INVALID player ID).
     if (player != INVALID_MATCH_PLAYER_ID) return false;
@@ -21,7 +45,7 @@ bool command_server_spawn_player_validity_check(const match_world_state& world, 
 void command_server_spawn_player_apply(match_world_state& world, match_player_id player,
         const match_command_header& command_header)
 {
-    if (!command_server_spawn_player_validity_check(world, player, command_header)) return;
+    if (!command_server_spawn_player_validity_check(world, player, command_header, nullptr)) return;
 
     const command_data_server_spawn_player& command = command_header.get_command_data<command_data_server_spawn_player>();
 
@@ -41,7 +65,8 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
 // ENTITY SET MOVE TARGET
 
 // Example of command sanity check function.
-bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header)
+bool command_set_entity_move_target_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
 {
 	const command_data_set_entity_move_target& command = command_header.get_command_data<command_data_set_entity_move_target>();
 
@@ -88,7 +113,8 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 
 // FOUND SETTLEMENT
 
-bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header)
+bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
 {
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
 
@@ -135,33 +161,50 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 constexpr ui32 RAISE_ARMY_POPULATION_COST = 100;
 
-bool command_raise_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header)
+bool command_raise_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
 {
 	const command_data_raise_army& command = command_header.get_command_data<command_data_raise_army>();
 
-	if (!world_entity_is_valid(world, command.settlement)) return false;
-	if (command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
-	if (command.raise_location.x >= world.terrain.size_tiles.x || command.raise_location.y >= world.terrain.size_tiles.y) return false;
+	if (feedback != nullptr) feedback->population_needed = RAISE_ARMY_POPULATION_COST;
+
+	// Nothing else can be checked without a settlement.
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
 
 	ui16 settlementIndex = command.settlement.get_index();
 	const world_entity_settlements& settlements = world.entities.settlements;
-	if (settlements.owners[settlementIndex] != player) return false;
-	if (settlements.populations[settlementIndex] < RAISE_ARMY_POPULATION_COST) return false;
+
+	bool locationInWorld = command.raise_location.x < world.terrain.size_tiles.x && command.raise_location.y < world.terrain.size_tiles.y;
+	if (!locationInWorld && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
+
+	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	if (feedback != nullptr) feedback->population_current = settlements.populations[settlementIndex];
+	if (settlements.populations[settlementIndex] < RAISE_ARMY_POPULATION_COST && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
 
 	// The raise location must be in the settlement's territory.
-	ui16 regionIndex, tileIndex;
-	world_get_tile(world.terrain, command.raise_location, regionIndex, tileIndex);
-	if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) return false;
+	if (locationInWorld)
+	{
+		ui16 regionIndex, tileIndex;
+		world_get_tile(world.terrain, command.raise_location, regionIndex, tileIndex);
+		if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_TERRITORY)) return false;
+	}
 
 	const world_entity_armies& armies = world.entities.armies;
-	return armies.active_count < armies.max_count;
+	if (armies.active_count >= armies.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
 }
 
 // Takes levies out of the settlement's population and raises them as an army at its location, moving to the raise location.
 void command_raise_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last army slot.
-	if (!command_raise_army_validity_check(world, player, command_header)) return;
+	if (!command_raise_army_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_raise_army& command = command_header.get_command_data<command_data_raise_army>();
 
@@ -182,7 +225,8 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 
 // ENTITY SET ATTACK TARGET
 
-bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header)
+bool command_set_entity_attack_target_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
 {
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
@@ -210,7 +254,7 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	// Checked again: earlier commands in the same tick may have destroyed the attacker or the target.
-	if (!command_set_entity_attack_target_validity_check(world, player, command_header)) return;
+	if (!command_set_entity_attack_target_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
@@ -219,44 +263,51 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 
 // BUILD ROAD
 
-bool command_build_road_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header)
+bool command_build_road_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
 {
 	const command_data_build_road& command = command_header.get_command_data<command_data_build_road>();
 
-    // Check validity of entity, it must be an active settlement.
-	if (!world_entity_is_valid(world, command.settlement)) return false;
-	if (command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
+    // Check validity of entity, it must be an active settlement. Nothing else can be checked without one.
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
 
     // The settlement must be owned by the player emitting the command.
 	ui16 settlementIndex = command.settlement.get_index();
 	const world_entity_settlements& settlements = world.entities.settlements;
-	if (settlements.owners[settlementIndex] != player) return false;
+	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
     // The origin and destination must be in the world, and not be equal to eachother.
-    if (command.origin == command.destination) return false;
+    if (command.origin == command.destination && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION)) return false;
 
 	const world_terrain& terrain = world.terrain;
-	if (command.origin.x >= terrain.size_tiles.x || command.origin.y >= terrain.size_tiles.y) return false;
-	if (command.destination.x >= terrain.size_tiles.x || command.destination.y >= terrain.size_tiles.y) return false;
+	bool originInWorld = command.origin.x < terrain.size_tiles.x && command.origin.y < terrain.size_tiles.y;
+	bool destinationInWorld = command.destination.x < terrain.size_tiles.x && command.destination.y < terrain.size_tiles.y;
+	if ((!originInWorld || !destinationInWorld) && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
 
 	// The road starts from the settlement itself, or from a road tile in its territory.
-	if (!(command.origin == settlements.locations[settlementIndex]))
+	if (originInWorld && !(command.origin == settlements.locations[settlementIndex]))
 	{
 		ui16 regionIndex, tileIndex;
 		world_get_tile(terrain, command.origin, regionIndex, tileIndex);
-		if (!terrain.regions[regionIndex].status[tileIndex].is_road) return false;
-		if (terrain.regions[regionIndex].owners[tileIndex] != settlementIndex) return false;
+		bool originUsable = terrain.regions[regionIndex].status[tileIndex].is_road && terrain.regions[regionIndex].owners[tileIndex] == settlementIndex;
+		if (!originUsable && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_INVALID)) return false;
 	}
 
 	const world_entity_builders& builders = world.entities.builders;
-	return builders.active_count < builders.max_count;
+	if (builders.active_count >= builders.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
 }
 
 // Spawns a road builder tied to the settlement. The road itself is built over the following ticks (see the construction system).
 void command_build_road_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last builder slot.
-	if (!command_build_road_validity_check(world, player, command_header)) return;
+	if (!command_build_road_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_build_road& command = command_header.get_command_data<command_data_build_road>();
 
@@ -280,13 +331,24 @@ void command_build_road_apply(match_world_state& world, match_player_id player, 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS
 
 // Checks that an input command would be valid to apply to the match over its next tick.
-bool match_command_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command)
+bool match_command_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command,
+	match_command_validity_feedback* feedback)
 {
+	if (feedback != nullptr) *feedback = {};
+
 	// Callers must have range-checked the type of untrusted commands already.
 	const match_command_def* def = match_command_get_def(command.type);
-	if (def == nullptr) return false;
+	if (def == nullptr)
+	{
+		if (feedback != nullptr) feedback->error_flags = COMMAND_ERROR_UNSPECIFIED;
+		return false;
+	}
 
-	return def->validity_check(world, player, command);
+	bool isValid = def->validity_check(world, player, command, feedback);
+
+	// Checks not collecting details (or not interested) still have to report that the command is invalid.
+	if (!isValid && feedback != nullptr && feedback->error_flags == 0) feedback->error_flags = COMMAND_ERROR_UNSPECIFIED;
+	return isValid;
 }
 
 inline void match_command_apply(match_world_state& world, match_player_id player, const match_command_header& command)

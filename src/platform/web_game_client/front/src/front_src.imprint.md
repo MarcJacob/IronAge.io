@@ -11,10 +11,15 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
 - *core.ts* holds the shared basics: frame loop, match joined / ended callbacks, message sending, and the Mode system (below).
 - *modes/* decides what the player sees and can do at any moment. See below.
 - *render.ts* draws the match from the backend's render state and a configuration object. It never decides what to show.
-- *ui/* holds DOM widgets (static markup lives in *web/index.html*). They show / hide / refresh themselves from what they are told,
-  and only emit signals back (callbacks). They never send input commands or switch modes.
-  The bottom bar is called the **action bar** (*ui/settlement_bar_ui.ts*, markup in *web/index.html*, style in *web/style.css*):
-  modes show their actions there, hotkeyed ones on the left, committed ones (no hotkey) on the right.
+- *ui/* holds the DOM elements of the interface, one module per major element (*ui_element_<name>.ts*; static markup lives in *web/index.html*).
+  Each owns its DOM and exports a state type and a *submit_** function that makes the element show a state (null clears it).
+  Elements only emit signals back (callbacks, e.g. a button's *on_activate*): they never send input commands or switch modes.
+  A mode that drives an element keeps its own full state for it (and may keep mutating it while it is not visible), submits it on entry and on resume,
+  and clears the element on exit. A child mode may override an element by submitting its own state; the parent submits its own again on resume.
+  Hotkeys are handled by the modes in their own *on_key_down*, not by the elements.
+  The elements are the hint line (*ui_element_hint.ts*) and the bottom **action bar** (*ui_element_action_bar.ts*, style in *web/style.css*):
+  a list of items with a name, a hotkey (for display), a state (selectable, unselectable, selected) and a callback;
+  hotkeyed items are placed on the left, items without hotkey on the right. *hotkey_text* gives the label of a key code, also for hints.
 - *input.ts* is a library plus the DOM listener registration. It forwards clicks, keys and Escape to the modes
   and holds input state (selection, held keys, camera input) and the generic command functions (*send_command*, *is_command_valid*).
   It knows no command by name: modes build and send their commands themselves, by command name and property name (see Game Data Objects in the C++ web client sources).

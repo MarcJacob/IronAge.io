@@ -12,8 +12,15 @@ static void fill_movement_view(entity_full_view& view, const world_entity_moveme
 	view.target_location_y = movement.destination.y;
 }
 
-bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes)
+bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes, match_command_validity_feedback* out_feedback)
 {
+	// Invalid with no detail until the check says more.
+	if (out_feedback != nullptr)
+	{
+		*out_feedback = {};
+		out_feedback->error_flags = COMMAND_ERROR_UNSPECIFIED;
+	}
+
 	if (backend.local_match == nullptr) return false;
 	if (command_type >= (ui8)MATCH_COMMAND_TYPE::TYPE_COUNT) return false;
 
@@ -30,7 +37,7 @@ bool game_client_query_command_valid(game_client& backend, ui8 command_type, con
 #endif
 	ia_memcpy(header.command_data, payload_bytes, payloadSize);
 
-	return match_command_validity_check(*backend.local_match->world, backend.controlled_player_id, header);
+	return match_command_validity_check(*backend.local_match->world, backend.controlled_player_id, header, out_feedback);
 }
 
 void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory)

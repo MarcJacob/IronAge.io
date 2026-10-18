@@ -12,8 +12,8 @@ import { init_camera_system } from './camera.js';
 import { init_game_ui } from './ui/game_ui.js';
 import { init_lobby_ui } from './ui/lobby_ui.js';
 import { init_placement_ui } from './ui/placement_ui.js';
-import { init_settlement_bar_ui } from './ui/settlement_bar_ui.js';
-import { init_mode_hint_ui } from './ui/mode_hint_ui.js';
+import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
+import { init_ui_element_hint } from './ui/ui_element_hint.js';
 import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
@@ -29,13 +29,13 @@ export function get_local_player_id(): number | null
 }
 
 // Whether the view is of a settlement of the local player.
-export function is_own_settlement(view: Backend.EntityView | null)
+export function is_own_settlement(view: Backend.EntityView | null): boolean
 {
     return view !== null && view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === LOCAL_PLAYER_ID;
 }
 
 // Whether the view is of an army of the local player.
-export function is_own_army(view: Backend.EntityView | null)
+export function is_own_army(view: Backend.EntityView | null): boolean
 {
     return view !== null && view.entity_type === Backend.ENTITY_TYPE.ARMY && view.owner === LOCAL_PLAYER_ID;
 }
@@ -142,8 +142,8 @@ async function start()
     init_game_ui();
     init_lobby_ui();
     init_placement_ui();
-    init_settlement_bar_ui();
-    init_mode_hint_ui();
+    init_ui_element_action_bar();
+    init_ui_element_hint();
 
     // Nothing but the lobby until the server says otherwise.
     Core.start_mode_stack(new LobbyBase());

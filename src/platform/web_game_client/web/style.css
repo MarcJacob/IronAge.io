@@ -66,7 +66,7 @@ body {
 
 /* Action bar: actions of the selected settlement / army. Floating, centered, a third of the screen wide, buttons from the left.
    Actions without a hotkey (committed actions) go to the right. */
-#game_hud_settlement_bar {
+#game_hud_action_bar {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -87,14 +87,21 @@ body {
     pointer-events: auto;
 }
 
-#game_hud_settlement_bar button {
+#game_hud_action_bar button {
     min-height: 3rem;
     padding: 8px 18px;
     font-family: inherit;
     font-size: 1.1rem;
 }
 
-#game_hud_settlement_bar .bar_right {
+/* The action whose mode is active. */
+#game_hud_action_bar button.selected {
+    background: #c7cbd1;
+    border: 2px solid #ffffff;
+    font-weight: bold;
+}
+
+#game_hud_action_bar .bar_right {
     margin-left: auto;
 }
 

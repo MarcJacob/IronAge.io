@@ -45,6 +45,10 @@ Work management resources are available in the management folder, while code exi
 /include/ is visible by the entire codebase and is used to have subsystems talk to one another across hierarchical boundaries.
 Apply strict symbol exposure discipline, anything that goes in /include/ has to have a good reason for it. By default, stick to "internal" header files (/src/).
 
+/include/core/ is the project's own core library (types, strings, math, memory, assertions...), meant to be used everywhere, since the standard library is not available in most of the code.
+BEFORE writing any utility, string handling, math, memory or similar helper, look in /include/ (start with *include/include.imprint.md*, then /include/core/ and *core.h*) and use what is there instead of re-implementing it.
+This applies to all code, whether you are working under /src/ or anywhere else.
+
 /src/ contains the main source code built as a tree of self-contained, hierarchical subsystems (with possible direct links for unity builds).
 It is hierarchical in the sense that every subfolder has a clear relationship with its parent folder:
 - *Component*, meaning the subfolder knows nothing / as little as possible about its parent, and is used for its own functionality by the parent.

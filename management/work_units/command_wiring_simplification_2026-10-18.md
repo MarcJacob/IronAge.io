@@ -30,9 +30,9 @@ Stays explicit (real design content): validity / apply functions, payload struct
  (single 128-byte GDO buffer, create by command name / set property / send) + TS by-name helper; `BUILD_ROAD` first.
 3. Game Data Object (GDO) for input commands: TS builds commands by property name instead of offsets. Design in Decisions; not started.
 3d. [DONE, user to verify in game] Front-end mode cleanup: `play_common.ts` dissolved (ownership helpers in `main.ts`, left-click selection in `MainPlay.on_click`, path preview in `ArmySelected` which takes its army guid); mode input dispatch is top-down fallthrough (handlers return boolean, true = handled; base default false; escape default pops); enemy-army path preview dropped.
-4. UI elements as stateful modules (design in progress, survey done): `ui/ui_element_*.ts`, one module per major UI element, state and building interface exposed by the module; any mode imports and drives them, no mode base class / inheritance. First two elements: hint text (top; set text only) and bottom action bar (replaces the settlement bar: dynamic buttons with hotkeys, richer action declarations with named placement sections, hotkey text derived dynamically). The mode stack shape avoids conflicts (modes set on entry / resumed, undo on exit / suspended). Pending: user elaboration on action declaration + sections + hotkey text; who handles bar hotkeys under fallthrough dispatch.
-5. [DONE; revisit if move command changes the flow] Update `artisan_skills/add_command.md` (builder suggestions available from the step 1-2 report: 2 dispatch switches, no client payload steps, `send_match_command`, HUD in `settlement_bar_ui.ts`, RAISE_ARMY).
-6. Server-validity-driven UI: last, needs its own design (button-level queries have no payload).
+4. [DONE, verified] (named action bar sections dropped for now) UI elements as stateful modules: `ui_element_hint.ts` and `ui_element_action_bar.ts` implemented (item list: name, hotkey for rendering, state selectable / unselectable / selected, on_activate; `submit_*(state|null)`, `hotkey_text`); modes keep their own state and handle hotkeys in `on_key_down`; settlement bar stays visible during child modes with the active item selected; no-hotkey items go right (placeholder until named sections). Original notes: `ui/ui_element_*.ts`, one module per major UI element, state and building interface exposed by the module; any mode imports and drives them, no mode base class / inheritance. First two elements: hint text (top; set text only) and bottom action bar (replaces the settlement bar: dynamic buttons with hotkeys, richer action declarations with named placement sections, hotkey text derived dynamically). The mode stack shape avoids conflicts (modes set on entry / resumed, undo on exit / suspended). Pending: user elaboration on action declaration + sections + hotkey text; who handles bar hotkeys under fallthrough dispatch.
+5. [DONE] Artisan skills (one-way dependencies): `web_client_add_action.md` -> `add_match_command.md` -> `add_world_simulation_mechanic.md`; `web_client_add_element.md` (interface / render elements) used by the action skill. Old `add_command.md` deleted. Update them when the process changes (world sim skill after `world_sim_reorganization`).
+6. [WIP: first slice implemented, user to review / verify; `LIMIT_REACHED` renamed `ENTITY_LIMIT_REACHED`; imprint + add_command.md updated] Command feedback: fat shared `match_command_validity_feedback` struct (ui32 `error_flags`, detail + info values, GDO), no flag = valid; validity functions take optional `command_feedback*` (null = server early-exit), bool result == no error flags; wrapper adds `UNSPECIFIED` if a check fails without a flag; `RAISE_ARMY` and `BUILD_ROAD` set real flags, other 4 signature only; client query fills a static feedback GDO; TS `get_command_feedback(name, props)` -> `{valid, values}`; `is_command_valid` kept. No UI display yet (decided per mode / action later). Sub-codes / 64-bit flags later if needed. Unconverted checks report `UNSPECIFIED`: convert as UI needs them.
 
 ## Decisions
 
@@ -43,7 +43,7 @@ Stays explicit (real design content): validity / apply functions, payload struct
 - Context orders are sent by the owning mode (`on_context_menu`), not by shared code. Out-of-world move clicks are clamped (may become "ignored").
 - Mode input events (click, context menu, key, escape) dispatch from the top of the stack down until a handler returns true; frame updates and net messages stay broadcasts. Modes return true only for inputs they own (exit key, clicks); other keys fall through.
 - No mode subtypes for shared UX (no `ActionBarMode` base class); modes own the whole UX, shared UI lives in `ui_element_*` modules. `RoadBuilding` / `ArmyRaising` stay separate (will diverge).
-- TS fix pending: `is_own_settlement` should return plain boolean (type predicate narrows the else branch to `never`, `main_play.ts` line 39).
+- `is_own_settlement` returns plain boolean (a type predicate narrowed the else branch to `never`); `is_own_army` stays a predicate.
 - `push_mode(mode, parent)`: parent mandatory; pops modes above the parent (normal exit path, no escape handling) before pushing, so a mode never stacks on a sibling.
 - Hot reload rule: `MATCH_COMMAND_TABLE` rows and the validity / apply function pointers live in the DLL's static data and are not stable across reloads. Never store a row pointer or function pointer in match state or the persistent block; pass the command type and look the row up at call time.
 - GDO design (task 3):
@@ -66,7 +66,7 @@ Stays explicit (real design content): validity / apply functions, payload struct
 
 - Related experiment (client UX session): raise location / roads on any player-owned tile (roads only through owned tiles). Validity change reaches the front end automatically; the pathing territory limit (`within_settlement_territory`, also passed by the preview's `query_path`) and the road origin rule need their own change.
 - Sources: artisan report after adding `SPAWN_CARAVAN`; road front peer after adding `BUILD_ROAD`.
-- Update `artisan_skills/add_command.md` when the process changes.
+- Update `artisan_skills/add_match_command.md` and `web_client_add_action.md` when the process changes.
 - Multi-file architecture change: survey and design before editing.
 
 ## Survey findings (done)
@@ -81,4 +81,4 @@ Stays explicit (real design content): validity / apply functions, payload struct
 
 ## Next step
 
-User verifies 3c in game. Then: task 4 (table-driven HUD / modal declaration), task 6 (validity-driven UI, own design). Imprints updated (include_match, front_src). `add_command.md` update at task 5.
+User verifies 3c in game. Then: task 4 (table-driven HUD / modal declaration), task 6 (validity-driven UI, own design). Imprints updated (include_match, front_src); front_src has the `ui_element_*` paragraph. Next: task 6 (validity-driven UI for command input, own design). Stale generated `.js` files in `web/src` to clean by hand. Feedback not used by any mode yet.

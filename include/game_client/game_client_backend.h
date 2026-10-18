@@ -212,7 +212,8 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 
 // Whether a command of the given type (a MATCH_COMMAND_TYPE value) with the given payload bytes (command payload layout, see commands.h)
 // would currently be valid for the controlled player. Same check the server applies. False if there is no local match or the type is unknown.
-bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes);
+// If out_feedback is given it is filled with what the check found out (COMMAND_ERROR_UNSPECIFIED alone if the check could not run).
+bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes, struct match_command_validity_feedback* out_feedback = nullptr);
 
 // MATCH
 
