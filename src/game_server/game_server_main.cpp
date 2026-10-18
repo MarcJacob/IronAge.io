@@ -4,6 +4,9 @@
 // Main "chaining" of game server platform and game server internals.
 #include "core/assert.h"
 #include "core/math/random.h"
+#include "core/memory.h"
+#include "core/string.h"
+#include "game_common/game_data_object.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -15,6 +18,7 @@
 
 // Game Messages protocol
 #include "game_common/game_messages.h"
+#include "game_common/game_data_object.h"
 
 // Unity-compile sub-components.
 #include "game_server_clients.cpp"
@@ -219,6 +223,14 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 #ifndef NDEBUG
 	TEST_COMMAND_SIZES_CHECK();
 	TEST_MESSAGE_TYPE_SIZES_CHECK();
+
+    static_mem_arena<512> test_mem;
+    ia_string_builder test_props_string(&test_mem);
+
+    stuff_get_prop_names_list(test_props_string);
+
+    newServer->log("TEST", LOG_NORMAL, test_props_string.string);
+
 #endif
 
 	// Initialize Web Server.
