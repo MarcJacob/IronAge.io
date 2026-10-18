@@ -175,6 +175,14 @@ struct world_entity_container
 	ui16 active_count; // How many entities in the container are known to be active.
 };
 
+// Counts of the troop types a settlement can hold locally (levies are drawn from population instead).
+struct settlement_troops
+{
+	ui16 men_at_arms;
+	ui16 horsemen;
+	ui16 knights;
+};
+
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
@@ -194,6 +202,10 @@ struct world_entity_settlements : public world_entity_container
     };
 	land_influence*				influences; // Influence values used to claim / lose land.
 
+	// Local troop pool. Ceilings are the RAW player-set values, never clamped in storage: 0xFFFF = saturated (effective ceiling = max).
+	settlement_troops*	local_troops;
+	settlement_troops*	troop_ceilings;
+
     // Infrastructure / building factors
 	ui8*				tiers;
 
@@ -210,6 +222,12 @@ struct world_entity_settlements : public world_entity_container
 		ui32 local_wealth;
         ui32 land_output;
         land_influence influence;
+
+		settlement_troops local_troops;
+		settlement_troops troop_ceilings; // Raw. Ignored by spawn (new settlements start saturated).
+		// Derived from population, only filled by query_entity_state_settlement.
+		settlement_troops troop_max;
+		settlement_troops troop_effective_ceilings;
 
 		ui8 tier;
 
@@ -228,6 +246,15 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(influence_bounds_min, influence.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(influence_bounds_max, influence.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(influence_pressure, influence.pressure, GAME_DATA_PROP_TYPE::I32)
+	GAME_DATA_PROPERTY_PATH(troops_men_at_arms, local_troops.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(troops_horsemen, local_troops.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(troops_knights, local_troops.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(ceiling_men_at_arms, troop_effective_ceilings.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(ceiling_horsemen, troop_effective_ceilings.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(ceiling_knights, troop_effective_ceilings.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_men_at_arms, troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_horsemen, troop_max.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_knights, troop_max.knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(tier, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(trade_attaction_index, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
@@ -243,8 +270,7 @@ struct world_entity_armies : public world_entity_container
 	struct comp
 	{
 		ui16 levies;
-		ui16 archers;
-		ui32 men_at_arms;
+		ui16 men_at_arms;
 		ui16 horsemen;
 		ui16 knights;
 	} *compositions;
@@ -255,6 +281,12 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* battles; // Battle this army is fighting in, if any. An army in a battle is pinned in place.
 	ui8* battle_sides; // Side (0 or 1) of the battle the army is on. Only relevant while in a battle.
 
+	// Raising state. An army is raised empty and draws men from its home settlement once it reached its destination, until each count reaches its target.
+	// Edit targets = overwrite raise_targets. Stop raising = clear raising (targets are kept).
+	comp* raise_targets; // Wanted counts per type while raising. Kept after raising ends: remembers what the army was raised to.
+	entity_guid* home_settlements; // Settlement the army draws its men from while raising.
+	ui8* raising; // 1 while the army is raising: it refuses move and attack orders. Cleared by the raising system when all targets are met.
+
 	// Consolidated representation of a single army for viewing purposes.
 	struct single
 	{
@@ -264,6 +296,10 @@ struct world_entity_armies : public world_entity_container
 		comp composition;
 		entity_guid action_target;
 		entity_guid arrows_target;
+		comp raise_target;
+		entity_guid home_settlement;
+		ui8 raising;
+		entity_guid battle; // Query-only: battle the army is in, if any. Ignored when spawning.
 	};
 };
 
@@ -278,12 +314,18 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(movement_path_handle, movement.path_handle, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(composition_levies, composition.levies, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(composition_archers, composition.archers, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(composition_horsemen, composition.horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(composition_knights, composition.knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(action_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(arrows_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY_PATH(raise_target_levies, raise_target.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_men_at_arms, raise_target.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_horsemen, raise_target.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_knights, raise_target.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(home_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(raising, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(battle, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_OBJECT_DEF_END()
 
 struct world_entity_caravans : public world_entity_container
@@ -355,7 +397,7 @@ GAME_DATA_OBJECT_DEF_END()
 // A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_battles : public world_entity_container
 {
-	static constexpr ui8 UNIT_TYPES = 5; // Army unit types, in comp order: levies, archers, men at arms, horsemen, knights.
+	static constexpr ui8 UNIT_TYPES = 4; // Army unit types, in comp order: levies, men at arms, horsemen, knights.
 
 	struct state
 	{
@@ -377,15 +419,13 @@ using world_entity_battle = world_entity_battles::single;
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_battle)
 	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(men_side0_levies, men[0][0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_archers, men[0][1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_men_at_arms, men[0][2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_horsemen, men[0][3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_knights, men[0][4], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_men_at_arms, men[0][1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_horsemen, men[0][2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_knights, men[0][3], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(men_side1_levies, men[1][0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_archers, men[1][1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_men_at_arms, men[1][2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_horsemen, men[1][3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_knights, men[1][4], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_men_at_arms, men[1][1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_horsemen, men[1][2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_knights, men[1][3], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(damage_side0, damage[0], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(damage_side1, damage[1], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)

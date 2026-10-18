@@ -78,6 +78,7 @@ void world_state_tick(match_world_state& world)
     world_system_economy_update_pressure(world);
     world_system_economy_contestation(world);
     world_system_economy_pop_growth(world);
+    world_system_economy_troop_growth(world);
 
     world_system_settlement_spawn_caravans(world);
 
@@ -86,6 +87,7 @@ void world_state_tick(match_world_state& world)
 
     world_system_caravan_arrivals(world);
     world_system_armies_target_reached(world);
+    world_system_armies_raising(world);
     world_system_battles(world);
 
     // Increment world age.

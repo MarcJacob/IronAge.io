@@ -32,8 +32,8 @@ void world_system_economy_pop_growth(match_world_state& world)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
 
-        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every 10 ticks based on their Extra guid field and world age.
-        if ((settlements.guids[settlementIndex].get_extra() + world.age) % 10 != 0) continue;
+        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every GROWTH_TICK_PERIOD ticks based on their Extra guid field and world age.
+        if ((settlements.guids[settlementIndex].get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
 
         ui32 targetPopulation = settlements.land_outputs[settlementIndex] / 10;
 
@@ -58,5 +58,26 @@ void world_system_economy_pop_growth(match_world_state& world)
             population += growth;
         }
 
+    }
+}
+
+// Local troop pool growth: each troop type gains 1 per growth tick while below its effective ceiling. Never reduces counts.
+void world_system_economy_troop_growth(match_world_state& world)
+{
+    world_entity_settlements& settlements = world.entities.settlements;
+
+    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+    {
+        if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
+
+        // Same staggering as pop growth.
+        if ((settlements.guids[settlementIndex].get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
+
+        settlement_troops ceilings = settlement_troop_effective_ceilings(settlements.populations[settlementIndex], settlements.troop_ceilings[settlementIndex]);
+        settlement_troops& troops = settlements.local_troops[settlementIndex];
+
+        if (troops.men_at_arms < ceilings.men_at_arms) troops.men_at_arms++;
+        if (troops.horsemen < ceilings.horsemen) troops.horsemen++;
+        if (troops.knights < ceilings.knights) troops.knights++;
     }
 }

@@ -3,17 +3,21 @@
 // The bar state is kept here. While an action's mode is active (a child of this mode) its item shows as selected.
 
 import * as Core from "../core.js"
-import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity } from "../input.js"
+import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity, send_command } from "../input.js"
 import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
+import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
+import { settlement_gauges } from "../ui/troop_gauges.js"
 import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
 
 export class SettlementSelected extends Core.Mode
 {
+    private raise_item = this.make_item("Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
+
     private bar: ActionBarState = { items: [
         this.make_item("Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
-        this.make_item("Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key)),
+        this.raise_item,
     ] };
 
     on_entry(): void
@@ -24,6 +28,7 @@ export class SettlementSelected extends Core.Mode
     on_exit(): void
     {
         submit_action_bar(null);
+        submit_properties_panel(null);
     }
 
     // The mode of the active action was left: nothing is selected anymore.
@@ -35,9 +40,23 @@ export class SettlementSelected extends Core.Mode
 
     on_frame_update(delta_time_s: number): void
     {
-        if (!this.is_top) return;
+        const view = get_selected_entity_view();
+        if (!is_own_settlement(view) || view === null)
+        {
+            if (this.is_top) Core.pop_mode();
+            return;
+        }
 
-        if (!is_own_settlement(get_selected_entity_view())) Core.pop_mode();
+        // The panel belongs to the raise army mode while it is active.
+        if (this.raise_item.state === 'selected') return;
+
+        submit_properties_panel({
+            title: "Settlement troops",
+            slider_name: "ceiling",
+            // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
+            gauges: settlement_gauges(view, (troop_type, ceiling) =>
+                send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling })),
+        });
     }
 
     on_escape(): boolean

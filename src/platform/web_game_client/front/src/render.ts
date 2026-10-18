@@ -508,6 +508,7 @@ export function draw(render_state: Backend.RenderState | null)
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
             draw_entity_army(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
+            draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
             // Simple red marker.
@@ -520,7 +521,33 @@ export function draw(render_state: Backend.RenderState | null)
     }
 }
 
+// Small centered text with a dark outline so it reads on any terrain.
+function draw_label(text: string, x: number, y: number)
+{
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, x, y);
+}
+
+// Total troops of an army as text right below its marker. Not drawn for an army in a battle (the battle shows the totals instead).
+function draw_army_troop_count(viewport_x: number, viewport_y: number, army_guid: number)
+{
+    const army = query_entity(army_guid);
+    if (army === null || army.get_number("battle") !== 0) return;
+
+    const total = army.get_number("composition_levies") + army.get_number("composition_men_at_arms")
+        + army.get_number("composition_horsemen") + army.get_number("composition_knights");
+    const center = entity_canvas_center(viewport_x, viewport_y);
+    draw_label(String(total), center.x, center.y + compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY) / 2 + 2);
+}
+
 // Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
+// "N vs N" total men text right above the bar.
 function draw_battle_balance(x: number, y: number, width: number, battle_guid: number)
 {
     const battle = query_entity(battle_guid);
@@ -541,6 +568,8 @@ function draw_battle_balance(x: number, y: number, width: number, battle_guid: n
     ctx.fillRect(x - width / 2, y - 6, redWidth, 4);
     ctx.fillStyle = 'blue';
     ctx.fillRect(x - width / 2 + redWidth, y - 6, width - redWidth, 4);
+
+    draw_label(`${attackerMen} vs ${defenderMen}`, x, y - 22);
 }
 
 // Matches the canvas's pixel size to its container's, and tells the camera. The container (not the canvas) is measured since

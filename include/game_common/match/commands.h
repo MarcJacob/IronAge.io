@@ -20,13 +20,19 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
-	RAISE_ARMY, // Raises an army of levies from a settlement's population, moving to a raise location.
+	RAISE_ARMY, // Spawns an empty army that moves to a raise location, then draws the target counts from its settlement.
 
     // SERVER COMMANDS
 
     SERVER_SPAWN_PLAYER, // Spawn starting entity/ies for a player. Called at game start.
 
 	BUILD_ROAD, // Has a settlement start building a road between two tiles, within its territory.
+
+	SET_SETTLEMENT_TROOP_CEILING, // Sets a settlement's raw local troop ceiling for one poolable troop type; troops above the effective ceiling are lost.
+
+	SET_ARMY_RAISE_TARGETS, // Overwrites the target counts of an army that is still raising.
+
+	STOP_RAISING_ARMY, // Ends an army's raising where it stands: its raise targets are kept (remembered for a later re-raise).
 
 	TYPE_COUNT,
 };
@@ -64,6 +70,8 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_TARGET_OUT_OF_TERRITORY = 1 << 5, // A target location is outside the settlement's territory.
 	COMMAND_ERROR_NOT_ENOUGH_POPULATION = 1 << 6, // See population_needed / population_current.
 	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 7, // No free slot for the entity the command would create.
+	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses move and attack orders.
+	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -160,12 +168,20 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 struct command_data_raise_army
 {
 	entity_guid settlement;
-	world_location raise_location; // Tile the new army starts moving to.
+	world_location raise_location; // Tile the new army moves to, then raises at.
+	ui16 target_levies; // Counts the army raises up to, per type.
+	ui16 target_men_at_arms;
+	ui16 target_horsemen;
+	ui16 target_knights;
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(raise_location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY(target_levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
@@ -194,6 +210,66 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_build_road_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SET SETTLEMENT TROOP CEILING
+struct command_data_set_settlement_troop_ceiling
+{
+	entity_guid settlement;
+	ui8 troop_type; // 0 men at arms, 1 horsemen, 2 knights (levies are not poolable).
+	ui16 ceiling; // Raw value, stored as is (0xFFFF = saturated).
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_settlement_troop_ceiling)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(troop_type, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(ceiling, GAME_DATA_PROP_TYPE::UI16)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_settlement_troop_ceiling_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SET ARMY RAISE TARGETS
+struct command_data_set_army_raise_targets
+{
+	entity_guid army;
+	ui16 target_levies; // Counts the army raises up to, per type.
+	ui16 target_men_at_arms;
+	ui16 target_horsemen;
+	ui16 target_knights;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_army_raise_targets)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(target_levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_army_raise_targets_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_army_raise_targets_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// STOP RAISING ARMY
+struct command_data_stop_raising_army
+{
+	entity_guid army;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_stop_raising_army)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_stop_raising_army_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_stop_raising_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
 // Header & command size mapping definitions.
@@ -298,6 +374,12 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_server_spawn_player_validity_check, command_server_spawn_player_apply },
 	{ "BUILD_ROAD", MATCH_COMMAND_TYPE::BUILD_ROAD, sizeof(command_data_build_road),
 		command_build_road_validity_check, command_build_road_apply },
+	{ "SET_SETTLEMENT_TROOP_CEILING", MATCH_COMMAND_TYPE::SET_SETTLEMENT_TROOP_CEILING, sizeof(command_data_set_settlement_troop_ceiling),
+		command_set_settlement_troop_ceiling_validity_check, command_set_settlement_troop_ceiling_apply },
+	{ "SET_ARMY_RAISE_TARGETS", MATCH_COMMAND_TYPE::SET_ARMY_RAISE_TARGETS, sizeof(command_data_set_army_raise_targets),
+		command_set_army_raise_targets_validity_check, command_set_army_raise_targets_apply },
+	{ "STOP_RAISING_ARMY", MATCH_COMMAND_TYPE::STOP_RAISING_ARMY, sizeof(command_data_stop_raising_army),
+		command_stop_raising_army_validity_check, command_stop_raising_army_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

@@ -3,6 +3,7 @@
 #include "game_common/match/world.h"
 #include "world_sim.h"
 #include "world_sim_battle.h"
+#include "world_sim_population.h"
 
 // An army reaches its attack target when within this many tiles of it.
 constexpr i32 ATTACK_REACH_TILES = 5;
@@ -40,16 +41,19 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 			}
 		}
 
-		// Otherwise the settlement raises levies (10% of its population, at least 1) and the siege begins.
+		// Otherwise the settlement raises levies (20% of its population, at least 1), its whole local troop pool joins them and the siege begins.
 		ui32& population = settlements.populations[targetIndex];
-		ui32 levies = population / 10 > 0 ? population / 10 : 1;
+		ui32 levies = population / 5 > 0 ? population / 5 : 1;
 		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
 		population -= levies < population ? levies : population;
 
+		settlement_troops& pool = settlements.local_troops[targetIndex];
 		world_entity_armies::single defenders = {};
 		defenders.owner = settlements.owners[targetIndex];
 		defenders.location = settlements.locations[targetIndex];
-		defenders.composition.levies = (ui16)levies;
+		defenders.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
+		defenders.raise_target = defenders.composition; // Initial counts, as "original counts" for the client. Not raising.
+		pool = {};
 		entity_guid defenderArmy = world_spawn_army(world, defenders);
 
 		world_entity_battles::state start = {};
@@ -102,6 +106,66 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	}
 	default:
 		break;
+	}
+}
+
+// Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
+constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
+
+// Moves men from a settlement pool to an army count, up to the target, the pool content and the per-tick limit.
+static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool)
+{
+	ui16 wanted = army_count < target ? target - army_count : 0;
+	ui16 drawn = wanted < pool ? wanted : pool;
+	if (drawn > RAISE_POOL_DRAW_PER_TICK) drawn = RAISE_POOL_DRAW_PER_TICK;
+
+	army_count += drawn;
+	pool -= drawn;
+}
+
+void world_system_armies_raising(match_world_state& world)
+{
+	world_entity_armies& armies = world.entities.armies;
+	world_entity_settlements& settlements = world.entities.settlements;
+
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !armies.raising[armyIndex]) continue;
+		if (armies.battles[armyIndex].is_valid()) continue; // Suspended, resumes after the battle.
+
+		// Raising ends if the home settlement is gone or changed hands. The army is kept as is.
+		entity_guid home = armies.home_settlements[armyIndex];
+		if (!world_entity_is_valid(world, home) || settlements.owners[home.get_index()] != armies.owners[armyIndex])
+		{
+			armies.raising[armyIndex] = 0;
+			continue;
+		}
+
+		// Still walking to the raise location.
+		if (!(armies.locations[armyIndex] == armies.movements[armyIndex].destination)) continue;
+
+		ui16 homeIndex = home.get_index();
+		world_entity_armies::comp& composition = armies.compositions[armyIndex];
+		const world_entity_armies::comp& target = armies.raise_targets[armyIndex];
+		settlement_troops& pool = settlements.local_troops[homeIndex];
+
+		// Levies come out of the population, one per tick, never leaving less than the minimum.
+		ui32& population = settlements.populations[homeIndex];
+		if (composition.levies < target.levies && population > RAISE_MIN_POPULATION_LEFT)
+		{
+			composition.levies++;
+			population--;
+		}
+
+		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, pool.men_at_arms);
+		raise_draw_from_pool(composition.horsemen, target.horsemen, pool.horsemen);
+		raise_draw_from_pool(composition.knights, target.knights, pool.knights);
+
+		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
+			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)
+		{
+			armies.raising[armyIndex] = 0;
+		}
 	}
 }
 

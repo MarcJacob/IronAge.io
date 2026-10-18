@@ -105,6 +105,71 @@ body {
     margin-left: auto;
 }
 
+/* Entity properties panel: general info about the selection, floating just left of the action bar (same bottom, bar edge = 50% - half its width). */
+#game_hud_properties_panel {
+    position: absolute;
+    right: calc(50% + max(16.667%, 11rem) + 12px);
+    bottom: 20px;
+    box-sizing: border-box;
+    width: 18rem;
+    max-width: calc(50% - max(16.667%, 11rem) - 24px);
+    max-height: calc(100% - 40px);
+    overflow: auto;
+    padding: 10px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+    font-family: monospace;
+    pointer-events: auto;
+}
+
+#game_hud_properties_title {
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+.gauge {
+    margin-bottom: 8px;
+}
+
+.gauge_text.warn {
+    color: #ff6b6b;
+}
+
+.gauge_bar {
+    position: relative;
+    height: 10px;
+    background: #14161a;
+    border: 1px solid #c7cbd1;
+}
+
+.gauge_fill {
+    height: 100%;
+}
+
+/* Ceiling / target position. */
+.gauge_marker {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 3px;
+    margin-left: -1px;
+    background: #ffffff;
+}
+
+.gauge_marker.warn {
+    background: #ff3b3b;
+}
+
+.gauge input[type=range] {
+    width: 100%;
+    margin: 2px 0 0;
+}
+
+.gauge input[type=range].warn {
+    accent-color: #ff3b3b;
+}
+
 /* What the current mode is and what to do, top center. Passes mouse input through. */
 #game_hud_mode_hint {
     position: absolute;

@@ -107,7 +107,7 @@ void world_destroy_caravan(match_world_state& world, entity_guid caravan);
 void world_destroy_army(match_world_state& world, entity_guid army);
 void world_destroy_battle(match_world_state& world, entity_guid battle);
 
-// Destroys an army and adds its men to the settlement's population.
+// Destroys an army and returns its men to the settlement: levies to the population, the other types to the local troop pool.
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
@@ -187,6 +187,8 @@ void world_system_economy_update_pressure(match_world_state& world);
 
 void world_system_economy_pop_growth(match_world_state& world);
 
+void world_system_economy_troop_growth(match_world_state& world);
+
 void world_system_settlement_spawn_caravans(match_world_state& world);
 
 void world_system_entity_movement_decision(match_world_state& world);
@@ -196,6 +198,9 @@ void world_system_entity_movement(match_world_state& world);
 void world_system_caravan_arrivals(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
+
+// Raising armies standing on their destination (and not in a battle) draw men from their home settlement.
+void world_system_armies_raising(match_world_state& world);
 
 void world_system_battles(match_world_state& world);
 

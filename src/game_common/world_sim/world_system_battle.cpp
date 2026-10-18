@@ -28,7 +28,7 @@ void battle_join(match_world_state& world, entity_guid battle, entity_guid army,
 constexpr ui32 BATTLE_MAX_DAMAGE_PERCENT = 10;
 
 // Battles resolve one round every this many world ticks (1 = every tick). Battle duration counts rounds.
-constexpr ui32 BATTLE_TICK_INTERVAL = 10;
+constexpr ui32 BATTLE_TICK_INTERVAL = 20;
 
 void world_system_battles(match_world_state& world)
 {
@@ -91,7 +91,8 @@ void world_system_battles(match_world_state& world)
 			army_unit_counts(composition, after);
 			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= before[unitType] - after[unitType];
 
-			if (army_total_manpower(composition) == 0) world_destroy_army(world, armies.guids[armyIndex]);
+			// A raising army that took no damage is just empty (still waiting for its men), not wiped out.
+			if (army_total_manpower(composition) == 0 && !(armies.raising[armyIndex] && taken == 0)) world_destroy_army(world, armies.guids[armyIndex]);
 		}
 
 		// Attackers wiping the defenders of a siege take the settlement.

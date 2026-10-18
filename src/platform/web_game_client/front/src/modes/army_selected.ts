@@ -5,14 +5,18 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
-import { query_entity } from "../gdo.js"
+import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
-import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
+import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
+import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
+import { army_gauges, army_count_gauges, army_raise_targets, raise_target_props } from "../ui/troop_gauges.js"
 
 export class ArmySelected extends Core.Mode
 {
     // army_guid: the selected own army this mode is about.
     constructor(private army_guid: number) { super(); }
+
+    private raising = false; // Whether the bar currently offers to stop raising.
 
     private bar: ActionBarState = { items: [
         { name: "Settle", state: 'selectable', on_activate: () => this.settle() },
@@ -26,19 +30,50 @@ export class ArmySelected extends Core.Mode
     on_exit(): void
     {
         submit_action_bar(null);
+        submit_properties_panel(null);
     }
 
     on_frame_update(delta_time_s: number): void
     {
         if (!this.is_top) return;
 
-        if (!is_own_army(query_entity(this.army_guid)) || get_selected_entity_guid() !== this.army_guid)
+        const army = query_entity(this.army_guid);
+        if (!is_own_army(army) || get_selected_entity_guid() !== this.army_guid)
         {
             Core.pop_mode();
             return;
         }
 
+        this.update_panel(army);
         this.update_path_preview();
+    }
+
+    // Troop gauges of the army. While raising: current / target slider / max. Otherwise just the current counts (no max, no target).
+    private update_panel(army: EntityData): void
+    {
+        const raising = army.get_number("raising") === 1;
+        if (raising !== this.raising)
+        {
+            this.raising = raising;
+            this.bar.items = [this.bar.items[0], ...(raising ? [{ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) } as ActionBarItem] : [])];
+            submit_action_bar(this.bar);
+        }
+
+        if (!raising)
+        {
+            submit_properties_panel({ title: "Army troops", gauges: army_count_gauges(army) });
+            return;
+        }
+
+        const targets = army_raise_targets(army);
+        submit_properties_panel({
+            title: "Army troops",
+            slider_name: "target",
+            gauges: army_gauges(army, query_entity(army.get_number("home_settlement")), targets, (troop, value) => {
+                targets[troop] = value;
+                send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) });
+            }),
+        });
     }
 
     on_escape(): boolean

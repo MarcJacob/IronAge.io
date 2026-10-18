@@ -6,7 +6,7 @@
 // Entity GDO inspection: JS calls client_query_entity_gdo(guid): if it returns a size, the backend has written the entity as a Game Data Object
 // at the offset given by client_get_entity_gdo_buffer_offset, which JS reads (and copies what it needs) before the next call.
 // Separate from the command GDO buffer. Plain bytes on purpose, see the global constructor note in web_game_client.h.
-static constexpr ui32 ENTITY_GDO_BUFFER_SIZE = 256; // Must fit the largest entity GDO.
+static constexpr ui32 ENTITY_GDO_BUFFER_SIZE = 384; // Must fit the largest entity GDO.
 static ui8 ENTITY_GDO_BUFFER[ENTITY_GDO_BUFFER_SIZE];
 
 WASM_EXPORT ui8* client_get_entity_gdo_buffer_offset()

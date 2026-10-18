@@ -1,5 +1,6 @@
 #include "game_common/match/world.h"
 #include "world_sim.h"
+#include "world_sim_population.h"
 
 // Used to initialize default values on entity property fields if they are left at 0.
 #define SET_DEFAULT_VAL(value, default) \
@@ -64,6 +65,8 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	world.entities.settlements.populations[freeIndex] = start_state.population;
 	world.entities.settlements.local_wealths[freeIndex] = start_state.local_wealth;
 	world.entities.settlements.tiers[freeIndex] = start_state.tier;
+	world.entities.settlements.local_troops[freeIndex] = start_state.local_troops;
+	world.entities.settlements.troop_ceilings[freeIndex] = { 0xFFFF, 0xFFFF, 0xFFFF }; // Saturated: effective ceiling = max.
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.settlements.populations[freeIndex], 100);
@@ -142,6 +145,9 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities.armies.compositions[freeIndex] = start_state.composition;
 	world.entities.armies.action_targets[freeIndex] = start_state.action_target;
 	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
+	world.entities.armies.raise_targets[freeIndex] = start_state.raise_target;
+	world.entities.armies.home_settlements[freeIndex] = start_state.home_settlement;
+	world.entities.armies.raising[freeIndex] = start_state.raising;
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 4);
@@ -246,7 +252,15 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 	const world_entity_armies::comp& men = world.entities.armies.compositions[army.get_index()];
 
-	world.entities.settlements.populations[settlement.get_index()] += (ui32)men.levies + men.archers + men.men_at_arms + men.horsemen + men.knights;
+	ui16 settlementIndex = settlement.get_index();
+	world.entities.settlements.populations[settlementIndex] += men.levies;
+
+	// Pooled types go back to the local pool, clamped to ui16.
+	settlement_troops& pool = world.entities.settlements.local_troops[settlementIndex];
+	ui32 returned[3] = { (ui32)pool.men_at_arms + men.men_at_arms, (ui32)pool.horsemen + men.horsemen, (ui32)pool.knights + men.knights };
+	pool.men_at_arms = (ui16)(returned[0] > 0xFFFF ? 0xFFFF : returned[0]);
+	pool.horsemen = (ui16)(returned[1] > 0xFFFF ? 0xFFFF : returned[1]);
+	pool.knights = (ui16)(returned[2] > 0xFFFF ? 0xFFFF : returned[2]);
 	world_destroy_army(world, army);
 }
 
@@ -308,6 +322,10 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 		.local_wealth = settlements.local_wealths[i],
         .land_output = settlements.land_outputs[i],
 		.influence = settlements.influences[i],
+		.local_troops = settlements.local_troops[i],
+		.troop_ceilings = settlements.troop_ceilings[i],
+		.troop_max = settlement_troop_max(settlements.populations[i]),
+		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
 		.tier = settlements.tiers[i],
 		.trade_attaction_index = settlements.trade_attraction_indices[i],
 	};
@@ -344,6 +362,10 @@ bool query_entity_state_army(const match_world_state& world, entity_guid entity,
 		.composition = armies.compositions[i],
 		.action_target = armies.action_targets[i],
 		.arrows_target = armies.arrows_targets[i],
+		.raise_target = armies.raise_targets[i],
+		.home_settlement = armies.home_settlements[i],
+		.raising = armies.raising[i],
+		.battle = armies.battles[i],
 	};
 	return true;
 }
@@ -448,6 +470,12 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.influences = memory.alloc<world_entity_settlements::land_influence>(count);
 	if (settlements.influences == nullptr) return false;
 
+	settlements.local_troops = memory.alloc<settlement_troops>(count);
+	if (settlements.local_troops == nullptr) return false;
+
+	settlements.troop_ceilings = memory.alloc<settlement_troops>(count);
+	if (settlements.troop_ceilings == nullptr) return false;
+
 	return true;
 }
 
@@ -532,6 +560,15 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 	armies.battle_sides = memory.alloc<ui8>(count);
 	if (armies.battle_sides == nullptr) return false;
+
+	armies.raise_targets = memory.alloc<world_entity_armies::comp>(count);
+	if (armies.raise_targets == nullptr) return false;
+
+	armies.home_settlements = memory.alloc<entity_guid>(count);
+	if (armies.home_settlements == nullptr) return false;
+
+	armies.raising = memory.alloc<ui8>(count);
+	if (armies.raising == nullptr) return false;
 
 	return true;
 }
