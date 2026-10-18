@@ -8,6 +8,7 @@ import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
 import { submit_hint } from "../ui/ui_element_hint.js"
 import { hotkey_text } from "../ui/ui_element_action_bar.js"
+import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
 export class ArmyRaising extends Core.Mode
@@ -29,7 +30,7 @@ export class ArmyRaising extends Core.Mode
     on_frame_update(delta_time_s: number): void
     {
         // Leave when the settlement is gone or not the selection anymore.
-        const view = Backend.query_entity(this.settlement_guid);
+        const view = query_entity(this.settlement_guid);
         if (view === null || !is_own_settlement(view) || get_selected_entity_guid() !== this.settlement_guid)
         {
             Core.pop_mode();
@@ -43,7 +44,7 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
-        const start = { x: view.location_x, y: view.location_y };
+        const start = view.get_location("location");
         const points = Backend.query_path(start, hovered, this.settlement_guid);
         const valid = points.length > 0 && is_command_valid("RAISE_ARMY", { settlement: this.settlement_guid, raise_location: hovered });
         Render.RENDER_CONFIG.path_preview = { start, points, valid };

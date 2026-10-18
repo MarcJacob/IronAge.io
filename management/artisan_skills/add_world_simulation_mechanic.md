@@ -49,7 +49,13 @@ Read first: *src/game_common/game_common.imprint.md*, *src/game_common/world_sim
 
 ## Steps
 
-1. Add the state (fields in *world.h*, zero = a valid default).
+1. Add the state (fields in *world.h*, zero = a valid default). Every entity type has a Game Data
+   Object right below its container: add a `GAME_DATA_PROPERTY` line for the new field so the
+   client can read it (the debug panel and the front end read entities only through it;
+   `GAME_DATA_PROPERTY_PATH` with a flat name for fields of nested structs). Entity structs are
+   NOT packed (only command structs are); their GDO is defined with the same
+   `GAME_DATA_OBJECT_DEF_BEGIN` as any other. A new entity type needs its single, a `using` alias
+   `world_entity_<type>`, its GDO and one case in `game_client_query_entity_gdo`.
 2. Add the system function in the themed file; declare it in *world_sim.h*.
 3. Call it from `world_state_tick` (end of the tick order unless told otherwise).
 4. Report: files touched, tick position, random calls added, structs changed.

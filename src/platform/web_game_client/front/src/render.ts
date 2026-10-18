@@ -4,6 +4,7 @@
 
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
+import { query_entity } from "./gdo.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 
 // A filled dot drawn over the map, at least a few px wide at any zoom.
@@ -522,11 +523,20 @@ export function draw(render_state: Backend.RenderState | null)
 // Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
 function draw_battle_balance(x: number, y: number, width: number, battle_guid: number)
 {
-    const battle = Backend.query_entity(battle_guid)?.battle;
-    if (battle === undefined) return;
+    const battle = query_entity(battle_guid);
+    if (battle === null) return;
 
-    const total = battle.attacker_men + battle.defender_men;
-    const redWidth = total > 0 ? width * battle.attacker_men / total : width / 2;
+    // Men of each side: the sum of its men_side<side>_<unit type> properties.
+    let attackerMen = 0, defenderMen = 0;
+    for (const property of battle.properties)
+    {
+        if (typeof property.value !== "number") continue;
+        if (property.name.startsWith("men_side0_")) attackerMen += property.value;
+        else if (property.name.startsWith("men_side1_")) defenderMen += property.value;
+    }
+
+    const total = attackerMen + defenderMen;
+    const redWidth = total > 0 ? width * attackerMen / total : width / 2;
     ctx.fillStyle = 'red';
     ctx.fillRect(x - width / 2, y - 6, redWidth, 4);
     ctx.fillStyle = 'blue';

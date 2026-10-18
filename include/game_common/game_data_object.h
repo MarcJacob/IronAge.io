@@ -188,8 +188,11 @@ struct game_data_object
 };
 #pragma pack(pop)
 
+// Covers a struct of any alignment. The GDO itself is packed, so the copy of the covered struct always starts right after the header
+// (at sizeof(game_data_object)), and property offsets come from offsetof, which includes the struct's own padding.
+// Structs that are sent over the network (the command structs) are packed by their own definition: that is what makes their layout
+// predictable across machines. The GDO is never sent, only the struct bytes are.
 #define GAME_DATA_OBJECT_DEF_BEGIN(StructType) \
-        static_assert(alignof(StructType) == 1, "Game Data Object definitions can only work with packed structures."); \
         _Pragma("pack(push, 1)") \
         struct gdo_##StructType : public game_data_object { \
             using _StructType = StructType; \
@@ -199,6 +202,10 @@ struct game_data_object
 
 #define GAME_DATA_PROPERTY(PropName, PropType) \
             GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, PropName) };
+
+// Same as GAME_DATA_PROPERTY for a value reached through a member path (e.g. influence.bounds_min). PropName is the flat name of the property.
+#define GAME_DATA_PROPERTY_PATH(PropName, MemberPath, PropType) \
+            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, MemberPath) };
 
 #define GAME_DATA_OBJECT_DEF_END() \
         }; \

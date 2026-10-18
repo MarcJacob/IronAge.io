@@ -87,9 +87,8 @@ interface ClientExports extends WebAssembly.Exports
 
     // Entity inspection
 
-    client_get_entity_view_buffer_offset(): number;
-    client_get_entity_view_buffer_size(): number;
-    client_query_entity(guid: number): number; // wasm bool: 0 or 1.
+    client_query_entity_gdo(guid: number): number; // Byte size of the entity GDO written in its buffer, 0 on failure.
+    client_get_entity_gdo_buffer_offset(): number;
 
     // Path query
 
@@ -118,8 +117,6 @@ export function start(): boolean
     }
 
     ClientInput.init();
-    entityViewBufferOffset = CLIENT_BACKEND.client_get_entity_view_buffer_offset();
-    entityViewBufferSize = CLIENT_BACKEND.client_get_entity_view_buffer_size();
 
     return true;
 }
@@ -306,6 +303,11 @@ export namespace ClientInput
     export function command_get_feedback_offset(): number { return CLIENT_BACKEND.client_command_get_feedback_offset(); }
 }
 
+// Entity inspection through Game Data Objects (see gdo.ts). The buffer is overwritten by every query: read it right away.
+// Returns the byte size of the GDO written, 0 if the entity doesn't exist (anymore), has no GDO yet or it doesn't fit the buffer.
+export function entity_gdo_query(guid: number): number { return CLIENT_BACKEND.client_query_entity_gdo(guid); }
+export function entity_gdo_get_buffer_offset(): number { return CLIENT_BACKEND.client_get_entity_gdo_buffer_offset(); }
+
 // Fresh view of the whole wasm memory. Do NOT hold the result across calls into the backend, as memory growth detaches it.
 export function get_memory_bytes(): Uint8Array<ArrayBuffer>
 {
@@ -324,84 +326,6 @@ export function query_path(start: { x: number, y: number }, end: { x: number, y:
     const points: { x: number, y: number }[] = [];
     for (let i = 0; i < count; i++) points.push({ x: view.getUint16(i * 4, true), y: view.getUint16(i * 4 + 2, true) });
     return points;
-}
-
-// Entity inspection. Buffer location / size cached once at start().
-let entityViewBufferOffset: number = 0;
-let entityViewBufferSize: number = 0;
-
-// Mirrors entity_full_view (include/game_client/game_client_backend.h) by hand. Keep both in sync.
-// Fields of the extra block that doesn't match entity_type are left undefined.
-export class EntityView
-{
-    entity_type: ENTITY_TYPE = ENTITY_TYPE.INVALID;
-    guid: number = 0;
-    location_x: number = 0;
-    location_y: number = 0;
-    owner: number = 0;
-    target_entity: number | null = null; // GUID, or null if none.
-    target_location: { x: number, y: number } | null = null; // null if none.
-    travel_speed: number = 0;
-
-    settlement?: { population: number, local_wealth: number, tier: number, trade_attractivity: number, influence_capacity: number };
-    caravan?: { origin_settlement: number };
-    army?: { levies: number, archers: number, men_at_arms: number, horsemen: number, knights: number, arrows_target: number | null };
-    battle?: { attacker_men: number, defender_men: number };
-}
-
-// Queries the current state of an entity. Returns null if it doesn't exist (anymore) or can't be inspected.
-export function query_entity(guid: number): EntityView | null
-{
-    if (CLIENT_BACKEND.client_query_entity(guid) === 0) return null;
-
-    // Layout of entity_full_view, packed: entity_type (ui8), guid (ui32), location x/y (ui16), owner (ui16),
-    // has_target_entity (ui8), target_entity (ui32), has_target_location (ui8), target_location x/y (ui16),
-    // travel_speed (ui8), then the type-specific block. sizeof 38 (static_assert'd in game_client_backend.h).
-    // A fresh DataView on every call on purpose, as with read_render_state.
-    const view = new DataView(CLIENT_BACKEND.memory.buffer, entityViewBufferOffset, entityViewBufferSize);
-
-    const out = new EntityView();
-    out.entity_type = view.getUint8(0);
-    out.guid = view.getUint32(1, true);
-    out.location_x = view.getUint16(5, true);
-    out.location_y = view.getUint16(7, true);
-    out.owner = view.getUint16(9, true);
-    out.target_entity = view.getUint8(11) !== 0 ? view.getUint32(12, true) : null;
-    out.target_location = view.getUint8(16) !== 0 ? { x: view.getUint16(17, true), y: view.getUint16(19, true) } : null;
-    out.travel_speed = view.getUint8(21);
-
-    // Type-specific block starts at offset 22.
-    switch (out.entity_type) {
-        case ENTITY_TYPE.SETTLEMENT:
-            out.settlement = {
-                population: view.getUint32(22, true),
-                local_wealth: view.getUint32(26, true),
-                tier: view.getUint8(30),
-                trade_attractivity: view.getUint8(31),
-                influence_capacity: view.getUint32(32, true),
-            };
-            break;
-        case ENTITY_TYPE.CARAVAN:
-            out.caravan = { origin_settlement: view.getUint32(22, true) };
-            break;
-        case ENTITY_TYPE.ARMY: {
-            const arrowsTarget = view.getUint32(34, true);
-            out.army = {
-                levies: view.getUint16(22, true),
-                archers: view.getUint16(24, true),
-                men_at_arms: view.getUint32(26, true),
-                horsemen: view.getUint16(30, true),
-                knights: view.getUint16(32, true),
-                arrows_target: arrowsTarget !== 0 ? arrowsTarget : null,
-            };
-            break;
-        }
-        case ENTITY_TYPE.BATTLE:
-            out.battle = { attacker_men: view.getUint32(22, true), defender_men: view.getUint32(26, true) };
-            break;
-    }
-
-    return out;
 }
 
 export class RenderEntity

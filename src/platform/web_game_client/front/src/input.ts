@@ -4,7 +4,7 @@
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
 import * as Render from "./render.js"
-import { read_GDO_schema, read_GDO_values, GAME_DATA_PROP_TYPE } from "./gdo.js"
+import { read_GDO_schema, read_GDO_values, query_entity, GAME_DATA_PROP_TYPE, type EntityData } from "./gdo.js"
 import { FRONTEND_CAMERA } from "./camera.js"
 
 // Input sources (updated on events, used on tick)
@@ -58,9 +58,9 @@ export function get_mouse_world_location(): { x: number, y: number } | null
 }
 
 // QUERY FUNCTIONS
-export function get_selected_entity_view(): Backend.EntityView | null
+export function get_selected_entity_view(): EntityData | null
 {
-    return SELECTED_ENTITY_GUID != null ? Backend.query_entity(SELECTED_ENTITY_GUID) : null;
+    return SELECTED_ENTITY_GUID != null ? query_entity(SELECTED_ENTITY_GUID) : null;
 }
 
 

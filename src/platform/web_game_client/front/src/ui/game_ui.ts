@@ -4,6 +4,7 @@
 
 import * as Backend from "../backend.js"
 import { get_selected_entity_view } from "../input.js"
+import { GAME_DATA_PROP_TYPE, type EntityData } from "../gdo.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
@@ -27,24 +28,20 @@ function set_hidden(element: HTMLElement, hidden: boolean): void
     if (element.hidden !== hidden) element.hidden = hidden;
 }
 
-// Builds the 'name = value' rows describing an entity's full view.
-function entity_view_text(view: Backend.EntityView): string
+// Builds the 'name = value' rows of an entity: every property of its Game Data Object, raw values, C++ property names.
+function entity_text(entity: EntityData): string
 {
     const rows: [string, string | number][] = [
-        ["entity_type", Backend.ENTITY_TYPE[view.entity_type]],
-        ["guid", "0x" + view.guid.toString(16)],
-        ["location", `(${view.location_x}, ${view.location_y})`],
-        ["owner", view.owner],
+        ["entity_type", Backend.ENTITY_TYPE[entity.entity_type]],
+        ["guid", "0x" + entity.guid.toString(16)],
     ];
-    if (view.target_entity !== null) rows.push(["target_entity", "0x" + view.target_entity.toString(16)]);
-    if (view.target_location !== null) rows.push(["target_location", `(${view.target_location.x}, ${view.target_location.y})`]);
-    rows.push(["travel_speed", view.travel_speed]);
-
-    // Only the block matching entity_type is set (see backend.EntityView). Null fields (no target) are skipped.
-    const typeBlock = view.settlement ?? view.caravan ?? view.army ?? view.battle ?? {};
-    for (const [name, value] of Object.entries(typeBlock))
+    for (const property of entity.properties)
     {
-        if (value !== undefined && value != null) rows.push([name, value as string | number]);
+        let value: string | number;
+        if (typeof property.value !== "number") value = `(${property.value.x}, ${property.value.y})`;
+        else if (property.type === GAME_DATA_PROP_TYPE.ENTITY_GUID) value = "0x" + property.value.toString(16);
+        else value = property.value;
+        rows.push([property.name, value]);
     }
 
     return rows.map(([name, value]) => `${name} = ${value}`).join('\n');
@@ -55,12 +52,12 @@ export function update_game_ui(): void
 {
     if (selectedPanelElement === null || selectedTextElement === null) return;
 
-    // Re-query the selected entity every frame so its values stay live.
-    const view = get_selected_entity_view();
+    // Re-query the selected entity every frame so its values stay live. Nothing to show if there is none or it has no Game Data Object.
+    const selected = get_selected_entity_view();
+    const text = selected !== null ? entity_text(selected) : null;
 
-    set_hidden(selectedPanelElement, view === null);
-    if (view === null) return;
+    set_hidden(selectedPanelElement, text === null);
+    if (text === null) return;
 
-    const text = entity_view_text(view);
     if (selectedTextElement.textContent !== text) selectedTextElement.textContent = text;
 }

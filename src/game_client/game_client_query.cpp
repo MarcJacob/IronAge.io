@@ -1,16 +1,8 @@
-// Implementation for client backend entity inspection: match entity state -> packed full view for the frontend.
+// Implementation for client backend queries: command validity, paths, and entity inspection (match entity state -> Game Data Object).
 
 #include "core.h"
 
 #include "game_client.h"
-
-static void fill_movement_view(entity_full_view& view, const world_entity_movement& movement)
-{
-	view.travel_speed = movement.travel_speed;
-	view.has_target_location = movement.destination.x != INVALID_WORLD_LOCATION.x || movement.destination.y != INVALID_WORLD_LOCATION.y;
-	view.target_location_x = movement.destination.x;
-	view.target_location_y = movement.destination.y;
-}
 
 bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes, match_command_validity_feedback* out_feedback)
 {
@@ -57,89 +49,37 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
 }
 
-bool game_client_query_entity(game_client& backend, entity_guid entity, entity_full_view& out_view)
+// Fills a GDO of the given type from the entity's single state (read by the given query function) and copies it into the buffer.
+// Returns the size written, or 0 if the query failed or the GDO does not fit.
+template<typename GdoType>
+static ui32 fill_entity_gdo(const match_world_state& world, entity_guid entity,
+	bool (*query_state)(const match_world_state&, entity_guid, decltype(GdoType::_data)&), ui8* out_buffer, ui32 buffer_size)
 {
-	if (backend.local_match == nullptr) return false;
+	if (sizeof(GdoType) > buffer_size) return 0;
+
+	// Queried into a local (naturally aligned) then copied: the GDO is packed, so its copy of the struct can't be bound to a reference.
+	decltype(GdoType::_data) state;
+	if (!query_state(world, entity, state)) return 0;
+
+	GdoType gdo;
+	ia_memcpy(&gdo._data, &state, sizeof(state));
+	ia_memcpy(out_buffer, &gdo, sizeof(GdoType));
+	return sizeof(GdoType);
+}
+
+ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8* out_buffer, ui32 buffer_size)
+{
+	if (backend.local_match == nullptr) return 0;
 	const match_world_state& world = *backend.local_match->world;
 
-	// Dispatch on the GUID's type to the matching match query, which also validates the GUID.
+	// One case per entity type with a GDO: its GDO definition (world.h) and single state query are all it needs.
 	switch (entity.get_type())
 	{
-	case ENTITY_TYPE::SETTLEMENT:
-	{
-		world_entity_settlements::single settlement;
-		if (!query_entity_state_settlement(world, entity, settlement)) return false;
-
-		out_view = {};
-		out_view.location_x = settlement.location.x;
-		out_view.location_y = settlement.location.y;
-		out_view.owner = settlement.owner;
-		out_view.extra.settlement.population = settlement.population;
-		out_view.extra.settlement.local_wealth = settlement.local_wealth;
-		out_view.extra.settlement.tier = settlement.tier;
-		out_view.extra.settlement.trade_attractivity = settlement.trade_attaction_index;
-		break;
+	case ENTITY_TYPE::SETTLEMENT: return fill_entity_gdo<gdo_world_entity_settlement>(world, entity, query_entity_state_settlement, out_buffer, buffer_size);
+	case ENTITY_TYPE::CARAVAN: return fill_entity_gdo<gdo_world_entity_caravan>(world, entity, query_entity_state_caravan, out_buffer, buffer_size);
+	case ENTITY_TYPE::ARMY: return fill_entity_gdo<gdo_world_entity_army>(world, entity, query_entity_state_army, out_buffer, buffer_size);
+	case ENTITY_TYPE::BUILDER: return fill_entity_gdo<gdo_world_entity_builder>(world, entity, query_entity_state_builder, out_buffer, buffer_size);
+	case ENTITY_TYPE::BATTLE: return fill_entity_gdo<gdo_world_entity_battle>(world, entity, query_entity_state_battle, out_buffer, buffer_size);
+	default: return 0;
 	}
-	case ENTITY_TYPE::CARAVAN:
-	{
-		world_entity_caravans::single caravan;
-		if (!query_entity_state_caravan(world, entity, caravan)) return false;
-
-		out_view = {};
-		out_view.location_x = caravan.location.x;
-		out_view.location_y = caravan.location.y;
-
-		// Owner is that of the origin settlement, as in the render state.
-		world_entity_settlements::single origin;
-		out_view.owner = query_entity_state_settlement(world, caravan.origin_settlement, origin) ? origin.owner : INVALID_MATCH_PLAYER_ID;
-
-		out_view.has_target_entity = caravan.dest_settlement.is_valid();
-		out_view.target_entity = caravan.dest_settlement;
-		fill_movement_view(out_view, caravan.movement);
-		out_view.extra.caravan.origin_settlement = caravan.origin_settlement;
-		break;
-	}
-	case ENTITY_TYPE::ARMY:
-	{
-		world_entity_armies::single army;
-		if (!query_entity_state_army(world, entity, army)) return false;
-
-		out_view = {};
-		out_view.location_x = army.location.x;
-		out_view.location_y = army.location.y;
-		out_view.owner = army.owner;
-		out_view.has_target_entity = army.action_target.is_valid();
-		out_view.target_entity = army.action_target;
-		fill_movement_view(out_view, army.movement);
-		out_view.extra.army.levies = army.composition.levies;
-		out_view.extra.army.archers = army.composition.archers;
-		out_view.extra.army.men_at_arms = army.composition.men_at_arms;
-		out_view.extra.army.horsemen = army.composition.horsemen;
-		out_view.extra.army.knights = army.composition.knights;
-		out_view.extra.army.arrows_target = army.arrows_target;
-		break;
-	}
-	case ENTITY_TYPE::BATTLE:
-	{
-		if (!world_entity_is_valid(world, entity)) return false;
-		const world_entity_battles::state& battle = world.entities.battles.states[entity.get_index()];
-
-		out_view = {};
-		out_view.location_x = battle.location.x;
-		out_view.location_y = battle.location.y;
-		out_view.owner = INVALID_MATCH_PLAYER_ID;
-		for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
-		{
-			out_view.extra.battle.attacker_men += battle.men[0][unitType];
-			out_view.extra.battle.defender_men += battle.men[1][unitType];
-		}
-		break;
-	}
-	default:
-		return false;
-	}
-
-	out_view.entity_type = entity.get_type();
-	out_view.guid = entity;
-	return true;
 }

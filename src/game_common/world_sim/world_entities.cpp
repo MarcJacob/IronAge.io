@@ -364,6 +364,14 @@ bool query_entity_state_builder(const match_world_state& world, entity_guid enti
 	return true;
 }
 
+bool query_entity_state_battle(const match_world_state& world, entity_guid entity, world_entity_battles::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::BATTLE || !world_entity_is_valid(world, entity)) return false;
+
+	out_state = world.entities.battles.states[entity.get_index()];
+	return true;
+}
+
 bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player)
 {
 	world_entity_caravans::single state;

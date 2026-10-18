@@ -5,6 +5,7 @@
 
 import * as Core from "./core.js"
 import * as Backend from "./backend.js"
+import type { EntityData } from "./gdo.js"
 
 import { init_render } from './render.js';
 import { init_input } from './input.js';
@@ -28,16 +29,16 @@ export function get_local_player_id(): number | null
     return LOCAL_PLAYER_ID;
 }
 
-// Whether the view is of a settlement of the local player.
-export function is_own_settlement(view: Backend.EntityView | null): boolean
+// Whether the entity is a settlement of the local player.
+export function is_own_settlement(entity: EntityData | null): boolean
 {
-    return view !== null && view.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && view.owner === LOCAL_PLAYER_ID;
+    return entity !== null && entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT && entity.get_number("owner") === LOCAL_PLAYER_ID;
 }
 
-// Whether the view is of an army of the local player.
-export function is_own_army(view: Backend.EntityView | null): boolean
+// Whether the entity is an army of the local player.
+export function is_own_army(entity: EntityData | null): entity is EntityData
 {
-    return view !== null && view.entity_type === Backend.ENTITY_TYPE.ARMY && view.owner === LOCAL_PLAYER_ID;
+    return entity !== null && entity.entity_type === Backend.ENTITY_TYPE.ARMY && entity.get_number("owner") === LOCAL_PLAYER_ID;
 }
 // ...
 

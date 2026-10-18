@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "core/math/random.h"
+#include "game_common/game_data_object.h"
 
 using match_player_id = ui16; // Index / unique ID of a player in the game, a single atomic participant in the match able to own entities and emit commands.
 using match_player_count = match_player_id; // Alias type for places where we need to count player.
@@ -216,6 +217,21 @@ struct world_entity_settlements : public world_entity_container
 	};
 };
 
+using world_entity_settlement = world_entity_settlements::single;
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
+	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY(population, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(local_wealth, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(land_output, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(influence_bounds_min, influence.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(influence_bounds_max, influence.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(influence_pressure, influence.pressure, GAME_DATA_PROP_TYPE::I32)
+	GAME_DATA_PROPERTY(tier, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(trade_attaction_index, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_OBJECT_DEF_END()
+
 // Property arrays for a world's armies.
 struct world_entity_armies : public world_entity_container
 {
@@ -251,6 +267,25 @@ struct world_entity_armies : public world_entity_container
 	};
 };
 
+using world_entity_army = world_entity_armies::single;
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
+	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_DATA_PROP_TYPE::VEC2_I8)
+	GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_path_handle, movement.path_handle, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_levies, composition.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_archers, composition.archers, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_horsemen, composition.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_knights, composition.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(action_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(arrows_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
 struct world_entity_caravans : public world_entity_container
 {
 	world_location* locations;
@@ -269,6 +304,19 @@ struct world_entity_caravans : public world_entity_container
 		entity_guid dest_settlement;
 	};
 };
+
+using world_entity_caravan = world_entity_caravans::single;
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_caravan)
+	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_DATA_PROP_TYPE::VEC2_I8)
+	GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(movement_path_handle, movement.path_handle, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(origin_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(dest_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
 
 // Small byte buffer for the data a build type keeps about its project. Its layout is entirely defined by the build type's logic.
 static constexpr ui8 WORLD_BUILD_ACTION_DATA_SIZE = 16;
@@ -295,6 +343,15 @@ struct world_entity_builders : public world_entity_container
 	};
 };
 
+using world_entity_builder = world_entity_builders::single;
+
+// action_data is left out: it is a byte buffer, which has no property type yet.
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_builder)
+	GAME_DATA_PROPERTY(origin_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(build_type, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(build_time, GAME_DATA_PROP_TYPE::UI32)
+GAME_DATA_OBJECT_DEF_END()
+
 // A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_battles : public world_entity_container
 {
@@ -310,7 +367,32 @@ struct world_entity_battles : public world_entity_container
 		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
 		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.
 	} *states;
+
+	using single = state; // Consolidated representation of a single battle for viewing purposes.
 };
+
+using world_entity_battle = world_entity_battles::single;
+
+// Men per side and unit type are flattened: men_side<side>_<unit type>, unit types in the order of army comp.
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_battle)
+	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(men_side0_levies, men[0][0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_archers, men[0][1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_men_at_arms, men[0][2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_horsemen, men[0][3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side0_knights, men[0][4], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_levies, men[1][0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_archers, men[1][1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_men_at_arms, men[1][2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_horsemen, men[1][3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(men_side1_knights, men[1][4], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(damage_side0, damage[0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(damage_side1, damage[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(siege_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(siege_owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY(siege_defenders, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
 
 // @TEMP(Marc): Static memory size / layout properties.
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
@@ -357,6 +439,8 @@ bool query_entity_state_caravan(const match_world_state& world, entity_guid enti
 bool query_entity_state_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
 
 bool query_entity_state_builder(const match_world_state& world, entity_guid entity, world_entity_builders::single& out_state);
+
+bool query_entity_state_battle(const match_world_state& world, entity_guid entity, world_entity_battles::single& out_state);
 
 bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player);
 

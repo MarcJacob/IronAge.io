@@ -61,7 +61,9 @@ Nothing about byte offsets lives in TS. Call sites build the property object the
    valid. How to show the feedback is decided per mode / action (not used by any mode yet).
    Unset properties of a half-built command are zero.
 8. State helpers: `get_local_player_id()`, `is_own_settlement` / `is_own_army` (*main.ts*),
-   `Backend.query_entity(guid)`, `get_selected_entity_guid()`, `pick_entity_at(...)`.
+   `query_entity(guid)` (*gdo.ts*: `EntityData` with `entity_type`, `get_number(name)`,
+   `get_location(name)` over the entity's GDO properties, named after the C++ fields),
+   `get_selected_entity_guid()`, `pick_entity_at(...)`.
 
 ## Checks
 

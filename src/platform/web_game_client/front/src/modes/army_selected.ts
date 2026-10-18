@@ -5,6 +5,7 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
+import { query_entity } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
 import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
 
@@ -31,7 +32,7 @@ export class ArmySelected extends Core.Mode
     {
         if (!this.is_top) return;
 
-        if (!is_own_army(Backend.query_entity(this.army_guid)) || get_selected_entity_guid() !== this.army_guid)
+        if (!is_own_army(query_entity(this.army_guid)) || get_selected_entity_guid() !== this.army_guid)
         {
             Core.pop_mode();
             return;
@@ -72,11 +73,11 @@ export class ArmySelected extends Core.Mode
     {
         Render.RENDER_CONFIG.path_preview = null;
 
-        const army = Backend.query_entity(this.army_guid);
+        const army = query_entity(this.army_guid);
         const hovered = Render.get_hovered_tile();
         if (army === null || hovered === null) return;
 
-        const start = { x: army.location_x, y: army.location_y };
+        const start = army.get_location("location");
         Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, hovered), valid: true };
     }
 
