@@ -344,11 +344,6 @@ struct match_world_state
 	} entities;
 };
 
-// Initializes a full world state according to the passed parameters.
-// Memory is allocated for the full terrain tile info, and pre-allocated for a reasonable number of each entity type given the size of the world.
-// TODO(Marc): Profile system so worlds can be exactly configured (image-based terrain generation, exact max entity counts...).
-match_world_state* world_state_init(mem_arena& memory, ui32 rand_seed);
-
 // World query functions.
 
 bool world_entity_is_valid(const match_world_state& world, entity_guid entity);

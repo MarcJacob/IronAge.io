@@ -3,28 +3,29 @@
 Add a simple mechanic to the match simulation (a new rule that runs every tick, or a change
 to an entity's behavior). Game common only. A command that triggers it is a separate step
 (`add_match_command.md`).
-Written 2026-10-18 for the current layout; the world simulation is due a reorganization
-(`work_units/world_sim_reorganization_2026-10-18.md`): re-verify files and symbols against code,
-and expect this skill to change.
+Written 2026-10-18 for the reorganized layout (`work_units/world_sim_reorganization_2026-10-18.md`).
 
-Read first: *src/game_common/game_common.imprint.md*, *src/game_common/world_sim/world_sim.imprint.md*
-(known to be incomplete), *include/game_common/match/include_match.imprint.md*.
+Read first: *src/game_common/game_common.imprint.md*, *src/game_common/world_sim/world_sim.imprint.md*,
+*include/game_common/match/include_match.imprint.md*.
 
 ## Where things are
 
 - State: *include/game_common/match/world.h*: tiles / terrain and the entity containers
   (settlements, caravans, armies, builders, battles), `match_world_state`.
 - Simulation: *src/game_common/world_sim/*. A mechanic is a **system**: a
-  `world_system_<theme>_<what>` function called once per tick, in a fixed order, from
+  `world_system_<what>` function called once per tick, in a fixed order, from
   `world_state_tick` (*world_sim_main.cpp*). Declarations and shared constants are in *world_sim.h*.
 - Entity lifecycle (spawn / destroy / queries): *world_entities.cpp*. Systems live in their own
-  file by theme: movement, combat, construction, economy (influence, population, caravans),
-  pathing. Each file is included by *world_sim_main.cpp* (unity build, one translation unit).
+  file by theme: *world_system_<theme>.cpp* for territory, population, caravans, army, battle,
+  movement, construction. Also terrain generation (*world_terrain.cpp*) and pathing (*world_pathing.cpp*).
+  Each file is included by *world_sim_main.cpp* (unity build, one translation unit).
+- Code shared by several themes goes in a *world_sim_<theme>.h* next to them (e.g. *world_sim_army.h*);
+  the cross-theme API stays in *world_sim.h*.
 
 ## Rules
 
 - **One theme per file.** A new mechanic goes in the file of its theme; a new theme gets a new
-  `world_system_<theme>.cpp`, included from *world_sim_main.cpp*, declared in *world_sim.h*.
+  `world_system_<theme>.cpp`, included from *world_sim_main.cpp*, its systems declared in *world_sim.h*.
   Do not grow an unrelated file. Do not mix themes in one function.
 - Only touch the state that mechanic needs; other systems' state through their helper / spawn /
   destroy functions, not by editing their arrays (use `world_destroy_*`, `world_spawn_*`).

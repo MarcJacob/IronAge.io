@@ -41,11 +41,12 @@ Beyond just the match system itself, the common code generally exposes its logic
 - Prediction / Extrapolation (client-side smoothing, AI decision making...)
 - ...
 
-_AI_logic.cpp = Primitive AI system code, called from host code to output automated behavior commands from a given match state and some internal AI state.
-_match_command.cpp = Input command function implementations both for specific command types and general match-wide functions like the centralized command type -> command logic mappings.
-_main.cpp = Core logic.
-_test.cpp = Various test functions.
+Top-level implementation files, by theme:
+- *game_common_main.cpp* is the Unity entry point: it includes the other implementation files and holds the match-wide logic (memory requirements, start, tick).
+- *match_AI_logic.cpp*: primitive AI, called from host code to output automated behavior commands from a given match state and some internal AI state.
+- *match_commands.cpp*: input command implementations, per command type.
+- *game_common_tests.cpp*: various test functions.
 
-_internals.h = all functions shared between the various implementation files of game_common, but not outside.
+*game_common_internals.h* is meant for symbols shared between game_common implementation files but not outside. It is currently an empty include guard.
 
-*/world_sim/* contains the main world simulation system implementation which covers most of the work done within a match tick.
+*/world_sim/* contains the world simulation implementation which covers most of the work done within a match tick. See its imprint.

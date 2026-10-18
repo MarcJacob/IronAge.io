@@ -7,7 +7,7 @@
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
 
 // Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
-void process_entity_movement (world_entity_movement& movement, world_location& location)
+static void process_entity_movement (world_entity_movement& movement, world_location& location)
 {
     if (movement.move_target == location) return;
 
@@ -95,8 +95,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 		// Despawn caravans whose destination settlement was destroyed.
 		if (!world_entity_is_valid(world, caravans.dest_settlements[caravanIndex]))
 		{
-			caravans.guids[caravanIndex] = INVALID_ENTITY_GUID;
-			caravans.active_count--;
+			world_destroy_caravan(world, caravans.guids[caravanIndex]);
 			continue;
 		}
 

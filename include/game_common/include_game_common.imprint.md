@@ -3,6 +3,10 @@
 This folder contains the public-facing symbols for the Game Common logic, which mostly includes the ability to simulate game matches using input commands,
 and the network-facing Game Message structures.
 
+*game_data_object.h* defines Game Data Objects (GDOs): a way to describe functional game data such as messages and input commands, so it can be interacted with across language / network boundaries.
+
+*/match/* contains the headers for starting, simulating and inspecting a match (world state, input commands, pathing, start parameters, AI logic). See its imprint.
+
 ## Game Messages
 
 Games messages are a network-oriented protocol for communicating specifically between a client and server in the IronAge "ecosystem". They acknowledge two roles:

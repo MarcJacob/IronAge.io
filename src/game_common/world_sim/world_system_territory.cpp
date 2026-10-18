@@ -1,8 +1,9 @@
-// Implementation file for economic systems in the game, IE anything related to settlements, caravand and other economic-side entities.
+// Territory systems: settlement influence over world tiles. Claiming / unclaiming tiles, proximity to the settlement, influence spread and contestation.
 
 #include "core/math/vec2.h"
 #include "game_common/match/world.h"
 #include "world_sim.h"
+#include "world_sim_population.h"
 
 // Food production for each terrain type.
 // 10 units = one supported pop.
@@ -15,10 +16,6 @@ static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
     20, // WATER_SEA
 };
 
-// How much population "Fills" one tile of terrain.
-// If population is higher than this, the settlement gets pressure to expand.
-static const ui8 POP_CAP_PER_TILE = 2;
-
 // Contestation parameters. Contestation is a per tile value from 0 to CONTESTATION_MAX.
 static constexpr ui8 CONTESTATION_MAX = 255;
 static constexpr ui8 CONTESTATION_GAIN = 24; // Per tick, per foreign neighbour tile (diagonals included).
@@ -28,7 +25,7 @@ static constexpr ui8 CONTESTATION_MAX_FOREIGN_NEIGHBOURS = 7; // Number of forei
 
 // Proximity at which land output is reduced to 90%, stacking.
 static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 20;
-// Proximity at which a border tile cannot expand into more tiles. 
+// Proximity at which a border tile cannot expand into more tiles.
 static constexpr ui16 MAX_EXPANSION_PROXIMITY = LAND_OUTPUT_DECREASE_STEP_DIST * 10;
 
 // Returns the land output of a tile based on its terrain base output and proximity to settlement root.
@@ -72,11 +69,11 @@ static void world_influence_update_tile_proximity(const match_world_state& world
         ui16 region_index, ui16 tile_index, ui16 settlement_index, ui16 new_proximity)
 {
     ui16& currentProximity = world.terrain.regions[region_index].proximities[tile_index];
-    
+
     // Calculate old and new land outputs based on proximity
     ui32 currentOutput = world_get_tile_land_output(world, region_index, tile_index, currentProximity);
     ui32 newOutput = world_get_tile_land_output(world, region_index, tile_index, new_proximity);
-    
+
     // Update land_outputs (subtract old, add new)
     auto& landOutput = world.entities.settlements.land_outputs[settlement_index];
     ASSERT(landOutput >= currentOutput);
@@ -133,16 +130,16 @@ static void world_influence_flag_same_settlement_neighbours(const match_world_st
     }
 }
 
-void world_influence_unclaim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
-{ 
+static void world_influence_unclaim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index)
+{
     ASSERT(region_index < world.terrain.size_regions.x * world.terrain.size_regions.y);
     ASSERT(tile_index < world_terrain::REGION_TILE_COUNT);
 
     ui16& proximity = world.terrain.regions[region_index].proximities[tile_index];
-    
+
     // Calculate land output based on current proximity and subtract from settlement's total
     ui32 tileOutput = world_get_tile_land_output(world, region_index, tile_index, proximity);
-    
+
     // Decreased land output.
     auto& landOutput = world.entities.settlements.land_outputs[settlement_index];
     ASSERT(landOutput >= tileOutput);
@@ -185,7 +182,7 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
 
     // Must be computed before the tile becomes owned.
     ui16 claimProximity = world_influence_get_claim_proximity(world, region_index, tile_index, settlement_index);
-    
+
     // Calculate land output based on proximity
     ui32 tileOutput = world_get_tile_land_output(world, region_index, tile_index, claimProximity);
 
@@ -346,7 +343,7 @@ static bool world_influence_can_push(const match_world_state& world, ui16 border
 
     // Compare: attacker_ratio * proximity_ratio > defender_ratio
     i64 attackerEffective = (i64)attackerRatio * proximityRatio;
-    
+
     return attackerEffective > (i64)defenderRatio * 1400; // Give slight advantage to defender.
 }
 
@@ -371,7 +368,7 @@ static bool world_influence_can_expand(const match_world_state& world, ui16 regi
 
 // Runs full influence logic over a border tile owned by the settlement (assumed to have been checked as so).
 // bounds_min and bounds_max are kept up-to-date with new tiles.
-void world_influence_border_logic(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index, i32& pressure,
+static void world_influence_border_logic(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index, i32& pressure,
         world_location& bounds_min, world_location& bounds_max)
 {
     ASSERT(region_index < world.terrain.size_regions.x * world.terrain.size_regions.y);
@@ -560,132 +557,4 @@ void world_system_economy_contestation(match_world_state& world)
                 }
             }
     }
-}
-
-// Updates settlement pressure based on population and land output.
-// Pressure = population - land_output * 3. Positive pressure means surplus population wanting to expand.
-void world_system_economy_update_pressure(match_world_state& world)
-{
-    world_entity_settlements& settlements = world.entities.settlements;
-
-    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
-    {
-        if (!settlements.guids[settlementIndex].is_valid()) continue;
-
-        ui32 population = settlements.populations[settlementIndex];
-        ui32 landPopCap = settlements.land_sizes[settlementIndex] * POP_CAP_PER_TILE;
-        
-        i32 newPressure = (i32)population - (i32)(landPopCap);
-        settlements.influences[settlementIndex].pressure = newPressure;
-    }
-}
-
-void world_system_economy_pop_growth(match_world_state& world)
-{
-    world_entity_settlements& settlements = world.entities.settlements;
-
-    // POP GROWTH
-    // Population seeks to reach an equilibrium that depends on settlement land / food output and by local wealth.
-    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
-    {
-        if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
-
-        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every 10 ticks based on their Extra guid field and world age.
-        if ((settlements.guids[settlementIndex].get_extra() + world.age) % 10 != 0) continue;
-
-        ui32 targetPopulation = settlements.land_outputs[settlementIndex] / 10; 
-
-        ui32& population = settlements.populations[settlementIndex];
-
-        i32 growth = ((i64)targetPopulation - (i64)population);
-        if (growth > 0 && (ui32)growth >= 1 + population / 100)
-        {
-            growth = 1 + (i64)population / 100; // Population cannot grow by more than 1% per growth tick.
-        }
-        else if (growth < 0 && ia_abs(growth) > (i64)population / 20)
-        {
-            growth = -(i64)population / 20; // Population cannot shrink by more than 5% per growth tick.
-        }
-
-        if ((i64)population + growth < 1)
-        {
-            population = 1;
-        }
-        else
-        {
-            population += growth;
-        }
-
-    }
-}
-
-void world_system_settlement_spawn_caravans(match_world_state& world)
-{
-    world_entity_settlements& settlements = world.entities.settlements;
-
-    for (ui32 settlementIndex = 0; settlementIndex < world.entities.settlements.max_count; settlementIndex++)
-    {
-        if (!settlements.guids[settlementIndex].is_valid()) continue;
-
-        // Randomly spawn caravan if there are more settlements on the map.
-        if (settlements.active_count > 1 && world.rand_gen.next_range(0.f, 1.f) < 0.001f)
-        {
-            // Pick a random active settlement other than this one. Slots can be empty now that settlements get destroyed.
-            ui16 destRandOrdinal = world.rand_gen.next_range<ui16>(0, settlements.active_count - 1) % (settlements.active_count - 1);
-            ui16 destRandIndex = 0;
-            for (;; destRandIndex++)
-            {
-                if (destRandIndex == settlementIndex || !settlements.guids[destRandIndex].is_valid()) continue;
-                if (destRandOrdinal == 0) break;
-                destRandOrdinal--;
-            }
-
-            world_entity_caravans::single newCaravan = {
-                .location = settlements.locations[settlementIndex],
-                .movement =
-                {
-                    .destination = settlements.locations[destRandIndex],
-                },
-                .origin_settlement = settlements.guids[settlementIndex],
-                .dest_settlement = settlements.guids[destRandIndex],
-            };
-            world_spawn_caravan(world, newCaravan);
-        }
-    }
-}
-
-void world_system_caravan_arrivals(match_world_state& world)
-{
-    world_entity_caravans& caravans = world.entities.caravans;
-    world_entity_settlements& settlements = world.entities.settlements;
-
-	// Once caravans reach close enough to their destination, despawn them and increase origin & destination local wealth.
-	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
-	{
-		if (!caravans.guids[caravanIndex].is_valid()) continue;
-
-		const world_location& caravanLoc = caravans.locations[caravanIndex];
-		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
-
-		if (caravanLoc == destLoc)
-		{
-            // Caravan has arrived !
-
-			// Both origin and destination town earn 20 + distance in tiles / 10 + destination wealth / 10 + origin wealth / 20, read before either is increased.
-			// A destroyed origin counts as 0 distance and 0 wealth, and earns nothing.
-			ui16 destIndex = caravans.dest_settlements[caravanIndex].get_index();
-			bool originValid = world_entity_is_valid(world, caravans.origin_settlements[caravanIndex]);
-			ui16 originIndex = originValid ? caravans.origin_settlements[caravanIndex].get_index() : 0;
-
-			ui32 distanceTiles = originValid ? vec2_dist(settlements.locations[originIndex], destLoc) : 0;
-			ui32 originWealth = originValid ? settlements.local_wealths[originIndex] : 0;
-			ui32 earnings = 20 + distanceTiles / 10 + settlements.local_wealths[destIndex] / 10 + originWealth / 20;
-
-			settlements.local_wealths[destIndex] += earnings;
-			if (originValid) settlements.local_wealths[originIndex] += earnings;
-
-            // Get rid of caravan.
-            world_destroy_caravan(world, caravans.guids[caravanIndex]);
-		}
-	}
 }
