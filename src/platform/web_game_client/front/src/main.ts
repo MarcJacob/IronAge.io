@@ -38,7 +38,7 @@ export function is_own_settlement(entity: EntityData | null): boolean
 }
 
 // Whether the entity is an army of the local player.
-export function is_own_army(entity: EntityData | null): entity is EntityData
+export function is_own_army(entity: EntityData | null): boolean
 {
     return entity !== null && entity.entity_type === Backend.ENTITY_TYPE.ARMY && entity.get_number("owner") === LOCAL_PLAYER_ID;
 }

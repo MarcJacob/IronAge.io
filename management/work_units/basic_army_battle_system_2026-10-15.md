@@ -136,6 +136,22 @@ Phases (sequential commits by manager):
 - Levies are claimed while population > army levies + `RAISE_MIN_POPULATION_LEFT`; pooled types while pool > army count.
 - Client: selected army previews the path to its current destination, green for a move, red while it has an attack target (optional `color` on `RENDER_CONFIG.path_preview`). Raised rows (`settlement_raised_rows`) in the settlement panel and the raise panel.
 
+### Review pass (a4f1766..55e64ba, by reading only: nothing compiled)
+
+Fixes made: none. No clear-cut compile error or inconsistency found.
+
+Checked and consistent: designated initializer order (settlement / army / warband queries, spawn player), command enum vs table (16 rows) vs web GDO cases, COMMAND_ERROR mirror, ENTITY_TYPE mirror (WARBAND 6, SIEGE 7) and render scale lookup, ARMY_STATE mirror, GDO property names read by TS (army / warband / siege / settlement), GDO sizes (army GDO ~1.1 KiB wasm32 / ~1.4 KiB x64 < 2048 entity buffer; largest command GDO < 128), `warband_##Slot` / `army_##Slot` macros, unity include order, mixed `&&` / `||` all parenthesized (-W -Werror builds), HTML ids used by the panels, TS strict narrowing (`is_own_army` is a type guard).
+
+Unresolved risks (not changed, design-level or pre-existing):
+- `vec2_dist_squared` returns float and is used in sim distance checks (now also the accompany distance). Deterministic with the pinned flags, but a float in sim.
+- SET_ENTITY_ATTACK_TARGET validity reads `owners[targetIndex]` of an enemy settlement / army without checking the target guid is valid (out of range read on a crafted guid). Pre-existing, the army case kept it.
+- `match_get_required_mem` does not count sieges, battles, builders or the 64-slot warband lists: relies on the 32 MiB slack.
+- `entity_guid_new` asserts look swapped (micro asserts index <= 0xFFF, macro <= 0xFFFF). Pre-existing; micro types assert past 4096 slots.
+- A lost sally out hands the settlement to the siege commander (same outcome rule as an assault). Intended?
+- Detaching from an army in a siege makes a free army (not in the siege) next to it.
+- front_src imprint mode tree does not list Siege selected (imprint, not edited).
+
 ### Status
 
-(manager updates: phase -> state)
+- A, B, C1, C2, D1, D2 (incl. E icons), compile-risk review: committed, NOT built or hand-tested (imprints forbid agent builds). Next: user builds (wasm, win32, tsc), hand-checks, fixes. Imprint updates pending (front_src, world_sim).
+- Note: C2 note "ARMY_STATE not mirrored in TS" is stale (mirrored in C2/D2).
