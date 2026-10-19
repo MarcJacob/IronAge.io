@@ -39,14 +39,22 @@ void world_system_economy_pop_growth(match_world_state& world)
 
         ui32& population = settlements.populations[settlementIndex];
 
-        i32 growth = ((i64)targetPopulation - (i64)population);
-        if (growth > 0 && (ui32)growth >= 1 + population / 100)
+        constexpr ui8 POP_GROWTH_LOW_BONUS = 3;
+
+        i32 growth = ia_min((i64)targetPopulation - (i64)population, population); // Base growth is simply difference between current and target population, or population, whichever is lower.
+
+        if (growth > 0) // Population growing / Stagnating.
         {
-            growth = 1 + (i64)population / 100; // Population cannot grow by more than 1% per growth tick.
+            // Place growth on a log curve of sorts, benefiting it for values whose square roots are under a certain value.
+            growth = POP_GROWTH_LOW_BONUS + ia_sqrt(growth, 10) * POP_GROWTH_LOW_BONUS; // @TODO: Get int-based square root function to guarantee determinism. In practice for now this should work well-enough.
         }
-        else if (growth < 0 && ia_abs(growth) > (i64)population / 20)
+        else // Population shrinking.
         {
-            growth = -(i64)population / 20; // Population cannot shrink by more than 5% per growth tick.
+            const i32 MAX_SHRINK = (i64)population * 10 / 100; // Population cannot shrink by more than 10% per growth tick.
+            if (growth < 0 && ia_abs(growth) > MAX_SHRINK)
+            {
+                growth = -MAX_SHRINK; 
+            }
         }
 
         if ((i64)population + growth < 1)
@@ -57,7 +65,6 @@ void world_system_economy_pop_growth(match_world_state& world)
         {
             population += growth;
         }
-
     }
 }
 
