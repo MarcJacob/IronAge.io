@@ -81,10 +81,8 @@ bool command_set_entity_move_target_validity_check(const match_world_state& worl
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		if (world.entities.armies.owners[command.entity.get_index()] != player) return false;
-		// An army refuses move orders until done raising.
-		if (world.entities.armies.raising[command.entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
-		return true;
+		// A raising army takes the order but only starts moving once raised.
+		return world.entities.armies.owners[command.entity.get_index()] == player;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
 		return false;
@@ -104,7 +102,6 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		if (world.entities.armies.raising[command.entity.get_index()]) break;
 		world.entities.armies.movements[command.entity.get_index()].destination = command.move_target;
 		// A new move order overrides any attack the army was committed to.
 		world.entities.armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
@@ -126,7 +123,8 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	if (!world_entity_is_valid(world, command.army)) return false;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
 	if (world.entities.armies.owners[command.army.get_index()] != player) return false;
-	if (world.entities.armies.raising[command.army.get_index()]) return false; // Not ready yet: an empty army would found a free settlement.
+	// Not ready yet: an empty army would found a free settlement.
+	if (world.entities.armies.raising[command.army.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
 
 	// The army is kept if the location is invalid or there is no room for the settlement.
 	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return false;
@@ -136,6 +134,7 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 }
 
 // Spawns a settlement at the army's location with its owner and total manpower as population, then destroys the army.
+// Settling is the one case where the army's men actually leave their home settlement.
 void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
@@ -160,6 +159,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 		+ composition.horsemen + composition.knights;
     newSettlement.tier = 1;
 
+	world_army_remove_men_from_home(world, armyIndex, composition);
 	world_spawn_settlement(world, newSettlement);
 	world_destroy_army(world, command.army);
 }
@@ -199,6 +199,11 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
+	// A settlement has a limited number of raised armies at once. Reported as the entity limit.
+	ui32 raisedArmies, raisedMen;
+	world_settlement_raised(world, command.settlement, raisedArmies, raisedMen);
+	if (raisedArmies >= SETTLEMENT_MAX_RAISED_ARMIES && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
 	// Raising levies must leave the settlement its minimum population. Pooled troops are only limited when drawn, so their targets can exceed the pool.
 	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
 	if (feedback != nullptr)
@@ -224,7 +229,8 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	return command_is_valid(feedback);
 }
 
-// Spawns an empty army at the raise location. It draws its men from the settlement right away (see world_system_armies_raising).
+// Spawns an empty army inside the settlement, heading for the raise location. It draws its men from the settlement right away
+// and starts moving once raised (see world_system_armies_raising).
 void command_raise_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last army slot.
@@ -237,7 +243,8 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owners[settlementIndex];
-	newArmy.location = command.raise_location; // The spawn function defaults the destination to the location.
+	newArmy.location = settlements.locations[settlementIndex];
+	newArmy.movement.destination = command.raise_location;
 	newArmy.raise_target = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
@@ -256,7 +263,7 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 	if (!world_entity_is_valid(world, command.attacker_entity)) return false;
 	if (command.attacker_entity.get_type() != ENTITY_TYPE::ARMY) return false;
 	if (world.entities.armies.owners[command.attacker_entity.get_index()] != player) return false;
-	if (world.entities.armies.raising[command.attacker_entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
+	// A raising army takes the order but only starts its chase once raised.
 
 	// Targets owned by the sender can't be attacked (see match_caravan_is_owned_by for caravans).
 	ui16 targetIndex = command.target_entity.get_index();

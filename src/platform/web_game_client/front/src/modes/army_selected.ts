@@ -12,6 +12,10 @@ import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
 import { raise_target_props } from "../ui/troop_gauges.js"
 import { army_panel } from "../ui/entity_panels.js"
 
+// Path preview colors of the army's current order.
+const PATH_COLOR_MOVE = 'rgba(60, 220, 60, 0.9)';
+const PATH_COLOR_ATTACK = 'rgba(255, 40, 40, 0.9)';
+
 export class ArmySelected extends Core.Mode
 {
     // army_guid: the selected own army this mode is about.
@@ -46,7 +50,7 @@ export class ArmySelected extends Core.Mode
         }
 
         this.update_panel(army);
-        this.update_path_preview();
+        this.update_path_preview(army);
     }
 
     // Army stats and troop gauges (see army_panel). While raising, the target sliders send new raise targets.
@@ -75,6 +79,7 @@ export class ArmySelected extends Core.Mode
     // Left clicks fall through to main play (selection).
 
     // Right click: attack the entity not owned by the local player under the cursor if there is one, otherwise move to the clicked tile.
+    // Also works while the army is raising: it keeps the new target and heads there once raised.
     on_context_menu(event: MouseEvent): boolean
     {
         const localPlayerId = get_local_player_id();
@@ -92,17 +97,18 @@ export class ArmySelected extends Core.Mode
         return true;
     }
 
-    // Previews the path from the army to the hovered tile (movement). No preview while the mouse is off the map.
-    private update_path_preview(): void
+    // Previews where the army is currently heading: green for a move, red while it chases an entity to attack.
+    // A raising army shows the destination it will head to once raised. Nothing while it stands on its destination.
+    private update_path_preview(army: EntityData): void
     {
         Render.RENDER_CONFIG.path_preview = null;
 
-        const army = query_entity(this.army_guid);
-        const hovered = Render.get_hovered_tile();
-        if (army === null || hovered === null) return;
-
         const start = army.get_location("location");
-        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, hovered), valid: true };
+        const destination = army.get_location("movement_destination");
+        if (start.x === destination.x && start.y === destination.y) return;
+
+        const attacking = army.get_number("action_target") !== 0;
+        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination), valid: true, color: attacking ? PATH_COLOR_ATTACK : PATH_COLOR_MOVE };
     }
 
     // The tile a move order to the given clicked tile goes to: clamped inside the world. Return null instead to ignore clicks outside the world.

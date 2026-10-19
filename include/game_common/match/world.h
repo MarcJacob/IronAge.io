@@ -229,6 +229,13 @@ struct world_entity_settlements : public world_entity_container
 		settlement_troops troop_max;
 		settlement_troops troop_effective_ceilings;
 
+		// Armies raised from this settlement (see world_settlement_raised), only filled by query_entity_state_settlement.
+		// Their men still count in population and local troops: raised_percent = raised_men / population.
+		ui8 raised_armies;
+		ui8 max_raised_armies;
+		ui32 raised_men;
+		ui32 raised_percent;
+
 		ui8 tier;
 
 		ui8 trade_attaction_index;
@@ -255,6 +262,10 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(max_men_at_arms, troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(max_horsemen, troop_max.horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(max_knights, troop_max.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(raised_armies, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(max_raised_armies, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(raised_men, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(raised_percent, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tier, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(trade_attaction_index, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
@@ -281,11 +292,13 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* battles; // Battle this army is fighting in, if any. An army in a battle is pinned in place.
 	ui8* battle_sides; // Side (0 or 1) of the battle the army is on. Only relevant while in a battle.
 
-	// Raising state. An army is raised empty and draws men from its home settlement once it reached its destination, until each count reaches its target.
+	// Raising state. An army is raised empty inside its home settlement and draws men from it until each count reaches its target.
 	// Edit targets = overwrite raise_targets. Stop raising = clear raising (targets are kept).
+	// The men of an army stay counted in its home settlement's population / local troops for as long as the army exists (they are not taken out):
+	// men the army loses are removed from the settlement (world_army_remove_men_from_home).
 	comp* raise_targets; // Wanted counts per type while raising. Kept after raising ends: remembers what the army was raised to.
-	entity_guid* home_settlements; // Settlement the army draws its men from while raising.
-	ui8* raising; // 1 while the army is raising: it refuses move and attack orders. Cleared by the raising system when all targets are met.
+	entity_guid* home_settlements; // Settlement the army was raised from. Its men count in it while it is valid and has the army's owner.
+	ui8* raising; // 1 while the army is raising: it takes move and attack orders but stays in place until raised. Cleared by the raising system when all targets are met.
 
 	// Consolidated representation of a single army for viewing purposes.
 	struct single

@@ -35,7 +35,8 @@ export const RENDER_CONFIG =
     tint_entities: true, // Tint entities by ownership (own / other).
     outlined_entity: null as number | null, // GUID of the entity drawn with a selection outline.
     // If set, draws the path from start through points (waypoints, as returned by Backend.query_path). Drawn red if not valid.
-    path_preview: null as { start: { x: number, y: number }, points: { x: number, y: number }[], valid: boolean } | null,
+    // color: overrides the valid / invalid color (any canvas color string).
+    path_preview: null as { start: { x: number, y: number }, points: { x: number, y: number }[], valid: boolean, color?: string } | null,
     overlay_dots: [] as OverlayDot[],
 };
 
@@ -432,7 +433,7 @@ function draw_path_preview()
 
     const startCenter = world_to_canvas(preview.start.x + 0.5, preview.start.y + 0.5);
 
-    ctx.strokeStyle = preview.valid ? PATH_PREVIEW_COLOR : PATH_PREVIEW_COLOR_INVALID;
+    ctx.strokeStyle = preview.color ?? (preview.valid ? PATH_PREVIEW_COLOR : PATH_PREVIEW_COLOR_INVALID);
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(startCenter.x, startCenter.y);

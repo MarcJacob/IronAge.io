@@ -112,15 +112,16 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 // Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
 constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
 
-// Moves men from a settlement pool to an army count, up to the target, the pool content and the per-tick limit.
-static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool)
+// Raises an army count towards its target, up to the per-tick limit. The men stay counted in the settlement pool, so the army can only
+// claim men the pool holds beyond what it already has (only one army per settlement for now, see SETTLEMENT_MAX_RAISED_ARMIES).
+static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16 pool)
 {
 	ui16 wanted = army_count < target ? target - army_count : 0;
-	ui16 drawn = wanted < pool ? wanted : pool;
+	ui16 available = pool > army_count ? pool - army_count : 0;
+	ui16 drawn = wanted < available ? wanted : available;
 	if (drawn > RAISE_POOL_DRAW_PER_TICK) drawn = RAISE_POOL_DRAW_PER_TICK;
 
 	army_count += drawn;
-	pool -= drawn;
 }
 
 void world_system_armies_raising(match_world_state& world)
@@ -141,20 +142,16 @@ void world_system_armies_raising(match_world_state& world)
 			continue;
 		}
 
-		// Still walking to the raise location.
-		if (!(armies.locations[armyIndex] == armies.movements[armyIndex].destination)) continue;
-
 		ui16 homeIndex = home.get_index();
 		world_entity_armies::comp& composition = armies.compositions[armyIndex];
 		const world_entity_armies::comp& target = armies.raise_targets[armyIndex];
-		settlement_troops& pool = settlements.local_troops[homeIndex];
+		const settlement_troops& pool = settlements.local_troops[homeIndex];
 
-		// Levies come out of the population, one per tick, never leaving less than the minimum.
-		ui32& population = settlements.populations[homeIndex];
-		if (composition.levies < target.levies && population > RAISE_MIN_POPULATION_LEFT)
+		// Levies are claimed from the population (which keeps counting them), one per tick, never leaving less than the minimum unclaimed.
+		ui32 population = settlements.populations[homeIndex];
+		if (composition.levies < target.levies && population > (ui32)composition.levies + RAISE_MIN_POPULATION_LEFT)
 		{
 			composition.levies++;
-			population--;
 		}
 
 		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, pool.men_at_arms);
@@ -178,6 +175,7 @@ void world_system_armies_target_reached(match_world_state& world)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
 		if (armies.battles[armyIndex].is_valid()) continue; // Already fighting.
+		if (armies.raising[armyIndex]) continue; // Attacks once raised.
 
 		// An earlier resolution this tick may have destroyed the target.
 		entity_guid target = armies.action_targets[armyIndex];

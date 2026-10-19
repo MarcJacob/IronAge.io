@@ -2,8 +2,17 @@
 // Reads entity snapshots only: what a slider does is up to the callback. A new entity type gets its own function here, called by the mode that shows it.
 
 import type { EntityData } from "../gdo.js"
-import type { PanelState } from "./ui_element_properties_panel.js"
+import type { PanelState, StatRow } from "./ui_element_properties_panel.js"
 import { settlement_gauges, army_gauges, army_count_gauges, army_raise_targets } from "./troop_gauges.js"
+
+// Raised armies of a settlement (count against max) and the share of its population they hold. Raised men still count in the population.
+export function settlement_raised_rows(settlement: EntityData): StatRow[]
+{
+    return [
+        { label: "Raised armies", value: `${settlement.get_number("raised_armies")} / ${settlement.get_number("max_raised_armies")}` },
+        { label: "Raised", value: `${settlement.get_number("raised_percent")}% (${settlement.get_number("raised_men")} men)` },
+    ];
+}
 
 // Settlement: macro indicators, then the local troop pool (current, ceiling slider, max).
 // on_ceiling: makes the ceiling sliders interactive (see settlement_gauges).
@@ -16,6 +25,7 @@ export function settlement_panel(settlement: EntityData, on_ceiling?: (troop_typ
             { label: "Wealth", value: settlement.get_number("local_wealth") },
             { label: "Land output", value: settlement.get_number("land_output") },
             { label: "Tier", value: settlement.get_number("tier") },
+            ...settlement_raised_rows(settlement),
         ],
         gauges_title: "Local troops",
         slider_name: "ceiling",

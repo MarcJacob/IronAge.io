@@ -112,6 +112,14 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
 
+// Counts the armies raised from a settlement (home settlement with the same owner) and their total men.
+// Those men still count in the settlement's population (levies) and local troops (other types).
+void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_armies, ui32& out_men);
+
+// Removes men an army lost (or took away to settle) from its home settlement: levies from the population (never below 1), other types from the local pool.
+// Does nothing if the home settlement is gone or changed hands.
+void world_army_remove_men_from_home(match_world_state& world, ui16 army_index, const world_entity_armies::comp& men);
+
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count);
 
 bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 count);
@@ -199,7 +207,7 @@ void world_system_caravan_arrivals(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
 
-// Raising armies standing on their destination (and not in a battle) draw men from their home settlement.
+// Raising armies (not in a battle) draw men from their home settlement. They wait there until raised (see world_system_entity_movement).
 void world_system_armies_raising(match_world_state& world);
 
 void world_system_battles(match_world_state& world);

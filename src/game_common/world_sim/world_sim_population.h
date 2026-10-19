@@ -13,6 +13,15 @@ static const ui8 POP_CAP_PER_TILE = 2;
 // Raising levies never takes a settlement's population below this.
 static constexpr ui32 RAISE_MIN_POPULATION_LEFT = 10;
 
+// How many armies a settlement can have raised at once. A constant for now: buildings may raise it later.
+static constexpr ui8 SETTLEMENT_MAX_RAISED_ARMIES = 1;
+
+// Share of a settlement's population that is raised in armies, in percent rounded down. Raised men count every troop type.
+static inline ui32 settlement_raised_percent(ui32 raised_men, ui32 population)
+{
+	return population > 0 ? (ui32)((ui64)raised_men * 100 / population) : 0;
+}
+
 // Population and local troop pool growth run on each settlement once every this many ticks (staggered by the settlement's GUID extra field).
 static constexpr ui32 GROWTH_TICK_PERIOD = 50;
 

@@ -1,6 +1,7 @@
 #include "game_common/match/world.h"
 #include "world_sim.h"
 #include "world_sim_population.h"
+#include "world_sim_army.h"
 
 // Used to initialize default values on entity property fields if they are left at 0.
 #define SET_DEFAULT_VAL(value, default) \
@@ -285,6 +286,37 @@ void world_settlement_decrease_population(match_world_state& world, entity_guid 
 	}
 }
 
+void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_armies, ui32& out_men)
+{
+	const world_entity_armies& armies = world.entities.armies;
+	match_player_id owner = world.entities.settlements.owners[settlement.get_index()];
+
+	out_armies = 0;
+	out_men = 0;
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !(armies.home_settlements[armyIndex] == settlement) || armies.owners[armyIndex] != owner) continue;
+
+		out_armies++;
+		out_men += (ui32)army_total_manpower(armies.compositions[armyIndex]);
+	}
+}
+
+void world_army_remove_men_from_home(match_world_state& world, ui16 army_index, const world_entity_armies::comp& men)
+{
+	entity_guid home = world.entities.armies.home_settlements[army_index];
+	if (!world_entity_is_valid(world, home) || world.entities.settlements.owners[home.get_index()] != world.entities.armies.owners[army_index]) return;
+
+	ui16 homeIndex = home.get_index();
+	ui32& population = world.entities.settlements.populations[homeIndex];
+	population = population > (ui32)men.levies + 1 ? population - men.levies : 1;
+
+	settlement_troops& pool = world.entities.settlements.local_troops[homeIndex];
+	pool.men_at_arms = pool.men_at_arms > men.men_at_arms ? pool.men_at_arms - men.men_at_arms : 0;
+	pool.horsemen = pool.horsemen > men.horsemen ? pool.horsemen - men.horsemen : 0;
+	pool.knights = pool.knights > men.knights ? pool.knights - men.knights : 0;
+}
+
 world_location world_get_entity_location(const match_world_state& world, entity_guid entity)
 {
 	ENTITY_TYPE type = entity.get_type();
@@ -315,6 +347,9 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 	const world_entity_settlements& settlements = world.entities.settlements;
 	ui16 i = entity.get_index();
 
+	ui32 raisedArmies, raisedMen;
+	world_settlement_raised(world, entity, raisedArmies, raisedMen);
+
 	out_state = {
 		.owner = settlements.owners[i],
 		.location = settlements.locations[i],
@@ -326,6 +361,10 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 		.troop_ceilings = settlements.troop_ceilings[i],
 		.troop_max = settlement_troop_max(settlements.populations[i]),
 		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
+		.raised_armies = (ui8)raisedArmies,
+		.max_raised_armies = SETTLEMENT_MAX_RAISED_ARMIES,
+		.raised_men = raisedMen,
+		.raised_percent = settlement_raised_percent(raisedMen, settlements.populations[i]),
 		.tier = settlements.tiers[i],
 		.trade_attaction_index = settlements.trade_attraction_indices[i],
 	};

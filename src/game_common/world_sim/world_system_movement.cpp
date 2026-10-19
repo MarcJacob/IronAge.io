@@ -145,6 +145,10 @@ void world_system_entity_movement(match_world_state& world)
 			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
 			armies.movements[armyIndex].destination = battleLoc;
 		}
+		else if (armies.raising[armyIndex])
+		{
+			continue; // Raising armies wait in their settlement, keeping their destination for when they are raised.
+		}
 
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}

@@ -1,5 +1,6 @@
-// Raising an army from a settlement. The player sets the troops to raise in the advanced action panel, then picks the raise location (in the settlement's territory).
-// The army appears there, empty, and draws its men from the settlement until it reaches its targets (it refuses move and attack orders until then, see world_system_armies_raising).
+// Raising an army from a settlement. The player sets the troops to raise in the advanced action panel, then picks the target location (in the settlement's territory).
+// The army appears inside the settlement, empty, and draws its men from it until it reaches its targets (see world_system_armies_raising), then walks to the target.
+// Its men keep counting in the settlement's population: the panel shows how much of it is raised. A settlement has a limited number of raised armies.
 // The path from the settlement to the hovered tile is previewed, red if the order would be refused.
 // A click sends the order and leaves the mode. Escape leaves without raising.
 
@@ -11,6 +12,7 @@ import { submit_hint } from "../ui/ui_element_hint.js"
 import { hotkey_text } from "../ui/ui_element_action_bar.js"
 import { submit_advanced_action_panel } from "../ui/ui_element_advanced_action_panel.js"
 import { army_gauges, raise_target_props } from "../ui/troop_gauges.js"
+import { settlement_raised_rows } from "../ui/entity_panels.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
@@ -39,7 +41,7 @@ export class ArmyRaising extends Core.Mode
 
     on_entry(): void
     {
-        submit_hint({ text: `Raise Army: set the troops with the sliders, then click a tile of the settlement's territory. The army appears there and gathers its men from the settlement over time (it cannot move until raised). Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
+        submit_hint({ text: `Raise Army: set the troops with the sliders, then click a tile of the settlement's territory as the army's target. The army gathers its men inside the settlement over time, then marches to the target (select it and right click to change the target, even while raising). Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
     }
 
     on_exit(): void
@@ -61,6 +63,7 @@ export class ArmyRaising extends Core.Mode
 
         submit_advanced_action_panel({
             title: "Raise army",
+            stats: settlement_raised_rows(view),
             gauges_title: "Troops to raise",
             slider_name: "target",
             gauges: army_gauges(null, view, this.targets, (troop, value) => { this.targets[troop] = value; }),

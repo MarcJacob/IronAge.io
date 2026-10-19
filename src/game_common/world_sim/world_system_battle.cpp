@@ -91,6 +91,10 @@ void world_system_battles(match_world_state& world)
 			army_unit_counts(composition, after);
 			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= before[unitType] - after[unitType];
 
+			// The dead were still counted in the home settlement: they are gone from it too.
+			world_entity_armies::comp lost = { (ui16)(before[0] - after[0]), (ui16)(before[1] - after[1]), (ui16)(before[2] - after[2]), (ui16)(before[3] - after[3]) };
+			world_army_remove_men_from_home(world, (ui16)armyIndex, lost);
+
 			// A raising army that took no damage is just empty (still waiting for its men), not wiped out.
 			if (army_total_manpower(composition) == 0 && !(armies.raising[armyIndex] && taken == 0)) world_destroy_army(world, armies.guids[armyIndex]);
 		}
