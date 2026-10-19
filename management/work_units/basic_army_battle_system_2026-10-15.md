@@ -35,6 +35,30 @@ Armies catching armies create a Battle entity (static layout, no army list). Arm
 
 None. Battle UI hand-tested OK (2026-10-16).
 
-## Next
+## Phase 2 (2026-10-19, unattended run; commit only, never push)
 
-Done.
+Phases (sequential commits by manager):
+- A [client UI]: generic entity inspection panel (troops + settlement macro stats), new "advanced action panel" above action bar, army raising from settlement uses it; fix raising mode text.
+- B [sim]: raising rework: N raised armies per settlement (number, not bool); army still counts in settlement pop (track raised %); spawns inside settlement, moves to target when done raising; right click retargets; origin kept. Client: path preview green (move) / red (attack target) for selected army.
+- C [sim+UI]: Warband (current army) / Army (up to 64 warbands by entity index, same owner, join within 5 tiles, merge, detach, accompany friendly). Army panel: combined bar + warband list.
+- D [sim+UI]: Siege entity (-5% pop/troops per growth tick), join/attack besiegers, Assault (defense x2) / Lift / detach; defender Sally (no bonus); defending-army spawn in own function. Disband action (inside home territory).
+- E: svg icons crossed swords (battle), catapult (siege).
+
+### Architecture gaps noted (for user)
+
+(builders append here, terse)
+
+- A: *front_src.imprint.md* lists the UI elements (hint, action bar) and not the properties panel nor the new advanced action panel / *entity_panels.ts*: imprint needs a user update.
+- A: the raise mode still previews a path from the settlement to the hovered tile, though the army spawns at the tile (no walk today). Kept as is; it becomes accurate with phase B (spawn inside, walk out).
+- A: *ui_element_advanced_action_panel.ts* imports the renderer (`PanelView`) from *ui_element_properties_panel.ts* (element -> element import). Could move to a shared *ui/panel_view.ts* if more panels come.
+
+### Phase A notes
+
+- Panel content is one `PanelState` (title, stat rows, optional gauges heading, gauges); properties panel and advanced action panel both render it with `PanelView`.
+- Per-entity-type states in *ui/entity_panels.ts* (`settlement_panel`, `army_panel`). Settlement stats: population, wealth, land output, tier (what the GDO has). Army stats: men, state (in battle / raising / ready).
+- The settlement panel now stays visible while raising (the raise controls moved to the advanced action panel).
+- Raise mode shows no validity text in the panel (feedback still only colors the path preview), to keep scope.
+
+### Status
+
+(manager updates: phase -> state)

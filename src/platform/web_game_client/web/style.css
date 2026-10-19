@@ -123,8 +123,43 @@ body {
     pointer-events: auto;
 }
 
-#game_hud_properties_title {
+/* Advanced action panel: controls of a complex action (e.g. raising an army), floating just above the action bar, same width and centering. */
+#game_hud_advanced_action_panel {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 124px;
+    width: 33.333%;
+    min-width: 22rem;
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 160px);
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+    font-family: monospace;
+    pointer-events: auto;
+}
+
+#game_hud_properties_title,
+#game_hud_advanced_action_title {
     margin-bottom: 6px;
+    font-weight: bold;
+}
+
+/* Stat row of a panel: label left, value right. */
+.panel_stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 2px;
+}
+
+/* Heading above a panel's gauges. */
+.panel_heading {
+    margin: 8px 0 4px;
     font-weight: bold;
 }
 

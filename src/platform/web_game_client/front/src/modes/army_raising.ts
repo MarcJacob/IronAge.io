@@ -1,5 +1,6 @@
-// Raising an army from a settlement. The player picks the raise location (in its territory) the new army will move to.
-// The raise location must be in the settlement's territory, and the preview is limited to it. The path to the hovered tile is previewed, red if the order would be refused.
+// Raising an army from a settlement. The player sets the troops to raise in the advanced action panel, then picks the raise location (in the settlement's territory).
+// The army appears there, empty, and draws its men from the settlement until it reaches its targets (it refuses move and attack orders until then, see world_system_armies_raising).
+// The path from the settlement to the hovered tile is previewed, red if the order would be refused.
 // A click sends the order and leaves the mode. Escape leaves without raising.
 
 import * as Core from "../core.js"
@@ -8,7 +9,7 @@ import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR, type CommandFeedback } from "../input.js"
 import { submit_hint } from "../ui/ui_element_hint.js"
 import { hotkey_text } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
+import { submit_advanced_action_panel } from "../ui/ui_element_advanced_action_panel.js"
 import { army_gauges, raise_target_props } from "../ui/troop_gauges.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
@@ -38,13 +39,13 @@ export class ArmyRaising extends Core.Mode
 
     on_entry(): void
     {
-        submit_hint({ text: `Raise Army: set the troops with the sliders, then click a tile to raise an army that moves there. Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
+        submit_hint({ text: `Raise Army: set the troops with the sliders, then click a tile of the settlement's territory. The army appears there and gathers its men from the settlement over time (it cannot move until raised). Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
     }
 
     on_exit(): void
     {
         submit_hint(null);
-        submit_properties_panel(null);
+        submit_advanced_action_panel(null);
         Render.RENDER_CONFIG.path_preview = null;
     }
 
@@ -58,8 +59,9 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
-        submit_properties_panel({
+        submit_advanced_action_panel({
             title: "Raise army",
+            gauges_title: "Troops to raise",
             slider_name: "target",
             gauges: army_gauges(null, view, this.targets, (troop, value) => { this.targets[troop] = value; }),
         });

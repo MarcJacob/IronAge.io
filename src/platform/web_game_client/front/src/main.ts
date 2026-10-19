@@ -16,6 +16,7 @@ import { init_placement_ui } from './ui/placement_ui.js';
 import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
 import { init_ui_element_hint } from './ui/ui_element_hint.js';
 import { init_ui_element_properties_panel } from './ui/ui_element_properties_panel.js';
+import { init_ui_element_advanced_action_panel } from './ui/ui_element_advanced_action_panel.js';
 import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
@@ -147,6 +148,7 @@ async function start()
     init_ui_element_action_bar();
     init_ui_element_hint();
     init_ui_element_properties_panel();
+    init_ui_element_advanced_action_panel();
 
     // Nothing but the lobby until the server says otherwise.
     Core.start_mode_stack(new LobbyBase());

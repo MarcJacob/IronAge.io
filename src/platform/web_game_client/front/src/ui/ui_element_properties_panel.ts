@@ -1,7 +1,8 @@
 // UI element: the entity properties panel, left of the bottom action bar (container in index.html, content built here).
-// Shows general information about what is selected, as a title and a list of gauges. A gauge shows a current value against a max,
+// Shows general information about what is selected, as a title, a list of stat rows (label / value) and a list of gauges. A gauge shows a current value against a max,
 // and optionally a slider (a ceiling, a target...) the player can move. Pure display: a gauge only emits on_change, when the slider is released.
 // A mode keeps its own state, submits it with submit_properties_panel (every frame is fine: the panel updates in place) and submits null to clear it.
+// The per-entity-type states are built in entity_panels.ts. PanelView (below) renders a PanelState into any panel DOM: other panels reuse it (advanced action panel).
 
 export interface GaugeState
 {
@@ -15,11 +16,20 @@ export interface GaugeState
     warn_below_current?: boolean; // Warn (red) while the slider is below current: releasing there discards the difference.
 }
 
-export interface PropertiesPanelState
+// One line of text: a label and its value (e.g. "Population 120").
+export interface StatRow
+{
+    label: string;
+    value: string | number;
+}
+
+export interface PanelState
 {
     title: string;
+    stats?: StatRow[]; // Shown first, under the title.
+    gauges_title?: string; // Heading above the gauges.
     slider_name?: string; // What the slider means, shown in the gauge text ("ceiling", "target").
-    gauges: GaugeState[];
+    gauges?: GaugeState[];
 }
 
 // How long a released value is kept shown while waiting for the game state to catch up with it.
@@ -108,42 +118,82 @@ class Gauge
     }
 }
 
-let panelElement: HTMLElement | null = null;
-let titleElement: HTMLElement | null = null;
-let gaugesElement: HTMLElement | null = null;
+// Renders a PanelState into a panel: root (hidden when cleared), title and content elements, the rows and gauges being built inside content.
+export class PanelView
+{
+    private builtKey: string | null = null; // What the built rows and gauges are made for. A different key rebuilds them, the same key updates them in place (a slider mid-drag survives).
+    private statValues: HTMLElement[] = [];
+    private gauges: Gauge[] = [];
 
-let builtKey: string | null = null; // What the built gauges are made for. A different key rebuilds them, the same key updates them in place (a slider mid-drag survives).
-let gauges: Gauge[] = [];
+    constructor(private root: HTMLElement, private title: HTMLElement, private content: HTMLElement) {}
+
+    // Makes the panel show the given state. Null clears it (hidden).
+    submit(state: PanelState | null): void
+    {
+        this.root.hidden = state === null;
+        if (state === null)
+        {
+            this.content.replaceChildren();
+            this.statValues = [];
+            this.gauges = [];
+            this.builtKey = null;
+            return;
+        }
+
+        this.title.textContent = state.title;
+
+        const stats = state.stats ?? [];
+        const gauges = state.gauges ?? [];
+        const key = [state.title, state.gauges_title ?? "", ...stats.map(stat => stat.label), "#", ...gauges.map(gauge => gauge.label + (gauge.on_change !== undefined ? "+" : ""))].join("|");
+        if (key !== this.builtKey) this.build(state.gauges_title, stats, gauges, key);
+
+        stats.forEach((stat, i) => {
+            const text = String(stat.value);
+            if (this.statValues[i].textContent !== text) this.statValues[i].textContent = text;
+        });
+        gauges.forEach((gauge, i) => this.gauges[i].update(gauge, state.slider_name ?? ""));
+    }
+
+    private build(gauges_title: string | undefined, stats: StatRow[], gauges: GaugeState[], key: string): void
+    {
+        this.content.replaceChildren();
+
+        this.statValues = stats.map(stat => {
+            const row = document.createElement("div");
+            row.className = "panel_stat";
+            const label = document.createElement("span");
+            label.textContent = stat.label;
+            const value = document.createElement("span");
+            row.append(label, value);
+            this.content.appendChild(row);
+            return value;
+        });
+
+        if (gauges_title !== undefined)
+        {
+            const heading = document.createElement("div");
+            heading.className = "panel_heading";
+            heading.textContent = gauges_title;
+            this.content.appendChild(heading);
+        }
+
+        this.gauges = gauges.map(gauge => new Gauge(this.content, gauge));
+        this.builtKey = key;
+    }
+}
+
+let panelView: PanelView | null = null;
 
 export function init_ui_element_properties_panel(): void
 {
-    panelElement = document.getElementById("game_hud_properties_panel") as HTMLElement;
-    titleElement = document.getElementById("game_hud_properties_title") as HTMLElement;
-    gaugesElement = document.getElementById("game_hud_properties_gauges") as HTMLElement;
+    panelView = new PanelView(
+        document.getElementById("game_hud_properties_panel") as HTMLElement,
+        document.getElementById("game_hud_properties_title") as HTMLElement,
+        document.getElementById("game_hud_properties_content") as HTMLElement);
 }
 
 // Makes the panel show the given state. Null clears it (hidden).
-export function submit_properties_panel(state: PropertiesPanelState | null): void
+export function submit_properties_panel(state: PanelState | null): void
 {
-    if (panelElement === null || titleElement === null || gaugesElement === null) return;
-
-    panelElement.hidden = state === null;
-    if (state === null)
-    {
-        gaugesElement.replaceChildren();
-        gauges = [];
-        builtKey = null;
-        return;
-    }
-
-    titleElement.textContent = state.title;
-
-    const key = state.title + "|" + state.gauges.map(gauge => gauge.label + (gauge.on_change !== undefined ? "+" : "")).join("|");
-    if (key !== builtKey)
-    {
-        gaugesElement.replaceChildren();
-        gauges = state.gauges.map(gauge => new Gauge(gaugesElement as HTMLElement, gauge));
-        builtKey = key;
-    }
-    state.gauges.forEach((gauge, i) => gauges[i].update(gauge, state.slider_name ?? ""));
+    panelView?.submit(state);
 }
