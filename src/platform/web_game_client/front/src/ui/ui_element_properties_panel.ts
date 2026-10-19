@@ -37,7 +37,7 @@ export interface ListRow
     text: string;
     segments?: BarSegment[];
     selected?: boolean; // Highlighted.
-    on_click?: () => void; // Makes the row clickable.
+    on_click?: (event: MouseEvent) => void; // Makes the row clickable. The event gives the held modifiers (Shift, Ctrl...).
 }
 
 export interface PanelState
@@ -247,7 +247,7 @@ export class PanelView
             if (row.on_click !== undefined)
             {
                 root.classList.add("clickable");
-                root.addEventListener("click", () => this.list[i]?.on_click?.()); // The latest submitted row's callback.
+                root.addEventListener("click", event => this.list[i]?.on_click?.(event)); // The latest submitted row's callback.
             }
             this.content.appendChild(root);
             return { root, text, parts };

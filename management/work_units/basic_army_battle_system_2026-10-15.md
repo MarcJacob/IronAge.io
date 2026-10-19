@@ -78,6 +78,19 @@ Phases (sequential commits by manager):
 - D2: Assault / Lift / Sally / Disband validity is asked to the backend every frame (one command build each) to grey the buttons out; no reason is shown (only the Disband hint says "inside home territory").
 - D2: path preview of a raising army with a stored attack target is now green (its state is RAISING); red only while state is ATTACKING.
 
+### UI feedback pass notes (client only, 2026-10-19)
+
+- Main play enters Settlement / Army / Siege / Battle selected for anyone's entity. Role decided per frame; items greyed via `is_command_valid`.
+- Settlement: Build Road / Raise Army probed with placeholder commands (road to a neighbour tile; 1 man-at-arms on the settlement tile), so the limit / population / siege / owner checks grey them. Ceiling sliders interactive only while a ceiling change is valid. Besieged: "Under siege" stat row (growth_ticks shown if the siege GDO has it) and hint line "building and raising are blocked".
+- Army (not own): same panel and bar, owner items greyed, no orders (right click falls through), no hint, no path preview (enemy destinations not shown). "Detach from siege" now greyed via validity (the commander can use it on others' armies).
+- Siege: Assault / Lift / Sally shown to every viewer, greyed by validity.
+- New Battle selected mode (*modes/battle_selected.ts*, child of Main play): empty bar, `battle_panel` (attackers / defenders men, defense doubled or normal, duration in ticks, red/blue bar, per-side type split rows).
+- Warband list: click selects only that row, Ctrl (or Cmd) + click toggles, Shift + click selects anchor..row. `ListRow.on_click` now gets the MouseEvent. Rows `user-select: none`.
+- Multi-warband army: no gauges (panel does not resize); the split bar always has 8 segments: selected warbands' types (darker colors, `TROOPS.dark`) left, others right.
+- Gap: raise target sliders are only shown for a single-warband army; a raising warband in a multi-warband army can only be stopped (Stop raising on the bar), not retargeted.
+- Gap: the sim's new `COMMAND_ERROR_UNDER_SIEGE` bit is not mirrored in *input.ts* `COMMAND_ERROR` (not needed by this pass, which only uses validity); whoever owns the sim change should mirror it.
+- Gap: imprint mode tree lacks Battle selected and the any-viewer modes.
+
 ### Phase D2 notes (client: sieges, icons, disband)
 
 - Sieges in the render state (*game_client_render.cpp*, like battles, owner INVALID). render.ts draws a siege icon right of its settlement's icon, edges touching (`entity_draw_center`, also used by picking): both stay clickable, no overlap at any zoom.
@@ -151,7 +164,26 @@ Unresolved risks (not changed, design-level or pre-existing):
 - Detaching from an army in a siege makes a free army (not in the siege) next to it.
 - front_src imprint mode tree does not list Siege selected (imprint, not edited).
 
+### Phase D3 notes (siege starvation, surrender, besieged settlement locked; sim only, unattended)
+
+- Siege state: `growth_ticks` (ui16, zero-init, appended), counted on the settlement's growth ticks, capped at the surrender value. Constants in *world.h* next to `SIEGE_MAX_ARMIES`: `SIEGE_STARVATION_GRACE_GROWTH_TICKS = 10`, `SIEGE_SURRENDER_GROWTH_TICKS = 30`.
+- Growth ticks 1-10: nothing dies. 11-29: 5% (at least 1) of population (never below 1, kept) and of each local troop count. 30: population set to 1 (0 would stop its growth for good), local troops 0, owner = commander (same one-line capture as an assault win; no helper extracted), siege destroyed right away.
+- Surrender waits while an assault / sally battle is in progress (attrition goes on): that battle decides, and the siege ends with it.
+- Siege GDO: `growth_ticks`, query-only `starvation_in` (growth ticks until the first deadly one, 0 once starving) and `surrender_in` (until the surrender one). Settlement GDO already had `siege` (used as "under siege").
+- New `COMMAND_ERROR_UNDER_SIEGE` (1 << 11), mirrored in input.ts (one line). Refused while the settlement has a siege: RAISE_ARMY, BUILD_ROAD, SET_SETTLEMENT_TROOP_CEILING, and SET_ARMY_RAISE_TARGETS (home settlement besieged). STOP_RAISING_ARMY stays allowed (only stops drawing). Siege commands (sally out) untouched.
+- Not changed: a warband already raising keeps drawing from its besieged home.
+
 ### Status
 
 - A, B, C1, C2, D1, D2 (incl. E icons), compile-risk review: committed, NOT built or hand-tested (imprints forbid agent builds). Next: user builds (wasm, win32, tsc), hand-checks, fixes. Imprint updates pending (front_src, world_sim).
 - Note: C2 note "ARMY_STATE not mirrored in TS" is stale (mirrored in C2/D2).
+
+### Perf investigation (2026-10-19, read-only, unconfirmed)
+
+- Prime suspect: pathfinding. A full A* runs on every tile step (path handle never kept), and every tick for an entity stuck at the closest reachable tile (count 0, world_system_movement.cpp:74-80). A search is capped at ~6144 nodes (256 KiB scratch), and the heuristic assumes cost 1 while plains cost 3, so most off-road paths beyond ~30-40 tiles hit the cap (partial).
+- New since Phase B: raised armies walk from the settlement to the raise location (before, they spawned there). Raise / move targets are not checked for reachability, and territory includes coast water, so an army can sit at the shore running a capped search every tick, forever.
+- Battle midpoints (world_system_army.cpp:81) can be water: armies more than 2 tiles away flood every tick while the battle lasts.
+- Amplifiers: same-speed armies step tiles on the same ticks; the server catch-up loop (game_server_match_play.cpp:303) then sends ticks in bursts.
+- Entity scans (raised count, battles x warbands, siege lookup) are O(512) on a 4x4 map: negligible on the server.
+- Pre-existing network suspects: no TCP_NODELAY on server sockets, Sleep(1) in the net threads (~15.6 ms without timeBeginPeriod), DEV_MODE CreateFile on each main-loop iteration.
+- No tick timing instrumentation exists yet.

@@ -203,6 +203,8 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
+	if (world_settlement_siege(world, command.settlement).is_valid() && command_add_error(feedback, COMMAND_ERROR_UNDER_SIEGE)) return false;
+
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
@@ -326,6 +328,8 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 	const world_entity_settlements& settlements = world.entities.settlements;
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
+	if (world_settlement_siege(world, command.settlement).is_valid() && command_add_error(feedback, COMMAND_ERROR_UNDER_SIEGE)) return false;
+
     // The origin and destination must be in the world, and not be equal to eachother.
     if (command.origin == command.destination && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION)) return false;
 
@@ -399,6 +403,8 @@ bool command_set_settlement_troop_ceiling_validity_check(const match_world_state
 
 	if (world.entities.settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
+	if (world_settlement_siege(world, command.settlement).is_valid() && command_add_error(feedback, COMMAND_ERROR_UNDER_SIEGE)) return false;
+
 	// No dedicated error for this: reported as unspecified.
 	if (command.troop_type >= POOLABLE_TROOP_TYPE_COUNT && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
@@ -452,6 +458,9 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
+
+	// Raise targets are what the home settlement gives: a besieged one takes no change.
+	if (world_settlement_siege(world, home).is_valid() && command_add_error(feedback, COMMAND_ERROR_UNDER_SIEGE)) return false;
 
 	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
 	ui32 populationCurrent = world.entities.settlements.populations[home.get_index()];

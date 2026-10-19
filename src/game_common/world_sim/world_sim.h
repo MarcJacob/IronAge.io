@@ -254,7 +254,7 @@ void world_siege_remove_army(match_world_state& world, entity_guid army);
 // defense_bonus doubles the defenders' defense (assault). The siege ends once the battle is over (see world_system_sieges).
 void world_siege_start_battle(match_world_state& world, entity_guid siege, bool defense_bonus);
 
-// Sieges: their armies leaving or dying, their end, and the attrition of the besieged settlements (every growth tick).
+// Sieges: their armies leaving or dying, their end, and the starvation and surrender of the besieged settlements (counted in growth ticks).
 void world_system_sieges(match_world_state& world);
 
 // LIFECYCLE

@@ -161,6 +161,7 @@ export const COMMAND_ERROR = {
     ARMY_RAISING: 1 << 8,
     NO_RAISE_TARGET: 1 << 9,
     INVALID_SELECTION: 1 << 10,
+    UNDER_SIEGE: 1 << 11,
 } as const;
 
 // Values of the feedback's invalid_path_reason. Mirrors COMMAND_INVALID_PATH_REASON (commands.h) by hand.

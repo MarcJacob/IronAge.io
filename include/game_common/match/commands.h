@@ -87,6 +87,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses the order (settling).
 	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
 	COMMAND_ERROR_INVALID_SELECTION = 1 << 10, // Warband selection empty, outside the army's warbands, or all of them (detach).
+	COMMAND_ERROR_UNDER_SIEGE = 1 << 11, // The settlement is besieged: it takes no settlement command.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.

@@ -554,8 +554,14 @@ GAME_DATA_OBJECT_DEF_END()
 // Max armies besieging one settlement.
 static constexpr ui8 SIEGE_MAX_ARMIES = 16;
 
+// Starvation of a besieged settlement, counted in its growth ticks since the siege began (see world_system_sieges).
+// Nothing dies during the first SIEGE_STARVATION_GRACE_GROWTH_TICKS; on growth tick SIEGE_SURRENDER_GROWTH_TICKS the settlement surrenders.
+static constexpr ui16 SIEGE_STARVATION_GRACE_GROWTH_TICKS = 10;
+static constexpr ui16 SIEGE_SURRENDER_GROWTH_TICKS = 30;
+
 // A siege of a settlement: started by an army attacking an enemy settlement, joined by the next armies attacking it (one siege per settlement).
-// Besieging armies are pinned until they leave it, and the settlement loses population and local troops every growth tick.
+// Besieging armies are pinned until they leave it. After a grace period the settlement starves (population and local troops every growth tick),
+// then surrenders to the commander as if an assault was won. A besieged settlement refuses every settlement command (COMMAND_ERROR_UNDER_SIEGE).
 // The commander can assault, the defender can sally out: both are a battle of the besiegers against the settlement's defenders (see world_spawn_settlement_defenders).
 // Ends with that battle, when the settlement is gone or changes hands, when the commander lifts it, or when no army is left in it.
 struct world_entity_sieges : public world_entity_container
@@ -569,6 +575,7 @@ struct world_entity_sieges : public world_entity_container
 		entity_guid battle; // Assault or sally in progress, if any.
 		ui8 army_count;
 		entity_guid armies[SIEGE_MAX_ARMIES]; // Besieging armies in joining order, army_count first ones used.
+		ui16 growth_ticks; // Growth ticks of the settlement since the siege began.
 	} *states;
 
 	// Consolidated representation of a single siege for viewing purposes.
@@ -578,6 +585,9 @@ struct world_entity_sieges : public world_entity_container
 		// Query-only: men per unit type (army comp order) of the besiegers, and of the defenders the settlement would field right now.
 		ui32 besieger_men[world_entity_battles::UNIT_TYPES];
 		ui32 defender_men[world_entity_battles::UNIT_TYPES];
+		// Query-only: growth ticks until the first one the settlement starves on (0 once it starves), and until the one it surrenders on.
+		ui16 starvation_in;
+		ui16 surrender_in;
 	};
 };
 
@@ -601,6 +611,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_siege)
 	GAME_DATA_PROPERTY_PATH(defender_men_at_arms, defender_men[1], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(defender_horsemen, defender_men[2], GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(defender_knights, defender_men[3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(growth_ticks, siege.growth_ticks, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(starvation_in, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(surrender_in, GAME_DATA_PROP_TYPE::UI16)
 	SIEGE_ARMY_PROPERTY(0) SIEGE_ARMY_PROPERTY(1) SIEGE_ARMY_PROPERTY(2) SIEGE_ARMY_PROPERTY(3)
 	SIEGE_ARMY_PROPERTY(4) SIEGE_ARMY_PROPERTY(5) SIEGE_ARMY_PROPERTY(6) SIEGE_ARMY_PROPERTY(7)
 	SIEGE_ARMY_PROPERTY(8) SIEGE_ARMY_PROPERTY(9) SIEGE_ARMY_PROPERTY(10) SIEGE_ARMY_PROPERTY(11)

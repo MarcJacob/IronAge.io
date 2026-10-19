@@ -1,15 +1,15 @@
-// Ordinary gameplay: HUD, entity selection and orders. Selecting an own settlement enters the settlement selected mode, an own army the army selected mode,
-// any siege the siege selected mode.
+// Ordinary gameplay: HUD, entity selection and orders. Selecting a settlement enters the settlement selected mode, an army the army selected mode,
+// a siege the siege selected mode, a battle the battle selected mode (anyone's).
 
 import * as Core from "../core.js"
 import * as Render from "../render.js"
 import * as Backend from "../backend.js"
 import { get_selected_entity_guid, get_selected_entity_view, set_selected_entity_guid } from "../input.js"
-import { is_own_army, is_own_settlement } from "../main.js"
 import { set_game_ui_visible, update_game_ui } from "../ui/game_ui.js"
 import { SettlementSelected } from "./settlement_selected.js"
 import { ArmySelected } from "./army_selected.js"
 import { SiegeSelected } from "./siege_selected.js"
+import { BattleSelected } from "./battle_selected.js"
 
 export class MainPlay extends Core.Mode
 {
@@ -36,11 +36,13 @@ export class MainPlay extends Core.Mode
 
         const selected = get_selected_entity_view();
 
+        // Anyone's entity: each mode disables what the local player cannot do.
         if (selected !== null)
             {
-                if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
-                else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
+                if (selected.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) Core.push_mode(new SettlementSelected(), this);
+                else if (selected.entity_type === Backend.ENTITY_TYPE.ARMY) Core.push_mode(new ArmySelected(selected.guid), this);
                 else if (selected.entity_type === Backend.ENTITY_TYPE.SIEGE) Core.push_mode(new SiegeSelected(selected.guid), this);
+                else if (selected.entity_type === Backend.ENTITY_TYPE.BATTLE) Core.push_mode(new BattleSelected(selected.guid), this);
             }
     }
 

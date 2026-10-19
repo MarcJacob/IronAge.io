@@ -714,6 +714,8 @@ bool query_entity_state_siege(const match_world_state& world, entity_guid entity
 	const world_entity_sieges::state& siege = world.entities.sieges.states[entity.get_index()];
 	out_state = {};
 	out_state.siege = siege;
+	if (siege.growth_ticks <= SIEGE_STARVATION_GRACE_GROWTH_TICKS) out_state.starvation_in = (ui16)(SIEGE_STARVATION_GRACE_GROWTH_TICKS + 1 - siege.growth_ticks);
+	if (siege.growth_ticks < SIEGE_SURRENDER_GROWTH_TICKS) out_state.surrender_in = (ui16)(SIEGE_SURRENDER_GROWTH_TICKS - siege.growth_ticks);
 
 	// Besiegers: every army still in the siege (an army destroyed this tick may still be listed until the siege system runs).
 	for (ui8 slot = 0; slot < siege.army_count; slot++)

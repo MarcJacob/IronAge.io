@@ -191,6 +191,7 @@ body {
 
 .panel_list_row.clickable {
     cursor: pointer;
+    user-select: none; /* Shift + click selects rows, not text. */
 }
 
 .panel_list_row.clickable:hover {

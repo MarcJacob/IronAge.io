@@ -5,7 +5,7 @@
 #include "world_sim_battle.h"
 #include "world_sim_population.h"
 
-// Share of its population and of each local troop count a besieged settlement loses every growth tick (at least 1 while there is any).
+// Share of its population and of each local troop count a starving besieged settlement loses every growth tick (at least 1 while there is any).
 constexpr ui32 SIEGE_ATTRITION_PERCENT = 5;
 
 // Takes the army at the given slot out of a siege's list. The slots after it move down one, keeping the joining order.
@@ -128,14 +128,29 @@ void world_system_sieges(match_world_state& world)
 			continue;
 		}
 
-		// Attrition, on the settlement's growth ticks (same staggering as population growth). Population never goes below 1.
+		// Starvation, on the settlement's growth ticks (same staggering as population growth), counted since the siege began.
 		if ((state.settlement.get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
+		if (state.growth_ticks < SIEGE_SURRENDER_GROWTH_TICKS) state.growth_ticks++;
+		if (state.growth_ticks <= SIEGE_STARVATION_GRACE_GROWTH_TICKS) continue;
 
 		ui16 settlementIndex = state.settlement.get_index();
 		ui32& population = settlements.populations[settlementIndex];
-		if (population > 1) siege_attrition(population); // From 2 up, what is lost is always less than the population.
-
 		settlement_troops& pool = settlements.local_troops[settlementIndex];
+
+		// Surrender: every defender left dies (population kept at 1, as 0 would stop its growth for good) and the commander takes the settlement,
+		// as when an assault is won (see world_system_battles). Not during an assault or sally: that battle decides instead.
+		if (state.growth_ticks >= SIEGE_SURRENDER_GROWTH_TICKS && !world_entity_is_valid(world, state.battle))
+		{
+			population = 1;
+			pool.men_at_arms = 0;
+			pool.horsemen = 0;
+			pool.knights = 0;
+			settlements.owners[settlementIndex] = state.commander;
+			world_destroy_siege(world, siege);
+			continue;
+		}
+
+		if (population > 1) siege_attrition(population); // From 2 up, what is lost is always less than the population.
 		siege_attrition(pool.men_at_arms);
 		siege_attrition(pool.horsemen);
 		siege_attrition(pool.knights);

@@ -1,5 +1,5 @@
-// A siege is selected (anyone's): the properties panel shows both sides. Its commander gets Assault and Lift siege, its defender Sally out,
-// other players only the panel. Items are disabled while the backend says the command would be refused (e.g. a battle in progress).
+// A siege is selected (anyone's): the properties panel shows both sides. The bar has Assault and Lift siege (commander) and Sally out (defender) for every viewer,
+// disabled while the backend says the command would be refused (not their role, a battle in progress...).
 // Leaves when the selection stops being this siege. Escape clears the selection.
 
 import * as Core from "../core.js"
@@ -40,29 +40,22 @@ export class SiegeSelected extends Core.Mode
         this.update_bar(siege);
     }
 
-    // The local player's actions on the siege, and a hint saying what they do. Nothing for other players. Submitted only when the items change.
+    // Every siege action for every viewer, disabled where refused (the commander's, the defender's), and a hint saying what the local player's do.
+    // Submitted only when the items change.
     private update_bar(siege: EntityData): void
     {
         const localPlayerId = get_local_player_id();
-        const items: ActionBarItem[] = [];
+        const items: ActionBarItem[] = [this.make_item("Assault", "ASSAULT_SIEGE"), this.make_item("Lift siege", "LIFT_SIEGE"), this.make_item("Sally out", "SALLY_OUT")];
         let hint: string | null = null;
 
-        if (localPlayerId === siege.get_number("commander"))
-        {
-            items.push(this.make_item("Assault", "ASSAULT_SIEGE"), this.make_item("Lift siege", "LIFT_SIEGE"));
-            hint = "Siege: Assault attacks the defenders, whose defense is doubled. Lift siege frees your armies.";
-        }
-        else if (localPlayerId === siege.get_number("defender"))
-        {
-            items.push(this.make_item("Sally out", "SALLY_OUT"));
-            hint = "Your settlement is besieged: Sally out attacks the besiegers (no defense bonus).";
-        }
+        if (localPlayerId === siege.get_number("commander")) hint = "Siege: Assault attacks the defenders, whose defense is doubled. Lift siege frees your armies.";
+        else if (localPlayerId === siege.get_number("defender")) hint = "Your settlement is besieged: Sally out attacks the besiegers (no defense bonus).";
 
-        const key = items.map(item => item.name + ":" + item.state).join("|");
+        const key = items.map(item => item.name + ":" + item.state).join("|") + "|" + hint;
         if (key === this.barKey) return;
 
         this.barKey = key;
-        submit_action_bar(items.length > 0 ? { items } : null);
+        submit_action_bar({ items });
         submit_hint(hint !== null ? { text: hint } : null);
     }
 
