@@ -5,7 +5,7 @@
 #include "core/memory.h"
 #include "game_common/game_messages.h"
 #include "game_common/match/commands.h"
-#include "game_common/match/world.h"
+#include "game_common/match/world/world_terrain.h"
 
 #include "match_slots.h"
 #include "../game_server.h"
@@ -220,7 +220,7 @@ void match_slot_handle_message_client_tick(game_server& server, match_slot_index
 // Returns the player controlling at least MATCH_END_POPULATION_PERCENT of the world's total settlement population, or INVALID_MATCH_PLAYER_ID if none does.
 static match_player_id match_find_dominant_player(const match_world_state& world)
 {
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 
 	// Weighted majority vote (Boyer-Moore) finds the only player who could hold more than half the population, without per-player storage.
 	ui64 totalPopulation = 0;

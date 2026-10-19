@@ -91,7 +91,7 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
 
     // Copy match terrain (stored region by region) into the row-major terrain bitmap.
     {
-        const world_terrain& terrain = localMatch->world->terrain;
+        const world_terrain& terrain = *localMatch->world->terrain;
         const ui16 width = backend.render_state.world_size.x;
         const ui16 height = backend.render_state.world_size.y;
         for (ui16 y = 0; y < height; y++)

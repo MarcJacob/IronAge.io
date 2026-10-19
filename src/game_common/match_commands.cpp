@@ -1,9 +1,9 @@
 // Main implementation file for match input command functions.
 
 #include "game_common/match/commands.h"
-#include "game_common/match/world.h"
+#include "game_common/match/world/world_terrain.h"
+#include "game_common/match/world/world_entities.h"
 #include "world_sim/world_sim.h"
-#include "world_sim/world_sim_population.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
@@ -56,7 +56,6 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
         .owner = command.spawned_player,
         .location = command.spawn_location,
         .population = 500,
-        .tier = 1,
     };
 
     world_spawn_settlement(world, startSettlement);
@@ -74,16 +73,16 @@ bool command_set_entity_move_target_validity_check(const match_world_state& worl
 	if (!world_entity_is_valid(world, command.entity)) return false;
 
 	// Check that target coordinates are inside the world.
-	if (command.move_target.x >= world.terrain.size_tiles.x || command.move_target.y >= world.terrain.size_tiles.y) return false;
+	if (command.move_target.x >= world.terrain->size_tiles.x || command.move_target.y >= world.terrain->size_tiles.y) return false;
 
 	ENTITY_TYPE entityType = command.entity.get_type();
 	switch (entityType)
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		if (world.entities.armies.owners[command.entity.get_index()] != player) return false;
+		if (world.entities->armies.owners[command.entity.get_index()] != player) return false;
 		// An army refuses move orders until done raising.
-		if (world.entities.armies.raising[command.entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
+		if (world.entities->armies.raising[command.entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
 		return true;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -104,10 +103,10 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 	{
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
-		if (world.entities.armies.raising[command.entity.get_index()]) break;
-		world.entities.armies.movements[command.entity.get_index()].destination = command.move_target;
+		if (world.entities->armies.raising[command.entity.get_index()]) break;
+		world.entities->armies.movements[command.entity.get_index()].destination = command.move_target;
 		// A new move order overrides any attack the army was committed to.
-		world.entities.armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
+		world.entities->armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
 		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -125,13 +124,13 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 
 	if (!world_entity_is_valid(world, command.army)) return false;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
-	if (world.entities.armies.owners[command.army.get_index()] != player) return false;
-	if (world.entities.armies.raising[command.army.get_index()]) return false; // Not ready yet: an empty army would found a free settlement.
+	if (world.entities->armies.owners[command.army.get_index()] != player) return false;
+	if (world.entities->armies.raising[command.army.get_index()]) return false; // Not ready yet: an empty army would found a free settlement.
 
 	// The army is kept if the location is invalid or there is no room for the settlement.
-	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return false;
+	if (!world_is_valid_settlement_location(world, world.entities->armies.locations[command.army.get_index()], player)) return false;
 
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 	return settlements.active_count < settlements.max_count;
 }
 
@@ -143,22 +142,21 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	// Checked again: earlier commands in the same tick may have destroyed this army, filled the last settlement slot or made the location invalid.
 	if (!world_entity_is_valid(world, command.army)) return;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return;
-	if (world.entities.armies.raising[command.army.get_index()]) return;
-	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return;
+	if (world.entities->armies.raising[command.army.get_index()]) return;
+	if (!world_is_valid_settlement_location(world, world.entities->armies.locations[command.army.get_index()], player)) return;
 
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 	if (settlements.active_count >= settlements.max_count) return;
 
 	ui16 armyIndex = command.army.get_index();
-	const world_entity_armies& armies = world.entities.armies;
-	const world_entity_armies::comp& composition = armies.compositions[armyIndex];
+	const world_entity_armies& armies = world.entities->armies;
+	const army_troop_count& composition = armies.compositions[armyIndex];
 
 	world_entity_settlements::single newSettlement = {};
 	newSettlement.owner = armies.owners[armyIndex];
 	newSettlement.location = armies.locations[armyIndex];
 	newSettlement.population = (ui32)composition.levies + composition.men_at_arms
 		+ composition.horsemen + composition.knights;
-    newSettlement.tier = 1;
 
 	world_spawn_settlement(world, newSettlement);
 	world_destroy_army(world, command.army);
@@ -189,9 +187,9 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	}
 
 	ui16 settlementIndex = command.settlement.get_index();
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 
-	bool locationInWorld = command.raise_location.x < world.terrain.size_tiles.x && command.raise_location.y < world.terrain.size_tiles.y;
+	bool locationInWorld = command.raise_location.x < world.terrain->size_tiles.x && command.raise_location.y < world.terrain->size_tiles.y;
 	if (!locationInWorld && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
 
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
@@ -214,11 +212,11 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (locationInWorld)
 	{
 		ui16 regionIndex, tileIndex;
-		world_get_tile(world.terrain, command.raise_location, regionIndex, tileIndex);
-		if (world.terrain.regions[regionIndex].owners[tileIndex] != settlementIndex && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_TERRITORY)) return false;
+		world_get_tile(*world.terrain, command.raise_location, regionIndex, tileIndex);
+		if (world.terrain->regions[regionIndex].owners[tileIndex] != settlementIndex && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_TERRITORY)) return false;
 	}
 
-	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_armies& armies = world.entities->armies;
 	if (armies.active_count >= armies.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
 
 	return command_is_valid(feedback);
@@ -233,12 +231,12 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	const command_data_raise_army& command = command_header.get_command_data<command_data_raise_army>();
 
 	ui16 settlementIndex = command.settlement.get_index();
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owners[settlementIndex];
 	newArmy.location = command.raise_location; // The spawn function defaults the destination to the location.
-	newArmy.raise_target = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
 
@@ -255,20 +253,18 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 
 	if (!world_entity_is_valid(world, command.attacker_entity)) return false;
 	if (command.attacker_entity.get_type() != ENTITY_TYPE::ARMY) return false;
-	if (world.entities.armies.owners[command.attacker_entity.get_index()] != player) return false;
-	if (world.entities.armies.raising[command.attacker_entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
+	if (world.entities->armies.owners[command.attacker_entity.get_index()] != player) return false;
+	if (world.entities->armies.raising[command.attacker_entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
 
 	// Targets owned by the sender can't be attacked (see match_caravan_is_owned_by for caravans).
 	ui16 targetIndex = command.target_entity.get_index();
-	const match_world_state::entities_store& entities = world.entities;
+	const world_entities& entities = *world.entities;
 	switch (command.target_entity.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
 		return entities.settlements.owners[targetIndex] != player;
 	case ENTITY_TYPE::ARMY:
 		return entities.armies.owners[targetIndex] != player;
-	case ENTITY_TYPE::CARAVAN:
-		return !world_caravan_is_owned_by(world, command.target_entity, player);
 	default:
 		return false;
 	}
@@ -282,7 +278,7 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
-	world.entities.armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
+	world.entities->armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
 }
 
 // BUILD ROAD
@@ -301,13 +297,13 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 
     // The settlement must be owned by the player emitting the command.
 	ui16 settlementIndex = command.settlement.get_index();
-	const world_entity_settlements& settlements = world.entities.settlements;
+	const world_entity_settlements& settlements = world.entities->settlements;
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
     // The origin and destination must be in the world, and not be equal to eachother.
     if (command.origin == command.destination && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION)) return false;
 
-	const world_terrain& terrain = world.terrain;
+	const world_terrain& terrain = *world.terrain;
 	bool originInWorld = command.origin.x < terrain.size_tiles.x && command.origin.y < terrain.size_tiles.y;
 	bool destinationInWorld = command.destination.x < terrain.size_tiles.x && command.destination.y < terrain.size_tiles.y;
 	if ((!originInWorld || !destinationInWorld) && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
@@ -321,7 +317,7 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 		if (!originUsable && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_INVALID)) return false;
 	}
 
-	const world_entity_builders& builders = world.entities.builders;
+	const world_entity_builders& builders = world.entities->builders;
 	if (builders.active_count >= builders.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
 
 	return command_is_valid(feedback);
@@ -354,7 +350,7 @@ void command_build_road_apply(match_world_state& world, match_player_id player, 
 
 constexpr ui8 POOLABLE_TROOP_TYPE_COUNT = 3; // men at arms, horsemen, knights.
 
-static ui16* settlement_troops_field(settlement_troops& troops, ui8 troopType)
+static ui16* settlement_troops_field(army_troop_count& troops, ui8 troopType)
 {
 	switch (troopType)
 	{
@@ -375,7 +371,7 @@ bool command_set_settlement_troop_ceiling_validity_check(const match_world_state
 		return false;
 	}
 
-	if (world.entities.settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+	if (world.entities->settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
 	// No dedicated error for this: reported as unspecified.
 	if (command.troop_type >= POOLABLE_TROOP_TYPE_COUNT && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
@@ -388,7 +384,7 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	if (!command_set_settlement_troop_ceiling_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_set_settlement_troop_ceiling& command = command_header.get_command_data<command_data_set_settlement_troop_ceiling>();
-	world_entity_settlements& settlements = world.entities.settlements;
+	world_entity_settlements& settlements = world.entities->settlements;
 	ui16 index = command.settlement.get_index();
 
 	// Raw value stored as is, never clamped.
@@ -412,7 +408,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 		return false;
 	}
 
-	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
@@ -432,7 +428,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	}
 
 	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
-	ui32 populationCurrent = world.entities.settlements.populations[home.get_index()];
+	ui32 populationCurrent = world.entities->settlements.populations[home.get_index()];
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;
@@ -450,7 +446,7 @@ void command_set_army_raise_targets_apply(match_world_state& world, match_player
 	const command_data_set_army_raise_targets& command = command_header.get_command_data<command_data_set_army_raise_targets>();
 
 	// Targets below the current counts are allowed: nothing is returned, the army just completes.
-	world.entities.armies.raise_targets[command.army.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	world.entities->armies.raised_troops[command.army.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 }
 
 // STOP RAISING ARMY
@@ -467,7 +463,7 @@ bool command_stop_raising_army_validity_check(const match_world_state& world, ma
 		return false;
 	}
 
-	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
@@ -483,7 +479,7 @@ void command_stop_raising_army_apply(match_world_state& world, match_player_id p
 	if (!command_stop_raising_army_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_stop_raising_army& command = command_header.get_command_data<command_data_stop_raising_army>();
-	world_entity_armies& armies = world.entities.armies;
+	world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = command.army.get_index();
 
 	// Raise targets are left untouched: the army remembers what it was raised to.

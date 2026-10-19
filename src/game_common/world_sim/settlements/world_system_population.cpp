@@ -1,30 +1,31 @@
 // Population systems: settlement expansion pressure and population growth.
 
-#include "game_common/match/world.h"
-#include "world_sim.h"
-#include "world_sim_population.h"
+#include "game_common/match/world/world_entities.h"
+
+#include "../world_sim.h"
+#include "world_sim_settlement.h"
 
 // Updates settlement pressure based on population and land output.
 // Pressure = population - land_output * 3. Positive pressure means surplus population wanting to expand.
 void world_system_economy_update_pressure(match_world_state& world)
 {
-    world_entity_settlements& settlements = world.entities.settlements;
+    world_entity_settlements& settlements = world.entities->settlements;
 
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid()) continue;
 
         ui32 population = settlements.populations[settlementIndex];
-        ui32 landPopCap = settlements.land_sizes[settlementIndex] * POP_CAP_PER_TILE;
+        ui32 landPopCap = settlements.territories[settlementIndex].tile_count * POP_CAP_PER_TILE;
 
         i32 newPressure = (i32)population - (i32)(landPopCap);
-        settlements.influences[settlementIndex].pressure = newPressure;
+        settlements.territories[settlementIndex].pressure = newPressure;
     }
 }
 
 void world_system_economy_pop_growth(match_world_state& world)
 {
-    world_entity_settlements& settlements = world.entities.settlements;
+    world_entity_settlements& settlements = world.entities->settlements;
 
     // POP GROWTH
     // Population seeks to reach an equilibrium that depends on settlement land / food output and by local wealth.
@@ -71,7 +72,7 @@ void world_system_economy_pop_growth(match_world_state& world)
 // Local troop pool growth: each troop type gains 1 per growth tick while below its effective ceiling. Never reduces counts.
 void world_system_economy_troop_growth(match_world_state& world)
 {
-    world_entity_settlements& settlements = world.entities.settlements;
+    world_entity_settlements& settlements = world.entities->settlements;
 
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
@@ -80,8 +81,8 @@ void world_system_economy_troop_growth(match_world_state& world)
         // Same staggering as pop growth.
         if ((settlements.guids[settlementIndex].get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
 
-        settlement_troops ceilings = settlement_troop_effective_ceilings(settlements.populations[settlementIndex], settlements.troop_ceilings[settlementIndex]);
-        settlement_troops& troops = settlements.local_troops[settlementIndex];
+        army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.populations[settlementIndex], settlements.troop_ceilings[settlementIndex]);
+        army_troop_count& troops = settlements.local_troops[settlementIndex];
 
         if (troops.men_at_arms < ceilings.men_at_arms) troops.men_at_arms++;
         if (troops.horsemen < ceilings.horsemen) troops.horsemen++;

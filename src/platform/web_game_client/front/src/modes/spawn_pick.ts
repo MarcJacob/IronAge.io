@@ -8,7 +8,7 @@ import * as Render from "../render.js"
 import { show_placement_ui, hide_placement_ui, update_placement_ui } from "../ui/placement_ui.js"
 import { MainPlay } from "./main_play.js"
 
-// Mirrors world_terrain::REGION_SIZE (include/game_common/match/world.h).
+// Mirrors world_terrain::REGION_SIZE (include/game_common/match/world/world_terrain.h).
 const REGION_SIZE = 128;
 
 // Other players' picks within 0 tiles of the local pick are fully red, those further than half a region are gray, linear in between.

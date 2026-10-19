@@ -3,6 +3,7 @@
 #include "core.h"
 
 #include "game_client.h"
+#include "game_common/match/world/world_entities.h"
 
 bool game_client_query_command_valid(game_client& backend, ui8 command_type, const ui8* payload_bytes, match_command_validity_feedback* out_feedback)
 {
@@ -39,7 +40,7 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	out_path.partial = true;
 
 	if (backend.local_match == nullptr) return;
-	const world_terrain& terrain = backend.local_match->world->terrain;
+	const world_terrain& terrain = *backend.local_match->world->terrain;
 	if (start.x >= terrain.size_tiles.x || start.y >= terrain.size_tiles.y || end.x >= terrain.size_tiles.x || end.y >= terrain.size_tiles.y) return;
 
 	path_params params = {};
@@ -75,11 +76,10 @@ ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8*
 	// One case per entity type with a GDO: its GDO definition (world.h) and single state query are all it needs.
 	switch (entity.get_type())
 	{
-	case ENTITY_TYPE::SETTLEMENT: return fill_entity_gdo<gdo_world_entity_settlement>(world, entity, query_entity_state_settlement, out_buffer, buffer_size);
-	case ENTITY_TYPE::CARAVAN: return fill_entity_gdo<gdo_world_entity_caravan>(world, entity, query_entity_state_caravan, out_buffer, buffer_size);
-	case ENTITY_TYPE::ARMY: return fill_entity_gdo<gdo_world_entity_army>(world, entity, query_entity_state_army, out_buffer, buffer_size);
-	case ENTITY_TYPE::BUILDER: return fill_entity_gdo<gdo_world_entity_builder>(world, entity, query_entity_state_builder, out_buffer, buffer_size);
-	case ENTITY_TYPE::BATTLE: return fill_entity_gdo<gdo_world_entity_battle>(world, entity, query_entity_state_battle, out_buffer, buffer_size);
+	case ENTITY_TYPE::SETTLEMENT: return fill_entity_gdo<gdo_world_entity_settlement>(world, entity, world_entity_query_settlement, out_buffer, buffer_size);
+	case ENTITY_TYPE::ARMY: return fill_entity_gdo<gdo_world_entity_army>(world, entity, world_entity_query_army, out_buffer, buffer_size);
+	case ENTITY_TYPE::BUILDER: return fill_entity_gdo<gdo_world_entity_builder>(world, entity, world_entity_query_builder, out_buffer, buffer_size);
+	case ENTITY_TYPE::BATTLE: return fill_entity_gdo<gdo_world_entity_battle>(world, entity, world_entity_query_battle, out_buffer, buffer_size);
 	default: return 0;
 	}
 }

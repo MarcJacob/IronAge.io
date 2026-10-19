@@ -4,7 +4,6 @@
 #define MATCH_START_PARAMS_INCLUDED
 
 #include "core.h"
-#include "world.h"
 
 // Pack the start params structure since, as of now, it gets sent over the network as-is.
 #pragma pack(push, 1)

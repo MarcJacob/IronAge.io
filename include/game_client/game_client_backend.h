@@ -10,8 +10,8 @@
 #include "game_common/match/match.h"
 
 #include "game_common/game_messages.h"
-#include "game_common/match/world.h"
-#include "game_common/match/pathing.h"
+#include "game_common/match/world/world_terrain.h"
+#include "game_common/match/world/world_pathing.h"
 
 // Structure definitions for resources sent from the client backend to frontend.
 

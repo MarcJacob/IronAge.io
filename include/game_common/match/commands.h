@@ -12,7 +12,8 @@
 #include "core.h"
 #include "game_common/game_data_object.h"
 #include "match.h"
-#include "world.h"
+#include "world/world.h"
+#include "world/world_entities.h"
 
 // Top-level type designations a match command can have.
 enum class MATCH_COMMAND_TYPE : ui8

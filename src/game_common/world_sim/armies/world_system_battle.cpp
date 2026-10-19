@@ -1,21 +1,22 @@
 // Battle systems: joining battles and resolving battle rounds. Siege outcomes are resolved here too.
 
 #include "core/math/random.h"
-#include "game_common/match/world.h"
-#include "world_sim.h"
-#include "world_sim_army.h"
-#include "world_sim_battle.h"
+#include "game_common/match/world/world_entities.h"
 
-void battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)
+#include "../world_sim.h"
+#include "../battles/world_sim_battle.h"
+#include "world_sim_army.h"
+
+void army_battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)
 {
-	world_entity_armies& armies = world.entities.armies;
+	world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = army.get_index();
 
 	ui32 counts[world_entity_battles::UNIT_TYPES];
 	army_unit_counts(armies.compositions[armyIndex], counts);
 	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
 	{
-		world.entities.battles.states[battle.get_index()].men[side][unitType] += counts[unitType];
+		world.entities->battles.states[battle.get_index()].men[side][unitType] += counts[unitType];
 	}
 
 	armies.battles[armyIndex] = battle;
@@ -34,8 +35,8 @@ void world_system_battles(match_world_state& world)
 {
 	if (world.age % BATTLE_TICK_INTERVAL != 0) return;
 
-	world_entity_battles& battles = world.entities.battles;
-	world_entity_armies& armies = world.entities.armies;
+	world_entity_battles& battles = world.entities->battles;
+	world_entity_armies& armies = world.entities->armies;
 
 	for (ui32 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
 	{
@@ -82,7 +83,7 @@ void world_system_battles(match_world_state& world)
 
 			// Take the enemy side's damage, proportionally to this army's share of its side (rounded up).
 			ui8 side = armies.battle_sides[armyIndex];
-			world_entity_armies::comp& composition = armies.compositions[armyIndex];
+			army_troop_count& composition = armies.compositions[armyIndex];
 			ui64 taken = ((ui64)battle.damage[side ^ 1] * army_total_manpower(composition) + sideMen[side] - 1) / sideMen[side];
 
 			ui32 before[world_entity_battles::UNIT_TYPES], after[world_entity_battles::UNIT_TYPES];
@@ -98,7 +99,7 @@ void world_system_battles(match_world_state& world)
 		// Attackers wiping the defenders of a siege take the settlement.
 		if (over && sideMen[0] > 0 && battle.siege_settlement.is_valid() && world_entity_is_valid(world, battle.siege_settlement))
 		{
-			world.entities.settlements.owners[battle.siege_settlement.get_index()] = battle.siege_owner;
+			world.entities->settlements.owners[battle.siege_settlement.get_index()] = battle.siege_owner;
 		}
 
 		if (over) world_destroy_battle(world, battles.guids[battleIndex]);

@@ -68,7 +68,7 @@ export function army_count_gauges(army: EntityData): GaugeState[]
 {
     return TROOPS.map(troop => {
         const current = army.get_number(`composition_${troop.name}`);
-        const original = army.get_number(`raise_target_${troop.name}`);
+        const original = army.get_number(`raised_${troop.name}`);
         return { label: troop.label, color: troop.color, current, max: Math.max(original, current) };
     });
 }
@@ -76,7 +76,7 @@ export function army_count_gauges(army: EntityData): GaugeState[]
 // The raise targets of an army, in troop order.
 export function army_raise_targets(army: EntityData): number[]
 {
-    return TROOPS.map(troop => army.get_number(`raise_target_${troop.name}`));
+    return TROOPS.map(troop => army.get_number(`raised_${troop.name}`));
 }
 
 // Targets in troop order as the target_* properties of RAISE_ARMY and SET_ARMY_RAISE_TARGETS.

@@ -27,7 +27,6 @@ export const RENDER_CONFIG =
     // Which entity types are drawn.
     show_entity_type: {
         [Backend.ENTITY_TYPE.SETTLEMENT]: true,
-        [Backend.ENTITY_TYPE.CARAVAN]: true,
         [Backend.ENTITY_TYPE.ARMY]: true,
         [Backend.ENTITY_TYPE.BATTLE]: true,
     } as Record<number, boolean>,
@@ -66,7 +65,6 @@ class RESOURCES_STORE
     // ENTITY SPRITES
     ENTITY = {
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
-        CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
     };
 
@@ -97,13 +95,12 @@ const ENTITY_TILE_SCALE = 0.5;
 let ENTITY_BASE_SCALE_MULTIPLIERS =
 {
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
-    [Backend.ENTITY_TYPE.CARAVAN]: 2,
     [Backend.ENTITY_TYPE.ARMY]: 2,
     [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
 }
 
-// RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
+// RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world/world_terrain.h.
 let TERRAIN_COLORS: Array<[number, number, number, number]> =
 [
     [80, 120, 80, 255],     // LAND_PLAINS
@@ -265,15 +262,6 @@ function draw_entity_settlement(viewport_x: number, viewport_y: number, owned_by
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
     draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), owned_by_local_player, is_selected);
-}
-
-// Draws a caravan entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_caravan(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
-{
-    if (RESOURCES == null) return;
-    if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
-
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
@@ -500,10 +488,6 @@ export function draw(render_state: Backend.RenderState | null)
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
             draw_entity_settlement(entity.viewport_x, entity.viewport_y,
                 entity.owner === render_state.controlled_player_id, isSelected);
-        }
-        else if (entity.entity_type == Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(entity.viewport_x, entity.viewport_y,
-                entity.owner == render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
             draw_entity_army(entity.viewport_x, entity.viewport_y,

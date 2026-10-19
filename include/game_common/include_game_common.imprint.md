@@ -5,7 +5,7 @@ and the network-facing Game Message structures.
 
 *game_data_object.h* defines Game Data Objects (GDOs): a way to describe functional game data such as messages and input commands, so it can be interacted with across language / network boundaries.
 
-*/match/* contains the headers for starting, simulating and inspecting a match (world state, input commands, pathing, start parameters, AI logic). See its imprint.
+*/match/* contains the headers for starting, simulating and inspecting a match (input commands, start parameters, AI logic, and the */world/* subfolder with world state, terrain, entities and pathing). See its imprint.
 
 ## Game Messages
 

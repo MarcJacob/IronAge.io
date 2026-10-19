@@ -6,7 +6,7 @@
 #include "game_common/game_messages.h"
 #include "game_common/match/match.h"
 
-#include "game_common/match/world.h"
+#include "game_common/match/world/world.h"
 #include "match_slots.h"
 #include "../game_server.h"
 

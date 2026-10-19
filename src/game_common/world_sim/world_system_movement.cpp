@@ -1,7 +1,8 @@
-// Main implementation file for entity pathfinding & movement code.
+// Main implementation file for entity movement tick systems.
 
-#include "game_common/match/world.h"
+#include "game_common/match/world/world.h"
 #include "world_sim.h"
+#include "world_movement.h"
 
 // What entities can cross for now: land only.
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
@@ -83,27 +84,9 @@ static void world_entity_follow_path(match_world_state& world, world_entity_move
 
 void world_system_entity_movement_decision(match_world_state& world)
 {
-    const world_entity_settlements settlements = world.entities.settlements;
+    const world_entity_settlements settlements = world.entities->settlements;
 
-    world_entity_caravans& caravans = world.entities.caravans;
-
-	// Make sure caravans have their movement target set to their destination settlement.
-	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
-	{
-		if (!caravans.guids[caravanIndex].is_valid()) continue;
-
-		// Despawn caravans whose destination settlement was destroyed.
-		if (!world_entity_is_valid(world, caravans.dest_settlements[caravanIndex]))
-		{
-			world_destroy_caravan(world, caravans.guids[caravanIndex]);
-			continue;
-		}
-
-		const world_location& destLoc = settlements.locations[caravans.dest_settlements[caravanIndex].get_index()];
-		caravans.movements[caravanIndex].destination = destLoc;
-	}
-
-    world_entity_armies& armies = world.entities.armies;
+    world_entity_armies& armies = world.entities->armies;
 
 	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
@@ -112,7 +95,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 
 		if (world_entity_is_valid(world, armies.action_targets[armyIndex]))
 		{
-			armies.movements[armyIndex].destination = world_get_entity_location(world, armies.action_targets[armyIndex]);
+			armies.movements[armyIndex].destination = world_entity_get_location(world, armies.action_targets[armyIndex]);
 		}
 		else
 		{
@@ -124,15 +107,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 
 void world_system_entity_movement(match_world_state& world)
 {
-    world_entity_caravans& caravans = world.entities.caravans;
-    world_entity_armies& armies = world.entities.armies;
-
-	for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
-	{
-		if (!caravans.guids[caravanIndex].is_valid()) continue;
-
-		world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
-	}
+    world_entity_armies& armies = world.entities->armies;
 
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
@@ -141,7 +116,7 @@ void world_system_entity_movement(match_world_state& world)
 		// Armies in a battle walk to the battle location, and are pinned once close enough.
 		if (armies.battles[armyIndex].is_valid())
 		{
-			world_location battleLoc = world.entities.battles.states[armies.battles[armyIndex].get_index()].location;
+			world_location battleLoc = world.entities->battles.states[armies.battles[armyIndex].get_index()].location;
 			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
 			armies.movements[armyIndex].destination = battleLoc;
 		}

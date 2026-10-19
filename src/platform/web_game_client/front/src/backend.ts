@@ -26,15 +26,14 @@ export enum INPUT_EVENT_TYPE
     VIEWPORT_CONTROL,
 };
 
-// Mirrors ENTITY_TYPE (include/game_common/match/world.h). Update here if the enum changes.
+// Mirrors ENTITY_TYPE (include/game_common/match/world/world_entities.h). Update here if the enum changes.
 export enum ENTITY_TYPE
 {
     INVALID = 0,
     SETTLEMENT = 1,
-    CARAVAN = 2,
-    ARMY = 3,
-    BUILDER = 4,
-    BATTLE = 5,
+    ARMY = 2,
+    BUILDER = 3,
+    BATTLE = 4,
 };
 
 interface ClientExports extends WebAssembly.Exports

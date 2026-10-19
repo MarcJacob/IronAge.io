@@ -9,7 +9,8 @@
 #include "game_common/match/start_params.h"
 #include "game_common/match/commands.h"
 
-#include "game_common/match/world.h"
+#include "game_common/match/world/world.h"
+#include "game_common/match/world/world_entities.h"
 #include "world_sim/world_sim.h"
 
 // Unity compile game common components.
@@ -27,12 +28,19 @@ constexpr ui64 match_get_required_mem(game_match_start_params& params)
  
     ui32 regionCount = params.world_size_regions.x * params.world_size_regions.y;
 
-    ui64 terrainCost = regionCount * sizeof(world_terrain::region) + sizeof(match_world_state); 
-    ui64 entitiesCost = regionCount * MICRO_ENTITIES_PER_TYPE_PER_REGION;
-    entitiesCost += entitiesCost * sizeof(world_entity_armies::single) + entitiesCost * sizeof(world_entity_caravans::single);
-    entitiesCost += regionCount * SETTLEMENTS_PER_REGION * sizeof(world_entity_settlements::single);
+    // Max entity counts, as in world_state_init.
+    ui64 settlementCount = (ui64)SETTLEMENTS_PER_REGION * regionCount;
+    ui64 microEntityCount = (ui64)MICRO_ENTITIES_PER_TYPE_PER_REGION * regionCount;
 
-    return MiB(32) + terrainCost + entitiesCost;
+    return MiB(32) // Base memory for general usage.
+        + (ui64)regionCount * sizeof(world_terrain::region) // Terrain regions.
+        + sizeof(match_world_state) + sizeof(world_terrain) + sizeof(world_entities) // World structures.
+        + sizeof(world_path_store) + WORLD_PATH_STORE_SCRATCH_SIZE // Path store and its search memory.
+        + settlementCount * sizeof(world_entity_settlements::single) // Settlements.
+        + microEntityCount * sizeof(world_entity_armies::single) // Armies.
+        + microEntityCount * sizeof(world_entity_battles::single) // Battles.
+        + microEntityCount * sizeof(world_entity_builders::single) // Builders.
+        + KiB(4); // Margin for the alignment padding of the ~30 allocations.
 }
 
 bool match_start(mem_arena& match_mem, time_ms start_time, game_match_start_params& params, game_match& out_match)

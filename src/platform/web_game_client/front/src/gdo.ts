@@ -96,7 +96,7 @@ export function read_GDO_values(gdo_offset: number, schema?: GDOPropDef[]): { [n
 const ENTITY_SCHEMAS = new Map<number, GDOPropDef[]>();
 
 // A snapshot of an entity's state, lifted out of the backend: its properties in definition order, and by name.
-// Raw values, named as in the entity's GDO (world.h). Stays as it was when queried: query again to see changes.
+// Raw values, named as in the entity's GDO (world_entities.h). Stays as it was when queried: query again to see changes.
 export class EntityData
 {
     entity_type: number; // ENTITY_TYPE, from the guid.

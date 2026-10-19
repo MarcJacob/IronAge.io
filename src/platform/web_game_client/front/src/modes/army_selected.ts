@@ -1,4 +1,4 @@
-// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (settle, no hotkey).
+// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (stop raising, no hotkey; no bar otherwise).
 // Leaves when the selection stops being an own army. Escape clears the selection.
 
 import * as Core from "../core.js"
@@ -7,7 +7,7 @@ import * as Render from "../render.js"
 import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
-import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
+import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
 import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
 import { army_gauges, army_count_gauges, army_raise_targets, raise_target_props } from "../ui/troop_gauges.js"
 
@@ -19,13 +19,8 @@ export class ArmySelected extends Core.Mode
     private raising = false; // Whether the bar currently offers to stop raising.
 
     private bar: ActionBarState = { items: [
-        { name: "Settle", state: 'selectable', on_activate: () => this.settle() },
+        { name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) },
     ] };
-
-    on_entry(): void
-    {
-        submit_action_bar(this.bar);
-    }
 
     on_exit(): void
     {
@@ -55,8 +50,7 @@ export class ArmySelected extends Core.Mode
         if (raising !== this.raising)
         {
             this.raising = raising;
-            this.bar.items = [this.bar.items[0], ...(raising ? [{ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) } as ActionBarItem] : [])];
-            submit_action_bar(this.bar);
+            submit_action_bar(raising ? this.bar : null);
         }
 
         if (!raising)
@@ -126,10 +120,5 @@ export class ArmySelected extends Core.Mode
             x: Math.max(0, Math.min(tile.x, state.world_size.width - 1)),
             y: Math.max(0, Math.min(tile.y, state.world_size.height - 1)),
         };
-    }
-
-    private settle(): void
-    {
-        send_command("FOUND_SETTLEMENT", { army: this.army_guid });
     }
 }

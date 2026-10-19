@@ -1,6 +1,6 @@
 // Terrain generation.
 
-#include "game_common/match/world.h"
+#include "game_common/match/world/world_terrain.h"
 #include "world_sim.h"
 
 // Generates terrain: ring of mountains then hills along the world border, plains elsewhere.

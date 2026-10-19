@@ -66,6 +66,8 @@ Sequences or full Tick Commands structures can be built using corresponding buil
 
 Matches have two broad types of elements: the world / world tiles, and entities.
 
+Their public state structures are in the */world/* subfolder: *world.h* (world state), *world_terrain.h*, *world_entities.h* and *world_pathing.h*. The terrain and entities are held by pointer in the world state.
+
 ### Entities
 
 Entities collectively are all the dynamic elements of the match's world state, meaning elements whose state can change and whose existence starts and ends at specific points in the match.

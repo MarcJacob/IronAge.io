@@ -1,7 +1,8 @@
 // Pathfinding implementation: A* over the 8-neighbour tile grid, outputting paths as waypoints (one waypoint per change of direction).
 
-#include "game_common/match/world.h"
+#include "game_common/match/world/world_terrain.h"
 #include "world_sim.h"
+#include "world_movement.h"
 
 // A* bookkeeping for one tile. Nodes live in an open-addressing hash table (linear probing) allocated from the scratch arena.
 enum PATH_NODE_STATE : ui8
@@ -243,12 +244,12 @@ void world_request_path(match_world_state& world, world_location start, world_lo
     out_result.handle = INVALID_PATH_HANDLE; // The store only keeps the last path for now, so there is nothing to refer to later.
 
     // Nothing to do, or an end outside the world (which the search can't handle).
-    if (start == end || end.x >= world.terrain.size_tiles.x || end.y >= world.terrain.size_tiles.y) return;
+    if (start == end || end.x >= world.terrain->size_tiles.x || end.y >= world.terrain->size_tiles.y) return;
 
     // Each request overwrites the previous path.
     world_path_store& store = *world.path_store;
     store.scratch.clear();
-    world_path_find(world.terrain, start, end, params, store.scratch, store.last);
+    world_path_find(*world.terrain, start, end, params, store.scratch, store.last);
 
     out_result.count = store.last.count;
     out_result.length = store.last.length;

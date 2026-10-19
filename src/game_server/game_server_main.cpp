@@ -116,7 +116,7 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
 // SERVER CONFIG
 
 static constexpr ui8 MAX_RESOURCE_FILE_COUNT = 255;
-static constexpr ui64 MATCH_SLOT_MEMORY = MiB(64);  // Memory assigned to each match slot. 
+static constexpr ui64 MATCH_SLOT_MEMORY = MiB(128);  // Memory assigned to each match slot. 
                                                     // @TODO(Marc): There should be a single big pool matches allocate from according to their parameters.
 
 static constexpr ui16 PLAYERS_PER_MATCH = 6;        // @TEMP(Marc): Max players per lobby / match. Later this will depend on lobby properties / map size...

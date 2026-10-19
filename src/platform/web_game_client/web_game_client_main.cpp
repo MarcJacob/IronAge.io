@@ -7,7 +7,7 @@
 
 #include "core/assert.h"
 #include "game_client/game_client_backend.h"
-#include "game_common/match/world.h"
+#include "game_common/match/world/world.h"
 #include "web_game_client.h"
 
 // Unity-compile the client backend.

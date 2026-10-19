@@ -47,6 +47,13 @@ static inline vec2<VecType> operator*(const vec2<VecType>& vec, Scalar scalar)
 	return { vec.x * scalar, vec.y * scalar };
 }
 
+// Vec2 / Scalar
+template<typename VecType, typename Scalar>
+static inline vec2<VecType> operator/(const vec2<VecType>& vec, Scalar scalar)
+{
+    return { vec.x / scalar, vec.y / scalar };
+}
+
 // Vec2 == Vec2
 template<typename VecTypeA, typename VecTypeB>
 static inline bool operator==(const vec2<VecTypeA>& vec_a, vec2<VecTypeB> vec_b)

@@ -1,14 +1,17 @@
 // Construction systems: advances the projects carried out by builder entities, and the tile modifications they perform.
 
-#include "game_common/match/world.h"
-#include "world_sim.h"
+#include "game_common/match/world/world.h"
 
-void world_tile_set_road(match_world_state& world, world_location location)
+#include "../world_sim.h"
+#include "../builders/world_sim_builder.h"
+
+// Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
+static void world_tile_set_road(match_world_state& world, world_location location)
 {
     ui16 regionIndex, tileIndex;
-    world_get_tile(world.terrain, location, regionIndex, tileIndex);
+    world_get_tile(*world.terrain, location, regionIndex, tileIndex);
 
-    world_terrain::region& region = world.terrain.regions[regionIndex];
+    world_terrain::region& region = world.terrain->regions[regionIndex];
     region.status[tileIndex].is_road = true;
     if (region.owners[tileIndex] != world_terrain::UNOWNED_TILE) region.status[tileIndex].proximity_recalc = true;
 }
@@ -17,7 +20,7 @@ void world_tile_set_road(match_world_state& world, world_location location)
 // the destination is reached, or no further progress is possible (unreachable, or the territory ends).
 static bool builder_tick_build_road(match_world_state& world, ui16 builder_index)
 {
-    world_entity_builders& builders = world.entities.builders;
+    world_entity_builders& builders = world.entities->builders;
     build_road_data& data = *(build_road_data*)builders.action_data[builder_index].bytes;
 
     if (data.head == data.destination) return true;
@@ -38,7 +41,7 @@ static bool builder_tick_build_road(match_world_state& world, ui16 builder_index
 
 void world_system_construction(match_world_state& world)
 {
-    world_entity_builders& builders = world.entities.builders;
+    world_entity_builders& builders = world.entities->builders;
 
     for (ui16 builderIndex = 0; builderIndex < builders.max_count; builderIndex++)
     {

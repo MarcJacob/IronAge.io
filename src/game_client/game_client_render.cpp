@@ -2,7 +2,7 @@
 
 #include "game_client.h"
 #include "game_client/game_client_backend.h"
-#include "game_common/match/world.h"
+#include "game_common/match/world/world.h"
 
 static constexpr ui8 SETTLEMENT_RENDER_SIZE = 12; // Square size of a settlement icon in viewport tiles.
 static constexpr ui8 CARAVAN_RENDER_SIZE = 6; // Square size of a caravan icon in viewport tiles.
@@ -31,10 +31,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// Build render entity states.
     const match_world_state& world = *match.world;
 
-	const world_entity_settlements& settlements = world.entities.settlements;
-	const world_entity_caravans& caravans = world.entities.caravans;
-	const world_entity_armies& armies = world.entities.armies;
-	const world_entity_battles& battles = world.entities.battles;
+	const world_entity_settlements& settlements = world.entities->settlements;
+	const world_entity_armies& armies = world.entities->armies;
+	const world_entity_battles& battles = world.entities->battles;
 
 	render_state.frame.entity_count = 0;
 	render_state.frame.entity_states = nullptr;
@@ -43,7 +42,6 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	// and share the same pattern for initializing it.
 
 	ui32 totalEntityCount = settlements.active_count
-		+ caravans.active_count
 		+ armies.active_count
 		+ battles.active_count;
 
@@ -58,32 +56,13 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			vec2<float> settlementLoc = settlements.locations[settlementIndex];
 			// Settlements are visible if any of their territory is (the frontend resolves tile owners through them).
 			if (!settlements.guids[settlementIndex].is_valid()
-				|| !bounds_touch_viewport(settlements.influences[settlementIndex].bounds_min, settlements.influences[settlementIndex].bounds_max, render_state.viewport)) continue;
+				|| !bounds_touch_viewport(settlements.territories[settlementIndex].bounds_min, settlements.territories[settlementIndex].bounds_max, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::SETTLEMENT;
 			outEntity.owner = settlements.owners[settlementIndex];
 			outEntity.guid = settlements.guids[settlementIndex];
 			outEntity.viewport_location = settlementLoc - render_state.viewport.bottom_left;
-
-			visibleCount++;
-		}
-
-		// CARAVANS
-		for (ui16 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
-		{
-			vec2<float> caravanLoc = caravans.locations[caravanIndex];
-			if (!caravans.guids[caravanIndex].is_valid() || !is_visible_in_viewport(caravanLoc, render_state.viewport)) continue;
-
-			render_entity& outEntity = entityStates[visibleCount];
-			outEntity.entity_type = ENTITY_TYPE::CARAVAN;
-
-            // @TEMP: Let's never mark caravan ownership until we figure out what to put in there exactly.
-			match_player_id owner = INVALID_MATCH_PLAYER_ID;
-
-			outEntity.owner = owner;
-			outEntity.guid = caravans.guids[caravanIndex];
-			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
 
 			visibleCount++;
 		}
@@ -127,7 +106,7 @@ void game_client_render_influence(client_render_state& render_state, const game_
 {
     ASSERT(match.world != nullptr);
 
-    const world_terrain& terrain = match.world->terrain;
+    const world_terrain& terrain = *match.world->terrain;
     for (ui16 regionX = 0; regionX < terrain.size_regions.x; regionX++)
     {
         for (ui16 regionY = 0; regionY < terrain.size_regions.y; regionY++)
@@ -163,7 +142,7 @@ void game_client_render_influence(client_render_state& render_state, const game_
 void game_client_rebuild_render_state(client_render_state& render_state, const game_match& match)
 {
     const match_world_state& world = *match.world;
-	render_state.world_size = world.terrain.size_tiles;
+	render_state.world_size = world.terrain->size_tiles;
 
     // Rebuild frame data.
     render_state.frame.memory.clear();
