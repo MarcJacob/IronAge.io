@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Catapult, side view: wheeled base, A-frame, throwing arm with a loaded bucket raised to the left. -->
+<svg fill="#000000" width="800px" height="800px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+	<rect x="2" y="15" width="20" height="2.2" rx="0.5"/>
+	<circle cx="6" cy="19.3" r="2.5"/>
+	<circle cx="18" cy="19.3" r="2.5"/>
+	<polygon points="9.5,15 12,8 14.5,15"/>
+	<line x1="17" y1="14" x2="5" y2="5" stroke="#000000" stroke-width="1.8" stroke-linecap="round"/>
+	<path d="M2,3.5 A3,3 0 0 0 8,3.5 Z"/>
+	<circle cx="5" cy="2.6" r="1.4"/>
+</svg>

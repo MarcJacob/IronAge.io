@@ -35,6 +35,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	const world_entity_caravans& caravans = world.entities.caravans;
 	const world_entity_armies& armies = world.entities.armies;
 	const world_entity_battles& battles = world.entities.battles;
+	const world_entity_sieges& sieges = world.entities.sieges;
 
 	render_state.frame.entity_count = 0;
 	render_state.frame.entity_states = nullptr;
@@ -45,7 +46,8 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	ui32 totalEntityCount = settlements.active_count
 		+ caravans.active_count
 		+ armies.active_count
-		+ battles.active_count;
+		+ battles.active_count
+		+ sieges.active_count;
 
 	if (totalEntityCount > 0)
 	{
@@ -114,6 +116,21 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
 			outEntity.guid = battles.guids[battleIndex];
 			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
+
+			visibleCount++;
+		}
+
+		// SIEGES (at their settlement's location: the frontend draws them beside it)
+		for (ui16 siegeIndex = 0; siegeIndex < sieges.max_count; siegeIndex++)
+		{
+			vec2<float> siegeLoc = sieges.states[siegeIndex].location;
+			if (!sieges.guids[siegeIndex].is_valid() || !is_visible_in_viewport(siegeLoc, render_state.viewport)) continue;
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::SIEGE;
+			outEntity.owner = INVALID_MATCH_PLAYER_ID; // Neutral, like battles: the commander and defender are in its GDO.
+			outEntity.guid = sieges.guids[siegeIndex];
+			outEntity.viewport_location = siegeLoc - render_state.viewport.bottom_left;
 
 			visibleCount++;
 		}

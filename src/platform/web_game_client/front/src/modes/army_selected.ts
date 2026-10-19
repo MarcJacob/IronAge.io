@@ -1,10 +1,10 @@
-// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (settle, stop raising, detach; no hotkeys).
+// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (settle, stop raising, detach, detach from siege, disband; no hotkeys).
 // The properties panel lists its warbands; the selection made there is kept here. Leaves when the selection stops being an own army. Escape clears the selection.
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
+import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
 import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
@@ -29,7 +29,8 @@ export class ArmySelected extends Core.Mode
 
     on_entry(): void
     {
-        submit_hint({ text: "Army: right click to move or attack. Right click an own army to accompany it, Shift + right click to merge into it." });
+        submit_hint({ text: "Army: right click to move or attack (a siege: join it). Right click an own army to accompany it, Shift + right click to merge into it."
+            + " Disband only inside home territory." });
     }
 
     on_exit(): void
@@ -73,22 +74,26 @@ export class ArmySelected extends Core.Mode
             : null;
         const focusGuid = focus?.warband.guid ?? 0;
 
-        this.update_bar(focus !== null && focus.warband.get_number("raising") === 1 ? focusGuid : 0, this.selected.size > 0 && this.selected.size < warbands.length);
+        this.update_bar(army, focus !== null && focus.warband.get_number("raising") === 1 ? focusGuid : 0, this.selected.size > 0 && this.selected.size < warbands.length);
 
         submit_properties_panel(army_panel(army, warbands, focus, this.selected,
             guid => { if (!this.selected.delete(guid)) this.selected.add(guid); },
             targets => send_command("SET_ARMY_RAISE_TARGETS", { warband: focusGuid, ...raise_target_props(targets) })));
     }
 
-    // Settle, then "Stop raising" while raising_warband (guid, 0 for none) raises, then "Detach" while some but not all warbands are selected.
+    // Settle, then "Stop raising" while raising_warband (guid, 0 for none) raises, then "Detach" while some but not all warbands are selected,
+    // then "Detach from siege" while the army is in a siege, then "Disband" (disabled while refused: only inside home territory, not in a battle).
     // Submitted only when the items change.
-    private update_bar(raising_warband: number, can_detach: boolean): void
+    private update_bar(army: EntityData, raising_warband: number, can_detach: boolean): void
     {
         const items: ActionBarItem[] = [{ name: "Settle", state: 'selectable', on_activate: () => this.settle() }];
         if (raising_warband !== 0) items.push({ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { warband: raising_warband }) });
         if (can_detach) items.push({ name: "Detach", state: 'selectable', on_activate: () => this.detach() });
+        if (army.get_number("siege") !== 0) items.push({ name: "Detach from siege", state: 'selectable', on_activate: () => send_command("DETACH_FROM_SIEGE", { army: this.army_guid }) });
+        items.push({ name: "Disband", state: is_command_valid("DISBAND_ARMY", { army: this.army_guid }) ? 'selectable' : 'unselectable',
+            on_activate: () => send_command("DISBAND_ARMY", { army: this.army_guid }) });
 
-        const key = items.map(item => item.name).join("|") + "|" + raising_warband;
+        const key = items.map(item => item.name + ":" + item.state).join("|") + "|" + raising_warband;
         if (key === this.barKey) return;
 
         this.barKey = key;
@@ -122,7 +127,7 @@ export class ArmySelected extends Core.Mode
 
     // Left clicks fall through to main play (selection).
 
-    // Right click: attack the entity not owned by the local player under the cursor if there is one. Otherwise, on another own army:
+    // Right click: attack the entity not owned by the local player under the cursor if there is one (a siege: its settlement). Otherwise, on another own army:
     // accompany it (an attack order on an own army), or merge into it with Shift held. Otherwise move to the clicked tile.
     // Also works while the army is raising: it keeps the new target and heads there once raised.
     on_context_menu(event: MouseEvent): boolean
@@ -130,9 +135,13 @@ export class ArmySelected extends Core.Mode
         const localPlayerId = get_local_player_id();
         if (localPlayerId === null) return true;
 
-        const targetGuid = Render.pick_entity_at(event.clientX, event.clientY, this.army_guid, localPlayerId);
+        let targetGuid = Render.pick_entity_at(event.clientX, event.clientY, this.army_guid, localPlayerId);
         if (targetGuid !== null)
         {
+            // A siege stands for its settlement: attacking the besieged settlement joins the siege.
+            const target = query_entity(targetGuid);
+            if (target !== null && target.entity_type === Backend.ENTITY_TYPE.SIEGE) targetGuid = target.get_number("settlement");
+
             send_command("SET_ENTITY_ATTACK_TARGET", { attacker_entity: this.army_guid, target_entity: targetGuid });
             return true;
         }
@@ -150,7 +159,7 @@ export class ArmySelected extends Core.Mode
         return true;
     }
 
-    // Previews where the army is currently heading: green for a move, red while it chases an entity to attack.
+    // Previews where the army is currently heading: red while attacking (its state), green otherwise (moving, accompanying, merging...).
     // A raising army shows the destination it will head to once raised. Nothing while it stands on its destination.
     private update_path_preview(army: EntityData): void
     {
@@ -160,7 +169,7 @@ export class ArmySelected extends Core.Mode
         const destination = army.get_location("movement_destination");
         if (start.x === destination.x && start.y === destination.y) return;
 
-        const attacking = army.get_number("action_target") !== 0;
+        const attacking = army.get_number("state") === Backend.ARMY_STATE.ATTACKING;
         Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination), valid: true, color: attacking ? PATH_COLOR_ATTACK : PATH_COLOR_MOVE };
     }
 

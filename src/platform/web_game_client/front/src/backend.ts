@@ -49,6 +49,7 @@ export enum ARMY_STATE
     MERGING,
     RAISING,
     IN_BATTLE,
+    BESIEGING,
 };
 
 interface ClientExports extends WebAssembly.Exports

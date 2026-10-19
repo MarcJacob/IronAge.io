@@ -49,6 +49,7 @@ const ARMY_STATE_TEXT: { [state: number]: string } = {
     [ARMY_STATE.MERGING]: "Merging",
     [ARMY_STATE.RAISING]: "Raising",
     [ARMY_STATE.IN_BATTLE]: "In battle",
+    [ARMY_STATE.BESIEGING]: "Besieging",
 };
 
 // Army: total men, state and warband count. With several warbands: one bar split between the troop types, then the warbands as a selectable list.
@@ -91,6 +92,30 @@ export function army_panel(army: EntityData, warbands: WarbandView[], focus: War
             : army_count_gauges(focus.warband);
     }
     return panel;
+}
+
+// Siege: men on each side (defenders = what the settlement would field now), a balance bar (besiegers red, defenders blue, like battles),
+// then each side's troop types as a list row with its own split bar.
+export function siege_panel(siege: EntityData): PanelState
+{
+    const besiegers = troop_segments(siege, "besieger_");
+    const defenders = troop_segments(siege, "defender_");
+    const besiegerMen = besiegers.reduce((sum, segment) => sum + segment.value, 0);
+    const defenderMen = defenders.reduce((sum, segment) => sum + segment.value, 0);
+    return {
+        title: "Siege",
+        stats: [
+            { label: "Besiegers", value: `${besiegerMen} men, ${siege.get_number("army_count")} armies` },
+            { label: "Defenders", value: `${defenderMen} men` },
+            { label: "State", value: siege.get_number("battle") !== 0 ? "Battle in progress" : "Besieging" },
+        ],
+        split_bar: [{ color: "red", value: besiegerMen }, { color: "blue", value: defenderMen }],
+        list_title: "Troops",
+        list: [
+            { text: `Besiegers: ${besiegerMen}`, segments: besiegers },
+            { text: `Defenders: ${defenderMen}`, segments: defenders },
+        ],
+    };
 }
 
 // "2. 120 men, from (34, 51), raising": slot number, men, home settlement location.

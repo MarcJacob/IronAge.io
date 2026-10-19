@@ -74,9 +74,10 @@ export function army_count_gauges(army: EntityData): GaugeState[]
 }
 
 // The men of an army or warband per troop type, as split bar segments (troop colors, in troop order).
-export function troop_segments(entity: EntityData): BarSegment[]
+// prefix: of the per type properties (a siege's sides are besieger_* and defender_*).
+export function troop_segments(entity: EntityData, prefix: string = "composition_"): BarSegment[]
 {
-    return TROOPS.map(troop => ({ color: troop.color, value: entity.get_number(`composition_${troop.name}`) }));
+    return TROOPS.map(troop => ({ color: troop.color, value: entity.get_number(`${prefix}${troop.name}`) }));
 }
 
 // The raise targets of an army, in troop order.

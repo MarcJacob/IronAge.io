@@ -73,6 +73,18 @@ Phases (sequential commits by manager):
 - C2: *front_src.imprint.md* mode tree says "Army selected: committed action (Settle), no hotkey": it now also has Stop raising / Detach and a hint line; imprint needs a user update.
 - C2: the selected army's path preview is red for any action target, including accompany / merge (own army). Could use the army `state` instead.
 - C2: per-frame panel cost for a selected army: 1 + 2 x warbands entity queries (warband + its home), up to 129 per frame.
+- D2: *front_src.imprint.md* mode tree lacks "Siege selected" (child of Main play, any viewer); imprint needs a user update.
+- D2: battle / siege render entities have no owner, so they are always tinted as not owned (red), and enemy-pick (right click) offers them as targets: a battle target is still sent and refused (pre-existing), a siege is mapped to its settlement.
+- D2: Assault / Lift / Sally / Disband validity is asked to the backend every frame (one command build each) to grey the buttons out; no reason is shown (only the Disband hint says "inside home territory").
+- D2: path preview of a raising army with a stored attack target is now green (its state is RAISING); red only while state is ATTACKING.
+
+### Phase D2 notes (client: sieges, icons, disband)
+
+- Sieges in the render state (*game_client_render.cpp*, like battles, owner INVALID). render.ts draws a siege icon right of its settlement's icon, edges touching (`entity_draw_center`, also used by picking): both stay clickable, no overlap at any zoom.
+- New mode Siege selected (*modes/siege_selected.ts*), pushed by Main play for any selected siege. Panel `siege_panel` (*entity_panels.ts*): besiegers (men, armies), defenders, state; red / blue balance bar; one list row per side with its troop type split bar (`troop_segments` got a property prefix). Commander: Assault, Lift siege; defender: Sally out; others: panel only. Buttons disabled while `is_command_valid` says no; hint per role.
+- Army selected: "Detach from siege" while its GDO `siege` is set; "Disband" always, disabled while invalid. Right click on a siege icon attacks its settlement (joins the siege). `ARMY_STATE.BESIEGING` mirrored, panel text "Besieging".
+- Icons: *web/art/entity_battle.svg* (crossed swords), *entity_siege.svg* (catapult), hand-written black silhouettes loaded and tinted like the other entity SVGs. Battles now get the selection outline too.
+- Path preview: red only while the army state is ATTACKING, green otherwise.
 
 ### Phase C2 notes (client UI)
 

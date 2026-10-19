@@ -30,6 +30,7 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.CARAVAN]: true,
         [Backend.ENTITY_TYPE.ARMY]: true,
         [Backend.ENTITY_TYPE.BATTLE]: true,
+        [Backend.ENTITY_TYPE.SIEGE]: true,
     } as Record<number, boolean>,
 
     tint_entities: true, // Tint entities by ownership (own / other).
@@ -69,6 +70,8 @@ class RESOURCES_STORE
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
         CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
+        BATTLE: new RESOURCE_SPRITE("art/entity_battle.svg"),
+        SIEGE: new RESOURCE_SPRITE("art/entity_siege.svg"),
     };
 
     // ...
@@ -103,7 +106,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
     [Backend.ENTITY_TYPE.WARBAND]: 1, // Never drawn (warbands stand in their army), only here to satisfy the lookup.
-    [Backend.ENTITY_TYPE.SIEGE]: 3, // Not in the render state yet (reached through the settlement / army GDO `siege`), only here to satisfy the lookup.
+    [Backend.ENTITY_TYPE.SIEGE]: 3,
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
@@ -225,9 +228,19 @@ function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
     return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
 
-function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+// Canvas px of the center of an entity's icon. A siege stands on its settlement's tile: its icon is drawn right of the settlement's, edges touching,
+// so both stay clickable (picking uses this too).
+function entity_draw_center(entity: Backend.RenderEntity)
 {
-    const center = entity_canvas_center(viewport_x, viewport_y);
+    const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+    if (entity.entity_type === Backend.ENTITY_TYPE.SIEGE)
+        center.x += (compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT) + compute_entity_canvas_size(Backend.ENTITY_TYPE.SIEGE)) / 2;
+    return center;
+}
+
+// center: canvas px of the icon's center.
+function draw_entity(entity_img: HTMLImageElement, center: { x: number, y: number }, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+{
     const drawX = center.x - size / 2;
     const drawY = center.y - size / 2;
 
@@ -267,7 +280,7 @@ function draw_entity_settlement(viewport_x: number, viewport_y: number, owned_by
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, entity_canvas_center(viewport_x, viewport_y), compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), owned_by_local_player, is_selected);
 }
 
 // Draws a caravan entity icon at the given viewport location, sized 'scale' world tiles across.
@@ -276,7 +289,7 @@ function draw_entity_caravan(viewport_x: number, viewport_y: number, owned_by_lo
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, entity_canvas_center(viewport_x, viewport_y), compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
@@ -285,7 +298,7 @@ function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.ARMY.img, entity_canvas_center(viewport_x, viewport_y), compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
 }
 
 // Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -513,13 +526,15 @@ export function draw(render_state: Backend.RenderState | null)
                 entity.owner == render_state.controlled_player_id, isSelected);
             draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
         }
-        else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
-            // Simple red marker.
-            const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+        else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE || entity.entity_type === Backend.ENTITY_TYPE.SIEGE) {
+            // Neutral (no owner): tinted as not owned.
+            const sprite = RESOURCES === null ? null : entity.entity_type === Backend.ENTITY_TYPE.BATTLE ? RESOURCES.ENTITY.BATTLE : RESOURCES.ENTITY.SIEGE;
+            if (sprite === null || !sprite.loaded) continue;
+
+            const center = entity_draw_center(entity);
             const size = compute_entity_canvas_size(entity.entity_type);
-            ctx.fillStyle = 'red';
-            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
-            draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
+            draw_entity(sprite.img, center, size, false, isSelected);
+            if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
         }
     }
 }
@@ -673,7 +688,7 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
         if (entity.entity_type == Backend.ENTITY_TYPE.INVALID) continue;
         if (exclude_owner !== null && entity.owner === exclude_owner) continue;
 
-        const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+        const center = entity_draw_center(entity);
         const dx = clickPos.x - center.x;
         const dy = clickPos.y - center.y;
         const halfSize = compute_entity_canvas_size(entity.entity_type) / 2;
