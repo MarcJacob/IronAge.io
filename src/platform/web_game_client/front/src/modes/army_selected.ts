@@ -1,5 +1,5 @@
-// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (settle, no hotkey).
-// Leaves when the selection stops being an own army. Escape clears the selection.
+// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (settle, stop raising, detach; no hotkeys).
+// The properties panel lists its warbands; the selection made there is kept here. Leaves when the selection stops being an own army. Escape clears the selection.
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
@@ -9,8 +9,9 @@ import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
 import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
 import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
+import { submit_hint } from "../ui/ui_element_hint.js"
 import { raise_target_props } from "../ui/troop_gauges.js"
-import { army_panel } from "../ui/entity_panels.js"
+import { army_panel, type WarbandView } from "../ui/entity_panels.js"
 
 // Path preview colors of the army's current order.
 const PATH_COLOR_MOVE = 'rgba(60, 220, 60, 0.9)';
@@ -21,19 +22,19 @@ export class ArmySelected extends Core.Mode
     // army_guid: the selected own army this mode is about.
     constructor(private army_guid: number) { super(); }
 
-    private raising = false; // Whether the bar currently offers to stop raising.
+    private selected = new Set<number>(); // Warbands selected in the panel's list, by guid (slots shift when warbands leave).
+    private barKey = ""; // What the submitted bar was made for (see update_bar).
 
-    private bar: ActionBarState = { items: [
-        { name: "Settle", state: 'selectable', on_activate: () => this.settle() },
-    ] };
+    private bar: ActionBarState = { items: [] };
 
     on_entry(): void
     {
-        submit_action_bar(this.bar);
+        submit_hint({ text: "Army: right click to move or attack. Right click an own army to accompany it, Shift + right click to merge into it." });
     }
 
     on_exit(): void
     {
+        submit_hint(null);
         submit_action_bar(null);
         submit_properties_panel(null);
     }
@@ -53,23 +54,63 @@ export class ArmySelected extends Core.Mode
         this.update_path_preview(army);
     }
 
-    // Army stats and troop gauges (see army_panel). While raising, the target sliders send new raise targets.
-    // Raising is per warband: until the army panel lists its warbands, raising controls act on the army's first warband (warband_0).
+    // Army stats, warband list and troop gauges (see army_panel), and the bar.
+    // Raising is per warband: the gauges, their target sliders and "Stop raising" are about the focus warband (the only one, or the only one selected).
     private update_panel(army: EntityData): void
     {
-        const warbandGuid = army.get_number("warband_0");
-        const raising = army.get_number("raising") === 1;
-        if (raising !== this.raising)
+        const warbands: WarbandView[] = [];
+        for (let slot = 0; slot < army.get_number("warband_count"); slot++)
         {
-            this.raising = raising;
-            this.bar.items = [this.bar.items[0], ...(raising ? [{ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { warband: warbandGuid }) } as ActionBarItem] : [])];
-            submit_action_bar(this.bar);
+            const warband = query_entity(army.get_number(`warband_${slot}`));
+            if (warband !== null) warbands.push({ warband, home: query_entity(warband.get_number("home_settlement")) });
         }
 
-        const warband = raising ? query_entity(warbandGuid) : null;
-        const home = warband !== null ? query_entity(warband.get_number("home_settlement")) : null;
-        submit_properties_panel(army_panel(warband ?? army, home, targets =>
-            send_command("SET_ARMY_RAISE_TARGETS", { warband: warbandGuid, ...raise_target_props(targets) })));
+        // Forget selected warbands that left the army.
+        for (const guid of this.selected) if (!warbands.some(view => view.warband.guid === guid)) this.selected.delete(guid);
+
+        const focus = warbands.length === 1 ? warbands[0]
+            : this.selected.size === 1 ? warbands.find(view => this.selected.has(view.warband.guid)) ?? null
+            : null;
+        const focusGuid = focus?.warband.guid ?? 0;
+
+        this.update_bar(focus !== null && focus.warband.get_number("raising") === 1 ? focusGuid : 0, this.selected.size > 0 && this.selected.size < warbands.length);
+
+        submit_properties_panel(army_panel(army, warbands, focus, this.selected,
+            guid => { if (!this.selected.delete(guid)) this.selected.add(guid); },
+            targets => send_command("SET_ARMY_RAISE_TARGETS", { warband: focusGuid, ...raise_target_props(targets) })));
+    }
+
+    // Settle, then "Stop raising" while raising_warband (guid, 0 for none) raises, then "Detach" while some but not all warbands are selected.
+    // Submitted only when the items change.
+    private update_bar(raising_warband: number, can_detach: boolean): void
+    {
+        const items: ActionBarItem[] = [{ name: "Settle", state: 'selectable', on_activate: () => this.settle() }];
+        if (raising_warband !== 0) items.push({ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { warband: raising_warband }) });
+        if (can_detach) items.push({ name: "Detach", state: 'selectable', on_activate: () => this.detach() });
+
+        const key = items.map(item => item.name).join("|") + "|" + raising_warband;
+        if (key === this.barKey) return;
+
+        this.barKey = key;
+        this.bar.items = items;
+        submit_action_bar(this.bar);
+    }
+
+    // Detaches the selected warbands into a new army. The slot mask is built from a fresh army snapshot (slots shift when warbands leave).
+    private detach(): void
+    {
+        const army = query_entity(this.army_guid);
+        if (army === null) return;
+
+        let slotsLow = 0, slotsHigh = 0;
+        for (let slot = 0; slot < army.get_number("warband_count"); slot++)
+        {
+            if (!this.selected.has(army.get_number(`warband_${slot}`))) continue;
+            if (slot < 32) slotsLow |= 1 << slot;
+            else slotsHigh |= 1 << (slot - 32);
+        }
+        send_command("DETACH_WARBANDS", { army: this.army_guid, slots_low: slotsLow, slots_high: slotsHigh });
+        this.selected.clear();
     }
 
     on_escape(): boolean
@@ -81,7 +122,8 @@ export class ArmySelected extends Core.Mode
 
     // Left clicks fall through to main play (selection).
 
-    // Right click: attack the entity not owned by the local player under the cursor if there is one, otherwise move to the clicked tile.
+    // Right click: attack the entity not owned by the local player under the cursor if there is one. Otherwise, on another own army:
+    // accompany it (an attack order on an own army), or merge into it with Shift held. Otherwise move to the clicked tile.
     // Also works while the army is raising: it keeps the new target and heads there once raised.
     on_context_menu(event: MouseEvent): boolean
     {
@@ -92,6 +134,14 @@ export class ArmySelected extends Core.Mode
         if (targetGuid !== null)
         {
             send_command("SET_ENTITY_ATTACK_TARGET", { attacker_entity: this.army_guid, target_entity: targetGuid });
+            return true;
+        }
+
+        const ownGuid = Render.pick_entity_at(event.clientX, event.clientY, this.army_guid);
+        if (ownGuid !== null && ownGuid !== this.army_guid && is_own_army(query_entity(ownGuid)))
+        {
+            if (event.shiftKey) send_command("MERGE_ARMY", { army: this.army_guid, into_army: ownGuid });
+            else send_command("SET_ENTITY_ATTACK_TARGET", { attacker_entity: this.army_guid, target_entity: ownGuid });
             return true;
         }
 

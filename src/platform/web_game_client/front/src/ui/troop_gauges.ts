@@ -2,7 +2,7 @@
 // shared by the modes that fill the entity properties panel. Reads entity snapshots only: what a slider does is up to the callback.
 
 import type { EntityData } from "../gdo.js"
-import type { GaugeState } from "./ui_element_properties_panel.js"
+import type { BarSegment, GaugeState } from "./ui_element_properties_panel.js"
 
 // Troop types in the order of the commands' target_* properties. name is the suffix of the entity GDO properties.
 // Levies come from the population, the others from the settlement's local pool.
@@ -71,6 +71,12 @@ export function army_count_gauges(army: EntityData): GaugeState[]
         const original = army.get_number(`raise_target_${troop.name}`);
         return { label: troop.label, color: troop.color, current, max: Math.max(original, current) };
     });
+}
+
+// The men of an army or warband per troop type, as split bar segments (troop colors, in troop order).
+export function troop_segments(entity: EntityData): BarSegment[]
+{
+    return TROOPS.map(troop => ({ color: troop.color, value: entity.get_number(`composition_${troop.name}`) }));
 }
 
 // The raise targets of an army, in troop order.

@@ -22,6 +22,15 @@ static inline ui32 settlement_raised_percent(ui32 raised_men, ui32 population)
 	return population > 0 ? (ui32)((ui64)raised_men * 100 / population) : 0;
 }
 
+// Men a settlement fields to defend itself (see world_spawn_settlement_defenders): levies, 20% of its population (at least 1, at most a warband's 0xFFFF),
+// and its whole local troop pool.
+static inline world_entity_warbands::comp settlement_defender_men(ui32 population, const settlement_troops& pool)
+{
+	ui32 levies = population / 5 > 0 ? population / 5 : 1;
+	if (levies > 0xFFFF) levies = 0xFFFF;
+	return { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
+}
+
 // Population and local troop pool growth run on each settlement once every this many ticks (staggered by the settlement's GUID extra field).
 static constexpr ui32 GROWTH_TICK_PERIOD = 50;
 

@@ -36,6 +36,9 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::WARBAND:
 		container = &world.entities.warbands;
 		break;
+	case ENTITY_TYPE::SIEGE:
+		container = &world.entities.sieges;
+		break;
 	default:
 		return false;
 	}
@@ -154,8 +157,9 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
     SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].destination, start_state.location);
     world.entities.armies.movements[freeIndex].move_target = start_state.location;
 
-	// Not in a battle, not merging, no warbands (the slot may have been used before).
+	// Not in a battle or siege, not merging, no warbands (the slot may have been used before).
 	world.entities.armies.battles[freeIndex] = INVALID_ENTITY_GUID;
+	world.entities.armies.sieges[freeIndex] = INVALID_ENTITY_GUID;
 	world.entities.armies.merging[freeIndex] = 0;
 	world.entities.armies.warbands[freeIndex].count = 0;
 
@@ -227,6 +231,25 @@ entity_guid world_spawn_battle(match_world_state& world, const world_entity_batt
 	world.entities.battles.guids[freeIndex] = newID;
 	world.entities.battles.active_count++;
 	world.entities.battles.states[freeIndex] = start_state;
+
+	return newID;
+}
+
+entity_guid world_spawn_siege(match_world_state& world, const world_entity_sieges::state& start_state)
+{
+	ui16 freeIndex = 0;
+	while (freeIndex < world.entities.sieges.max_count && world.entities.sieges.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < world.entities.sieges.max_count);
+
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::SIEGE, freeIndex, world.age % 0x100); // 8-bit extra field.
+
+	world.entities.sieges.guids[freeIndex] = newID;
+	world.entities.sieges.active_count++;
+	world.entities.sieges.states[freeIndex] = start_state;
 
 	return newID;
 }
@@ -355,6 +378,62 @@ void world_destroy_battle(match_world_state& world, entity_guid battle)
 
 	battles.guids[battle.get_index()] = INVALID_ENTITY_GUID;
 	battles.active_count--;
+}
+
+void world_destroy_siege(match_world_state& world, entity_guid siege)
+{
+	ASSERT(world_entity_is_valid(world, siege) && siege.get_type() == ENTITY_TYPE::SIEGE);
+	world_entity_sieges& sieges = world.entities.sieges;
+	world_entity_armies& armies = world.entities.armies;
+
+	// Its armies are free to move again.
+	const world_entity_sieges::state& state = sieges.states[siege.get_index()];
+	for (ui8 slot = 0; slot < state.army_count; slot++)
+	{
+		entity_guid army = state.armies[slot];
+		if (world_entity_is_valid(world, army) && armies.sieges[army.get_index()] == siege) armies.sieges[army.get_index()] = INVALID_ENTITY_GUID;
+	}
+
+	sieges.guids[siege.get_index()] = INVALID_ENTITY_GUID;
+	sieges.active_count--;
+}
+
+entity_guid world_spawn_settlement_defenders(match_world_state& world, entity_guid settlement)
+{
+	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	world_entity_settlements& settlements = world.entities.settlements;
+	ui16 settlementIndex = settlement.get_index();
+
+	ui32& population = settlements.populations[settlementIndex];
+	settlement_troops& pool = settlements.local_troops[settlementIndex];
+	world_entity_warbands::comp men = settlement_defender_men(population, pool);
+
+	// The men are taken out of the settlement (not claimed): world_disband_army gives them back.
+	population -= men.levies < population ? men.levies : population;
+	pool = {};
+
+	world_entity_armies::single defenders = {};
+	defenders.owner = settlements.owners[settlementIndex];
+	defenders.location = settlements.locations[settlementIndex];
+	entity_guid defenderArmy = world_spawn_army(world, defenders);
+
+	// One warband, with no home settlement.
+	world_entity_warbands::single defenderWarband = {};
+	defenderWarband.composition = men;
+	defenderWarband.raise_target = men; // Initial counts, as "original counts" for the client. Not raising.
+	world_spawn_warband(world, defenderWarband, defenderArmy);
+
+	return defenderArmy;
+}
+
+entity_guid world_settlement_siege(const match_world_state& world, entity_guid settlement)
+{
+	const world_entity_sieges& sieges = world.entities.sieges;
+	for (ui32 siegeIndex = 0; siegeIndex < sieges.max_count; siegeIndex++)
+	{
+		if (sieges.guids[siegeIndex].is_valid() && sieges.states[siegeIndex].settlement == settlement) return sieges.guids[siegeIndex];
+	}
+	return INVALID_ENTITY_GUID;
 }
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)
@@ -487,6 +566,8 @@ world_location world_get_entity_location(const match_world_state& world, entity_
 	case ENTITY_TYPE::WARBAND:
 		// Warbands stand where their army is.
 		return world.entities.armies.locations[world.entities.warbands.armies[entity.get_index()].get_index()];
+	case ENTITY_TYPE::SIEGE:
+		return world.entities.sieges.states[entity.get_index()].location;
 	default:
 		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
 		return INVALID_WORLD_LOCATION;
@@ -518,6 +599,7 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 		.max_raised_armies = SETTLEMENT_MAX_RAISED_ARMIES,
 		.raised_men = raisedMen,
 		.raised_percent = settlement_raised_percent(raisedMen, settlements.populations[i]),
+		.siege = world_settlement_siege(world, entity),
 		.tier = settlements.tiers[i],
 		.trade_attaction_index = settlements.trade_attraction_indices[i],
 	};
@@ -554,6 +636,7 @@ bool query_entity_state_army(const match_world_state& world, entity_guid entity,
 
 	ui8 state = ARMY_STATE_IDLE;
 	if (armies.battles[i].is_valid()) state = ARMY_STATE_IN_BATTLE;
+	else if (armies.sieges[i].is_valid()) state = ARMY_STATE_BESIEGING;
 	else if (raising) state = ARMY_STATE_RAISING;
 	else if (followsOwnArmy) state = armies.merging[i] ? ARMY_STATE_MERGING : ARMY_STATE_FOLLOWING;
 	else if (target.is_valid()) state = ARMY_STATE_ATTACKING;
@@ -570,6 +653,7 @@ bool query_entity_state_army(const match_world_state& world, entity_guid entity,
 		.arrows_target = armies.arrows_targets[i],
 		.merging = armies.merging[i],
 		.battle = armies.battles[i],
+		.siege = armies.sieges[i],
 		.state = state,
 		.raising = (ui8)(raising ? 1 : 0),
 		.followed_army = followsOwnArmy ? target : INVALID_ENTITY_GUID,
@@ -620,6 +704,35 @@ bool query_entity_state_battle(const match_world_state& world, entity_guid entit
 	if (entity.get_type() != ENTITY_TYPE::BATTLE || !world_entity_is_valid(world, entity)) return false;
 
 	out_state = world.entities.battles.states[entity.get_index()];
+	return true;
+}
+
+bool query_entity_state_siege(const match_world_state& world, entity_guid entity, world_entity_sieges::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::SIEGE || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_sieges::state& siege = world.entities.sieges.states[entity.get_index()];
+	out_state = {};
+	out_state.siege = siege;
+
+	// Besiegers: every army still in the siege (an army destroyed this tick may still be listed until the siege system runs).
+	for (ui8 slot = 0; slot < siege.army_count; slot++)
+	{
+		entity_guid army = siege.armies[slot];
+		if (!world_entity_is_valid(world, army) || !(world.entities.armies.sieges[army.get_index()] == entity)) continue;
+
+		ui32 men[world_entity_battles::UNIT_TYPES];
+		army_total_unit_counts(world, army.get_index(), men);
+		for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) out_state.besieger_men[unitType] += men[unitType];
+	}
+
+	// Defenders: what world_spawn_settlement_defenders would field now.
+	if (world_entity_is_valid(world, siege.settlement))
+	{
+		ui16 settlementIndex = siege.settlement.get_index();
+		world_entity_warbands::comp defenders = settlement_defender_men(world.entities.settlements.populations[settlementIndex], world.entities.settlements.local_troops[settlementIndex]);
+		army_unit_counts(defenders, out_state.defender_men);
+	}
 	return true;
 }
 
@@ -790,6 +903,9 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.battle_sides = memory.alloc<ui8>(count);
 	if (armies.battle_sides == nullptr) return false;
 
+	armies.sieges = memory.alloc<entity_guid>(count);
+	if (armies.sieges == nullptr) return false;
+
 	armies.warbands = memory.alloc<world_entity_armies::warband_list>(count);
 	if (armies.warbands == nullptr) return false;
 
@@ -837,6 +953,21 @@ bool world_alloc_battles(match_world_state& world, mem_arena& memory, ui32 count
 
 	battles.states = memory.alloc<world_entity_battles::state>(count);
 	if (battles.states == nullptr) return false;
+
+	return true;
+}
+
+bool world_alloc_sieges(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_sieges& sieges = world.entities.sieges;
+
+	sieges.max_count = count;
+
+	sieges.guids = memory.alloc<entity_guid>(count);
+	if (sieges.guids == nullptr) return false;
+
+	sieges.states = memory.alloc<world_entity_sieges::state>(count);
+	if (sieges.states == nullptr) return false;
 
 	return true;
 }

@@ -38,6 +38,16 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	DETACH_WARBANDS, // Takes some warbands out of an army into a new army next to it.
 
+	ASSAULT_SIEGE, // The siege's commander starts a battle of all its besiegers against the settlement's defenders, whose defense is doubled.
+
+	LIFT_SIEGE, // The siege's commander ends it: its armies are free to move again.
+
+	DETACH_FROM_SIEGE, // Takes an army out of its siege (the siege ends if it was its last army).
+
+	SALLY_OUT, // The besieged settlement's owner starts a battle of its defenders against all the besiegers (no defense bonus).
+
+	DISBAND_ARMY, // Removes an army standing in the territory of every one of its warbands' home settlements, where its men are still counted.
+
 	TYPE_COUNT,
 };
 
@@ -317,6 +327,86 @@ bool command_detach_warbands_validity_check(const match_world_state& world, matc
 void command_detach_warbands_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// ASSAULT SIEGE
+struct command_data_assault_siege
+{
+	entity_guid siege;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_assault_siege)
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_assault_siege_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_assault_siege_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// LIFT SIEGE
+struct command_data_lift_siege
+{
+	entity_guid siege;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_lift_siege)
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_lift_siege_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_lift_siege_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// DETACH FROM SIEGE
+struct command_data_detach_from_siege
+{
+	entity_guid army;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_detach_from_siege)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_detach_from_siege_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_detach_from_siege_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SALLY OUT
+struct command_data_sally_out
+{
+	entity_guid siege;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_sally_out)
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_sally_out_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_sally_out_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// DISBAND ARMY
+struct command_data_disband_army
+{
+	entity_guid army;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_disband_army)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_disband_army_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_disband_army_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -429,6 +519,16 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_merge_army_validity_check, command_merge_army_apply },
 	{ "DETACH_WARBANDS", MATCH_COMMAND_TYPE::DETACH_WARBANDS, sizeof(command_data_detach_warbands),
 		command_detach_warbands_validity_check, command_detach_warbands_apply },
+	{ "ASSAULT_SIEGE", MATCH_COMMAND_TYPE::ASSAULT_SIEGE, sizeof(command_data_assault_siege),
+		command_assault_siege_validity_check, command_assault_siege_apply },
+	{ "LIFT_SIEGE", MATCH_COMMAND_TYPE::LIFT_SIEGE, sizeof(command_data_lift_siege),
+		command_lift_siege_validity_check, command_lift_siege_apply },
+	{ "DETACH_FROM_SIEGE", MATCH_COMMAND_TYPE::DETACH_FROM_SIEGE, sizeof(command_data_detach_from_siege),
+		command_detach_from_siege_validity_check, command_detach_from_siege_apply },
+	{ "SALLY_OUT", MATCH_COMMAND_TYPE::SALLY_OUT, sizeof(command_data_sally_out),
+		command_sally_out_validity_check, command_sally_out_apply },
+	{ "DISBAND_ARMY", MATCH_COMMAND_TYPE::DISBAND_ARMY, sizeof(command_data_disband_army),
+		command_disband_army_validity_check, command_disband_army_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

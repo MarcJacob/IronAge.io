@@ -36,6 +36,19 @@ export enum ENTITY_TYPE
     BUILDER = 4,
     BATTLE = 5,
     WARBAND = 6,
+    SIEGE = 7,
+};
+
+// Mirrors ARMY_STATE (include/game_common/match/world.h): the state property of an army GDO. Update here if the enum changes.
+export enum ARMY_STATE
+{
+    IDLE,
+    MOVING,
+    ATTACKING,
+    FOLLOWING,
+    MERGING,
+    RAISING,
+    IN_BATTLE,
 };
 
 interface ClientExports extends WebAssembly.Exports

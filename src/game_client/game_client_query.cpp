@@ -81,6 +81,7 @@ ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8*
 	case ENTITY_TYPE::BUILDER: return fill_entity_gdo<gdo_world_entity_builder>(world, entity, query_entity_state_builder, out_buffer, buffer_size);
 	case ENTITY_TYPE::BATTLE: return fill_entity_gdo<gdo_world_entity_battle>(world, entity, query_entity_state_battle, out_buffer, buffer_size);
 	case ENTITY_TYPE::WARBAND: return fill_entity_gdo<gdo_world_entity_warband>(world, entity, query_entity_state_warband, out_buffer, buffer_size);
+	case ENTITY_TYPE::SIEGE: return fill_entity_gdo<gdo_world_entity_siege>(world, entity, query_entity_state_siege, out_buffer, buffer_size);
 	default: return 0;
 	}
 }

@@ -105,6 +105,19 @@ entity_guid world_spawn_warband(match_world_state& world, const world_entity_war
 // Spawns a new battle in the world with the provided start state and returns its GUID.
 entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state);
 
+// Spawns a new siege in the world with the provided start state and returns its GUID. Add armies with world_siege_add_army, not through the start state.
+entity_guid world_spawn_siege(match_world_state& world, const world_entity_sieges::state& start_state);
+
+// Destroys a siege: its armies are no longer in it (free to move again).
+void world_destroy_siege(match_world_state& world, entity_guid siege);
+
+// Spawns the army a settlement defends itself with when attacked (siege assault or sally): one warband with no home, of settlement_defender_men.
+// Its men are taken out of the settlement (levies from the population, the whole local troop pool), world_disband_army gives them back.
+entity_guid world_spawn_settlement_defenders(match_world_state& world, entity_guid settlement);
+
+// Siege of a settlement, INVALID_ENTITY_GUID if there is none.
+entity_guid world_settlement_siege(const match_world_state& world, entity_guid settlement);
+
 void world_destroy_settlement(match_world_state& world, entity_guid settlement);
 void world_destroy_caravan(match_world_state& world, entity_guid caravan);
 void world_destroy_army(match_world_state& world, entity_guid army); // Destroys its warbands too.
@@ -144,6 +157,8 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 bool world_alloc_battles(match_world_state& world, mem_arena& memory, ui32 count);
 
 bool world_alloc_warbands(match_world_state& world, mem_arena& memory, ui32 count);
+
+bool world_alloc_sieges(match_world_state& world, mem_arena& memory, ui32 count);
 
 // Spawns a new builder in the world with the provided start state and returns its GUID.
 // Returns INVALID_ENTITY_GUID if the origin is not a valid entity. Asserts if its type is not the one the build type requires.
@@ -228,6 +243,19 @@ void world_system_armies_target_reached(match_world_state& world);
 void world_system_armies_raising(match_world_state& world);
 
 void world_system_battles(match_world_state& world);
+
+// Adds an army to a siege (pinning it there) and has it join the siege's battle if one is in progress. Returns false (nothing done) if the siege is full.
+bool world_siege_add_army(match_world_state& world, entity_guid siege, entity_guid army);
+
+// Takes an army out of its siege. The siege ends if it was its last army.
+void world_siege_remove_army(match_world_state& world, entity_guid army);
+
+// Starts the battle of a siege: every besieger not already fighting elsewhere on side 0, against the settlement's defenders (world_spawn_settlement_defenders) on side 1.
+// defense_bonus doubles the defenders' defense (assault). The siege ends once the battle is over (see world_system_sieges).
+void world_siege_start_battle(match_world_state& world, entity_guid siege, bool defense_bonus);
+
+// Sieges: their armies leaving or dying, their end, and the attrition of the besieged settlements (every growth tick).
+void world_system_sieges(match_world_state& world);
 
 // LIFECYCLE
 

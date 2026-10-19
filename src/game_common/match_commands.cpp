@@ -591,6 +591,194 @@ void command_detach_warbands_apply(match_world_state& world, match_player_id pla
 	world_army_detach(world, command.army, ((ui64)command.slots_high << 32) | command.slots_low);
 }
 
+// SIEGE COMMANDS (assault, lift, detach from, sally out)
+
+// Records an invalid entity error unless the guid is a valid siege. Returns whether it is one (nothing else can be checked otherwise).
+static bool siege_check_entity(const match_world_state& world, entity_guid siege, match_command_validity_feedback* feedback)
+{
+	if (world_entity_is_valid(world, siege) && siege.get_type() == ENTITY_TYPE::SIEGE) return true;
+
+	command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+	return false;
+}
+
+// Whether a siege can start its battle (assault or sally out) now: none in progress, at least one besieger not fighting elsewhere,
+// and room for the defenders' army and warband and for the battle. No dedicated error for the first two: reported as unspecified.
+// Ends the caller's check: returns its result (with feedback, valid unless any error was recorded, before or here).
+static bool siege_can_start_battle(const match_world_state& world, entity_guid siege, match_command_validity_feedback* feedback)
+{
+	const world_entity_sieges::state& state = world.entities.sieges.states[siege.get_index()];
+	const world_entity_armies& armies = world.entities.armies;
+
+	bool freeBesieger = false;
+	for (ui8 slot = 0; slot < state.army_count; slot++)
+	{
+		entity_guid army = state.armies[slot];
+		if (world_entity_is_valid(world, army) && armies.sieges[army.get_index()] == siege && !armies.battles[army.get_index()].is_valid()) freeBesieger = true;
+	}
+	if ((world_entity_is_valid(world, state.battle) || !freeBesieger) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	const world_entity_warbands& warbands = world.entities.warbands;
+	const world_entity_battles& battles = world.entities.battles;
+	if ((armies.active_count >= armies.max_count || warbands.active_count >= warbands.max_count || battles.active_count >= battles.max_count)
+		&& command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+bool command_assault_siege_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_assault_siege& command = command_header.get_command_data<command_data_assault_siege>();
+
+	if (!siege_check_entity(world, command.siege, feedback)) return false;
+
+	if (world.entities.sieges.states[command.siege.get_index()].commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	return siege_can_start_battle(world, command.siege, feedback);
+}
+
+void command_assault_siege_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_assault_siege_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_assault_siege& command = command_header.get_command_data<command_data_assault_siege>();
+	world_siege_start_battle(world, command.siege, true);
+}
+
+bool command_lift_siege_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_lift_siege& command = command_header.get_command_data<command_data_lift_siege>();
+
+	if (!siege_check_entity(world, command.siege, feedback)) return false;
+
+	const world_entity_sieges::state& state = world.entities.sieges.states[command.siege.get_index()];
+	if (state.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// Not while its battle is being fought: no dedicated error, reported as unspecified.
+	if (world_entity_is_valid(world, state.battle) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_lift_siege_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_lift_siege_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_lift_siege& command = command_header.get_command_data<command_data_lift_siege>();
+	world_destroy_siege(world, command.siege);
+}
+
+// Accepted from the siege's commander or the army's owner (an army of another player may have joined the siege).
+bool command_detach_from_siege_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_detach_from_siege& command = command_header.get_command_data<command_data_detach_from_siege>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	ui16 armyIndex = command.army.get_index();
+	entity_guid siege = world.entities.armies.sieges[armyIndex];
+	if (!world_entity_is_valid(world, siege))
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY); // Not in a siege.
+		return false;
+	}
+
+	if (world.entities.armies.owners[armyIndex] != player && world.entities.sieges.states[siege.get_index()].commander != player
+		&& command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_detach_from_siege_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_detach_from_siege_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_detach_from_siege& command = command_header.get_command_data<command_data_detach_from_siege>();
+	world_siege_remove_army(world, command.army);
+}
+
+bool command_sally_out_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_sally_out& command = command_header.get_command_data<command_data_sally_out>();
+
+	if (!siege_check_entity(world, command.siege, feedback)) return false;
+
+	// The defender is the settlement's owner for as long as the siege lasts.
+	if (world.entities.sieges.states[command.siege.get_index()].defender != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	return siege_can_start_battle(world, command.siege, feedback);
+}
+
+void command_sally_out_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_sally_out_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_sally_out& command = command_header.get_command_data<command_data_sally_out>();
+	world_siege_start_battle(world, command.siege, false);
+}
+
+// DISBAND ARMY
+
+// The army must stand in the territory of the home settlement of each of its warbands, still held by the warband's owner.
+bool command_disband_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_disband_army& command = command_header.get_command_data<command_data_disband_army>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_warbands& warbands = world.entities.warbands;
+	ui16 armyIndex = command.army.get_index();
+
+	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// Pinned: no dedicated error for an army in a battle, reported as unspecified.
+	if (armies.battles[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	ui16 regionIndex, tileIndex;
+	world_get_tile(world.terrain, armies.locations[armyIndex], regionIndex, tileIndex);
+	ui16 tileOwner = world.terrain.regions[regionIndex].owners[tileIndex];
+
+	const world_entity_armies::warband_list& list = armies.warbands[armyIndex];
+	for (ui8 slot = 0; slot < list.count; slot++)
+	{
+		ui16 warbandIndex = list.indices[slot];
+		entity_guid home = warbands.home_settlements[warbandIndex];
+		bool atHome = world_entity_is_valid(world, home) && home.get_type() == ENTITY_TYPE::SETTLEMENT
+			&& world.entities.settlements.owners[home.get_index()] == warbands.owners[warbandIndex] && tileOwner == home.get_index();
+		if (!atHome)
+		{
+			if (command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_TERRITORY)) return false;
+			break;
+		}
+	}
+
+	return command_is_valid(feedback);
+}
+
+// The men of a warband are still counted in its home settlement (see world_warband_remove_men_from_home): removing the army is all it takes to give them back.
+void command_disband_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_disband_army_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_disband_army& command = command_header.get_command_data<command_data_disband_army>();
+	world_siege_remove_army(world, command.army); // Does nothing outside a siege.
+	world_destroy_army(world, command.army);
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS

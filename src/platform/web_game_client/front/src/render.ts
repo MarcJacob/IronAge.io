@@ -103,6 +103,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
     [Backend.ENTITY_TYPE.WARBAND]: 1, // Never drawn (warbands stand in their army), only here to satisfy the lookup.
+    [Backend.ENTITY_TYPE.SIEGE]: 3, // Not in the render state yet (reached through the settlement / army GDO `siege`), only here to satisfy the lookup.
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.
@@ -536,7 +537,8 @@ function draw_label(text: string, x: number, y: number)
     ctx.fillText(text, x, y);
 }
 
-// Total troops of an army as text right below its marker. Not drawn for an army in a battle (the battle shows the totals instead).
+// Total troops of an army (all its warbands) as text right below its marker, followed by its warband count in parentheses when it has several.
+// Not drawn for an army in a battle (the battle shows the totals instead).
 function draw_army_troop_count(viewport_x: number, viewport_y: number, army_guid: number)
 {
     const army = query_entity(army_guid);
@@ -544,8 +546,9 @@ function draw_army_troop_count(viewport_x: number, viewport_y: number, army_guid
 
     const total = army.get_number("composition_levies") + army.get_number("composition_men_at_arms")
         + army.get_number("composition_horsemen") + army.get_number("composition_knights");
+    const warbands = army.get_number("warband_count");
     const center = entity_canvas_center(viewport_x, viewport_y);
-    draw_label(String(total), center.x, center.y + compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY) / 2 + 2);
+    draw_label(warbands > 1 ? `${total} (${warbands})` : String(total), center.x, center.y + compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY) / 2 + 2);
 }
 
 // Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.

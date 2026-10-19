@@ -167,6 +167,41 @@ body {
     margin-bottom: 8px;
 }
 
+/* One bar divided between segments (e.g. an army's men per troop type). */
+.split_bar {
+    display: flex;
+    height: 10px;
+    margin: 4px 0;
+    background: #14161a;
+    border: 1px solid #c7cbd1;
+}
+
+/* Line of a panel list (e.g. an army's warbands). */
+.panel_list_row {
+    padding: 3px 4px;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+}
+
+.panel_list_row .split_bar {
+    height: 5px;
+    margin: 2px 0 0;
+}
+
+.panel_list_row.clickable {
+    cursor: pointer;
+}
+
+.panel_list_row.clickable:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.panel_list_row.selected {
+    border-color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
 .gauge_text.warn {
     color: #ff6b6b;
 }

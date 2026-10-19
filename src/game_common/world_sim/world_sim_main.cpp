@@ -14,6 +14,7 @@
 #include "world_system_caravans.cpp"
 #include "world_system_army.cpp"
 #include "world_system_battle.cpp"
+#include "world_system_siege.cpp"
 #include "world_system_movement.cpp"
 #include "world_system_construction.cpp"
 #include "world_pathing.cpp"
@@ -54,6 +55,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_builders(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_battles(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_warbands(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_sieges(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     world_terrain_generate(newWorld->terrain);
@@ -90,6 +92,7 @@ void world_state_tick(match_world_state& world)
     world_system_armies_target_reached(world);
     world_system_armies_raising(world);
     world_system_battles(world);
+    world_system_sieges(world); // Right after battles: a siege ends the tick its battle does.
 
     // Increment world age.
     world.age++;

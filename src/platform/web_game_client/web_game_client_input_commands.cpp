@@ -48,6 +48,11 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::STOP_RAISING_ARMY: return gdo_buffer_place<gdo_command_data_stop_raising_army>(command_type);
 	case MATCH_COMMAND_TYPE::MERGE_ARMY: return gdo_buffer_place<gdo_command_data_merge_army>(command_type);
 	case MATCH_COMMAND_TYPE::DETACH_WARBANDS: return gdo_buffer_place<gdo_command_data_detach_warbands>(command_type);
+	case MATCH_COMMAND_TYPE::ASSAULT_SIEGE: return gdo_buffer_place<gdo_command_data_assault_siege>(command_type);
+	case MATCH_COMMAND_TYPE::LIFT_SIEGE: return gdo_buffer_place<gdo_command_data_lift_siege>(command_type);
+	case MATCH_COMMAND_TYPE::DETACH_FROM_SIEGE: return gdo_buffer_place<gdo_command_data_detach_from_siege>(command_type);
+	case MATCH_COMMAND_TYPE::SALLY_OUT: return gdo_buffer_place<gdo_command_data_sally_out>(command_type);
+	case MATCH_COMMAND_TYPE::DISBAND_ARMY: return gdo_buffer_place<gdo_command_data_disband_army>(command_type);
 	default: return COMMAND_CREATE_NO_GDO;
 	}
 }

@@ -32,6 +32,7 @@ enum ENTITY_TYPE : ui8
 	BUILDER,
 	BATTLE,
 	WARBAND,
+	SIEGE,
 	// ...
 };
 
@@ -237,6 +238,8 @@ struct world_entity_settlements : public world_entity_container
 		ui32 raised_men;
 		ui32 raised_percent;
 
+		entity_guid siege; // Siege of this settlement, if any. Only filled by query_entity_state_settlement.
+
 		ui8 tier;
 
 		ui8 trade_attaction_index;
@@ -267,6 +270,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY(max_raised_armies, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(raised_men, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(raised_percent, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(tier, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(trade_attaction_index, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
@@ -327,7 +331,7 @@ GAME_DATA_OBJECT_DEF_END()
 // Max warbands in one army.
 static constexpr ui8 ARMY_MAX_WARBANDS = 64;
 
-// What an army is doing, for viewing purposes (army single state). Highest priority first: in battle, raising, merging, following, attacking, moving, idle.
+// What an army is doing, for viewing purposes (army single state). Highest priority first: in battle, besieging, raising, merging, following, attacking, moving, idle.
 enum ARMY_STATE : ui8
 {
 	ARMY_STATE_IDLE,
@@ -337,6 +341,7 @@ enum ARMY_STATE : ui8
 	ARMY_STATE_MERGING, // Heads for an own army to merge into it.
 	ARMY_STATE_RAISING, // One of its warbands is raising: waits in place.
 	ARMY_STATE_IN_BATTLE,
+	ARMY_STATE_BESIEGING, // In a siege: pinned at the besieged settlement.
 };
 
 // Property arrays for a world's armies: a group of warbands of one owner (at least one), all standing at the army's location.
@@ -357,6 +362,8 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* battles; // Battle this army is fighting in, if any. An army in a battle is pinned in place.
 	ui8* battle_sides; // Side (0 or 1) of the battle the army is on. Only relevant while in a battle.
 
+	entity_guid* sieges; // Siege this army is in, if any (it is then in the siege's army list). An army in a siege is pinned in place.
+
 	// Warbands of the army, as slot indices in the warband container, in joining order.
 	struct warband_list
 	{
@@ -376,6 +383,7 @@ struct world_entity_armies : public world_entity_container
 		// Query-only below: ignored when spawning (an army starts with no warbands, see world_spawn_warband).
 		ui8 merging;
 		entity_guid battle; // Battle the army is in, if any.
+		entity_guid siege; // Siege the army is in, if any.
 		ui8 state; // ARMY_STATE.
 		ui8 raising; // 1 while any of its warbands is raising.
 		entity_guid followed_army; // Own army it follows (accompanies or merges into), if any.
@@ -411,6 +419,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY(arrows_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(merging, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(battle, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(state, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(raising, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(followed_army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
@@ -514,6 +523,7 @@ struct world_entity_battles : public world_entity_container
 		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
 		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
 		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.
+		ui8 defense_bonus; // 1 = side 1 defends with doubled defense (siege assault): side 0's damage is halved.
 	} *states;
 
 	using single = state; // Consolidated representation of a single battle for viewing purposes.
@@ -538,7 +548,68 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_battle)
 	GAME_DATA_PROPERTY(siege_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(siege_owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(siege_defenders, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(defense_bonus, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
+
+// Max armies besieging one settlement.
+static constexpr ui8 SIEGE_MAX_ARMIES = 16;
+
+// A siege of a settlement: started by an army attacking an enemy settlement, joined by the next armies attacking it (one siege per settlement).
+// Besieging armies are pinned until they leave it, and the settlement loses population and local troops every growth tick.
+// The commander can assault, the defender can sally out: both are a battle of the besiegers against the settlement's defenders (see world_spawn_settlement_defenders).
+// Ends with that battle, when the settlement is gone or changes hands, when the commander lifts it, or when no army is left in it.
+struct world_entity_sieges : public world_entity_container
+{
+	struct state
+	{
+		world_location location; // The settlement's.
+		entity_guid settlement;
+		match_player_id commander; // Owner of the army that started the siege: orders assaults and lifting, takes the settlement if its battle is won.
+		match_player_id defender; // Owner of the settlement (the siege ends if it changes).
+		entity_guid battle; // Assault or sally in progress, if any.
+		ui8 army_count;
+		entity_guid armies[SIEGE_MAX_ARMIES]; // Besieging armies in joining order, army_count first ones used.
+	} *states;
+
+	// Consolidated representation of a single siege for viewing purposes.
+	struct single
+	{
+		state siege;
+		// Query-only: men per unit type (army comp order) of the besiegers, and of the defenders the settlement would field right now.
+		ui32 besieger_men[world_entity_battles::UNIT_TYPES];
+		ui32 defender_men[world_entity_battles::UNIT_TYPES];
+	};
+};
+
+using world_entity_siege = world_entity_sieges::single;
+
+// One property per army slot: army_0 ... army_15.
+#define SIEGE_ARMY_PROPERTY(Slot) GAME_DATA_PROPERTY_PATH(army_##Slot, siege.armies[Slot], GAME_DATA_PROP_TYPE::ENTITY_GUID)
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_siege)
+	GAME_DATA_PROPERTY_PATH(location, siege.location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(settlement, siege.settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY_PATH(commander, siege.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(defender, siege.defender, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(battle, siege.battle, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY_PATH(army_count, siege.army_count, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY_PATH(besieger_levies, besieger_men[0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(besieger_men_at_arms, besieger_men[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(besieger_horsemen, besieger_men[2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(besieger_knights, besieger_men[3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_levies, defender_men[0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_men_at_arms, defender_men[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_horsemen, defender_men[2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_knights, defender_men[3], GAME_DATA_PROP_TYPE::UI32)
+	SIEGE_ARMY_PROPERTY(0) SIEGE_ARMY_PROPERTY(1) SIEGE_ARMY_PROPERTY(2) SIEGE_ARMY_PROPERTY(3)
+	SIEGE_ARMY_PROPERTY(4) SIEGE_ARMY_PROPERTY(5) SIEGE_ARMY_PROPERTY(6) SIEGE_ARMY_PROPERTY(7)
+	SIEGE_ARMY_PROPERTY(8) SIEGE_ARMY_PROPERTY(9) SIEGE_ARMY_PROPERTY(10) SIEGE_ARMY_PROPERTY(11)
+	SIEGE_ARMY_PROPERTY(12) SIEGE_ARMY_PROPERTY(13) SIEGE_ARMY_PROPERTY(14) SIEGE_ARMY_PROPERTY(15)
+GAME_DATA_OBJECT_DEF_END()
+
+static_assert(SIEGE_MAX_ARMIES == 16, "The siege GDO lists one army_<slot> property per slot: update it with SIEGE_MAX_ARMIES.");
+
+#undef SIEGE_ARMY_PROPERTY
 
 // @TEMP(Marc): Static memory size / layout properties.
 constexpr ui32 SETTLEMENTS_PER_REGION = 10;
@@ -570,6 +641,7 @@ struct match_world_state
 		world_entity_builders builders;
 		world_entity_battles battles;
 		world_entity_warbands warbands;
+		world_entity_sieges sieges;
 	} entities;
 };
 
@@ -590,6 +662,8 @@ bool query_entity_state_warband(const match_world_state& world, entity_guid enti
 bool query_entity_state_builder(const match_world_state& world, entity_guid entity, world_entity_builders::single& out_state);
 
 bool query_entity_state_battle(const match_world_state& world, entity_guid entity, world_entity_battles::single& out_state);
+
+bool query_entity_state_siege(const match_world_state& world, entity_guid entity, world_entity_sieges::single& out_state);
 
 bool world_caravan_is_owned_by(const match_world_state& world, entity_guid caravan, match_player_id player);
 

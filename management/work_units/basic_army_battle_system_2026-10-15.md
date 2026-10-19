@@ -63,6 +63,25 @@ Phases (sequential commits by manager):
 - C1: detach selection = bit mask of slots in the army's warband list; slots shift down when warbands leave (merge/detach/death), so a client must build the mask from a fresh army GDO.
 - C1: FOUND_SETTLEMENT on an army in a battle (pre-existing): its men stay counted in the battle side, which then never empties.
 - C1: battle damage is rounded up per warband (was per army): an army of many warbands loses slightly more per round.
+- D1: *world_sim.imprint.md* lists the themes per file; the new *world_system_siege.cpp* (siege theme) is not in it: imprint needs a user update.
+- D1: sieges are not in the client render state (no render entity, not pickable): a siege drawn on its settlement would contest clicks on the settlement (attack target). Reached through the settlement / army GDO `siege` field instead. Rendering is D2's choice.
+- D1: any non-owner army attacking a besieged settlement joins its siege, whoever started it (as the old siege battle did); the commander stays the first attacker. DETACH_FROM_SIEGE is accepted from the army's owner or the commander.
+- D1: siege defenders still levy 20% of a population that counts the settlement's raised men (B gap kept: "exactly like now").
+- D1: sieges (like battles) are not counted in `match_get_required_mem` (about 90 B each, one slot per micro entity), covered by the 32 MiB base.
+- D1: armies in a siege keep any order given meanwhile (move, attack, merge) and act on it once out, like raising armies; DETACH_WARBANDS out of a besieging army gives a free (non-besieging) army.
+- D1: the defense bonus has no per-unit-type defense to double (battles have none): it halves the attackers' damage (rounded up) for that battle.
+- C2: *front_src.imprint.md* mode tree says "Army selected: committed action (Settle), no hotkey": it now also has Stop raising / Detach and a hint line; imprint needs a user update.
+- C2: the selected army's path preview is red for any action target, including accompany / merge (own army). Could use the army `state` instead.
+- C2: per-frame panel cost for a selected army: 1 + 2 x warbands entity queries (warband + its home), up to 129 per frame.
+
+### Phase C2 notes (client UI)
+
+- `ARMY_STATE` mirrored in *backend.ts* (next to `ENTITY_TYPE`); panel shows it as text (FOLLOWING = "Accompanying").
+- Orders (army selected): right click on another own army = accompany (SET_ENTITY_ATTACK_TARGET), Shift + right click = MERGE_ARMY. Enemies still take priority under the cursor. Chosen over a merge hotkey / mode: no new mode, one modifier. Hint line added to the mode.
+- Map label: total men, plus "(N)" warbands when N > 1.
+- `PanelState` extended: `split_bar` (proportional `BarSegment`s) and `list_title` / `list` (`ListRow`: text, optional small split bar, selected, on_click). Order: stats, split bar, list, gauges.
+- Army panel: Men / State / Warbands stats. One warband: its gauges as before (raise sliders while raising). Several: split bar of the army's types, warband list (slot, men, home location, raising; click toggles selection), and the gauges (with raise sliders) of the focus warband = the only selected one.
+- Bar: Settle, "Stop raising" (focus warband raising), "Detach" (some but not all warbands selected). Detach mask is built from a fresh army snapshot at click time; selection is kept by warband guid and pruned each frame.
 
 ### Phase C1 notes (sim + commands, no new UI)
 
@@ -76,6 +95,18 @@ Phases (sequential commits by manager):
 - SET_ARMY_RAISE_TARGETS / STOP_RAISING_ARMY now take a warband (field renamed `army` -> `warband`, same layout).
 - Army GDO: owner, location, movement_*, action_target, arrows_target, merging, battle, state (`ARMY_STATE`, world.h, not mirrored in TS yet), raising (any warband), followed_army, composition_* (sums, now UI32), warband_count, warband_0..63 (guids). Warband GDO: owner, composition_*, raise_target_*, home_settlement, raising, army.
 - Client kept working with minimal edits: ENTITY_TYPE mirror, render scale lookup entry, error mirror, army_selected.ts raising controls act on `warband_0`.
+
+### Phase D1 notes (siege + disband: sim, commands, GDO; no UI)
+
+- Model: new `ENTITY_TYPE::SIEGE` (7, appended), one per settlement. State: location (settlement's), settlement, commander (first attacker's owner), defender (settlement owner), battle (assault / sally in progress), army_count, armies[16] (`SIEGE_MAX_ARMIES`, guids, joining order). Armies hold `sieges` (guid), like `battles`.
+- An army reaching an enemy settlement no longer starts a battle: it starts or joins the settlement's siege (full siege / no siege slot: it just stops). Besiegers are pinned (movement and target resolution skip them) until they leave it. Attacking a besieging army is the normal army-vs-army battle.
+- Siege system (`world_system_sieges`, new *world_system_siege.cpp*, end of tick right after battles): drops destroyed armies; ends the siege when its battle is over (whoever won), the settlement is gone or changed owner, or no army is left; on the settlement's growth ticks takes 5% (at least 1) of population (never below 1) and of each local troop count.
+- Defenders: `world_spawn_settlement_defenders` (world_entities.cpp), numbers from `settlement_defender_men` (world_sim_population.h): unchanged rules (20% population levies, whole pool, taken out, given back by `world_disband_army` if they win).
+- `world_siege_start_battle`: battle at the settlement, siege flags as before (settlement taken if side 0 wins), besiegers not already in a battle on side 0, defenders side 1. New battle field `defense_bonus`: side 0 damage halved (assault only). A besieger arriving during it joins it.
+- Commands (payload = one guid each, GDO cases added): ASSAULT_SIEGE (siege; commander), LIFT_SIEGE (siege; commander, not during its battle), DETACH_FROM_SIEGE (army; army owner or commander), SALLY_OUT (siege; defender), DISBAND_ARMY (army; owner, not in a battle, army tile in the territory of every warband's home settlement still held by the warband's owner, else `TARGET_OUT_OF_TERRITORY`). Assault / sally refused (UNSPECIFIED) with a battle in progress or no besieger free to fight; ENTITY_LIMIT_REACHED without army / warband / battle slots. No new error bit.
+- Disband just destroys the army: per phase B its men are still counted in their home settlements (no men added back).
+- GDOs: siege (location, settlement, commander, defender, battle, army_count, besieger_<type>, defender_<type> (what the settlement would field now), army_0..army_15); settlement and army get `siege`; battle gets `defense_bonus`; `ARMY_STATE_BESIEGING` (7) appended.
+- Client: only `SIEGE = 7` in backend.ts ENTITY_TYPE and its render.ts scale entry.
 
 ### Phase A notes
 

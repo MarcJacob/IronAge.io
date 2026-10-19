@@ -161,6 +161,10 @@ void world_system_entity_movement(match_world_state& world)
 			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
 			armies.movements[armyIndex].destination = battleLoc;
 		}
+		else if (armies.sieges[armyIndex].is_valid())
+		{
+			continue; // Besieging armies stay where they are until they leave the siege, keeping their destination for then.
+		}
 		else if (army_is_raising(world, (ui16)armyIndex))
 		{
 			continue; // Armies with a raising warband wait in place, keeping their destination for when they are raised.

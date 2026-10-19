@@ -65,6 +65,9 @@ void world_system_battles(match_world_state& world)
 				if (percent > BATTLE_MAX_DAMAGE_PERCENT) percent = BATTLE_MAX_DAMAGE_PERCENT; // The range function may land on its max.
 				battle.damage[side] = (ui32)((sideMen[side] * percent + 99) / 100); // Rounded up so a fight always costs something.
 			}
+
+			// Doubled defense of side 1 (siege assault): side 0 kills half as many, rounded up.
+			if (battle.defense_bonus) battle.damage[0] = (battle.damage[0] + 1) / 2;
 		}
 
 		// Over: the armies still in the battle are released.

@@ -1,4 +1,4 @@
-// Army systems: armies reaching their attack targets and the resolution of those attacks. Siege start is resolved here too.
+// Army systems: armies reaching their attack targets and the resolution of those attacks. Attacking a settlement starts or joins its siege.
 
 #include "game_common/match/world.h"
 #include "world_sim.h"
@@ -31,44 +31,20 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	{
 		if (settlements.owners[targetIndex] == attackerOwner) break;
 
-		// Join the siege of this settlement if there is one.
-		world_entity_battles& battles = world.entities.battles;
-		for (ui32 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+		// Join the siege of this settlement if there is one (whoever started it), otherwise start one. No room for either: the army just stops.
+		entity_guid siege = world_settlement_siege(world, target);
+		if (!siege.is_valid())
 		{
-			if (battles.guids[battleIndex].is_valid() && battles.states[battleIndex].siege_settlement == target)
-			{
-				battle_join(world, battles.guids[battleIndex], attacker, 0);
-				return;
-			}
+			if (world.entities.sieges.active_count >= world.entities.sieges.max_count) break;
+
+			world_entity_sieges::state start = {};
+			start.location = settlements.locations[targetIndex];
+			start.settlement = target;
+			start.commander = attackerOwner;
+			start.defender = settlements.owners[targetIndex];
+			siege = world_spawn_siege(world, start);
 		}
-
-		// Otherwise the settlement raises levies (20% of its population, at least 1), its whole local troop pool joins them and the siege begins.
-		ui32& population = settlements.populations[targetIndex];
-		ui32 levies = population / 5 > 0 ? population / 5 : 1;
-		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
-		population -= levies < population ? levies : population;
-
-		settlement_troops& pool = settlements.local_troops[targetIndex];
-		world_entity_armies::single defenders = {};
-		defenders.owner = settlements.owners[targetIndex];
-		defenders.location = settlements.locations[targetIndex];
-		entity_guid defenderArmy = world_spawn_army(world, defenders);
-
-		// One warband, with no home settlement: its men were taken out of the settlement above, not claimed.
-		world_entity_warbands::single defenderWarband = {};
-		defenderWarband.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
-		defenderWarband.raise_target = defenderWarband.composition; // Initial counts, as "original counts" for the client. Not raising.
-		pool = {};
-		world_spawn_warband(world, defenderWarband, defenderArmy);
-
-		world_entity_battles::state start = {};
-		start.location = world_location_midpoint(armies.locations[attackerIndex], settlements.locations[targetIndex]);
-		start.siege_settlement = target;
-		start.siege_owner = attackerOwner;
-		start.siege_defenders = defenderArmy;
-		entity_guid battle = world_spawn_battle(world, start);
-		battle_join(world, battle, attacker, 0);
-		battle_join(world, battle, defenderArmy, 1);
+		world_siege_add_army(world, siege, attacker);
 		break;
 	}
 	case ENTITY_TYPE::CARAVAN:
@@ -181,6 +157,7 @@ void world_system_armies_target_reached(match_world_state& world)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
 		if (armies.battles[armyIndex].is_valid()) continue; // Already fighting.
+		if (armies.sieges[armyIndex].is_valid()) continue; // Pinned by its siege: acts once out of it.
 		if (army_is_raising(world, (ui16)armyIndex)) continue; // Acts once raised.
 
 		// An earlier resolution this tick may have destroyed the target.
