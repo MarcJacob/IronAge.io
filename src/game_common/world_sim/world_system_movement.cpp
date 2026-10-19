@@ -2,9 +2,13 @@
 
 #include "game_common/match/world.h"
 #include "world_sim.h"
+#include "world_sim_army.h"
 
 // What entities can cross for now: land only.
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
+
+// An army accompanying an own army stops moving when within this many tiles of it.
+constexpr i32 ACCOMPANY_DISTANCE_TILES = 2;
 
 // Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
 static void process_entity_movement (world_entity_movement& movement, world_location& location)
@@ -106,17 +110,29 @@ void world_system_entity_movement_decision(match_world_state& world)
     world_entity_armies& armies = world.entities.armies;
 
 	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
+	// Armies accompanying an own army chase it too, but stop once close to it.
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
 
-		if (world_entity_is_valid(world, armies.action_targets[armyIndex]))
+		entity_guid target = armies.action_targets[armyIndex];
+		if (world_entity_is_valid(world, target))
 		{
-			armies.movements[armyIndex].destination = world_get_entity_location(world, armies.action_targets[armyIndex]);
+			world_location targetLoc = world_get_entity_location(world, target);
+			bool accompanying = target.get_type() == ENTITY_TYPE::ARMY && armies.owners[target.get_index()] == armies.owners[armyIndex] && !armies.merging[armyIndex];
+			if (accompanying && vec2_dist_squared(armies.locations[armyIndex], targetLoc) <= ACCOMPANY_DISTANCE_TILES * ACCOMPANY_DISTANCE_TILES)
+			{
+				world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+			}
+			else
+			{
+				armies.movements[armyIndex].destination = targetLoc;
+			}
 		}
 		else
 		{
 			armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+			armies.merging[armyIndex] = 0;
 			world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 		}
 	}
@@ -145,9 +161,9 @@ void world_system_entity_movement(match_world_state& world)
 			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
 			armies.movements[armyIndex].destination = battleLoc;
 		}
-		else if (armies.raising[armyIndex])
+		else if (army_is_raising(world, (ui16)armyIndex))
 		{
-			continue; // Raising armies wait in their settlement, keeping their destination for when they are raised.
+			continue; // Armies with a raising warband wait in place, keeping their destination for when they are raised.
 		}
 
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);

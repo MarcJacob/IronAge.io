@@ -18,9 +18,9 @@
 enum class MATCH_COMMAND_TYPE : ui8
 {
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
-	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
-	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
-	RAISE_ARMY, // Spawns an empty army inside its settlement that draws the target counts from it, then moves to the raise location.
+	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves. On another own army: accompany it.
+	FOUND_SETTLEMENT, // Turns an army (all its warbands) into a settlement at its location.
+	RAISE_ARMY, // Spawns an empty warband (in a new army of its own) inside its settlement that draws the target counts from it, then moves to the raise location.
 
     // SERVER COMMANDS
 
@@ -30,9 +30,13 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	SET_SETTLEMENT_TROOP_CEILING, // Sets a settlement's raw local troop ceiling for one poolable troop type; troops above the effective ceiling are lost.
 
-	SET_ARMY_RAISE_TARGETS, // Overwrites the target counts of an army that is still raising.
+	SET_ARMY_RAISE_TARGETS, // Overwrites the target counts of a warband that is still raising.
 
-	STOP_RAISING_ARMY, // Ends an army's raising where it stands: its raise targets are kept (remembered for a later re-raise).
+	STOP_RAISING_ARMY, // Ends a warband's raising where it stands: its raise targets are kept (remembered for a later re-raise).
+
+	MERGE_ARMY, // Orders an army to follow another own army and merge into it (all its warbands) once within reach.
+
+	DETACH_WARBANDS, // Takes some warbands out of an army into a new army next to it.
 
 	TYPE_COUNT,
 };
@@ -72,6 +76,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 7, // No free slot for the entity the command would create.
 	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses the order (settling).
 	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
+	COMMAND_ERROR_INVALID_SELECTION = 1 << 10, // Warband selection empty, outside the army's warbands, or all of them (detach).
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -235,15 +240,15 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 // SET ARMY RAISE TARGETS
 struct command_data_set_army_raise_targets
 {
-	entity_guid army;
-	ui16 target_levies; // Counts the army raises up to, per type.
+	entity_guid warband;
+	ui16 target_levies; // Counts the warband raises up to, per type.
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_army_raise_targets)
-	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(warband, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(target_levies, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
@@ -259,17 +264,57 @@ void command_set_army_raise_targets_apply(match_world_state& world, match_player
 // STOP RAISING ARMY
 struct command_data_stop_raising_army
 {
-	entity_guid army;
+	entity_guid warband;
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_stop_raising_army)
-	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(warband, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_stop_raising_army_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_stop_raising_army_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// MERGE ARMY
+struct command_data_merge_army
+{
+	entity_guid army; // Army merged: it is removed once its warbands are in into_army.
+	entity_guid into_army;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_merge_army)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(into_army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_merge_army_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_merge_army_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// DETACH WARBANDS
+// The selection is a 64-bit mask of slots in the army's warband list (the order of the army GDO's warband_<slot> properties),
+// split in two halves as GDO properties are 32 bits at most.
+struct command_data_detach_warbands
+{
+	entity_guid army;
+	ui32 slots_low; // Bit N = slot N, for slots 0 to 31.
+	ui32 slots_high; // Bit N = slot 32 + N.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_detach_warbands)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(slots_low, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(slots_high, GAME_DATA_PROP_TYPE::UI32)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_detach_warbands_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_detach_warbands_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
 // Header & command size mapping definitions.
@@ -380,6 +425,10 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_army_raise_targets_validity_check, command_set_army_raise_targets_apply },
 	{ "STOP_RAISING_ARMY", MATCH_COMMAND_TYPE::STOP_RAISING_ARMY, sizeof(command_data_stop_raising_army),
 		command_stop_raising_army_validity_check, command_stop_raising_army_apply },
+	{ "MERGE_ARMY", MATCH_COMMAND_TYPE::MERGE_ARMY, sizeof(command_data_merge_army),
+		command_merge_army_validity_check, command_merge_army_apply },
+	{ "DETACH_WARBANDS", MATCH_COMMAND_TYPE::DETACH_WARBANDS, sizeof(command_data_detach_warbands),
+		command_detach_warbands_validity_check, command_detach_warbands_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

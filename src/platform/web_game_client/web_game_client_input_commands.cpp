@@ -46,6 +46,8 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::SET_SETTLEMENT_TROOP_CEILING: return gdo_buffer_place<gdo_command_data_set_settlement_troop_ceiling>(command_type);
 	case MATCH_COMMAND_TYPE::SET_ARMY_RAISE_TARGETS: return gdo_buffer_place<gdo_command_data_set_army_raise_targets>(command_type);
 	case MATCH_COMMAND_TYPE::STOP_RAISING_ARMY: return gdo_buffer_place<gdo_command_data_stop_raising_army>(command_type);
+	case MATCH_COMMAND_TYPE::MERGE_ARMY: return gdo_buffer_place<gdo_command_data_merge_army>(command_type);
+	case MATCH_COMMAND_TYPE::DETACH_WARBANDS: return gdo_buffer_place<gdo_command_data_detach_warbands>(command_type);
 	default: return COMMAND_CREATE_NO_GDO;
 	}
 }

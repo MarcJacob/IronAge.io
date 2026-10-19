@@ -102,6 +102,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.ARMY]: 2,
     [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
+    [Backend.ENTITY_TYPE.WARBAND]: 1, // Never drawn (warbands stand in their army), only here to satisfy the lookup.
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world.h.

@@ -2,6 +2,7 @@
 
 #include "game_common/match/world.h"
 #include "world_sim.h"
+#include "world_sim_army.h"
 #include "world_sim_battle.h"
 #include "world_sim_population.h"
 
@@ -51,10 +52,14 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		world_entity_armies::single defenders = {};
 		defenders.owner = settlements.owners[targetIndex];
 		defenders.location = settlements.locations[targetIndex];
-		defenders.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
-		defenders.raise_target = defenders.composition; // Initial counts, as "original counts" for the client. Not raising.
-		pool = {};
 		entity_guid defenderArmy = world_spawn_army(world, defenders);
+
+		// One warband, with no home settlement: its men were taken out of the settlement above, not claimed.
+		world_entity_warbands::single defenderWarband = {};
+		defenderWarband.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
+		defenderWarband.raise_target = defenderWarband.composition; // Initial counts, as "original counts" for the client. Not raising.
+		pool = {};
+		world_spawn_warband(world, defenderWarband, defenderArmy);
 
 		world_entity_battles::state start = {};
 		start.location = world_location_midpoint(armies.locations[attackerIndex], settlements.locations[targetIndex]);
@@ -112,39 +117,39 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 // Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
 constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
 
-// Raises an army count towards its target, up to the per-tick limit. The men stay counted in the settlement pool, so the army can only
-// claim men the pool holds beyond what it already has (only one army per settlement for now, see SETTLEMENT_MAX_RAISED_ARMIES).
-static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16 pool)
+// Raises a warband count towards its target, up to the per-tick limit. The men stay counted in the settlement pool, so the warband can only
+// claim men the pool holds beyond what it already has (only one warband per settlement for now, see SETTLEMENT_MAX_RAISED_ARMIES).
+static void raise_draw_from_pool(ui16& warband_count, ui16 target, ui16 pool)
 {
-	ui16 wanted = army_count < target ? target - army_count : 0;
-	ui16 available = pool > army_count ? pool - army_count : 0;
+	ui16 wanted = warband_count < target ? target - warband_count : 0;
+	ui16 available = pool > warband_count ? pool - warband_count : 0;
 	ui16 drawn = wanted < available ? wanted : available;
 	if (drawn > RAISE_POOL_DRAW_PER_TICK) drawn = RAISE_POOL_DRAW_PER_TICK;
 
-	army_count += drawn;
+	warband_count += drawn;
 }
 
 void world_system_armies_raising(match_world_state& world)
 {
-	world_entity_armies& armies = world.entities.armies;
+	world_entity_warbands& warbands = world.entities.warbands;
 	world_entity_settlements& settlements = world.entities.settlements;
 
-	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	for (ui32 warbandIndex = 0; warbandIndex < warbands.max_count; warbandIndex++)
 	{
-		if (!armies.guids[armyIndex].is_valid() || !armies.raising[armyIndex]) continue;
-		if (armies.battles[armyIndex].is_valid()) continue; // Suspended, resumes after the battle.
+		if (!warbands.guids[warbandIndex].is_valid() || !warbands.raising[warbandIndex]) continue;
+		if (world.entities.armies.battles[warbands.armies[warbandIndex].get_index()].is_valid()) continue; // Suspended, resumes after the battle.
 
-		// Raising ends if the home settlement is gone or changed hands. The army is kept as is.
-		entity_guid home = armies.home_settlements[armyIndex];
-		if (!world_entity_is_valid(world, home) || settlements.owners[home.get_index()] != armies.owners[armyIndex])
+		// Raising ends if the home settlement is gone or changed hands. The warband is kept as is.
+		entity_guid home = warbands.home_settlements[warbandIndex];
+		if (!world_entity_is_valid(world, home) || settlements.owners[home.get_index()] != warbands.owners[warbandIndex])
 		{
-			armies.raising[armyIndex] = 0;
+			warbands.raising[warbandIndex] = 0;
 			continue;
 		}
 
 		ui16 homeIndex = home.get_index();
-		world_entity_armies::comp& composition = armies.compositions[armyIndex];
-		const world_entity_armies::comp& target = armies.raise_targets[armyIndex];
+		world_entity_warbands::comp& composition = warbands.compositions[warbandIndex];
+		const world_entity_warbands::comp& target = warbands.raise_targets[warbandIndex];
 		const settlement_troops& pool = settlements.local_troops[homeIndex];
 
 		// Levies are claimed from the population (which keeps counting them), one per tick, never leaving less than the minimum unclaimed.
@@ -161,7 +166,7 @@ void world_system_armies_raising(match_world_state& world)
 		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
 			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)
 		{
-			armies.raising[armyIndex] = 0;
+			warbands.raising[warbandIndex] = 0;
 		}
 	}
 }
@@ -171,18 +176,42 @@ void world_system_armies_target_reached(match_world_state& world)
     world_entity_armies& armies = world.entities.armies;
 
 	// Armies that got close enough to their attack target resolve the attack, which ends the chase.
+	// Armies following an own army join its battles, and merge into it once close enough if ordered to.
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
 		if (armies.battles[armyIndex].is_valid()) continue; // Already fighting.
-		if (armies.raising[armyIndex]) continue; // Attacks once raised.
+		if (army_is_raising(world, (ui16)armyIndex)) continue; // Acts once raised.
 
 		// An earlier resolution this tick may have destroyed the target.
 		entity_guid target = armies.action_targets[armyIndex];
 		if (!world_entity_is_valid(world, target)) continue; // Handled by the chase code next tick.
 
-		if (vec2_dist_squared(armies.locations[armyIndex], world_get_entity_location(world, target))
-			> ATTACK_REACH_TILES * ATTACK_REACH_TILES) continue;
+		bool inReach = vec2_dist_squared(armies.locations[armyIndex], world_get_entity_location(world, target)) <= ATTACK_REACH_TILES * ATTACK_REACH_TILES;
+
+		if (target.get_type() == ENTITY_TYPE::ARMY && armies.owners[target.get_index()] == armies.owners[armyIndex])
+		{
+			ui16 followedIndex = target.get_index();
+			if (armies.battles[followedIndex].is_valid())
+			{
+				// The followed army is fighting: join its side, wherever it is. An accompanying army keeps following it afterwards, a merge order is dropped.
+				bool accompanying = !armies.merging[armyIndex];
+				battle_join(world, armies.battles[followedIndex], armies.guids[armyIndex], armies.battle_sides[followedIndex]);
+				if (accompanying) armies.action_targets[armyIndex] = target;
+				continue;
+			}
+
+			if (!armies.merging[armyIndex] || !inReach) continue; // Accompanying: the movement decision keeps it close.
+
+			// Merge (destroys this army). Dropped if the warbands no longer fit: the army stops where it is.
+			armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+			armies.merging[armyIndex] = 0;
+			world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+			world_army_merge(world, armies.guids[armyIndex], target);
+			continue;
+		}
+
+		if (!inReach) continue;
 
 		armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
 		world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);

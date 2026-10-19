@@ -31,6 +31,7 @@ enum ENTITY_TYPE : ui8
 	ARMY,
 	BUILDER,
 	BATTLE,
+	WARBAND,
 	// ...
 };
 
@@ -270,13 +271,11 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY(trade_attaction_index, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
-// Property arrays for a world's armies.
-struct world_entity_armies : public world_entity_container
+// Property arrays for a world's warbands: men raised from a settlement. A warband is always part of exactly one army,
+// which moves, takes orders and fights for it: the warband itself only holds its men and its tie to its home settlement.
+struct world_entity_warbands : public world_entity_container
 {
-	match_player_id* owners;
-	world_location*	locations;
-
-	world_entity_movement* movements;
+	match_player_id* owners; // Always the owner of its army.
 
 	struct comp
 	{
@@ -286,19 +285,84 @@ struct world_entity_armies : public world_entity_container
 		ui16 knights;
 	} *compositions;
 
-	entity_guid* action_targets; // What entity this army is currently engaging or following, if any.
+	// Raising state. A warband is raised empty inside its home settlement and draws men from it until each count reaches its target.
+	// Edit targets = overwrite raise_targets. Stop raising = clear raising (targets are kept).
+	// The men of a warband stay counted in its home settlement's population / local troops for as long as the warband exists (they are not taken out):
+	// men the warband loses are removed from the settlement (world_warband_remove_men_from_home).
+	comp* raise_targets; // Wanted counts per type while raising. Kept after raising ends: remembers what the warband was raised to.
+	entity_guid* home_settlements; // Settlement the warband was raised from. Its men count in it while it is valid and has the warband's owner.
+	ui8* raising; // 1 while the warband is raising: its army takes orders but stays in place until all its warbands are raised. Cleared by the raising system.
+
+	entity_guid* armies; // Army the warband is part of.
+
+	// Consolidated representation of a single warband for viewing purposes.
+	struct single
+	{
+		match_player_id owner;
+		comp composition;
+		comp raise_target;
+		entity_guid home_settlement;
+		ui8 raising;
+		entity_guid army; // Ignored when spawning (see world_spawn_warband).
+	};
+};
+
+using world_entity_warband = world_entity_warbands::single;
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_warband)
+	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(composition_levies, composition.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_horsemen, composition.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(composition_knights, composition.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_levies, raise_target.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_men_at_arms, raise_target.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_horsemen, raise_target.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raise_target_knights, raise_target.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(home_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(raising, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+// Max warbands in one army.
+static constexpr ui8 ARMY_MAX_WARBANDS = 64;
+
+// What an army is doing, for viewing purposes (army single state). Highest priority first: in battle, raising, merging, following, attacking, moving, idle.
+enum ARMY_STATE : ui8
+{
+	ARMY_STATE_IDLE,
+	ARMY_STATE_MOVING,
+	ARMY_STATE_ATTACKING,
+	ARMY_STATE_FOLLOWING, // Accompanies an own army: keeps close to it and joins its battles.
+	ARMY_STATE_MERGING, // Heads for an own army to merge into it.
+	ARMY_STATE_RAISING, // One of its warbands is raising: waits in place.
+	ARMY_STATE_IN_BATTLE,
+};
+
+// Property arrays for a world's armies: a group of warbands of one owner (at least one), all standing at the army's location.
+// Movement, orders and battles are the army's; men and their home settlements are the warbands'.
+struct world_entity_armies : public world_entity_container
+{
+	using comp = world_entity_warbands::comp;
+
+	match_player_id* owners;
+	world_location*	locations;
+
+	world_entity_movement* movements;
+
+	entity_guid* action_targets; // Entity this army is attacking, or own army it follows (see merging), if any.
 	entity_guid* arrows_targets; // What entity this army last shot at, if any.
+	ui8* merging; // With an own army as action target: 1 = merge into it once within reach, 0 = accompany it.
 
 	entity_guid* battles; // Battle this army is fighting in, if any. An army in a battle is pinned in place.
 	ui8* battle_sides; // Side (0 or 1) of the battle the army is on. Only relevant while in a battle.
 
-	// Raising state. An army is raised empty inside its home settlement and draws men from it until each count reaches its target.
-	// Edit targets = overwrite raise_targets. Stop raising = clear raising (targets are kept).
-	// The men of an army stay counted in its home settlement's population / local troops for as long as the army exists (they are not taken out):
-	// men the army loses are removed from the settlement (world_army_remove_men_from_home).
-	comp* raise_targets; // Wanted counts per type while raising. Kept after raising ends: remembers what the army was raised to.
-	entity_guid* home_settlements; // Settlement the army was raised from. Its men count in it while it is valid and has the army's owner.
-	ui8* raising; // 1 while the army is raising: it takes move and attack orders but stays in place until raised. Cleared by the raising system when all targets are met.
+	// Warbands of the army, as slot indices in the warband container, in joining order.
+	struct warband_list
+	{
+		ui8 count;
+		ui16 indices[ARMY_MAX_WARBANDS];
+	} *warbands;
 
 	// Consolidated representation of a single army for viewing purposes.
 	struct single
@@ -306,17 +370,34 @@ struct world_entity_armies : public world_entity_container
 		match_player_id owner;
 		world_location location;
 		world_entity_movement movement;
-		comp composition;
 		entity_guid action_target;
 		entity_guid arrows_target;
-		comp raise_target;
-		entity_guid home_settlement;
-		ui8 raising;
-		entity_guid battle; // Query-only: battle the army is in, if any. Ignored when spawning.
+
+		// Query-only below: ignored when spawning (an army starts with no warbands, see world_spawn_warband).
+		ui8 merging;
+		entity_guid battle; // Battle the army is in, if any.
+		ui8 state; // ARMY_STATE.
+		ui8 raising; // 1 while any of its warbands is raising.
+		entity_guid followed_army; // Own army it follows (accompanies or merges into), if any.
+		struct men_totals
+		{
+			ui32 levies;
+			ui32 men_at_arms;
+			ui32 horsemen;
+			ui32 knights;
+		} composition; // Men of all its warbands (ui32: 64 full warbands overflow a ui16).
+		ui8 warband_count;
+		entity_guid warbands[ARMY_MAX_WARBANDS]; // Its warbands (see the warband GDO for each one's men and home), warband_count first ones valid.
 	};
 };
 
 using world_entity_army = world_entity_armies::single;
+
+// One property per warband slot: warband_0 ... warband_63.
+#define ARMY_WARBAND_PROPERTY(Slot) GAME_DATA_PROPERTY_PATH(warband_##Slot, warbands[Slot], GAME_DATA_PROP_TYPE::ENTITY_GUID)
+#define ARMY_WARBAND_PROPERTIES_8(S0, S1, S2, S3, S4, S5, S6, S7) \
+	ARMY_WARBAND_PROPERTY(S0) ARMY_WARBAND_PROPERTY(S1) ARMY_WARBAND_PROPERTY(S2) ARMY_WARBAND_PROPERTY(S3) \
+	ARMY_WARBAND_PROPERTY(S4) ARMY_WARBAND_PROPERTY(S5) ARMY_WARBAND_PROPERTY(S6) ARMY_WARBAND_PROPERTY(S7)
 
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
@@ -326,20 +407,32 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(movement_path_handle, movement.path_handle, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(composition_levies, composition.levies, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(composition_horsemen, composition.horsemen, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(composition_knights, composition.knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(action_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(arrows_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-	GAME_DATA_PROPERTY_PATH(raise_target_levies, raise_target.levies, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(raise_target_men_at_arms, raise_target.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(raise_target_horsemen, raise_target.horsemen, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(raise_target_knights, raise_target.knights, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY(home_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-	GAME_DATA_PROPERTY(raising, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(merging, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(battle, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(state, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(raising, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(followed_army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY_PATH(composition_levies, composition.levies, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_men_at_arms, composition.men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_horsemen, composition.horsemen, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(composition_knights, composition.knights, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(warband_count, GAME_DATA_PROP_TYPE::UI8)
+	ARMY_WARBAND_PROPERTIES_8(0, 1, 2, 3, 4, 5, 6, 7)
+	ARMY_WARBAND_PROPERTIES_8(8, 9, 10, 11, 12, 13, 14, 15)
+	ARMY_WARBAND_PROPERTIES_8(16, 17, 18, 19, 20, 21, 22, 23)
+	ARMY_WARBAND_PROPERTIES_8(24, 25, 26, 27, 28, 29, 30, 31)
+	ARMY_WARBAND_PROPERTIES_8(32, 33, 34, 35, 36, 37, 38, 39)
+	ARMY_WARBAND_PROPERTIES_8(40, 41, 42, 43, 44, 45, 46, 47)
+	ARMY_WARBAND_PROPERTIES_8(48, 49, 50, 51, 52, 53, 54, 55)
+	ARMY_WARBAND_PROPERTIES_8(56, 57, 58, 59, 60, 61, 62, 63)
 GAME_DATA_OBJECT_DEF_END()
+
+static_assert(ARMY_MAX_WARBANDS == 64, "The army GDO lists one warband_<slot> property per slot: update it with ARMY_MAX_WARBANDS.");
+
+#undef ARMY_WARBAND_PROPERTIES_8
+#undef ARMY_WARBAND_PROPERTY
 
 struct world_entity_caravans : public world_entity_container
 {
@@ -476,6 +569,7 @@ struct match_world_state
 		world_entity_caravans caravans;
 		world_entity_builders builders;
 		world_entity_battles battles;
+		world_entity_warbands warbands;
 	} entities;
 };
 
@@ -490,6 +584,8 @@ bool query_entity_state_settlement(const match_world_state& world, entity_guid e
 bool query_entity_state_caravan(const match_world_state& world, entity_guid entity, world_entity_caravans::single& out_state);
 
 bool query_entity_state_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
+
+bool query_entity_state_warband(const match_world_state& world, entity_guid entity, world_entity_warbands::single& out_state);
 
 bool query_entity_state_builder(const match_world_state& world, entity_guid entity, world_entity_builders::single& out_state);
 

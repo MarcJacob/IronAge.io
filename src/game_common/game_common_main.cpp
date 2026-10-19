@@ -29,7 +29,8 @@ constexpr ui64 match_get_required_mem(game_match_start_params& params)
 
     ui64 terrainCost = regionCount * sizeof(world_terrain::region) + sizeof(match_world_state); 
     ui64 entitiesCost = regionCount * MICRO_ENTITIES_PER_TYPE_PER_REGION;
-    entitiesCost += entitiesCost * sizeof(world_entity_armies::single) + entitiesCost * sizeof(world_entity_caravans::single);
+    entitiesCost += entitiesCost * sizeof(world_entity_armies::single) + entitiesCost * sizeof(world_entity_caravans::single)
+        + entitiesCost * sizeof(world_entity_warbands::single);
     entitiesCost += regionCount * SETTLEMENTS_PER_REGION * sizeof(world_entity_settlements::single);
 
     return MiB(32) + terrainCost + entitiesCost;

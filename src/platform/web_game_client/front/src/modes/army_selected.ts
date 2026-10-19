@@ -54,19 +54,22 @@ export class ArmySelected extends Core.Mode
     }
 
     // Army stats and troop gauges (see army_panel). While raising, the target sliders send new raise targets.
+    // Raising is per warband: until the army panel lists its warbands, raising controls act on the army's first warband (warband_0).
     private update_panel(army: EntityData): void
     {
+        const warbandGuid = army.get_number("warband_0");
         const raising = army.get_number("raising") === 1;
         if (raising !== this.raising)
         {
             this.raising = raising;
-            this.bar.items = [this.bar.items[0], ...(raising ? [{ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) } as ActionBarItem] : [])];
+            this.bar.items = [this.bar.items[0], ...(raising ? [{ name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { warband: warbandGuid }) } as ActionBarItem] : [])];
             submit_action_bar(this.bar);
         }
 
-        const home = raising ? query_entity(army.get_number("home_settlement")) : null;
-        submit_properties_panel(army_panel(army, home, targets =>
-            send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) })));
+        const warband = raising ? query_entity(warbandGuid) : null;
+        const home = warband !== null ? query_entity(warband.get_number("home_settlement")) : null;
+        submit_properties_panel(army_panel(warband ?? army, home, targets =>
+            send_command("SET_ARMY_RAISE_TARGETS", { warband: warbandGuid, ...raise_target_props(targets) })));
     }
 
     on_escape(): boolean

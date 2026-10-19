@@ -3,6 +3,7 @@
 #include "game_common/match/commands.h"
 #include "game_common/match/world.h"
 #include "world_sim/world_sim.h"
+#include "world_sim/world_sim_army.h"
 #include "world_sim/world_sim_population.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
@@ -103,8 +104,9 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 		// With valid types, just need to check that player can control them.
 	case ENTITY_TYPE::ARMY:
 		world.entities.armies.movements[command.entity.get_index()].destination = command.move_target;
-		// A new move order overrides any attack the army was committed to.
+		// A new move order overrides any attack (or follow / merge) the army was committed to.
 		world.entities.armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
+		world.entities.armies.merging[command.entity.get_index()] = 0;
 		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -123,8 +125,8 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	if (!world_entity_is_valid(world, command.army)) return false;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
 	if (world.entities.armies.owners[command.army.get_index()] != player) return false;
-	// Not ready yet: an empty army would found a free settlement.
-	if (world.entities.armies.raising[command.army.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
+	// Not ready yet: an empty warband would found a free settlement.
+	if (army_is_raising(world, command.army.get_index())) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
 
 	// The army is kept if the location is invalid or there is no room for the settlement.
 	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return false;
@@ -133,8 +135,8 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	return settlements.active_count < settlements.max_count;
 }
 
-// Spawns a settlement at the army's location with its owner and total manpower as population, then destroys the army.
-// Settling is the one case where the army's men actually leave their home settlement.
+// Spawns a settlement at the army's location with its owner and the total manpower of its warbands as population, then destroys the army.
+// Settling is the one case where the warbands' men actually leave their home settlements.
 void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
@@ -142,7 +144,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	// Checked again: earlier commands in the same tick may have destroyed this army, filled the last settlement slot or made the location invalid.
 	if (!world_entity_is_valid(world, command.army)) return;
 	if (command.army.get_type() != ENTITY_TYPE::ARMY) return;
-	if (world.entities.armies.raising[command.army.get_index()]) return;
+	if (army_is_raising(world, command.army.get_index())) return;
 	if (!world_is_valid_settlement_location(world, world.entities.armies.locations[command.army.get_index()], player)) return;
 
 	const world_entity_settlements& settlements = world.entities.settlements;
@@ -150,16 +152,21 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 	ui16 armyIndex = command.army.get_index();
 	const world_entity_armies& armies = world.entities.armies;
-	const world_entity_armies::comp& composition = armies.compositions[armyIndex];
+	ui32 men[world_entity_battles::UNIT_TYPES];
+	army_total_unit_counts(world, armyIndex, men);
 
 	world_entity_settlements::single newSettlement = {};
 	newSettlement.owner = armies.owners[armyIndex];
 	newSettlement.location = armies.locations[armyIndex];
-	newSettlement.population = (ui32)composition.levies + composition.men_at_arms
-		+ composition.horsemen + composition.knights;
+	newSettlement.population = men[0] + men[1] + men[2] + men[3];
     newSettlement.tier = 1;
 
-	world_army_remove_men_from_home(world, armyIndex, composition);
+	const world_entity_armies::warband_list& list = armies.warbands[armyIndex];
+	for (ui8 slot = 0; slot < list.count; slot++)
+	{
+		ui16 warbandIndex = list.indices[slot];
+		world_warband_remove_men_from_home(world, warbandIndex, world.entities.warbands.compositions[warbandIndex]);
+	}
 	world_spawn_settlement(world, newSettlement);
 	world_destroy_army(world, command.army);
 }
@@ -224,16 +231,18 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	}
 
 	const world_entity_armies& armies = world.entities.armies;
-	if (armies.active_count >= armies.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+	const world_entity_warbands& warbands = world.entities.warbands;
+	if ((armies.active_count >= armies.max_count || warbands.active_count >= warbands.max_count)
+		&& command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
 
 	return command_is_valid(feedback);
 }
 
-// Spawns an empty army inside the settlement, heading for the raise location. It draws its men from the settlement right away
-// and starts moving once raised (see world_system_armies_raising).
+// Spawns an empty warband, in a new army of its own, inside the settlement, heading for the raise location. It draws its men from the settlement right away
+// and its army starts moving once it is raised (see world_system_armies_raising).
 void command_raise_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
-	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last army slot.
+	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last army / warband slot.
 	if (!command_raise_army_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_raise_army& command = command_header.get_command_data<command_data_raise_army>();
@@ -245,11 +254,14 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	newArmy.owner = settlements.owners[settlementIndex];
 	newArmy.location = settlements.locations[settlementIndex];
 	newArmy.movement.destination = command.raise_location;
-	newArmy.raise_target = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
-	newArmy.home_settlement = command.settlement;
-	newArmy.raising = 1;
+	entity_guid army = world_spawn_army(world, newArmy);
 
-	world_spawn_army(world, newArmy);
+	world_entity_warbands::single newWarband = {};
+	newWarband.raise_target = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	newWarband.home_settlement = command.settlement;
+	newWarband.raising = 1;
+	world_spawn_warband(world, newWarband, army);
+
 	raise_army_charge(world, command);
 }
 
@@ -273,7 +285,9 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 	case ENTITY_TYPE::SETTLEMENT:
 		return entities.settlements.owners[targetIndex] != player;
 	case ENTITY_TYPE::ARMY:
-		return entities.armies.owners[targetIndex] != player;
+		// Another own army is accompanied instead (see world_system_armies_target_reached).
+		if (entities.armies.owners[targetIndex] != player) return true;
+		return world_entity_is_valid(world, command.target_entity) && !(command.target_entity == command.attacker_entity);
 	case ENTITY_TYPE::CARAVAN:
 		return !world_caravan_is_owned_by(world, command.target_entity, player);
 	default:
@@ -281,7 +295,7 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 	}
 }
 
-// Commits the army to chasing the target. The chase and its resolution are handled by the match tick.
+// Commits the army to chasing the target (or accompanying it, for an own army). The chase and its resolution are handled by the match tick.
 void command_set_entity_attack_target_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	// Checked again: earlier commands in the same tick may have destroyed the attacker or the target.
@@ -290,6 +304,7 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
 	world.entities.armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
+	world.entities.armies.merging[command.attacker_entity.get_index()] = 0;
 }
 
 // BUILD ROAD
@@ -413,25 +428,25 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 {
 	const command_data_set_army_raise_targets& command = command_header.get_command_data<command_data_set_army_raise_targets>();
 
-	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	if (!world_entity_is_valid(world, command.warband) || command.warband.get_type() != ENTITY_TYPE::WARBAND)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
 
-	const world_entity_armies& armies = world.entities.armies;
-	ui16 armyIndex = command.army.get_index();
+	const world_entity_warbands& warbands = world.entities.warbands;
+	ui16 warbandIndex = command.warband.get_index();
 
-	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+	if (warbands.owners[warbandIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	// No dedicated error for an army that is not raising: reported as unspecified.
-	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+	// No dedicated error for a warband that is not raising: reported as unspecified.
+	if (!warbands.raising[warbandIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
 	// Same levy rule as RAISE_ARMY, against the home settlement's current population.
-	entity_guid home = armies.home_settlements[armyIndex];
+	entity_guid home = warbands.home_settlements[warbandIndex];
 	if (!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
@@ -456,8 +471,8 @@ void command_set_army_raise_targets_apply(match_world_state& world, match_player
 
 	const command_data_set_army_raise_targets& command = command_header.get_command_data<command_data_set_army_raise_targets>();
 
-	// Targets below the current counts are allowed: nothing is returned, the army just completes.
-	world.entities.armies.raise_targets[command.army.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	// Targets below the current counts are allowed: nothing is returned, the warband just completes.
+	world.entities.warbands.raise_targets[command.warband.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 }
 
 // STOP RAISING ARMY
@@ -467,6 +482,80 @@ bool command_stop_raising_army_validity_check(const match_world_state& world, ma
 	match_command_validity_feedback* feedback)
 {
 	const command_data_stop_raising_army& command = command_header.get_command_data<command_data_stop_raising_army>();
+
+	if (!world_entity_is_valid(world, command.warband) || command.warband.get_type() != ENTITY_TYPE::WARBAND)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_warbands& warbands = world.entities.warbands;
+	ui16 warbandIndex = command.warband.get_index();
+
+	if (warbands.owners[warbandIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// No dedicated error for a warband that is not raising: reported as unspecified.
+	if (!warbands.raising[warbandIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_stop_raising_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_stop_raising_army_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_stop_raising_army& command = command_header.get_command_data<command_data_stop_raising_army>();
+
+	// Raise targets are left untouched: the warband remembers what it was raised to.
+	world.entities.warbands.raising[command.warband.get_index()] = 0;
+}
+
+// MERGE ARMY
+
+// Two own armies, different, whose warbands fit in one. Not checked: battles (an army in a battle acts once released, like attack orders).
+bool command_merge_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_merge_army& command = command_header.get_command_data<command_data_merge_army>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY
+		|| !world_entity_is_valid(world, command.into_army) || command.into_army.get_type() != ENTITY_TYPE::ARMY
+		|| command.army == command.into_army)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_armies& armies = world.entities.armies;
+	ui16 armyIndex = command.army.get_index();
+	ui16 intoIndex = command.into_army.get_index();
+
+	if ((armies.owners[armyIndex] != player || armies.owners[intoIndex] != player) && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	if ((ui32)armies.warbands[armyIndex].count + armies.warbands[intoIndex].count > ARMY_MAX_WARBANDS
+		&& command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+// Commits the army to following the other one: the merge happens in the match tick once within reach (see world_system_armies_target_reached).
+void command_merge_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_merge_army_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_merge_army& command = command_header.get_command_data<command_data_merge_army>();
+	ui16 armyIndex = command.army.get_index();
+
+	world.entities.armies.action_targets[armyIndex] = command.into_army;
+	world.entities.armies.merging[armyIndex] = 1;
+}
+
+// DETACH WARBANDS
+
+bool command_detach_warbands_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_detach_warbands& command = command_header.get_command_data<command_data_detach_warbands>();
 
 	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
 	{
@@ -479,22 +568,27 @@ bool command_stop_raising_army_validity_check(const match_world_state& world, ma
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	// No dedicated error for an army that is not raising: reported as unspecified.
-	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+	// At least one slot, only slots of existing warbands, and not all of them (a single-warband army can't detach anything).
+	ui64 slots = ((ui64)command.slots_high << 32) | command.slots_low;
+	ui8 count = armies.warbands[armyIndex].count;
+	ui64 allSlots = count >= 64 ? ~(ui64)0 : (((ui64)1 << count) - 1);
+	if ((slots == 0 || (slots & ~allSlots) != 0 || slots == allSlots) && command_add_error(feedback, COMMAND_ERROR_INVALID_SELECTION)) return false;
+
+	// Pinned: no dedicated error for an army in a battle, reported as unspecified.
+	if (armies.battles[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	if (armies.active_count >= armies.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
 
 	return command_is_valid(feedback);
 }
 
-void command_stop_raising_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+// The selected warbands form a new army next to the old one, with no orders.
+void command_detach_warbands_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
-	if (!command_stop_raising_army_validity_check(world, player, command_header, nullptr)) return;
+	if (!command_detach_warbands_validity_check(world, player, command_header, nullptr)) return;
 
-	const command_data_stop_raising_army& command = command_header.get_command_data<command_data_stop_raising_army>();
-	world_entity_armies& armies = world.entities.armies;
-	ui16 armyIndex = command.army.get_index();
-
-	// Raise targets are left untouched: the army remembers what it was raised to.
-	armies.raising[armyIndex] = 0;
+	const command_data_detach_warbands& command = command_header.get_command_data<command_data_detach_warbands>();
+	world_army_detach(world, command.army, ((ui64)command.slots_high << 32) | command.slots_low);
 }
 
 // END COMMAND FUNCTION IMPLEMENTATIONS

@@ -33,6 +33,9 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::BATTLE:
 		container = &world.entities.battles;
 		break;
+	case ENTITY_TYPE::WARBAND:
+		container = &world.entities.warbands;
+		break;
 	default:
 		return false;
 	}
@@ -143,20 +146,67 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities.armies.owners[freeIndex] = start_state.owner;
 	world.entities.armies.locations[freeIndex] = start_state.location;
 	world.entities.armies.movements[freeIndex] = start_state.movement;
-	world.entities.armies.compositions[freeIndex] = start_state.composition;
 	world.entities.armies.action_targets[freeIndex] = start_state.action_target;
 	world.entities.armies.arrows_targets[freeIndex] = start_state.arrows_target;
-	world.entities.armies.raise_targets[freeIndex] = start_state.raise_target;
-	world.entities.armies.home_settlements[freeIndex] = start_state.home_settlement;
-	world.entities.armies.raising[freeIndex] = start_state.raising;
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities.armies.movements[freeIndex].travel_speed, 4);
     SET_DEFAULT_VAL_STRUCT(world.entities.armies.movements[freeIndex].destination, start_state.location);
     world.entities.armies.movements[freeIndex].move_target = start_state.location;
 
-	// Not in a battle (the slot may have been used before).
+	// Not in a battle, not merging, no warbands (the slot may have been used before).
 	world.entities.armies.battles[freeIndex] = INVALID_ENTITY_GUID;
+	world.entities.armies.merging[freeIndex] = 0;
+	world.entities.armies.warbands[freeIndex].count = 0;
+
+	return newID;
+}
+
+// Appends a warband to an army's warband list. The army must have room for it.
+static void army_add_warband(match_world_state& world, ui16 army_index, ui16 warband_index)
+{
+	world_entity_armies::warband_list& list = world.entities.armies.warbands[army_index];
+	ASSERT(list.count < ARMY_MAX_WARBANDS);
+
+	list.indices[list.count] = warband_index;
+	list.count++;
+	world.entities.warbands.armies[warband_index] = world.entities.armies.guids[army_index];
+}
+
+// Takes the warband at the given slot out of an army's warband list. The slots after it move down one, keeping the joining order.
+static void army_remove_warband_slot(world_entity_armies::warband_list& list, ui8 slot)
+{
+	for (ui8 next = slot + 1; next < list.count; next++) list.indices[next - 1] = list.indices[next];
+	list.count--;
+}
+
+entity_guid world_spawn_warband(match_world_state& world, const world_entity_warbands::single& start_state, entity_guid army)
+{
+	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
+	world_entity_warbands& warbands = world.entities.warbands;
+
+	ui16 freeIndex = 0;
+	while (freeIndex < warbands.max_count && warbands.guids[freeIndex].is_valid())
+	{
+		freeIndex++;
+	}
+
+	ASSERT(freeIndex < warbands.max_count);
+
+	// Compute GUID (stored and returned value are the same).
+	entity_guid newID = entity_guid_new(ENTITY_TYPE::WARBAND, freeIndex, world.age % 0x100); // 8-bit extra field.
+
+	warbands.guids[freeIndex] = newID;
+	warbands.active_count++;
+
+	// Apply start state.
+	warbands.owners[freeIndex] = world.entities.armies.owners[army.get_index()];
+	warbands.compositions[freeIndex] = start_state.composition;
+	warbands.raise_targets[freeIndex] = start_state.raise_target;
+	warbands.home_settlements[freeIndex] = start_state.home_settlement;
+	warbands.raising[freeIndex] = start_state.raising;
+
+	army_add_warband(world, army.get_index(), freeIndex);
 
 	return newID;
 }
@@ -234,9 +284,41 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 {
 	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
 	world_entity_armies& armies = world.entities.armies;
+	world_entity_warbands& warbands = world.entities.warbands;
+
+	world_entity_armies::warband_list& list = armies.warbands[army.get_index()];
+	for (ui8 slot = 0; slot < list.count; slot++)
+	{
+		warbands.guids[list.indices[slot]] = INVALID_ENTITY_GUID;
+		warbands.active_count--;
+	}
+	list.count = 0;
 
 	armies.guids[army.get_index()] = INVALID_ENTITY_GUID;
 	armies.active_count--;
+}
+
+void world_destroy_warband(match_world_state& world, entity_guid warband)
+{
+	ASSERT(world_entity_is_valid(world, warband) && warband.get_type() == ENTITY_TYPE::WARBAND);
+	world_entity_warbands& warbands = world.entities.warbands;
+	ui16 warbandIndex = warband.get_index();
+
+	entity_guid army = warbands.armies[warbandIndex];
+	world_entity_armies::warband_list& list = world.entities.armies.warbands[army.get_index()];
+	for (ui8 slot = 0; slot < list.count; slot++)
+	{
+		if (list.indices[slot] == warbandIndex)
+		{
+			army_remove_warband_slot(list, slot);
+			break;
+		}
+	}
+
+	warbands.guids[warbandIndex] = INVALID_ENTITY_GUID;
+	warbands.active_count--;
+
+	if (list.count == 0) world_destroy_army(world, army);
 }
 
 void world_destroy_builder(match_world_state& world, entity_guid builder)
@@ -251,14 +333,15 @@ void world_destroy_builder(match_world_state& world, entity_guid builder)
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
-	const world_entity_armies::comp& men = world.entities.armies.compositions[army.get_index()];
+	ui32 men[world_entity_battles::UNIT_TYPES];
+	army_total_unit_counts(world, army.get_index(), men);
 
 	ui16 settlementIndex = settlement.get_index();
-	world.entities.settlements.populations[settlementIndex] += men.levies;
+	world.entities.settlements.populations[settlementIndex] += men[0];
 
 	// Pooled types go back to the local pool, clamped to ui16.
 	settlement_troops& pool = world.entities.settlements.local_troops[settlementIndex];
-	ui32 returned[3] = { (ui32)pool.men_at_arms + men.men_at_arms, (ui32)pool.horsemen + men.horsemen, (ui32)pool.knights + men.knights };
+	ui32 returned[3] = { (ui32)pool.men_at_arms + men[1], (ui32)pool.horsemen + men[2], (ui32)pool.knights + men[3] };
 	pool.men_at_arms = (ui16)(returned[0] > 0xFFFF ? 0xFFFF : returned[0]);
 	pool.horsemen = (ui16)(returned[1] > 0xFFFF ? 0xFFFF : returned[1]);
 	pool.knights = (ui16)(returned[2] > 0xFFFF ? 0xFFFF : returned[2]);
@@ -286,26 +369,26 @@ void world_settlement_decrease_population(match_world_state& world, entity_guid 
 	}
 }
 
-void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_armies, ui32& out_men)
+void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_warbands, ui32& out_men)
 {
-	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_warbands& warbands = world.entities.warbands;
 	match_player_id owner = world.entities.settlements.owners[settlement.get_index()];
 
-	out_armies = 0;
+	out_warbands = 0;
 	out_men = 0;
-	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	for (ui32 warbandIndex = 0; warbandIndex < warbands.max_count; warbandIndex++)
 	{
-		if (!armies.guids[armyIndex].is_valid() || !(armies.home_settlements[armyIndex] == settlement) || armies.owners[armyIndex] != owner) continue;
+		if (!warbands.guids[warbandIndex].is_valid() || !(warbands.home_settlements[warbandIndex] == settlement) || warbands.owners[warbandIndex] != owner) continue;
 
-		out_armies++;
-		out_men += (ui32)army_total_manpower(armies.compositions[armyIndex]);
+		out_warbands++;
+		out_men += (ui32)army_total_manpower(warbands.compositions[warbandIndex]);
 	}
 }
 
-void world_army_remove_men_from_home(match_world_state& world, ui16 army_index, const world_entity_armies::comp& men)
+void world_warband_remove_men_from_home(match_world_state& world, ui16 warband_index, const world_entity_warbands::comp& men)
 {
-	entity_guid home = world.entities.armies.home_settlements[army_index];
-	if (!world_entity_is_valid(world, home) || world.entities.settlements.owners[home.get_index()] != world.entities.armies.owners[army_index]) return;
+	entity_guid home = world.entities.warbands.home_settlements[warband_index];
+	if (!world_entity_is_valid(world, home) || world.entities.settlements.owners[home.get_index()] != world.entities.warbands.owners[warband_index]) return;
 
 	ui16 homeIndex = home.get_index();
 	ui32& population = world.entities.settlements.populations[homeIndex];
@@ -315,6 +398,73 @@ void world_army_remove_men_from_home(match_world_state& world, ui16 army_index, 
 	pool.men_at_arms = pool.men_at_arms > men.men_at_arms ? pool.men_at_arms - men.men_at_arms : 0;
 	pool.horsemen = pool.horsemen > men.horsemen ? pool.horsemen - men.horsemen : 0;
 	pool.knights = pool.knights > men.knights ? pool.knights - men.knights : 0;
+}
+
+bool world_army_merge(match_world_state& world, entity_guid army, entity_guid into_army)
+{
+	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
+	ASSERT(world_entity_is_valid(world, into_army) && into_army.get_type() == ENTITY_TYPE::ARMY && !(army == into_army));
+	world_entity_armies& armies = world.entities.armies;
+	ui16 intoIndex = into_army.get_index();
+
+	world_entity_armies::warband_list& from = armies.warbands[army.get_index()];
+	if ((ui32)from.count + armies.warbands[intoIndex].count > ARMY_MAX_WARBANDS) return false;
+
+	for (ui8 slot = 0; slot < from.count; slot++) army_add_warband(world, intoIndex, from.indices[slot]);
+	from.count = 0; // Moved: destroying the emptied army must not destroy them.
+	world_destroy_army(world, army);
+	return true;
+}
+
+entity_guid world_army_detach(match_world_state& world, entity_guid army, ui64 slots)
+{
+	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
+	world_entity_armies& armies = world.entities.armies;
+	ui16 armyIndex = army.get_index();
+
+	// First walkable tile around the army, in neighbour order. Its own tile if there is none.
+	const world_terrain& terrain = world.terrain;
+	const path_params landParams = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
+	world_location location = armies.locations[armyIndex];
+	world_location spot = location;
+	for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
+	{
+		i32 x = (i32)location.x + offset.x;
+		i32 y = (i32)location.y + offset.y;
+		if (x < 0 || y < 0 || x >= (i32)terrain.size_tiles.x || y >= (i32)terrain.size_tiles.y) continue;
+
+		world_location candidate = { (ui16)x, (ui16)y };
+		ui16 regionIndex, tileIndex;
+		world_get_tile(terrain, candidate, regionIndex, tileIndex);
+		if (world_tile_move_cost(terrain, regionIndex, tileIndex, landParams) == 0) continue;
+
+		spot = candidate;
+		break;
+	}
+
+	world_entity_armies::single start = {};
+	start.owner = armies.owners[armyIndex];
+	start.location = spot;
+	start.movement.travel_speed = armies.movements[armyIndex].travel_speed;
+	entity_guid newArmy = world_spawn_army(world, start);
+
+	// Selected warbands in slot order, then taken out from the last slot down so the slots still to visit keep their position.
+	world_entity_armies::warband_list& list = armies.warbands[armyIndex];
+	ASSERT(slots != 0 && list.count <= ARMY_MAX_WARBANDS);
+	ui16 moved[ARMY_MAX_WARBANDS];
+	ui8 movedCount = 0;
+	for (ui8 slot = 0; slot < list.count; slot++)
+	{
+		if (slots & ((ui64)1 << slot)) moved[movedCount++] = list.indices[slot];
+	}
+	for (i32 slot = (i32)list.count - 1; slot >= 0; slot--)
+	{
+		if (slots & ((ui64)1 << slot)) army_remove_warband_slot(list, (ui8)slot);
+	}
+	ASSERT(list.count > 0);
+
+	for (ui8 movedIndex = 0; movedIndex < movedCount; movedIndex++) army_add_warband(world, newArmy.get_index(), moved[movedIndex]);
+	return newArmy;
 }
 
 world_location world_get_entity_location(const match_world_state& world, entity_guid entity)
@@ -334,6 +484,9 @@ world_location world_get_entity_location(const match_world_state& world, entity_
 		return world_get_entity_location(world, world.entities.builders.origin_entity[entity.get_index()]);
 	case ENTITY_TYPE::BATTLE:
 		return world.entities.battles.states[entity.get_index()].location;
+	case ENTITY_TYPE::WARBAND:
+		// Warbands stand where their army is.
+		return world.entities.armies.locations[world.entities.warbands.armies[entity.get_index()].get_index()];
 	default:
 		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
 		return INVALID_WORLD_LOCATION;
@@ -392,19 +545,56 @@ bool query_entity_state_army(const match_world_state& world, entity_guid entity,
 	if (entity.get_type() != ENTITY_TYPE::ARMY || !world_entity_is_valid(world, entity)) return false;
 
 	const world_entity_armies& armies = world.entities.armies;
+	const world_entity_warbands& warbands = world.entities.warbands;
 	ui16 i = entity.get_index();
+
+	entity_guid target = armies.action_targets[i];
+	bool followsOwnArmy = target.get_type() == ENTITY_TYPE::ARMY && world_entity_is_valid(world, target) && armies.owners[target.get_index()] == armies.owners[i];
+	bool raising = army_is_raising(world, i);
+
+	ui8 state = ARMY_STATE_IDLE;
+	if (armies.battles[i].is_valid()) state = ARMY_STATE_IN_BATTLE;
+	else if (raising) state = ARMY_STATE_RAISING;
+	else if (followsOwnArmy) state = armies.merging[i] ? ARMY_STATE_MERGING : ARMY_STATE_FOLLOWING;
+	else if (target.is_valid()) state = ARMY_STATE_ATTACKING;
+	else if (!(armies.locations[i] == armies.movements[i].destination)) state = ARMY_STATE_MOVING;
+
+	ui32 men[world_entity_battles::UNIT_TYPES];
+	army_total_unit_counts(world, i, men);
 
 	out_state = {
 		.owner = armies.owners[i],
 		.location = armies.locations[i],
 		.movement = armies.movements[i],
-		.composition = armies.compositions[i],
-		.action_target = armies.action_targets[i],
+		.action_target = target,
 		.arrows_target = armies.arrows_targets[i],
-		.raise_target = armies.raise_targets[i],
-		.home_settlement = armies.home_settlements[i],
-		.raising = armies.raising[i],
+		.merging = armies.merging[i],
 		.battle = armies.battles[i],
+		.state = state,
+		.raising = (ui8)(raising ? 1 : 0),
+		.followed_army = followsOwnArmy ? target : INVALID_ENTITY_GUID,
+		.composition = { men[0], men[1], men[2], men[3] },
+		.warband_count = armies.warbands[i].count,
+	};
+
+	for (ui8 slot = 0; slot < armies.warbands[i].count; slot++) out_state.warbands[slot] = warbands.guids[armies.warbands[i].indices[slot]];
+	return true;
+}
+
+bool query_entity_state_warband(const match_world_state& world, entity_guid entity, world_entity_warbands::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::WARBAND || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_warbands& warbands = world.entities.warbands;
+	ui16 i = entity.get_index();
+
+	out_state = {
+		.owner = warbands.owners[i],
+		.composition = warbands.compositions[i],
+		.raise_target = warbands.raise_targets[i],
+		.home_settlement = warbands.home_settlements[i],
+		.raising = warbands.raising[i],
+		.army = warbands.armies[i],
 	};
 	return true;
 }
@@ -585,14 +775,14 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.movements = memory.alloc<world_entity_movement>(count);
 	if (armies.movements == nullptr) return false;
 
-	armies.compositions = memory.alloc<world_entity_armies::comp>(count);
-	if (armies.compositions == nullptr) return false;
-
 	armies.action_targets = memory.alloc<entity_guid>(count);
 	if (armies.action_targets == nullptr) return false;
 
 	armies.arrows_targets = memory.alloc<entity_guid>(count);
 	if (armies.arrows_targets == nullptr) return false;
+
+	armies.merging = memory.alloc<ui8>(count);
+	if (armies.merging == nullptr) return false;
 
 	armies.battles = memory.alloc<entity_guid>(count);
 	if (armies.battles == nullptr) return false;
@@ -600,14 +790,38 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.battle_sides = memory.alloc<ui8>(count);
 	if (armies.battle_sides == nullptr) return false;
 
-	armies.raise_targets = memory.alloc<world_entity_armies::comp>(count);
-	if (armies.raise_targets == nullptr) return false;
+	armies.warbands = memory.alloc<world_entity_armies::warband_list>(count);
+	if (armies.warbands == nullptr) return false;
 
-	armies.home_settlements = memory.alloc<entity_guid>(count);
-	if (armies.home_settlements == nullptr) return false;
+	return true;
+}
 
-	armies.raising = memory.alloc<ui8>(count);
-	if (armies.raising == nullptr) return false;
+bool world_alloc_warbands(match_world_state& world, mem_arena& memory, ui32 count)
+{
+	world_entity_warbands& warbands = world.entities.warbands;
+
+	warbands.max_count = count;
+
+	warbands.guids = memory.alloc<entity_guid>(count);
+	if (warbands.guids == nullptr) return false;
+
+	warbands.owners = memory.alloc<match_player_id>(count);
+	if (warbands.owners == nullptr) return false;
+
+	warbands.compositions = memory.alloc<world_entity_warbands::comp>(count);
+	if (warbands.compositions == nullptr) return false;
+
+	warbands.raise_targets = memory.alloc<world_entity_warbands::comp>(count);
+	if (warbands.raise_targets == nullptr) return false;
+
+	warbands.home_settlements = memory.alloc<entity_guid>(count);
+	if (warbands.home_settlements == nullptr) return false;
+
+	warbands.raising = memory.alloc<ui8>(count);
+	if (warbands.raising == nullptr) return false;
+
+	warbands.armies = memory.alloc<entity_guid>(count);
+	if (warbands.armies == nullptr) return false;
 
 	return true;
 }

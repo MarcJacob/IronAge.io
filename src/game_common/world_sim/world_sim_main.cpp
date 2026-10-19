@@ -53,6 +53,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_armies(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_builders(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_battles(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_warbands(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     world_terrain_generate(newWorld->terrain);

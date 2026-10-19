@@ -160,6 +160,7 @@ export const COMMAND_ERROR = {
     ENTITY_LIMIT_REACHED: 1 << 7,
     ARMY_RAISING: 1 << 8,
     NO_RAISE_TARGET: 1 << 9,
+    INVALID_SELECTION: 1 << 10,
 } as const;
 
 // Values of the feedback's invalid_path_reason. Mirrors COMMAND_INVALID_PATH_REASON (commands.h) by hand.

@@ -95,30 +95,45 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_caravan(match_world_state& world, const world_entity_caravans::single& start_state);
 
-// Spawns a new army in the world with the provided start state and returns its GUID.
+// Spawns a new army in the world with the provided start state and returns its GUID. It has no warbands yet: add at least one right away (world_spawn_warband).
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state);
+
+// Spawns a new warband in the given army (valid, with room for it) with the provided start state and returns its GUID. Its owner is the army's.
+entity_guid world_spawn_warband(match_world_state& world, const world_entity_warbands::single& start_state, entity_guid army);
 
 // Spawns a new battle in the world with the provided start state and returns its GUID.
 entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state);
 
 void world_destroy_settlement(match_world_state& world, entity_guid settlement);
 void world_destroy_caravan(match_world_state& world, entity_guid caravan);
-void world_destroy_army(match_world_state& world, entity_guid army);
+void world_destroy_army(match_world_state& world, entity_guid army); // Destroys its warbands too.
 void world_destroy_battle(match_world_state& world, entity_guid battle);
 
-// Destroys an army and returns its men to the settlement: levies to the population, the other types to the local troop pool.
+// Destroys a warband, taking it out of its army. Destroys the army too if it was its last warband.
+void world_destroy_warband(match_world_state& world, entity_guid warband);
+
+// Destroys an army and returns the men of all its warbands to the settlement: levies to the population, the other types to the local troop pool.
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
 
-// Counts the armies raised from a settlement (home settlement with the same owner) and their total men.
+// Counts the warbands raised from a settlement (home settlement with the same owner) and their total men.
 // Those men still count in the settlement's population (levies) and local troops (other types).
-void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_armies, ui32& out_men);
+void world_settlement_raised(const match_world_state& world, entity_guid settlement, ui32& out_warbands, ui32& out_men);
 
-// Removes men an army lost (or took away to settle) from its home settlement: levies from the population (never below 1), other types from the local pool.
+// Removes men a warband lost (or took away to settle) from its home settlement: levies from the population (never below 1), other types from the local pool.
 // Does nothing if the home settlement is gone or changed hands.
-void world_army_remove_men_from_home(match_world_state& world, ui16 army_index, const world_entity_armies::comp& men);
+void world_warband_remove_men_from_home(match_world_state& world, ui16 warband_index, const world_entity_warbands::comp& men);
+
+// Moves every warband of an army into another army of the same owner, then destroys the emptied army.
+// Returns false (nothing done) if the warbands don't all fit in the other army.
+bool world_army_merge(match_world_state& world, entity_guid army, entity_guid into_army);
+
+// Moves the warbands at the given slots of an army (bit N = slot N of its warband list) into a new army of the same owner, on a walkable tile
+// next to it (its own tile if there is none). The selection must be valid: slots within the list, not all of them, at least one.
+// Returns the new army.
+entity_guid world_army_detach(match_world_state& world, entity_guid army, ui64 slots);
 
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count);
 
@@ -127,6 +142,8 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
 bool world_alloc_battles(match_world_state& world, mem_arena& memory, ui32 count);
+
+bool world_alloc_warbands(match_world_state& world, mem_arena& memory, ui32 count);
 
 // Spawns a new builder in the world with the provided start state and returns its GUID.
 // Returns INVALID_ENTITY_GUID if the origin is not a valid entity. Asserts if its type is not the one the build type requires.
@@ -207,7 +224,7 @@ void world_system_caravan_arrivals(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
 
-// Raising armies (not in a battle) draw men from their home settlement. They wait there until raised (see world_system_entity_movement).
+// Raising warbands (whose army is not in a battle) draw men from their home settlement. Their army waits until they are all raised (see world_system_entity_movement).
 void world_system_armies_raising(match_world_state& world);
 
 void world_system_battles(match_world_state& world);

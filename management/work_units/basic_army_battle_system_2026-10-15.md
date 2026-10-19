@@ -57,6 +57,25 @@ Phases (sequential commits by manager):
 - B: an army whose home settlement is lost (destroyed / captured) keeps its men, now counted nowhere; its later losses / settling take nothing from anyone.
 - B: a raising army pulled into a battle loses its stored destination (battle_join stops it); after the battle it raises in place, wherever it stands.
 - B: raised armies are derived (scan of all armies by home settlement), not stored: O(armies) per raise validity check and per settlement query.
+- C1: the army GDO lists warbands as 64 flat properties (`warband_0`..`warband_63`, no array property type); the web entity GDO buffer went 384 -> 2048 bytes. An array GDO property type would be cleaner.
+- C1: SETTLEMENT_MAX_RAISED_ARMIES (and settlement GDO `raised_armies`) now counts warbands; names kept.
+- C1: an army following an army that merges away (destroyed) just stops; it is not redirected to the merged army.
+- C1: detach selection = bit mask of slots in the army's warband list; slots shift down when warbands leave (merge/detach/death), so a client must build the mask from a fresh army GDO.
+- C1: FOUND_SETTLEMENT on an army in a battle (pre-existing): its men stay counted in the battle side, which then never empties.
+- C1: battle damage is rounded up per warband (was per army): an army of many warbands loses slightly more per round.
+
+### Phase C1 notes (sim + commands, no new UI)
+
+- Model: `ENTITY_TYPE::ARMY` (value 3, unchanged) is now the group; new `ENTITY_TYPE::WARBAND` (6, appended) is the old army content (owner, men, raise targets, home settlement, raising, parent army). Every warband is always in exactly one army; RAISE_ARMY spawns a warband in a new army of one. Armies hold up to 64 warband slot indices (fixed array, joining order kept).
+- Army-level: location, movement, action target, battle / side, merging flag. Warband-level: men, raising, home claims (`world_warband_remove_men_from_home`).
+- Battles: join sums the army's warbands; each round damages each warband by its share of its side; a warband at 0 men is destroyed, and its army with its last warband. Battle state struct unchanged.
+- Raising per warband; an army waits in place while any of its warbands raises. Settling (FOUND_SETTLEMENT, army guid) settles all warbands, each removing its men from its own home.
+- Accompany = SET_ENTITY_ATTACK_TARGET on another own army: chases it, stops within 2 tiles (`ACCOMPANY_DISTANCE_TILES`), joins the followed army's battle (same side, any distance) and keeps following after it. Never merges.
+- Merge = new MERGE_ARMY command (army, into_army): same chase, merges once within 5 tiles (`ATTACK_REACH_TILES`). If the target is in a battle first, joins it and the merge order is dropped. Dropped too if the warbands no longer fit (64). Chosen over "follow always merges", which would make accompany unable to persist.
+- Detach = new DETACH_WARBANDS command (army, slots_low, slots_high): new army on the first land neighbour tile (own tile if none), no orders. Refused: empty / out of range / all slots (new `COMMAND_ERROR_INVALID_SELECTION`, mirrored in input.ts), army in battle (UNSPECIFIED), no army slot.
+- SET_ARMY_RAISE_TARGETS / STOP_RAISING_ARMY now take a warband (field renamed `army` -> `warband`, same layout).
+- Army GDO: owner, location, movement_*, action_target, arrows_target, merging, battle, state (`ARMY_STATE`, world.h, not mirrored in TS yet), raising (any warband), followed_army, composition_* (sums, now UI32), warband_count, warband_0..63 (guids). Warband GDO: owner, composition_*, raise_target_*, home_settlement, raising, army.
+- Client kept working with minimal edits: ENTITY_TYPE mirror, render scale lookup entry, error mirror, army_selected.ts raising controls act on `warband_0`.
 
 ### Phase A notes
 
