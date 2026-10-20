@@ -86,17 +86,9 @@ Decided along the way: army gauges show current vs raised count as max (no "(X R
 
 Housekeeping for the user: delete stale compiled .js in web/src (ui/ui_element_treasury.js, troop_gauges.js, ui_element_hint.js, ui_element_properties_panel.js, mode_hint_ui.js, settlement_bar_ui.js).
 
-Next: peer-programmer walks the user through the UI (inspection feature, rows, tooltip, player state, adding a row). Then design buildings (housing vs consumption-based growth, no target pop) and trade.
+UI walkthrough done (user caught up). User added `settlement_count`, `total_population`, `total_troops` to `world_player_state` with ROWS entries, tested OK; peer added `soldiers_raised()` / `soldiers_total()` to `settlement_population`. Player totals are updated inline at ~10 sites (settlement spawn / destroy / owner change, siege levies, disband, casualties, found settlement, ceiling lowering).
 
-## Peer brief
-
-- Goal: catch the user up on how the web client UI works after today's changes, ending with a guided walk-through of adding a new row to the player state panel (the user types the change, the peer explains and corrects).
-- Scope (read, explain; edit only when the user asks): `src/platform/web_game_client/front/src/`: `ui/inspection/` (inspect_entity, sections, row kinds: gauge, text, value, slider; panel container; tooltip), `ui/ui_element_player_state.ts`, `ui/ui_element_calendar.ts`, `ui/game_ui.ts`, `gdo.ts` (GDOData / EntityData / get_game_parameters / get_local_player_state), `backend.ts`, the modes that feed callbacks (settlement_selected, army_selected, army_raising), `main_play.ts`.
-- C++ side as needed to explain data flow: GDOs for entities, `game_parameters`, `world_player_state`; the entity GDO buffer and its static_asserts.
-- Start from `front_src.imprint.md`; unit file sections "UI wishes" and "Next step" for context.
-- Decisions: inspection feature is experimental and self-contained (deletable folder); row elements are classes with `submit(state)`; modes pass only callbacks; actions shown only for owned entities in modal code; enemy info visible.
-- Done when: the user has added a new row (e.g. income / expenses breakdown) to the player state panel end to end (a new field in `world_player_state` + GDO property, then one `ROWS` entry), or says they are caught up.
-- Open: none.
+Decided: both. Primitive inlined helpers per entity in `world_sim_<entity>.h` (world + index, every mutation of population / troops / owner goes through them; they maintain settlement invariants, not player stats); `world_update_player_stats` in world_sim_main.cpp after each tick recomputes settlement_count, total_population, total_troops. Coded, untested (helpers in `world_sim_army.h` / `world_sim_settlement.h`, `TROOP_TYPE_*`; stats lag one tick; disband returns exactly the released amount). Then design buildings (housing vs consumption-based growth, no target pop) and trade.
 
 ## UI wishes (user, 2026-10-20)
 

@@ -21,21 +21,43 @@ static inline ui64 army_total_manpower(const army_troop_count& composition)
 	return (ui64)composition.levies + composition.men_at_arms + composition.horsemen + composition.knights;
 }
 
-template<typename Count>
-static inline void army_take_manpower(Count& count, ui64& remaining)
+// Troop types, in the order of world_entity_battles::UNIT_TYPES (cheapest first).
+constexpr ui8 TROOP_TYPE_LEVIES = 0;
+constexpr ui8 TROOP_TYPE_MEN_AT_ARMS = 1;
+constexpr ui8 TROOP_TYPE_HORSEMEN = 2;
+constexpr ui8 TROOP_TYPE_KNIGHTS = 3;
+constexpr ui8 TROOP_TYPE_COUNT = 4;
+
+static inline ui16& troop_count_field(army_troop_count& troops, ui8 troop_type)
 {
-	ui64 taken = remaining < count ? remaining : count;
-	count = (Count)(count - taken);
-	remaining -= taken;
+	switch (troop_type)
+	{
+	case TROOP_TYPE_LEVIES: return troops.levies;
+	case TROOP_TYPE_MEN_AT_ARMS: return troops.men_at_arms;
+	case TROOP_TYPE_HORSEMEN: return troops.horsemen;
+	default: return troops.knights;
+	}
 }
 
-// Removes manpower from an army, cheapest units first.
-static inline void army_remove_manpower(army_troop_count& composition, ui64 amount)
+// ARMY PRIMITIVES
+// Army composition changes. Take the army's index. They only touch the army: the home settlement's counts and the player stats are the caller's business.
+
+// Adds men of a type to the army's composition (clamped to the ui16 count). Returns how many were added.
+static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, ui8 troop_type, ui16 count)
 {
-	army_take_manpower(composition.levies, amount);
-	army_take_manpower(composition.men_at_arms, amount);
-	army_take_manpower(composition.horsemen, amount);
-	army_take_manpower(composition.knights, amount);
+	ui16& troops = troop_count_field(world.entities->armies.compositions[army_index], troop_type);
+	ui16 added = ia_min(count, (ui16)(0xFFFF - troops));
+	troops += added;
+	return added;
+}
+
+// Removes up to count men of a type from the army's composition. Returns how many were removed.
+static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index, ui8 troop_type, ui16 count)
+{
+	ui16& troops = troop_count_field(world.entities->armies.compositions[army_index], troop_type);
+	ui16 removed = ia_min(count, troops);
+	troops -= removed;
+	return removed;
 }
 
 // Man count of each unit type of an army, in the order of world_entity_battles::UNIT_TYPES.
@@ -47,7 +69,7 @@ static inline void army_unit_counts(const army_troop_count& composition, ui32 ou
 	out_counts[3] = composition.knights;
 }
 
-// Kills up to amount men of an army (cheapest first), returns the dead per unit type, and removes them from the home settlement's raised counts and total population (clamped at 0; skipped if the home is invalid).
+// Kills up to amount men of an army (cheapest first), returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid or changed hands).
 void world_army_take_casualties(match_world_state& world, entity_guid army, ui64 amount, ui32 out_dead[world_entity_battles::UNIT_TYPES]);
 
 void army_battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side);

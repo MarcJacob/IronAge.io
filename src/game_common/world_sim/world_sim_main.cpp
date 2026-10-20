@@ -131,11 +131,37 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 
     world_terrain_generate(*newWorld->terrain);
 
+	world_update_player_stats(*newWorld);
+
 	return newWorld;
 
 WORLD_INIT_FAIL:
 	memory.allocated_count = memoryStart;
 	return nullptr;
+}
+
+void world_update_player_stats(match_world_state& world)
+{
+    for (ui16 playerIndex = 0; playerIndex < world.player_count; playerIndex++)
+    {
+        world_player_state& player = world.player_states[playerIndex];
+        player.settlement_count = 0;
+        player.total_population = 0;
+        player.total_troops = 0;
+    }
+
+    // Population and soldiers (raised ones included) belong to the settlement's owner.
+    const world_entity_settlements& settlements = world.entities->settlements;
+    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+    {
+        if (!settlements.guids[settlementIndex].is_valid() || settlements.owners[settlementIndex] >= world.player_count) continue;
+
+        world_player_state& player = world.player_states[settlements.owners[settlementIndex]];
+        const settlement_population& population = settlements.populations[settlementIndex];
+        player.settlement_count++;
+        player.total_population += population.population_total;
+        player.total_troops += population.soldiers_total();
+    }
 }
 
 void world_state_tick(match_world_state& world)
@@ -159,6 +185,8 @@ void world_state_tick(match_world_state& world)
     world_system_armies_target_reached(world);
     world_system_armies_raising(world);
     world_system_battles(world);
+
+    world_update_player_stats(world);
 
     // Increment world age.
     world.age++;

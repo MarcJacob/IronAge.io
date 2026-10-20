@@ -105,6 +105,10 @@ void world_terrain_generate(world_terrain& terrain);
 // Initializes a new world state into the given memory from match start parameters.
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params);
 
+// Recomputes the players' settlement_count, total_population and total_troops from the settlements they own.
+// Called at the end of world init and of every tick. The other player stats are maintained by the tick itself.
+void world_update_player_stats(match_world_state& world);
+
 // Advances the world state by one tick.
 void world_state_tick(match_world_state& world);
 

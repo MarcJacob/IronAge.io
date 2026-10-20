@@ -41,23 +41,24 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		ui32 levies = population.population_total / 5 > 0 ? population.population_total / 5 : 1;
 		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
 		if (levies > population.peasants) levies = population.peasants; // SIEGE ADAPTATION: levies come out of the peasants.
-		population.peasants -= levies;
-		population.raised.levies += levies;
-		if (settlements.owners[targetIndex] < world.player_count) world.player_states[settlements.owners[targetIndex]].total_troops += levies; // Peasants became soldiers.
+		army_troop_count defenderTroops = {};
+		defenderTroops.levies = settlement_raise_levies(world, targetIndex, levies); // Peasants became soldiers.
+		// SIEGE ADAPTATION: the pool joins the army, so it becomes raised.
+		for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT; troopType++)
+		{
+			troop_count_field(defenderTroops, troopType) = settlement_raise_soldiers(world, targetIndex, troopType, troop_count_field(population.home, troopType));
+		}
 
-		army_troop_count& pool = population.home;
 		world_entity_armies::single defenders = {};
 		defenders.owner = settlements.owners[targetIndex];
 		defenders.home_settlement = target; // Casualties and disbanding go back to the besieged settlement.
 		defenders.location = settlements.locations[targetIndex];
-		defenders.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
-		defenders.raised_troops = defenders.composition;
-		// SIEGE ADAPTATION: the pool joins the army, so it becomes raised.
-		population.raised.men_at_arms += pool.men_at_arms;
-		population.raised.horsemen += pool.horsemen;
-		population.raised.knights += pool.knights;
-		pool = {};
+		defenders.raised_troops = defenderTroops;
 		entity_guid defenderArmy = world_spawn_army(world, defenders);
+		for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+		{
+			army_add_troops(world, defenderArmy.get_index(), troopType, troop_count_field(defenderTroops, troopType));
+		}
 
 		world_entity_battles::state start = {};
 		start.location = (armies.locations[attackerIndex] + settlements.locations[targetIndex]) / 2; // Start battle at midpoint between beligerent armies.
@@ -96,16 +97,13 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 // Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
 constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
 
-// Moves men from a settlement pool (home) to an army count (and the settlement's raised count), up to the target, the pool content and the per-tick limit.
-static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool, ui16& raised)
+// Moves men of a type from a settlement pool (home) to an army (and the settlement's raised count), up to the target, the pool content and the per-tick limit.
+static void raise_draw_from_pool(match_world_state& world, ui16 army_index, ui16 settlement_index, ui8 troop_type, ui16 army_count, ui16 target)
 {
 	ui16 wanted = army_count < target ? target - army_count : 0;
-	ui16 drawn = wanted < pool ? wanted : pool;
-	if (drawn > RAISE_POOL_DRAW_PER_TICK) drawn = RAISE_POOL_DRAW_PER_TICK;
+	if (wanted > RAISE_POOL_DRAW_PER_TICK) wanted = RAISE_POOL_DRAW_PER_TICK;
 
-	army_count += drawn;
-	pool -= drawn;
-	raised += drawn;
+	army_add_troops(world, army_index, troop_type, settlement_raise_soldiers(world, settlement_index, troop_type, wanted));
 }
 
 void world_system_armies_raising(match_world_state& world)
@@ -139,19 +137,12 @@ void world_system_armies_raising(match_world_state& world)
 		// Levies come out of the peasants, one per tick, never leaving less than the minimum. They become raised soldiers of the settlement.
 		if (composition.levies < target.levies && population.peasants > GAME_PARAMETERS.raise_min_population_left)
 		{
-			composition.levies++;
-			population.peasants--;
-			population.raised.levies++;
-
-            if (homeOwner < world.player_count)
-            {
-                world.player_states[homeOwner].total_troops++;
-            }
+			army_add_troops(world, armyIndex, TROOP_TYPE_LEVIES, settlement_raise_levies(world, homeIndex, 1));
 		}
 
-		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, population.home.men_at_arms, population.raised.men_at_arms);
-		raise_draw_from_pool(composition.horsemen, target.horsemen, population.home.horsemen, population.raised.horsemen);
-		raise_draw_from_pool(composition.knights, target.knights, population.home.knights, population.raised.knights);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_HORSEMEN, composition.horsemen, target.horsemen);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_KNIGHTS, composition.knights, target.knights);
 
 		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
 			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)

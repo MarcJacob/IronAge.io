@@ -126,25 +126,17 @@ static void settlement_apply_growth(match_world_state& world, ui32 settlement_in
 
     if (change > 0)
     {
-        population.peasants += change;
-        population.population_total += change;
+        settlement_add_peasants(world, settlement_index, change);
     }
     else if (change < 0)
     {
         ui32 deaths = (ui32)-change;
         if (deaths > atHome - 1) deaths = atHome - 1;
         if (deaths > population.peasants) deaths = population.peasants;
-        population.peasants -= deaths;
-        population.population_total -= deaths;
+        settlement_remove_peasants(world, settlement_index, deaths);
         change = -(i32)deaths;
     }
     population.population_change = change;
-
-    match_player_id& settlementOwner = settlements.owners[settlement_index];
-    if (settlementOwner < world.player_count)
-    {
-        world.player_states[settlementOwner].total_population += change;
-    }
 }
 
 // Runs daily, all settlements on the same tick. Writes the settlement's finances (last day's figures).
@@ -179,17 +171,17 @@ void world_system_economy_daily_tick(match_world_state& world)
 
 // Trains peasants into soldiers of a type (up to GAME_PARAMETERS.troop_growth_per_day), limited by the lower of its ceiling and max applied to the
 // total (home + raised), and by the peasants above the minimum. Never removes troops.
-static void train_troop(ui32& peasants, ui16& troops, ui16 raised, ui16 ceiling, ui16 max)
+static void train_troop(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 ceiling, ui16 max)
 {
+    settlement_population& population = world.entities->settlements.populations[settlement_index];
     ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
-    ui32 owned = (ui32)troops + raised;
+    ui32 owned = (ui32)troop_count_field(population.home, troop_type) + troop_count_field(population.raised, troop_type);
     ui32 limit = ia_min(ceiling, max);
     ui32 room = owned < limit ? limit - owned : 0;
-    ui32 available = peasants > minLeft ? peasants - minLeft : 0;
+    ui32 available = population.peasants > minLeft ? population.peasants - minLeft : 0;
     ui32 trained = ia_min(ia_min(room, available), GAME_PARAMETERS.troop_growth_per_day);
 
-    troops += (ui16)trained;
-    peasants -= trained;
+    settlement_train_soldiers(world, settlement_index, troop_type, trained);
 }
 
 // Local troop pool growth, daily: each troop type gains troop_growth_per_day while home + raised is below its effective ceiling,trained from peasants (1:1).
@@ -209,18 +201,8 @@ void world_system_economy_troop_growth(match_world_state& world)
 
         army_troop_count max = settlement_troop_max(population);
 
-        ui32 soldiersHome = population.soldiers_home();
-
-        train_troop(population.peasants, population.home.men_at_arms, population.raised.men_at_arms, ceilings.men_at_arms, max.men_at_arms);
-        train_troop(population.peasants, population.home.horsemen, population.raised.horsemen, ceilings.horsemen, max.horsemen);
-        train_troop(population.peasants, population.home.knights, population.raised.knights, ceilings.knights, max.knights);
-
-        ui32 gained = population.soldiers_home() - soldiersHome;
-
-        const match_player_id& settlementOwner = settlements.owners[settlementIndex];
-        if (settlementOwner < world.player_count)
-        {
-            world.player_states[settlementOwner].total_troops += gained;
-        }
+        train_troop(world, settlementIndex, TROOP_TYPE_MEN_AT_ARMS, ceilings.men_at_arms, max.men_at_arms);
+        train_troop(world, settlementIndex, TROOP_TYPE_HORSEMEN, ceilings.horsemen, max.horsemen);
+        train_troop(world, settlementIndex, TROOP_TYPE_KNIGHTS, ceilings.knights, max.knights);
     }
 }

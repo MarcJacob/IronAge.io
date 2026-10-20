@@ -4,6 +4,7 @@
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_entities.h"
 #include "world_sim/world_sim.h"
+#include "world_sim/settlements/world_sim_settlement.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
@@ -137,13 +138,6 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 }
 
 // Removes up to men from a raised count and returns how many were removed.
-static ui32 found_release_raised(ui16& raised, ui16 men)
-{
-	ui16 released = ia_min(raised, men);
-	raised -= released;
-	return released;
-}
-
 // Spawns a settlement at the army's location with its owner and total manpower as peasants, then destroys the army.
 void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
@@ -160,7 +154,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 	ui16 armyIndex = command.army.get_index();
 	const world_entity_armies& armies = world.entities->armies;
-	const army_troop_count& composition = armies.compositions[armyIndex];
+	army_troop_count composition = armies.compositions[armyIndex];
 
 	world_entity_settlements::single newSettlement = {};
 	newSettlement.owner = armies.owners[armyIndex];
@@ -172,19 +166,9 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	entity_guid home = armies.home_settlements[armyIndex];
 	if (world_entity_is_valid(world, home) && home.get_type() == ENTITY_TYPE::SETTLEMENT)
 	{
-		settlement_population& homePop = world.entities->settlements.populations[home.get_index()];
-		ui32 released = found_release_raised(homePop.raised.levies, composition.levies)
-			+ found_release_raised(homePop.raised.men_at_arms, composition.men_at_arms)
-			+ found_release_raised(homePop.raised.horsemen, composition.horsemen)
-			+ found_release_raised(homePop.raised.knights, composition.knights);
-		homePop.population_total -= released;
-
-		// Soldiers leaving the home settlement are no longer soldiers nor home population (the new settlement adds them back as peasants).
-		match_player_id homeOwner = world.entities->settlements.owners[home.get_index()];
-		if (homeOwner < world.player_count)
+		for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
 		{
-			world.player_states[homeOwner].total_population -= released;
-			world.player_states[homeOwner].total_troops -= released;
+			settlement_remove_soldiers_raised(world, home.get_index(), troopType, troop_count_field(composition, troopType));
 		}
 	}
 
@@ -422,16 +406,10 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 
 	// The ceiling applies to home + raised: lowering it below that total releases only HOME troops back to peasants (raised ones are never touched).
 	settlement_population& population = settlements.populations[index];
-	ui16* count = settlement_troops_field(population.home, command.troop_type);
+	ui16 home = *settlement_troops_field(population.home, command.troop_type);
 	ui16 raised = *settlement_troops_field(population.raised, command.troop_type);
 	ui16 homeAllowed = command.ceiling > raised ? command.ceiling - raised : 0;
-	if (*count > homeAllowed)
-	{
-		ui16 discarded = *count - homeAllowed;
-		population.peasants += discarded;
-		*count = homeAllowed;
-		if (player < world.player_count) world.player_states[player].total_troops -= discarded; // Soldiers back to peasants.
-	}
+	if (home > homeAllowed) settlement_discharge_soldiers(world, index, command.troop_type + TROOP_TYPE_MEN_AT_ARMS, home - homeAllowed);
 }
 
 // SET SETTLEMENT TAX RATE
