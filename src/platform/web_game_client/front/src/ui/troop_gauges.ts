@@ -5,7 +5,7 @@ import type { EntityData } from "../gdo.js"
 import type { GaugeState } from "./ui_element_properties_panel.js"
 
 // Troop types in the order of the commands' target_* properties. name is the suffix of the entity GDO properties.
-// Levies come from the population, the others from the settlement's local pool.
+// Levies come from the peasants, the others from the settlement's local pool.
 const TROOPS = [
     { name: "levies", label: "Levies", color: "#c7cbd1" },
     { name: "men_at_arms", label: "Men-at-arms", color: "#4aa3ff" },
@@ -13,7 +13,7 @@ const TROOPS = [
     { name: "knights", label: "Knights", color: "#c060e0" },
 ];
 
-const RAISE_MIN_POPULATION_LEFT = 10; // Mirrors RAISE_MIN_POPULATION_LEFT in the backend (levy max = population - this).
+const RAISE_MIN_POPULATION_LEFT = 10; // Mirrors RAISE_MIN_POPULATION_LEFT in the backend (levy max = peasants - this).
 const CEILING_SATURATED = 0xFFFF; // Raw ceiling meaning "follows max".
 const MAX_COUNT = 0xFFFF; // Counts are ui16.
 
@@ -48,7 +48,7 @@ export function army_gauges(army: EntityData | null, home: EntityData | null, ta
         {
             // Pooled types: the home max, or the pool if it holds more (pool above max is kept) so the existing troops can be drawn.
             max = i === 0
-                ? Math.max(0, home.get_number("population") - RAISE_MIN_POPULATION_LEFT)
+                ? Math.max(0, home.get_number("peasants") - RAISE_MIN_POPULATION_LEFT)
                 : Math.max(home.get_number(`max_${troop.name}`), home.get_number(`troops_${troop.name}`));
         }
         return {

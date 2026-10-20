@@ -86,11 +86,9 @@ void world_system_battles(match_world_state& world)
 			army_troop_count& composition = armies.compositions[armyIndex];
 			ui64 taken = ((ui64)battle.damage[side ^ 1] * army_total_manpower(composition) + sideMen[side] - 1) / sideMen[side];
 
-			ui32 before[world_entity_battles::UNIT_TYPES], after[world_entity_battles::UNIT_TYPES];
-			army_unit_counts(composition, before);
-			army_remove_manpower(composition, taken);
-			army_unit_counts(composition, after);
-			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= before[unitType] - after[unitType];
+			ui32 dead[world_entity_battles::UNIT_TYPES];
+			world_army_take_casualties(world, armies.guids[armyIndex], taken, dead);
+			for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) battle.men[side][unitType] -= dead[unitType];
 
 			// A raising army that took no damage is just empty (still waiting for its men), not wiped out.
 			if (army_total_manpower(composition) == 0 && !(armies.raising[armyIndex] && taken == 0)) world_destroy_army(world, armies.guids[armyIndex]);
@@ -99,7 +97,7 @@ void world_system_battles(match_world_state& world)
 		// Attackers wiping the defenders of a siege take the settlement.
 		if (over && sideMen[0] > 0 && battle.siege_settlement.is_valid() && world_entity_is_valid(world, battle.siege_settlement))
 		{
-			world.entities->settlements.owners[battle.siege_settlement.get_index()] = battle.siege_owner;
+			world_settlement_change_owner(world, battle.siege_settlement.get_index(), battle.siege_owner);
 		}
 
 		if (over) world_destroy_battle(world, battles.guids[battleIndex]);

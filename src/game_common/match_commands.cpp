@@ -55,7 +55,7 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
     world_entity_settlements::single startSettlement = {
         .owner = command.spawned_player,
         .location = command.spawn_location,
-        .population = 500,
+        .population = { .peasants = 500 },
     };
 
     world_spawn_settlement(world, startSettlement);
@@ -134,7 +134,15 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	return settlements.active_count < settlements.max_count;
 }
 
-// Spawns a settlement at the army's location with its owner and total manpower as population, then destroys the army.
+// Removes up to men from a raised count and returns how many were removed.
+static ui32 found_release_raised(ui16& raised, ui16 men)
+{
+	ui16 released = ia_min(raised, men);
+	raised -= released;
+	return released;
+}
+
+// Spawns a settlement at the army's location with its owner and total manpower as peasants, then destroys the army.
 void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
@@ -155,8 +163,19 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	world_entity_settlements::single newSettlement = {};
 	newSettlement.owner = armies.owners[armyIndex];
 	newSettlement.location = armies.locations[armyIndex];
-	newSettlement.population = (ui32)composition.levies + composition.men_at_arms
+	newSettlement.population.peasants = (ui32)composition.levies + composition.men_at_arms
 		+ composition.horsemen + composition.knights;
+
+	// The men leave their home settlement's raised counts (and its population) to become the new settlement's peasants.
+	entity_guid home = armies.home_settlements[armyIndex];
+	if (world_entity_is_valid(world, home) && home.get_type() == ENTITY_TYPE::SETTLEMENT)
+	{
+		settlement_population& homePop = world.entities->settlements.populations[home.get_index()];
+		homePop.population_total -= found_release_raised(homePop.raised.levies, composition.levies)
+			+ found_release_raised(homePop.raised.men_at_arms, composition.men_at_arms)
+			+ found_release_raised(homePop.raised.horsemen, composition.horsemen)
+			+ found_release_raised(homePop.raised.knights, composition.knights);
+	}
 
 	world_spawn_settlement(world, newSettlement);
 	world_destroy_army(world, command.army);
@@ -197,14 +216,14 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
-	// Raising levies must leave the settlement its minimum population. Pooled troops are only limited when drawn, so their targets can exceed the pool.
+	// Raising levies must leave the settlement its minimum peasants. Pooled troops are only limited when drawn, so their targets can exceed the pool.
 	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;
-		feedback->population_current = settlements.populations[settlementIndex];
+		feedback->population_current = settlements.populations[settlementIndex].peasants;
 	}
-	if (settlements.populations[settlementIndex] < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
+	if (settlements.populations[settlementIndex].peasants < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
 
 	if (!raise_army_can_afford(world, command, feedback) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
@@ -390,9 +409,14 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	// Raw value stored as is, never clamped.
 	*settlement_troops_field(settlements.troop_ceilings[index], command.troop_type) = command.ceiling;
 
-	// Only lowering the ceiling itself below the current count loses the excess troops (a pool above max is kept).
-	ui16* count = settlement_troops_field(settlements.local_troops[index], command.troop_type);
-	if (*count > command.ceiling) *count = command.ceiling;
+	// Only lowering the ceiling itself below the current count releases the excess troops back to peasants (a pool above max is kept).
+	settlement_population& population = settlements.populations[index];
+	ui16* count = settlement_troops_field(population.home, command.troop_type);
+	if (*count > command.ceiling)
+	{
+		population.peasants += *count - command.ceiling;
+		*count = command.ceiling;
+	}
 }
 
 // SET ARMY RAISE TARGETS
@@ -419,7 +443,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
-	// Same levy rule as RAISE_ARMY, against the home settlement's current population.
+	// Same levy rule as RAISE_ARMY, against the home settlement's current peasants.
 	entity_guid home = armies.home_settlements[armyIndex];
 	if (!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
 	{
@@ -428,7 +452,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	}
 
 	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
-	ui32 populationCurrent = world.entities->settlements.populations[home.get_index()];
+	ui32 populationCurrent = world.entities->settlements.populations[home.get_index()].peasants;
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;

@@ -7,7 +7,6 @@
 #include "world_sim.h"
 
 // Unity-include the entire world simulation code. 
-#include "world_entities.cpp"
 #include "world_terrain.cpp"
 
 #include "settlements/world_sim_settlement.cpp"
@@ -108,6 +107,13 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 	newWorld->entities = memory.alloc<world_entities>();
 	if (newWorld->entities == nullptr) goto WORLD_INIT_FAIL;
 
+	newWorld->player_count = start_params.player_count;
+	if (newWorld->player_count > 0)
+	{
+		newWorld->player_treasuries = memory.alloc<ui32>(newWorld->player_count); // Zeroed: players start with an empty treasury.
+		if (newWorld->player_treasuries == nullptr) goto WORLD_INIT_FAIL;
+	}
+
 	newWorld->path_store = world_path_store_init(memory);
 	if (newWorld->path_store == nullptr) goto WORLD_INIT_FAIL;
 
@@ -140,8 +146,8 @@ void world_state_tick(match_world_state& world)
 
     world_system_construction(world); // Before proximity recalc, so new roads count this tick.
 
-    world_system_economy_pop_growth(world);
-    world_system_economy_troop_growth(world);
+    world_system_economy_daily_tick(world);
+    world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_territory(world);
     world_system_economy_proximity_recalc(world);
     world_system_economy_update_pressure(world);

@@ -36,17 +36,24 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		}
 
 		// Otherwise the settlement raises levies (20% of its population, at least 1), its whole local troop pool joins them and the siege begins.
-		ui32& population = settlements.populations[targetIndex];
-		ui32 levies = population / 5 > 0 ? population / 5 : 1;
+		settlement_population& population = settlements.populations[targetIndex];
+		ui32 levies = population.population_total / 5 > 0 ? population.population_total / 5 : 1;
 		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
-		population -= levies < population ? levies : population;
+		if (levies > population.peasants) levies = population.peasants; // SIEGE ADAPTATION: levies come out of the peasants.
+		population.peasants -= levies;
+		population.raised.levies += levies;
 
-		army_troop_count& pool = settlements.local_troops[targetIndex];
+		army_troop_count& pool = population.home;
 		world_entity_armies::single defenders = {};
 		defenders.owner = settlements.owners[targetIndex];
+		defenders.home_settlement = target; // Casualties and disbanding go back to the besieged settlement.
 		defenders.location = settlements.locations[targetIndex];
 		defenders.composition = { (ui16)levies, pool.men_at_arms, pool.horsemen, pool.knights };
 		defenders.raised_troops = defenders.composition;
+		// SIEGE ADAPTATION: the pool joins the army, so it becomes raised.
+		population.raised.men_at_arms += pool.men_at_arms;
+		population.raised.horsemen += pool.horsemen;
+		population.raised.knights += pool.knights;
 		pool = {};
 		entity_guid defenderArmy = world_spawn_army(world, defenders);
 
@@ -87,8 +94,8 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 // Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
 constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
 
-// Moves men from a settlement pool to an army count, up to the target, the pool content and the per-tick limit.
-static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool)
+// Moves men from a settlement pool (home) to an army count (and the settlement's raised count), up to the target, the pool content and the per-tick limit.
+static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool, ui16& raised)
 {
 	ui16 wanted = army_count < target ? target - army_count : 0;
 	ui16 drawn = wanted < pool ? wanted : pool;
@@ -96,6 +103,7 @@ static void raise_draw_from_pool(ui16& army_count, ui16 target, ui16& pool)
 
 	army_count += drawn;
 	pool -= drawn;
+	raised += drawn;
 }
 
 void world_system_armies_raising(match_world_state& world)
@@ -122,19 +130,19 @@ void world_system_armies_raising(match_world_state& world)
 		ui16 homeIndex = home.get_index();
 		army_troop_count& composition = armies.compositions[armyIndex];
 		const army_troop_count& target = armies.raised_troops[armyIndex];
-		army_troop_count& pool = settlements.local_troops[homeIndex];
+		settlement_population& population = settlements.populations[homeIndex];
 
-		// Levies come out of the population, one per tick, never leaving less than the minimum.
-		ui32& population = settlements.populations[homeIndex];
-		if (composition.levies < target.levies && population > RAISE_MIN_POPULATION_LEFT)
+		// Levies come out of the peasants, one per tick, never leaving less than the minimum. They become raised soldiers of the settlement.
+		if (composition.levies < target.levies && population.peasants > RAISE_MIN_POPULATION_LEFT)
 		{
 			composition.levies++;
-			population--;
+			population.peasants--;
+			population.raised.levies++;
 		}
 
-		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, pool.men_at_arms);
-		raise_draw_from_pool(composition.horsemen, target.horsemen, pool.horsemen);
-		raise_draw_from_pool(composition.knights, target.knights, pool.knights);
+		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, population.home.men_at_arms, population.raised.men_at_arms);
+		raise_draw_from_pool(composition.horsemen, target.horsemen, population.home.horsemen, population.raised.horsemen);
+		raise_draw_from_pool(composition.knights, target.knights, population.home.knights, population.raised.knights);
 
 		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
 			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)

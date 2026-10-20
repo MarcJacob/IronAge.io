@@ -21,15 +21,20 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	// Apply start state.
 	world.entities->settlements.owners[freeIndex] = start_state.owner;
 	world.entities->settlements.locations[freeIndex] = start_state.location;
-	world.entities->settlements.populations[freeIndex] = start_state.population;
-    world.entities->settlements.land_outputs[freeIndex] = start_state.land_output;
+	// Every property is written from the start state: the slot may have been used before.
+	settlement_population& population = world.entities->settlements.populations[freeIndex];
+	population = start_state.population;
+	population.home.levies = 0; // No home pool for levies.
+    world.entities->settlements.base_land_outputs[freeIndex] = start_state.base_land_output;
+	world.entities->settlements.local_wealth[freeIndex] = 0; // New settlements start with no wealth, no tax and no finance history.
+	world.entities->settlements.tax_rates[freeIndex] = 0;
+	world.entities->settlements.finances[freeIndex] = {};
     world.entities->settlements.territories[freeIndex] = start_state.territory;
-	world.entities->settlements.local_troops[freeIndex] = start_state.local_troops;
-	world.entities->settlements.raised_troops[freeIndex] = start_state.local_troops;
 	world.entities->settlements.troop_ceilings[freeIndex] = { 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF }; // Saturated: effective ceiling = max.
 
     // Init default values if they weren't specified by start state.
-    SET_DEFAULT_VAL(world.entities->settlements.populations[freeIndex], 100);
+    SET_DEFAULT_VAL(population.peasants, 100);
+	population.population_total = population.at_home() + population.raised.levies + population.raised.men_at_arms + population.raised.horsemen + population.raised.knights;
     SET_DEFAULT_VAL_STRUCT(world.entities->settlements.territories[freeIndex], (world_entity_settlements::territory
             {
                 .bounds_min = world.entities->settlements.locations[freeIndex],
@@ -56,13 +61,21 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement)
 }
 
 
+void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner)
+{
+	world.entities->settlements.owners[settlement_index] = new_owner;
+	world.entities->settlements.tax_rates[settlement_index] = 0;
+}
+
 void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
-	ui32& population = world.entities->settlements.populations[settlement.get_index()];
+	settlement_population& population = world.entities->settlements.populations[settlement.get_index()];
 
-	population = amount < population ? population - amount : 0;
-	if (population == 0)
+	ui32 removed = amount < population.peasants ? amount : population.peasants;
+	population.peasants -= removed;
+	population.population_total -= removed;
+	if (population.population_total == 0)
 	{
 		world_destroy_settlement(world, settlement);
 	}
@@ -79,9 +92,11 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.owner = settlements.owners[i],
 		.location = settlements.locations[i],
 		.population = settlements.populations[i],
-		.land_output = settlements.land_outputs[i],
+		.base_land_output = settlements.base_land_outputs[i],
+		.local_wealth = settlements.local_wealth[i],
+		.tax_rate = settlements.tax_rates[i],
+		.finances = settlements.finances[i],
 		.territory = settlements.territories[i],
-		.local_troops = settlements.local_troops[i],
 		.troop_ceilings = settlements.troop_ceilings[i],
 		.troop_max = settlement_troop_max(settlements.populations[i]),
 		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
@@ -134,23 +149,26 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.locations = memory.alloc<world_location>(count);
 	if (settlements.locations == nullptr) return false;
 
-	settlements.populations = memory.alloc<ui32>(count);
+	settlements.populations = memory.alloc<settlement_population>(count);
 	if (settlements.populations == nullptr) return false;
 
-	settlements.land_outputs = memory.alloc<ui32>(count);
-	if (settlements.land_outputs == nullptr) return false;
+	settlements.base_land_outputs = memory.alloc<ui32>(count);
+	if (settlements.base_land_outputs == nullptr) return false;
+
+	settlements.local_wealth = memory.alloc<ui32>(count);
+	if (settlements.local_wealth == nullptr) return false;
+
+	settlements.tax_rates = memory.alloc<i8>(count);
+	if (settlements.tax_rates == nullptr) return false;
+
+	settlements.finances = memory.alloc<settlement_finances>(count);
+	if (settlements.finances == nullptr) return false;
 
 	settlements.territories = memory.alloc<world_entity_settlements::territory>(count);
 	if (settlements.territories == nullptr) return false;
 
-	settlements.local_troops = memory.alloc<army_troop_count>(count);
-	if (settlements.local_troops == nullptr) return false;
-
 	settlements.troop_ceilings = memory.alloc<army_troop_count>(count);
 	if (settlements.troop_ceilings == nullptr) return false;
-
-	settlements.raised_troops = memory.alloc<army_troop_count>(count);
-	if (settlements.raised_troops == nullptr) return false;
 
 	return true;
 }

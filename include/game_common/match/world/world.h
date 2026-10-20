@@ -37,6 +37,8 @@ struct match_world_state
 
     world_entities* entities; // Entities storage.
 
+    ui16 player_count; // Number of players in the match. Size of player_treasuries.
+    ui32* player_treasuries; // Wealth held by each player, indexed by player ID. Only deposits (daily tax) for now.
 };
 
 #endif // MATCH_WORLD_INCLUDED

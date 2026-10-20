@@ -62,7 +62,7 @@ void world_request_path(match_world_state& world, world_location start, world_lo
 
 // ENTITIES
 //
-// Destroys an army and returns its men to the settlement: levies to the population, the other types to the local troop pool.
+// Destroys an army and returns its men to the settlement: levies become peasants, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 // SYSTEMS & HELPERS
@@ -83,7 +83,8 @@ void world_system_settlement_territory(match_world_state& world);
 
 void world_system_economy_update_pressure(match_world_state& world);
 
-void world_system_economy_pop_growth(match_world_state& world);
+// Daily, per settlement: output -> wealth, tax, consumption, population growth. See world_system_population.cpp.
+void world_system_economy_daily_tick(match_world_state& world);
 
 void world_system_economy_troop_growth(match_world_state& world);
 

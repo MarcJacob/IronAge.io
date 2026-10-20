@@ -47,6 +47,9 @@ static inline void army_unit_counts(const army_troop_count& composition, ui32 ou
 	out_counts[3] = composition.knights;
 }
 
+// Kills up to amount men of an army (cheapest first), returns the dead per unit type, and removes them from the home settlement's raised counts and total population (clamped at 0; skipped if the home is invalid).
+void world_army_take_casualties(match_world_state& world, entity_guid army, ui64 amount, ui32 out_dead[world_entity_battles::UNIT_TYPES]);
+
 void army_battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side);
 
 #endif // WORLD_SIM_ARMY_INCLUDED

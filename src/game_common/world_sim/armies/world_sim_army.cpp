@@ -47,21 +47,62 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	armies.active_count--;
 }
 
+// Moves the men of an army from the settlement's raised count back to its home count.
+static void disband_return_troops(ui16& raised, ui16& home, ui16 men)
+{
+	raised -= ia_min(raised, men);
+	ui32 returned = (ui32)home + men;
+	home = (ui16)(returned > 0xFFFF ? 0xFFFF : returned);
+}
+
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 	const army_troop_count& men = world.entities->armies.compositions[army.get_index()];
 
-	ui16 settlementIndex = settlement.get_index();
-	world.entities->settlements.populations[settlementIndex] += men.levies;
+	settlement_population& population = world.entities->settlements.populations[settlement.get_index()];
 
-	// Pooled types go back to the local pool, clamped to ui16.
-	army_troop_count& pool = world.entities->settlements.local_troops[settlementIndex];
-	ui32 returned[3] = { (ui32)pool.men_at_arms + men.men_at_arms, (ui32)pool.horsemen + men.horsemen, (ui32)pool.knights + men.knights };
-	pool.men_at_arms = (ui16)(returned[0] > 0xFFFF ? 0xFFFF : returned[0]);
-	pool.horsemen = (ui16)(returned[1] > 0xFFFF ? 0xFFFF : returned[1]);
-	pool.knights = (ui16)(returned[2] > 0xFFFF ? 0xFFFF : returned[2]);
+	// Levies become peasants again.
+	population.raised.levies -= ia_min(population.raised.levies, men.levies);
+	population.peasants += men.levies;
+
+	// Other types rejoin the local troops (home), clamped to ui16.
+	disband_return_troops(population.raised.men_at_arms, population.home.men_at_arms, men.men_at_arms);
+	disband_return_troops(population.raised.horsemen, population.home.horsemen, men.horsemen);
+	disband_return_troops(population.raised.knights, population.home.knights, men.knights);
 	world_destroy_army(world, army);
+}
+
+// Removes up to dead men from a raised count and returns how many were removed.
+static ui32 casualties_release_raised(ui16& raised, ui32 dead)
+{
+	ui16 released = (ui16)ia_min((ui32)raised, dead);
+	raised -= released;
+	return released;
+}
+
+void world_army_take_casualties(match_world_state& world, entity_guid army, ui64 amount, ui32 out_dead[world_entity_battles::UNIT_TYPES])
+{
+	world_entity_armies& armies = world.entities->armies;
+	army_troop_count& composition = armies.compositions[army.get_index()];
+
+	ui32 before[world_entity_battles::UNIT_TYPES];
+	army_unit_counts(composition, before);
+	army_remove_manpower(composition, amount);
+	ui32 after[world_entity_battles::UNIT_TYPES];
+	army_unit_counts(composition, after);
+	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) out_dead[unitType] = before[unitType] - after[unitType];
+
+	// The dead also leave their home settlement (raised counts and total population). Skipped if the home is gone.
+	entity_guid home = armies.home_settlements[army.get_index()];
+	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
+
+	settlement_population& population = world.entities->settlements.populations[home.get_index()];
+	ui32 released = casualties_release_raised(population.raised.levies, out_dead[0])
+		+ casualties_release_raised(population.raised.men_at_arms, out_dead[1])
+		+ casualties_release_raised(population.raised.horsemen, out_dead[2])
+		+ casualties_release_raised(population.raised.knights, out_dead[3]);
+	population.population_total -= ia_min(population.population_total, released);
 }
 
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state)

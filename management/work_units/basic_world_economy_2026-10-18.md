@@ -22,8 +22,8 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
    - [DONE] Survey of tick-based timing.
    - [DONE] `TICKS_PER_DAY` + `world_is_daily_tick` in `world_sim.h`; growth moved to daily tick, amounts x2; stale comments fixed. Untested: needs build + growth pace check.
 2. Wealth / treasury:
-   - a. Population accounting refactor (peasants / soldiers home / soldiers raised). Multi-file; also pool troops trained from peasants.
-   - b. Output tick: base land output, effective output from peasants, daily wealth + population target.
+   - a. Population accounting refactor (peasants / soldiers home / soldiers raised, `settlement_population`). Coded incl. casualties mirrored to home settlement (`world_army_take_casualties`) and pool growth +2/day. Untested: needs build + hand checks (raise, disband, pool growth, display, siege, battle casualties).
+   - b. [DONE, untested] Daily economy tick: base land output, effective output, wealth, tax, consumption, growth. Treasury `world.player_treasuries[player]` (deposit-only), `tax_rates` signed, `settlement_finances`; GDO: `base_land_output`, `local_wealth`, `tax_rate`, `finance_*`. Territory `pressure` kept (used by expansion). To check: spawn starvation (500 peasants vs one tile), stockpile behavior.
    - c. Treasury + per-settlement signed tax rate + set-tax command, daily tax step.
    - d. HUD / UI for treasury and tax.
 3-4. Buildings, trade: not broken down yet.
@@ -39,8 +39,19 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 - Local troops == pool troops (upkeep from local wealth).
 - Population accounting per settlement (struct, like army troops): peasants + soldiers per type, soldiers split between at home and in armies (raised). Levies: no home pool, only counted while in armies. Levies in the field count in the settlement population (as soldiers, not at home).
 - Peasants = everyone at home who is not a soldier. Raising: peasants -> soldiers (settlement side) + levies in the army. Troop pools are trained from peasants (1 peasant -> 1 soldier of a type).
+- Disband: levies -> peasants; other types rejoin the local troops (raised count of each type goes down by the army's amount).
+- Population shrink: total deaths computed, then split peasants / soldiers. For now peasants only. Later: soldier share of deaths (a %), spread over home soldiers, ordered by type (knights last).
+- Siege defense left as is for now (to revisit with military mechanics); only minimally adapted to compile with the new struct.
 - Growth counts population at home (peasants + home soldiers) and creates new peasants.
-- Land output becomes base land output = peasants that can work the land at full efficiency. Effective output = base + surplus / (1 + surplus / base), where surplus = max(0, peasants - base); below base it is just peasants (min()). Daily "output tick" runs before growth and taxes: yields base wealth and the population target. Daily order: output, growth, tax.
+- Land output becomes base land output = peasants that can work the land at full efficiency. Effective output = base + surplus / (1 + surplus / base), where surplus = max(0, peasants - base); below base it is just peasants (min()).
+- Daily order: (1) output: effective output -> wealth via a small function (1 wealth per unit now; multipliers / bonuses later), added to local wealth; (2) tax % of local wealth moves to treasury; (3) consumption: base consumption = f(total population at home) is deducted from local wealth; (4) growth from how well consumption was met.
+- No target population anymore: growth depends only on consumption vs current population.
+- Growth rule (r = wealth available / required consumption): enough: +2%, plus up to +2% more scaled by excess / consumption (capped at excess == consumption; excess is not consumed). Shortfall: growth goes from the enough-level down to 0% at 10% under required; then shrinks, reaching -20% at 50% of required; no worse below that.
+- Every transaction to / from local wealth and treasury must be individually determinable (clients need an accurate breakdown). Likely a financial state / ledger object; not designed yet.
+- Growth curve: r >= 1 -> +2% (+ up to +2% by excess / consumption), 0% at r = 0.9, -20% at r = 0.5 and below; linear between. "Available" = whole local wealth after tax, stockpile included. No food vs wealth distinction for now.
+- Consumption: 1 wealth per person at home per day. Small-population percentages get sensible minimums (min +1 when growing, min -1 when shrinking).
+- Financial breakdown: per-settlement struct of last day's figures (income, tax, consumption, excess, growth rate) written by the daily tick, exposed via GDO.
+- Battle casualties: deducted from the army AND from the home settlement (raised counts and total), freeing room in pools / peasants.
 - Single-production / needs-consumption model (food vs commercial wealth) deferred; revisit with buildings / trade.
 - Day-length constant lives in the main world_sim header, with a helper telling whether the world is currently on a daily tick.
 - Sea trade stays in Alpha: only the definition of links between settlements and the pathing differ from land.
@@ -49,9 +60,6 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 ## Open questions
 
 - Which existing periodic mechanics move to the daily tick (growth `GROWTH_TICK_PERIOD` 50, troop pool growth, battle round interval 20, raising draw)?
-- Formula: effective output -> daily wealth and population target (conversion factors).
-- Population shrinking above target: who dies (peasants only, soldiers too)?
-- On army disband, do levies return to peasants?
 - Upkeep split for armies (treasury): see `alpha_troops_recruitment`.
 - Caravan return trip, or disappear at target?
 - What does a caravan carry (plunder gives "carried gold")?
@@ -72,4 +80,15 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Next step
 
-User builds and checks growth pace. Then design wealth / treasury on the daily tick: decide the open questions, break into tasks.
+Panel survey running (read-only). Then: design the generic inspection panel, genericity refactor, settlement UI builder (local wealth + last-day change + hover breakdown, population + growth, in the entity properties panel), then 2c (set-tax command) and treasury HUD (always visible, bottom left). User builds and hand-tests 2a / 2b when back.
+
+## UI wishes (user, 2026-10-20)
+
+- Generic panel design (experimental, must be tidy and easy to remove / replace): panel = title + ordered rows; row types are reusable elements (gauge, value row with delta + optional hover breakdown, text row); per-entity-type inspector functions compose shared section builders (troops, population, wealth); one generic tooltip element. Order: A (container + inspectors, no visible change), B (value row, tooltip, wealth / population sections), C (treasury HUD, needs client query of per-player state).
+- Every selected entity gets the panel (enemy / other types included). Actions are simply not shown in the modal code when the selected entity is not owned (not a universal rule).
+- Legacy debug text panel stays; add a way to collapse / hide it (click and/or hotkey).
+
+- Genericity pass first: the entity inspection panel must show any entity type, not just armies / settlements with troop breakdowns. Complex in-panel elements reusable across panels; panels (except special ones like the action panel) generic and able to hold anything. No two different panel elements per inspected entity type (settlements and armies share elements). Multi-file client change.
+- Treasury gold count always visible, bottom left (position may change).
+- Settlement inspection panel: local wealth with last day's change beside it; hover shows a floating breakdown window.
+- Population count with growth / shrink next to it.

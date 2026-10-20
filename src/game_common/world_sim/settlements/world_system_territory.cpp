@@ -8,8 +8,7 @@
 
 #include "world_sim_settlement.h"
 
-// Food production for each terrain type.
-// 10 units = one supported pop.
+// Base land output of each terrain type: peasants that can work the tile at full efficiency.
 static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
     40, // LAND_PLAINS
     28, // LAND_HILLS
@@ -66,8 +65,8 @@ static void world_influence_update_tile_proximity(const match_world_state& world
     ui32 currentOutput = world_get_tile_land_output(world, region_index, tile_index, currentProximity);
     ui32 newOutput = world_get_tile_land_output(world, region_index, tile_index, new_proximity);
 
-    // Update land_outputs (subtract old, add new)
-    auto& landOutput = world.entities->settlements.land_outputs[settlement_index];
+    // Update base land output (subtract old, add new)
+    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
     ASSERT(landOutput >= currentOutput);
     landOutput = landOutput - currentOutput + newOutput;
 
@@ -133,7 +132,7 @@ static void world_influence_unclaim_tile(const match_world_state& world, ui16 re
     ui32 tileOutput = world_get_tile_land_output(world, region_index, tile_index, proximity);
 
     // Decreased land output.
-    auto& landOutput = world.entities->settlements.land_outputs[settlement_index];
+    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
     ASSERT(landOutput >= tileOutput);
     landOutput -= tileOutput;
 
@@ -181,7 +180,7 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     world.terrain->regions[region_index].owners[tile_index] = settlement_index;
 
     // Increase land output.
-    auto& landOutput = world.entities->settlements.land_outputs[settlement_index];
+    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
     landOutput += tileOutput;
 
     // Increase land size.
@@ -307,8 +306,8 @@ static bool world_influence_can_push(const match_world_state& world, ui16 border
     ui16 defenderIndex = world.terrain->regions[target_region_index].owners[target_tile_index];
     ASSERT(defenderIndex != world_terrain::UNOWNED_TILE && defenderIndex != settlement_index);
 
-    ui32 attackerPop = world.entities->settlements.populations[settlement_index];
-    ui32 defenderPop = world.entities->settlements.populations[defenderIndex];
+    ui32 attackerPop = world.entities->settlements.populations[settlement_index].population_total;
+    ui32 defenderPop = world.entities->settlements.populations[defenderIndex].population_total;
     if (attackerPop == 0 || defenderPop == 0) return false;
 
     i32 defenderPressure = world.entities->settlements.territories[defenderIndex].pressure;
