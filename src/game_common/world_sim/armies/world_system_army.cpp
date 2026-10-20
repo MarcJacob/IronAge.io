@@ -1,6 +1,10 @@
 // Army systems: armies reaching their attack targets and the resolution of those attacks. Siege start is resolved here too.
 
 #include "game_common/match/world/world_entities.h"
+#include "world_sim_army.h"
+
+#include "../battles/world_sim_battle.h"
+#include "../settlements/world_sim_settlement.h"
 
 #include "../world_sim.h"
 

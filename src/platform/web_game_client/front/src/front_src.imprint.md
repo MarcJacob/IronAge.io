@@ -6,8 +6,10 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
 
 - *backend.ts* is the only file that knows about the wasm backend (exports, memory layouts). Everything else sees plain JS values.
   Structures read at fixed offsets mirror the C++ ones by hand: keep both in sync.
+
 - *main.ts* owns the lifecycle of the app: start-up order, the websocket, backend match start / end, canvas visibility.
   It hands every server message to the backend, then to the modes. It does not decide what the player sees or can do.
+
 - *core.ts* holds the shared basics: frame loop, match joined / ended callbacks, message sending, and the Mode system (below).
 - *modes/* decides what the player sees and can do at any moment. See below.
 - *render.ts* draws the match from the backend's render state and a configuration object. It never decides what to show.
@@ -17,9 +19,7 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
   A mode that drives an element keeps its own full state for it (and may keep mutating it while it is not visible), submits it on entry and on resume,
   and clears the element on exit. A child mode may override an element by submitting its own state; the parent submits its own again on resume.
   Hotkeys are handled by the modes in their own *on_key_down*, not by the elements.
-  The elements are the hint line (*ui_element_hint.ts*) and the bottom **action bar** (*ui_element_action_bar.ts*, style in *web/style.css*):
-  a list of items with a name, a hotkey (for display), a state (selectable, unselectable, selected) and a callback;
-  hotkeyed items are placed on the left, items without hotkey on the right. *hotkey_text* gives the label of a key code, also for hints.
+
 - *input.ts* is a library plus the DOM listener registration. It forwards clicks, keys and Escape to the modes
   and holds input state (selection, held keys, camera input) and the generic command functions (*send_command*, *is_command_valid*).
   It knows no command by name: modes build and send their commands themselves, by command name and property name (see Game Data Objects in the C++ web client sources).
@@ -32,16 +32,6 @@ The bottom one is the base mode, which cannot be escaped out of. *start_mode_sta
 *push_mode(mode, parent)* enters a child mode, *pop_mode* returns to the previous one (Escape does this by default), *replace_top_mode* swaps the top.
 *push_mode* takes the mode that is starting the new one as parent: every mode above the parent is popped first (one at a time, through the normal exit path,
 without Escape handling), then the new mode is pushed directly on the parent. A mode therefore never stacks on top of a sibling.
-
-The current tree (extend it, keep it as a tree):
-- Lobby base: no match running.
-- Game base: a match is running, until it ends. Runs the camera. Has one child at a time:
-  - Spawn pick: placement phase.
-  - Main play: ordinary gameplay. Has one child at a time:
-    - Settlement selected: actions with hotkeys. Has one child at a time:
-      - Road building: stays active after an order.
-      - Army raising: one click raises one army, then the mode exits.
-    - Army selected: committed action (Settle), no hotkey.
 
 ### Events
 

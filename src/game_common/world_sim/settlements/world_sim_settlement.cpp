@@ -22,7 +22,10 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	world.entities->settlements.owners[freeIndex] = start_state.owner;
 	world.entities->settlements.locations[freeIndex] = start_state.location;
 	world.entities->settlements.populations[freeIndex] = start_state.population;
+    world.entities->settlements.land_outputs[freeIndex] = start_state.land_output;
+    world.entities->settlements.territories[freeIndex] = start_state.territory;
 	world.entities->settlements.local_troops[freeIndex] = start_state.local_troops;
+	world.entities->settlements.raised_troops[freeIndex] = start_state.local_troops;
 	world.entities->settlements.troop_ceilings[freeIndex] = { 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF }; // Saturated: effective ceiling = max.
 
     // Init default values if they weren't specified by start state.

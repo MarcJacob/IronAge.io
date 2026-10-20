@@ -86,7 +86,7 @@ struct world_entity_container
 
 struct world_entity_movement
 {
-	ui8 travel_speed; // Speed in tenth of tile per tick.
+	ui8 travel_speed; // Speed in twentieths of a tile per tick, along an axis (a tile spans 200 fractional units, each tick adds 10 per speed point). Diagonal moves split it between the axes.
 	vec2<i8> fractional_loc; // "In-tile location" of the entity. Affects movement.
 	world_location destination; // Tile the entity wants to reach. Set by orders and decisions.
 	world_location move_target; // Next tile of the path the entity is stepping to. Only set by the movement system.
@@ -282,7 +282,7 @@ struct world_entity_battles : public world_entity_container
 		world_location location;
 		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
 		ui32 damage[2]; // Men killed this tick BY each side.
-		ui32 duration; // Ticks since the battle started.
+		ui32 duration; // Rounds since the battle started (one round every BATTLE_TICK_INTERVAL ticks).
 		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
 		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
 		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.

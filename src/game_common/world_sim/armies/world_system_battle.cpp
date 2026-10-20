@@ -25,7 +25,7 @@ void army_battle_join(match_world_state& world, entity_guid battle, entity_guid 
 	world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 }
 
-// Each side's damage per tick is this many percent of its men at most.
+// Each side's damage per round (every BATTLE_TICK_INTERVAL ticks) is this many percent of its men at most.
 constexpr ui32 BATTLE_MAX_DAMAGE_PERCENT = 10;
 
 // Battles resolve one round every this many world ticks (1 = every tick). Battle duration counts rounds.

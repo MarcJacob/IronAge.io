@@ -16,7 +16,7 @@ Not broken down yet.
 
 ## Depends on
 
-`alpha_vassalization_2026-10-18.md`, `alpha_wealth_treasury_2026-10-18.md`.
+`alpha_vassalization_2026-10-18.md`, `basic_world_economy_2026-10-18.md`.
 
 ## Next step
 

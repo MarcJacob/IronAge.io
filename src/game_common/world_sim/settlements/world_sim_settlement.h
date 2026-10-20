@@ -13,9 +13,6 @@ static const ui8 POP_CAP_PER_TILE = 2;
 // Raising levies never takes a settlement's population below this.
 static constexpr ui32 RAISE_MIN_POPULATION_LEFT = 10;
 
-// Population and local troop pool growth run on each settlement once every this many ticks (staggered by the settlement's GUID extra field).
-static constexpr ui32 GROWTH_TICK_PERIOD = 50;
-
 // Spawns a new settlement in the world with the provided start state and returns its GUID.
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_settlement(match_world_state& world, const world_entity_settlements::single& start_state);

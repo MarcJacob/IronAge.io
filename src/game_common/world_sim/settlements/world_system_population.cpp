@@ -23,8 +23,11 @@ void world_system_economy_update_pressure(match_world_state& world)
     }
 }
 
+// Runs daily.
 void world_system_economy_pop_growth(match_world_state& world)
 {
+    if (!world_is_daily_tick(world)) return;
+
     world_entity_settlements& settlements = world.entities->settlements;
 
     // POP GROWTH
@@ -32,9 +35,6 @@ void world_system_economy_pop_growth(match_world_state& world)
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
-
-        // @TEMP(Marc): Crude spread / optimization of work: Run on each settlement every GROWTH_TICK_PERIOD ticks based on their Extra guid field and world age.
-        if ((settlements.guids[settlementIndex].get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
 
         ui32 targetPopulation = settlements.land_outputs[settlementIndex] / 10;
 
@@ -51,7 +51,7 @@ void world_system_economy_pop_growth(match_world_state& world)
         }
         else // Population shrinking.
         {
-            const i32 MAX_SHRINK = (i64)population * 10 / 100; // Population cannot shrink by more than 10% per growth tick.
+            const i32 MAX_SHRINK = (i64)population * 20 / 100; // Population cannot shrink by more than 20% per day.
             if (growth < 0 && ia_abs(growth) > MAX_SHRINK)
             {
                 growth = -MAX_SHRINK; 
@@ -69,23 +69,23 @@ void world_system_economy_pop_growth(match_world_state& world)
     }
 }
 
-// Local troop pool growth: each troop type gains 1 per growth tick while below its effective ceiling. Never reduces counts.
+// Local troop pool growth, daily: each troop type gains GROWTH_DAILY_MULTIPLIER per day while below its effective ceiling. Never reduces counts.
 void world_system_economy_troop_growth(match_world_state& world)
 {
+    if (!world_is_daily_tick(world)) return;
+
     world_entity_settlements& settlements = world.entities->settlements;
 
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex] == 0) continue;
 
-        // Same staggering as pop growth.
-        if ((settlements.guids[settlementIndex].get_extra() + world.age) % GROWTH_TICK_PERIOD != 0) continue;
-
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.populations[settlementIndex], settlements.troop_ceilings[settlementIndex]);
         army_troop_count& troops = settlements.local_troops[settlementIndex];
 
-        if (troops.men_at_arms < ceilings.men_at_arms) troops.men_at_arms++;
-        if (troops.horsemen < ceilings.horsemen) troops.horsemen++;
-        if (troops.knights < ceilings.knights) troops.knights++;
+        // Gain is capped at the ceiling.
+        if (troops.men_at_arms < ceilings.men_at_arms) troops.men_at_arms = ia_min(troops.men_at_arms + 1, ceilings.men_at_arms);
+        if (troops.horsemen < ceilings.horsemen) troops.horsemen = ia_min(troops.horsemen + 1, ceilings.horsemen);
+        if (troops.knights < ceilings.knights) troops.knights = ia_min(troops.knights + 1, ceilings.knights);
     }
 }

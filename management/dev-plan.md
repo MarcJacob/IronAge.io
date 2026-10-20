@@ -31,9 +31,7 @@ when it finishes.
 - `work_units/command_wiring_simplification_2026-10-18.md` [DONE]
 - `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/world_sim_simplification_2026-10-19.md`
-- `work_units/alpha_wealth_treasury_2026-10-18.md`
-- `work_units/alpha_settlement_buildings_2026-10-18.md`
-- `work_units/alpha_trade_2026-10-18.md`
+- `work_units/basic_world_economy_2026-10-18.md` [WIP]
 - `work_units/alpha_troops_recruitment_2026-10-18.md`
 - `work_units/alpha_war_extensions_2026-10-18.md`
 - `work_units/alpha_diplomacy_chat_2026-10-18.md`
@@ -122,8 +120,8 @@ work to a line or two.
        command to a client modal control scheme. (`command_wiring_simplification`)
      - Reorganize world simulation code: one implementation file per system, helper
        headers per theme. (`world_sim_reorganization`)
-   - Alpha features, in this order, after the preparation: `alpha_wealth_treasury`,
-     `alpha_settlement_buildings`, `alpha_trade`, `alpha_troops_recruitment`,
+   - Alpha features, in this order, after the preparation: `basic_world_economy`
+     (time system, wealth / treasury, buildings, trade), `alpha_troops_recruitment` (war economy),
      `alpha_war_extensions`, `alpha_diplomacy_chat`, `alpha_vassalization`,
      `alpha_victory_score` (plus `straight_line_movement`).
    - Formalize the feature-branch workflow.

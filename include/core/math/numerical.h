@@ -3,8 +3,8 @@
 #ifndef NUMERICAL_INCLUDED
 #define NUMERICAL_INCLUDED
 
-#define ia_min(a, b) (a <= b ? a : b)
-#define ia_max(a, b) (a >= b ? a : b)
+#define ia_min(a, b) ((a) <= (b) ? (a) : (b))
+#define ia_max(a, b) ((a) >= (b) ? (a) : (b))
 
 template<typename Numeric>
 static Numeric ia_pow(Numeric base_val, ui32 pow)

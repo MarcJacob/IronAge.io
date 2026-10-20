@@ -9,17 +9,76 @@
 // Unity-include the entire world simulation code. 
 #include "world_entities.cpp"
 #include "world_terrain.cpp"
+
 #include "settlements/world_sim_settlement.cpp"
 #include "settlements/world_system_territory.cpp"
 #include "settlements/world_system_population.cpp"
+
 #include "armies/world_sim_army.cpp"
 #include "armies/world_system_army.cpp"
 #include "armies/world_system_battle.cpp"
+
 #include "battles/world_sim_battle.cpp"
+
 #include "builders/world_sim_builder.cpp"
 #include "builders/world_system_construction.cpp"
+
 #include "world_system_movement.cpp"
 #include "world_pathing.cpp"
+
+// GENERAL HELPERS
+
+bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
+{
+	if (!entity.is_valid()) return false;
+
+	const world_entity_container* container;
+
+	switch (entity.get_type())
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		container = &world.entities->settlements;
+		break;
+	case ENTITY_TYPE::ARMY:
+		container = &world.entities->armies;
+		break;
+	case ENTITY_TYPE::BUILDER:
+		container = &world.entities->builders;
+		break;
+	case ENTITY_TYPE::BATTLE:
+		container = &world.entities->battles;
+		break;
+	default:
+		return false;
+	}
+
+	// The stored GUID is zero for inactive slots, and differs in its extra bits if the slot was reused by a newer entity.
+	ui16 index = entity.get_index();
+	return index < container->max_count && container->guids[index] == entity;
+}
+
+world_location world_entity_get_location(const match_world_state& world, entity_guid entity)
+{
+	ENTITY_TYPE type = entity.get_type();
+
+	switch (type)
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		return world.entities->settlements.locations[entity.get_index()];
+	case ENTITY_TYPE::ARMY:
+		return world.entities->armies.locations[entity.get_index()];
+	case ENTITY_TYPE::BUILDER:
+		// Builders have no location of their own for now: they are where their origin is.
+		return world_entity_get_location(world, world.entities->builders.origin_entity[entity.get_index()]);
+	case ENTITY_TYPE::BATTLE:
+		return world.entities->battles.states[entity.get_index()].location;
+	default:
+		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
+		return INVALID_WORLD_LOCATION;
+	}
+}
+
+// MAIN LIFECYCLE FUNCTIONS
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
 {

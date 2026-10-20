@@ -1,4 +1,6 @@
-# Alpha: troops, recruitment and upkeep
+# Alpha: war economy (troops, recruitment, upkeep)
+
+Scope widened 2026-10-20: covers the war economy broadly (recruitment, upkeep, raising / disbanding mechanics), on top of the economy from `basic_world_economy`. File name kept.
 
 Started: 2026-10-18. Design: `management/design_doc.md`, Alpha > War & conquest > Troop recruitment & Raising, Upkeep & Economy.
 
@@ -44,7 +46,7 @@ Deferred: barracks / keep pools, upkeep, desertion / disbanding when out of gold
 
 ## Depends on (later parts)
 
-`alpha_wealth_treasury_2026-10-18.md`, `alpha_settlement_buildings_2026-10-18.md`.
+`basic_world_economy_2026-10-18.md`.
 
 ## Next step
 

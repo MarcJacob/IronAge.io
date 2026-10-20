@@ -1,6 +1,6 @@
 # World sim simplification
 
-Started: 2026-10-19. Off the Alpha feature order: done before `alpha_wealth_treasury` and the other Alpha units.
+Started: 2026-10-19. Off the Alpha feature order: done before `basic_world_economy` and the other Alpha units.
 
 ## Scope
 

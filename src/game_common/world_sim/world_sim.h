@@ -9,11 +9,16 @@
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_pathing.h"
 
-// Entity headers: lifecycle and shared helpers of each entity type.
-#include "settlements/world_sim_settlement.h"
-#include "armies/world_sim_army.h"
-#include "battles/world_sim_battle.h"
-#include "builders/world_sim_builder.h"
+// WORLD SIM PARAMETERS & HELPERS
+
+// A calendar day is this many world ticks. Slow systems (growth...) run once per day.
+static constexpr ui32 TICKS_PER_DAY = 100;
+
+// True on the first tick of each day.
+static inline bool world_is_daily_tick(const match_world_state& world)
+{
+    return world.age % TICKS_PER_DAY == 0;
+}
 
 // Distances are measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).
 // Stepping to a tile adds its travel cost times the weight.
@@ -82,13 +87,9 @@ void world_system_economy_pop_growth(match_world_state& world);
 
 void world_system_economy_troop_growth(match_world_state& world);
 
-void world_system_settlement_spawn_caravans(match_world_state& world);
-
 void world_system_entity_movement_decision(match_world_state& world);
 
 void world_system_entity_movement(match_world_state& world);
-
-void world_system_caravan_arrivals(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
 
