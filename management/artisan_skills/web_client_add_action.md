@@ -37,7 +37,7 @@ Nothing about byte offsets lives in TS. Call sites build the property object the
      `pick_entity_at(x, y, exclude_owner?)` for targets, then `send_command`.
    - Interactive mode (targeting, preview, stays or exits after the order): a new class in
      *modes/*, copy `road_building.ts` (stays active) or `army_raising.ts` (exits after one
-     order). It holds its hint, its exit key, per-frame preview, `on_click`, `on_context_menu`.
+     order). It holds its exit key, per-frame preview, `on_click`, `on_context_menu`.
 3. Action bar (bottom bar, *ui/ui_element_action_bar.ts*): the owning mode keeps its own
    `ActionBarState` (items: `name`, `hotkey` as a `KeyboardEvent.code` for display only,
    `state` selectable / unselectable / selected, `on_activate`). It calls `submit_action_bar`
@@ -51,8 +51,8 @@ Nothing about byte offsets lives in TS. Call sites build the property object the
    that is starting it. Modes above that parent are popped first, so a mode never stacks on a
    sibling. A mode returns true only for inputs it owns (its exit key, its clicks); other keys
    fall through to the parent (this is how pressing another action's hotkey switches modes).
-6. Hint line (*ui/ui_element_hint.ts*): `submit_hint({ text })` on entry / resume, `null` on
-   exit. Build key texts with `hotkey_text(code)`, never hard-code "[1]".
+6. No hint line (the hint element was removed; tutorial / tooltips come later). Build key texts
+   with `hotkey_text(code)`, never hard-code "[1]".
 7. Validity and feedback: `is_command_valid("NAME", {...})` (bool, uses the server's check) for
    simple previews; `get_command_feedback("NAME", {...})` returns `{ valid, values }`, the
    `values` being the fields of the command's validity feedback struct by name
@@ -71,7 +71,7 @@ Nothing about byte offsets lives in TS. Call sites build the property object the
 - Property names in the TS object == the command struct member names; command name == the
   command table row name.
 - The mode returns true / false correctly for each handler (see the mode dispatch in the imprint).
-- Hotkey texts come from `hotkey_text`; the bar and hint are cleared on exit.
+- Hotkey texts come from `hotkey_text`; the bar is cleared on exit.
 - Mode tree rules in *front_src.imprint.md* respected (children pop themselves when the state
   stops matching; a mode that must not be left overrides Escape).
 - The browser may serve cached modules after a redeploy: hard reload. The deployment copy never

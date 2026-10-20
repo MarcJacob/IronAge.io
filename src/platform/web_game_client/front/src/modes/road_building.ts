@@ -7,8 +7,6 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
-import { submit_hint } from "../ui/ui_element_hint.js"
-import { hotkey_text } from "../ui/ui_element_action_bar.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
@@ -26,12 +24,10 @@ export class RoadBuilding extends Core.Mode
         if (view === null) { Core.pop_mode(); return; }
 
         this.origin = view.get_location("location");
-        submit_hint({ text: `Build Road: click a tile to build a road to it. Click the settlement or a road tile to start from there. Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
     }
 
     on_exit(): void
     {
-        submit_hint(null);
         Render.RENDER_CONFIG.path_preview = null;
     }
 

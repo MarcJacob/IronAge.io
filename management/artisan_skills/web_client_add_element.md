@@ -10,8 +10,8 @@ Read first: *front/front.imprint.md*, *front/src/front_src.imprint.md*.
 
 ## A. A DOM interface element
 
-Precedents: *ui/ui_element_hint.ts* (simplest: one text), *ui/ui_element_action_bar.ts*
-(dynamic content with callbacks).
+Precedents: *ui/inspection/ui_element_text_row.ts* (simplest: one text row),
+*ui/ui_element_action_bar.ts* (dynamic content with callbacks).
 
 1. Markup: an empty container with an id in *web/index.html* (hidden by default). Style in
    *web/style.css* (keep the bottom / top layout classes the other elements use).

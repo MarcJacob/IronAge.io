@@ -14,8 +14,7 @@ import { init_game_ui } from './ui/game_ui.js';
 import { init_lobby_ui } from './ui/lobby_ui.js';
 import { init_placement_ui } from './ui/placement_ui.js';
 import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
-import { init_ui_element_hint } from './ui/ui_element_hint.js';
-import { init_ui_element_properties_panel } from './ui/ui_element_properties_panel.js';
+import { init_ui_element_properties_panel } from './ui/inspection/ui_element_properties_panel.js';
 import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
@@ -145,7 +144,6 @@ async function start()
     init_lobby_ui();
     init_placement_ui();
     init_ui_element_action_bar();
-    init_ui_element_hint();
     init_ui_element_properties_panel();
 
     // Nothing but the lobby until the server says otherwise.

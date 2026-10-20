@@ -170,21 +170,24 @@ body {
     accent-color: #ff3b3b;
 }
 
-/* What the current mode is and what to do, top center. Passes mouse input through. */
-#game_hud_mode_hint {
-    position: absolute;
-    top: 12px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-family: monospace;
-    font-size: 1.2rem;
-    text-shadow: 0 0 4px #000;
-    pointer-events: none;
+.text_row {
+    margin-bottom: 4px;
+}
+
+.text_row_label {
+    margin-right: 0.5rem;
+    color: #9aa0a6;
+}
+
+/* Clickable header of the debug panel: collapses / expands its text. */
+#game_hud_selected_header {
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
 }
 
 #game_hud_selected_text {
-    margin: 0 0 8px;
+    margin: 8px 0 8px;
     white-space: pre-wrap;
 }
 

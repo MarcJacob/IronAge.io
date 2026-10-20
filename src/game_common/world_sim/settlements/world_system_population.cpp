@@ -42,10 +42,10 @@ static ui32 land_output_to_wealth(ui32 effective_output)
     return effective_output;
 }
 
-// Wealth needed per day by the population at home (peasants + home soldiers, not raised ones): 1 per person.
+// Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
 static ui32 settlement_consumption_required(const settlement_population& population)
 {
-    return population.at_home();
+    return population.at_home() * GAME_PARAMETERS.consumption_per_person;
 }
 
 // WEALTH MOVEMENT 1: land output -> local wealth.
@@ -87,16 +87,20 @@ static void settlement_wealth_pay_consumption(world_entity_settlements& settleme
 
 // Population growth in per mille of the population at home, from how well the consumption was met. required must not be 0.
 // available is the local wealth after tax (before consumption), excess what was left of it after consumption.
-//  r >= 1: +2% to +4% (more with excess, up to excess == required). 0.9 <= r < 1: +2% down to 0%. 0.5 <= r < 0.9: 0% down to -20%. r < 0.5: -20%.
+// Curve points are in GAME_PARAMETERS (now: r >= 1: +2% to +4%, more with excess up to excess == required; 0.9 <= r < 1: +2% down to 0%;
+// 0.5 <= r < 0.9: 0% down to -20%; r < 0.5: -20%).
 static i32 settlement_growth_per_mille(ui32 available, ui32 required, ui32 excess)
 {
+    const game_parameters& params = GAME_PARAMETERS;
     ui64 avail = available;
     ui64 req = required;
+    ui64 zeroRatio = params.growth_zero_ratio_per_mille;
+    ui64 floorRatio = params.growth_floor_ratio_per_mille;
 
-    if (avail >= req) return 20 + (i32)(20 * (ui64)ia_min(excess, required) / req);
-    if (avail * 10 >= req * 9) return (i32)((200 * avail - 180 * req) / req);
-    if (avail * 2 >= req) return -(i32)((450 * req - 500 * avail) / req);
-    return -200;
+    if (avail >= req) return params.growth_enough_per_mille + (i32)((ui64)(params.growth_max_per_mille - params.growth_enough_per_mille) * ia_min(excess, required) / req);
+    if (avail * 1000 >= req * zeroRatio) return (i32)((ui64)params.growth_enough_per_mille * (avail * 1000 - req * zeroRatio) / (req * (1000 - zeroRatio)));
+    if (avail * 1000 >= req * floorRatio) return -(i32)((ui64)(-params.growth_floor_per_mille) * (req * zeroRatio - avail * 1000) / (req * (zeroRatio - floorRatio)));
+    return params.growth_floor_per_mille;
 }
 
 // GROWTH: creates new peasants, or kills peasants only. Never kills more than the peasants or the last one at home.
@@ -152,22 +156,20 @@ void world_system_economy_daily_tick(match_world_state& world)
     }
 }
 
-// Troops gained per type per daily tick (the former per-run amount of 1, doubled when growth moved to the daily tick).
-static constexpr ui16 GROWTH_DAILY_MULTIPLIER = 2;
-
-// Trains peasants into soldiers of a type (up to GROWTH_DAILY_MULTIPLIER), limited by its ceiling and by the peasants above the minimum.
+// Trains peasants into soldiers of a type (up to GAME_PARAMETERS.troop_growth_per_day), limited by its ceiling and by the peasants above the minimum.
 static void train_troop(ui32& peasants, ui16& troops, ui16 ceiling)
 {
+    ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
     ui32 room = troops < ceiling ? ceiling - troops : 0;
-    ui32 available = peasants > RAISE_MIN_POPULATION_LEFT ? peasants - RAISE_MIN_POPULATION_LEFT : 0;
-    ui32 trained = ia_min(ia_min(room, available), (ui32)GROWTH_DAILY_MULTIPLIER);
+    ui32 available = peasants > minLeft ? peasants - minLeft : 0;
+    ui32 trained = ia_min(ia_min(room, available), GAME_PARAMETERS.troop_growth_per_day);
 
     troops += (ui16)trained;
     peasants -= trained;
 }
 
-// Local troop pool growth, daily: each troop type gains GROWTH_DAILY_MULTIPLIER per day while below its effective ceiling, trained from peasants (1:1).
-// Only while peasants stay above RAISE_MIN_POPULATION_LEFT. Never reduces counts. The total population is unchanged.
+// Local troop pool growth, daily: each troop type gains troop_growth_per_day while below its effective ceiling, trained from peasants (1:1).
+// Only while peasants stay above raise_min_population_left. Never reduces counts. The total population is unchanged.
 void world_system_economy_troop_growth(match_world_state& world)
 {
     if (!world_is_daily_tick(world)) return;

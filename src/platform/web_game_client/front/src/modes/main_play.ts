@@ -4,9 +4,13 @@ import * as Core from "../core.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, get_selected_entity_view, set_selected_entity_guid } from "../input.js"
 import { is_own_army, is_own_settlement } from "../main.js"
-import { set_game_ui_visible, update_game_ui } from "../ui/game_ui.js"
+import { set_game_ui_visible, update_game_ui, toggle_debug_panel } from "../ui/game_ui.js"
+import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
+import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { SettlementSelected } from "./settlement_selected.js"
 import { ArmySelected } from "./army_selected.js"
+
+const DEBUG_PANEL_HOTKEY = "Backquote"; // Shows / hides the debug entity text (clear of the camera keys).
 
 export class MainPlay extends Core.Mode
 {
@@ -18,6 +22,7 @@ export class MainPlay extends Core.Mode
     on_exit(): void
     {
         set_game_ui_visible(false);
+        submit_properties_panel(null);
         Render.RENDER_CONFIG.outlined_entity = null;
         Render.RENDER_CONFIG.path_preview = null;
     }
@@ -33,11 +38,20 @@ export class MainPlay extends Core.Mode
 
         const selected = get_selected_entity_view();
 
-        if (selected !== null)
-            {
-                if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
-                else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
-            }
+        if (selected === null) submit_properties_panel(null);
+        else if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
+        else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
+        // Anything else (enemy or other entity types): read-only properties, no callbacks.
+        else submit_properties_panel(inspect_entity(selected, {}));
+    }
+
+    // Debug panel toggle.
+    on_key_down(event: KeyboardEvent): boolean
+    {
+        if (event.code !== DEBUG_PANEL_HOTKEY) return false;
+
+        if (!event.repeat) toggle_debug_panel();
+        return true;
     }
 
     // The mode right above the game base: leaving it would leave the match without a play mode.

@@ -5,8 +5,8 @@
 import * as Core from "../core.js"
 import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity, send_command } from "../input.js"
 import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
-import { settlement_gauges } from "../ui/troop_gauges.js"
+import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
+import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
@@ -50,13 +50,10 @@ export class SettlementSelected extends Core.Mode
         // The panel belongs to the raise army mode while it is active.
         if (this.raise_item.state === 'selected') return;
 
-        submit_properties_panel({
-            title: "Settlement troops",
-            slider_name: "ceiling",
-            // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
-            gauges: settlement_gauges(view, (troop_type, ceiling) =>
-                send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling })),
-        });
+        // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
+        submit_properties_panel(inspect_entity(view, {
+            on_ceiling: (troop_type, ceiling) => send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling }),
+        }));
     }
 
     on_escape(): boolean

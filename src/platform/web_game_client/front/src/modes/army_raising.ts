@@ -6,12 +6,16 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR, type CommandFeedback } from "../input.js"
-import { submit_hint } from "../ui/ui_element_hint.js"
-import { hotkey_text } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
-import { army_gauges, raise_target_props } from "../ui/troop_gauges.js"
+import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
+import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
+
+// Targets in troop order as the target_* properties of RAISE_ARMY and SET_ARMY_RAISE_TARGETS.
+export function raise_target_props(targets: number[]): { target_levies: number, target_men_at_arms: number, target_horsemen: number, target_knights: number }
+{
+    return { target_levies: targets[0], target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3] };
+}
 
 // Whether the path preview is drawn as acceptable (green) or refused (red), from the validity feedback of the order.
 // Example of using the feedback: each flag can be given its own treatment here (for now every error makes it red).
@@ -36,14 +40,8 @@ export class ArmyRaising extends Core.Mode
     // exit_key: code of the key that entered the mode, pressing it again leaves the mode.
     constructor(private settlement_guid: number, private exit_key: string) { super(); }
 
-    on_entry(): void
-    {
-        submit_hint({ text: `Raise Army: set the troops with the sliders, then click a tile to raise an army that moves there. Esc or [${hotkey_text(this.exit_key)}] to cancel.` });
-    }
-
     on_exit(): void
     {
-        submit_hint(null);
         submit_properties_panel(null);
         Render.RENDER_CONFIG.path_preview = null;
     }
@@ -58,11 +56,10 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
-        submit_properties_panel({
-            title: "Raise army",
-            slider_name: "target",
-            gauges: army_gauges(null, view, this.targets, (troop, value) => { this.targets[troop] = value; }),
-        });
+        submit_properties_panel(inspect_entity(view, {
+            raise_targets: this.targets,
+            on_raise_targets: targets => { this.targets = targets; },
+        }));
 
         const hovered = Render.get_hovered_tile();
         if (hovered === null)

@@ -133,6 +133,14 @@ client_render_state* game_client_get_render_state(game_client& backend);
 // Returns the byte size written, or 0 if there is no local match, the GUID is invalid / stale, its type has no GDO defined yet, or the GDO does not fit.
 ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8* out_buffer, ui32 buffer_size);
 
+// WORLD STATE QUERIES
+
+// Age of the local match's world in ticks. 0 if there is no local match.
+ui64 game_client_query_world_age(game_client& backend);
+
+// Treasury of the controlled player in the local match's world. 0 if there is no local match or the player is not in it.
+ui32 game_client_query_controlled_player_treasury(game_client& backend);
+
 // PATH QUERY
 
 // Computes a land path between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.

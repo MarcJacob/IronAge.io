@@ -1,6 +1,7 @@
-// Implementation for the query bridging code between JS frontend and Client backend: entity inspection and paths.
+// Implementation for the query bridging code between JS frontend and Client backend: entity inspection, game parameters, world state values and paths.
 
 #include "game_client/game_client_backend.h"
+#include "game_common/match/game_parameters.h"
 #include "web_game_client.h"
 
 // Entity GDO inspection: JS calls client_query_entity_gdo(guid): if it returns a size, the backend has written the entity as a Game Data Object
@@ -19,6 +20,32 @@ WASM_EXPORT ui32 client_query_entity_gdo(ui32 guid)
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
 	return game_client_query_entity_gdo(*WEB_CLIENT.backend, entity_guid{ guid }, ENTITY_GDO_BUFFER, ENTITY_GDO_BUFFER_SIZE);
+}
+
+// Global game parameters: the constant GAME_PARAMETERS as a Game Data Object, in its own buffer. JS calls client_get_game_parameters_gdo_offset (which fills it)
+// and reads the properties by name. Plain bytes on purpose, see the global constructor note in web_game_client.h.
+static ui8 GAME_PARAMETERS_GDO_BUFFER[sizeof(gdo_game_parameters)];
+
+WASM_EXPORT ui8* client_get_game_parameters_gdo_offset()
+{
+	gdo_game_parameters gdo; // Built on the stack then copied, as for the command GDO.
+	ia_memcpy(&gdo._data, &GAME_PARAMETERS, sizeof(game_parameters));
+	ia_memcpy(GAME_PARAMETERS_GDO_BUFFER, &gdo, sizeof(gdo_game_parameters));
+	return GAME_PARAMETERS_GDO_BUFFER;
+}
+
+// World age in ticks as a double (a wasm i64 would reach JS as a BigInt): exact up to 2^53 ticks.
+WASM_EXPORT double client_query_world_age()
+{
+	ASSERT(WEB_CLIENT.backend != nullptr);
+	return (double)game_client_query_world_age(*WEB_CLIENT.backend);
+}
+
+// Treasury of the controlled player. Returned as a wasm i32, so JS must read it as unsigned (>>> 0).
+WASM_EXPORT ui32 client_query_controlled_player_treasury()
+{
+	ASSERT(WEB_CLIENT.backend != nullptr);
+	return game_client_query_controlled_player_treasury(*WEB_CLIENT.backend);
 }
 
 // Path query: JS calls client_query_path, which returns how many waypoints it wrote, then reads that many (x, y) ui16 pairs

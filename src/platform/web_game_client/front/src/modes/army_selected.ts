@@ -8,8 +8,9 @@ import { get_selected_entity_guid, clear_selected_entity, send_command } from ".
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
 import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/ui_element_properties_panel.js"
-import { army_gauges, army_count_gauges, army_raise_targets, raise_target_props } from "../ui/troop_gauges.js"
+import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
+import { inspect_entity } from "../ui/inspection/inspect_entity.js"
+import { raise_target_props } from "./army_raising.js"
 
 export class ArmySelected extends Core.Mode
 {
@@ -43,7 +44,7 @@ export class ArmySelected extends Core.Mode
         this.update_path_preview();
     }
 
-    // Troop gauges of the army. While raising: current / target slider / max. Otherwise just the current counts (no max, no target).
+    // The bar offers to stop raising while the army is raising. The panel's target sliders (while raising) send the new targets.
     private update_panel(army: EntityData): void
     {
         const raising = army.get_number("raising") === 1;
@@ -53,21 +54,9 @@ export class ArmySelected extends Core.Mode
             submit_action_bar(raising ? this.bar : null);
         }
 
-        if (!raising)
-        {
-            submit_properties_panel({ title: "Army troops", gauges: army_count_gauges(army) });
-            return;
-        }
-
-        const targets = army_raise_targets(army);
-        submit_properties_panel({
-            title: "Army troops",
-            slider_name: "target",
-            gauges: army_gauges(army, query_entity(army.get_number("home_settlement")), targets, (troop, value) => {
-                targets[troop] = value;
-                send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) });
-            }),
-        });
+        submit_properties_panel(inspect_entity(army, {
+            on_raise_targets: targets => send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) }),
+        }));
     }
 
     on_escape(): boolean

@@ -133,7 +133,7 @@ void world_system_armies_raising(match_world_state& world)
 		settlement_population& population = settlements.populations[homeIndex];
 
 		// Levies come out of the peasants, one per tick, never leaving less than the minimum. They become raised soldiers of the settlement.
-		if (composition.levies < target.levies && population.peasants > RAISE_MIN_POPULATION_LEFT)
+		if (composition.levies < target.levies && population.peasants > GAME_PARAMETERS.raise_min_population_left)
 		{
 			composition.levies++;
 			population.peasants--;

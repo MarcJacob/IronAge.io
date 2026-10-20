@@ -143,6 +143,36 @@ export function query_entity(guid: number): EntityData | null
     return new EntityData(guid, read_GDO_properties(offset, schema));
 }
 
+// Global game parameters (game_parameters in include/game_common/match/game_parameters.h), named as its fields. Update here if the fields change.
+// Per mille = thousandths (20 = 2%).
+export interface GameParameters
+{
+    ticks_per_day: number;
+    raise_min_population_left: number;
+    troop_growth_per_day: number;
+    men_at_arms_max_per_mille: number;
+    horsemen_max_per_mille: number;
+    knights_max_per_mille: number;
+    consumption_per_person: number;
+    growth_enough_per_mille: number;
+    growth_max_per_mille: number;
+    growth_zero_ratio_per_mille: number;
+    growth_floor_ratio_per_mille: number;
+    growth_floor_per_mille: number;
+}
+
+let GAME_PARAMETERS: GameParameters | null = null;
+
+// The global game parameters. They are constants of the build: read from the backend once, then cached.
+export function get_game_parameters(): GameParameters
+{
+    if (GAME_PARAMETERS === null)
+    {
+        GAME_PARAMETERS = read_GDO_values(Backend.game_parameters_gdo_get_offset()) as unknown as GameParameters;
+    }
+    return GAME_PARAMETERS;
+}
+
 // Reads the property definitions of the GDO at the given wasm memory offset, for debugging.
 // Layout (packed, wasm32): game_data_object header = total size, data size, props offset (ui32 each), then the struct copy,
 // then one GAME_DATA_PROP_DEF per property = name pointer (ui32 @0), type (ui8 @4), offset in struct (ui32 @5), 9 bytes.

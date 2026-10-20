@@ -89,6 +89,12 @@ interface ClientExports extends WebAssembly.Exports
     client_query_entity_gdo(guid: number): number; // Byte size of the entity GDO written in its buffer, 0 on failure.
     client_get_entity_gdo_buffer_offset(): number;
 
+    // Game parameters and world state values
+
+    client_get_game_parameters_gdo_offset(): number; // Fills and returns the offset of the game_parameters GDO buffer.
+    client_query_world_age(): number; // Ticks, as a double (exact to 2^53). 0 without a match.
+    client_query_controlled_player_treasury(): number; // wasm i32: read as unsigned. 0 without a match.
+
     // Path query
 
     client_get_path_buffer_offset(): number;
@@ -306,6 +312,15 @@ export namespace ClientInput
 // Returns the byte size of the GDO written, 0 if the entity doesn't exist (anymore), has no GDO yet or it doesn't fit the buffer.
 export function entity_gdo_query(guid: number): number { return CLIENT_BACKEND.client_query_entity_gdo(guid); }
 export function entity_gdo_get_buffer_offset(): number { return CLIENT_BACKEND.client_get_entity_gdo_buffer_offset(); }
+
+// Offset of the game_parameters GDO (include/game_common/match/game_parameters.h), refreshed by this call. Read it with gdo.ts (get_game_parameters).
+export function game_parameters_gdo_get_offset(): number { return CLIENT_BACKEND.client_get_game_parameters_gdo_offset(); }
+
+// Age of the local match's world in ticks (a JS number: the backend gives a double, so there is no 64 bit issue). 0 without a match.
+export function get_world_age(): number { return CLIENT_BACKEND.client_query_world_age(); }
+
+// Treasury of the local player. 0 without a match.
+export function get_local_player_treasury(): number { return CLIENT_BACKEND.client_query_controlled_player_treasury() >>> 0; }
 
 // Fresh view of the whole wasm memory. Do NOT hold the result across calls into the backend, as memory growth detaches it.
 export function get_memory_bytes(): Uint8Array<ArrayBuffer>

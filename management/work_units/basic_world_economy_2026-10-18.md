@@ -80,12 +80,15 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Next step
 
-Panel survey running (read-only). Then: design the generic inspection panel, genericity refactor, settlement UI builder (local wealth + last-day change + hover breakdown, population + growth, in the entity properties panel), then 2c (set-tax command) and treasury HUD (always visible, bottom left). User builds and hand-tests 2a / 2b when back.
+Task A (generic inspection panel, `ui/inspection/`, hint removed, debug panel collapse on click / ` key) coded, untested (tsc not run; check main_play.ts narrowing; delete stale compiled .js by hand). Global game parameters step 1 coded (`include/game_common/match/game_parameters.h`, `GAME_PARAMETERS`, GDO `gdo_game_parameters`; TS `get_game_parameters()`, `get_world_age()`, `get_local_player_treasury()`), untested. Step 2 sweep of remaining constants (territory, battle, movement, army reach, terrain) happens with the systems they belong to; memory-layout constants stay. User hand-tests task A and step 1. Enemy info is not hidden in inspection panels. Then task B (value row + tooltip + wealth / population sections), then calendar + treasury readout. Old next-step text: settlement UI builder (local wealth + last-day change + hover breakdown, population + growth, in the entity properties panel), then 2c (set-tax command) and treasury HUD (always visible, bottom left). User builds and hand-tests 2a / 2b when back.
 
 ## UI wishes (user, 2026-10-20)
 
 - Generic panel design (experimental, must be tidy and easy to remove / replace): panel = title + ordered rows; row types are reusable elements (gauge, value row with delta + optional hover breakdown, text row); per-entity-type inspector functions compose shared section builders (troops, population, wealth); one generic tooltip element. Order: A (container + inspectors, no visible change), B (value row, tooltip, wealth / population sections), C (treasury HUD, needs client query of per-player state).
 - Every selected entity gets the panel (enemy / other types included). Actions are simply not shown in the modal code when the selected entity is not owned (not a universal rule).
+- Hint element removed (tutorial / tooltips later). Done inside task A.
+- Calendar at the top of the screen: current day + time left until the next daily tick. Needs a client-readable global world state (age, TICKS_PER_DAY); share the mechanism with the treasury readout (task C).
+- Global game parameters: one constexpr static structure holding every global constant of the world sim (ticks per day, rates, thresholds, magic numbers), exposed to the client through the backend, with a GDO for easy reading. World state values (age, treasury) are exposed property by property.
 - Legacy debug text panel stays; add a way to collapse / hide it (click and/or hotkey).
 
 - Genericity pass first: the entity inspection panel must show any entity type, not just armies / settlements with troop breakdowns. Complex in-panel elements reusable across panels; panels (except special ones like the action panel) generic and able to hold anything. No two different panel elements per inspected entity type (settlements and armies share elements). Multi-file client change.

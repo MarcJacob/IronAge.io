@@ -8,11 +8,31 @@ import { GAME_DATA_PROP_TYPE, type EntityData } from "../gdo.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
+let selectedHeaderElement: HTMLElement | null = null;
+let debugPanelCollapsed = false;
 
 export function init_game_ui(): void
 {
     selectedPanelElement = document.getElementById("game_hud_selected_panel") as HTMLElement,
     selectedTextElement = document.getElementById("game_hud_selected_text") as HTMLElement;
+    selectedHeaderElement = document.getElementById("game_hud_selected_header") as HTMLElement;
+    selectedHeaderElement.addEventListener("click", toggle_debug_panel);
+    refresh_debug_panel_collapse();
+}
+
+function refresh_debug_panel_collapse(): void
+{
+    if (selectedTextElement === null || selectedHeaderElement === null) return;
+
+    selectedTextElement.hidden = debugPanelCollapsed;
+    selectedHeaderElement.textContent = (debugPanelCollapsed ? "[+] " : "[-] ") + "Debug";
+}
+
+// Collapses / expands the debug entity text (the header stays). Called by the header click and by the hotkey in the play mode.
+export function toggle_debug_panel(): void
+{
+    debugPanelCollapsed = !debugPanelCollapsed;
+    refresh_debug_panel_collapse();
 }
 
 // Shows / hides the whole HUD overlay.

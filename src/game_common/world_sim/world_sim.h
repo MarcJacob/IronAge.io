@@ -3,6 +3,7 @@
 #ifndef WORLD_SIM_INCLUDED
 #define WORLD_SIM_INCLUDED
 
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/start_params.h"
 #include "game_common/match/world/world.h"
 #include "game_common/match/world/world_entities.h"
@@ -11,13 +12,10 @@
 
 // WORLD SIM PARAMETERS & HELPERS
 
-// A calendar day is this many world ticks. Slow systems (growth...) run once per day.
-static constexpr ui32 TICKS_PER_DAY = 100;
-
-// True on the first tick of each day.
+// True on the first tick of each day (GAME_PARAMETERS.ticks_per_day ticks).
 static inline bool world_is_daily_tick(const match_world_state& world)
 {
-    return world.age % TICKS_PER_DAY == 0;
+    return world.age % GAME_PARAMETERS.ticks_per_day == 0;
 }
 
 // Distances are measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).

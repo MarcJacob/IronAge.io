@@ -217,7 +217,7 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
 	// Raising levies must leave the settlement its minimum peasants. Pooled troops are only limited when drawn, so their targets can exceed the pool.
-	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
+	ui32 populationNeeded = (ui32)command.target_levies + GAME_PARAMETERS.raise_min_population_left;
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;
@@ -451,7 +451,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 		return false;
 	}
 
-	ui32 populationNeeded = (ui32)command.target_levies + RAISE_MIN_POPULATION_LEFT;
+	ui32 populationNeeded = (ui32)command.target_levies + GAME_PARAMETERS.raise_min_population_left;
 	ui32 populationCurrent = world.entities->settlements.populations[home.get_index()].peasants;
 	if (feedback != nullptr)
 	{

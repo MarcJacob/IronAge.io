@@ -4,14 +4,12 @@
 #define WORLD_SIM_ECONOMY_INCLUDED
 
 #include "core/std_types.h"
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_entities.h"
 
 // How much population "Fills" one tile of terrain.
 // If population is higher than this, the settlement gets pressure to expand.
 static const ui8 POP_CAP_PER_TILE = 2;
-
-// Raising levies never takes a settlement's population below this.
-static constexpr ui32 RAISE_MIN_POPULATION_LEFT = 10;
 
 // Spawns a new settlement in the world with the provided start state and returns its GUID.
 // Returns a deterministic new ID according to match state, if there's room.
@@ -31,17 +29,18 @@ void world_settlement_decrease_population(match_world_state& world, entity_guid 
 // Ensure settlement's influence bounds rectangle is kept up to date !
 ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);
 
-// Max local troops of a settlement: a share of its total population, rounded down (men at arms 2%, horsemen 1%, knights 0.5%).
-// Levies are not pooled: their max is the peasants that can be raised without going below RAISE_MIN_POPULATION_LEFT.
+// Max local troops of a settlement: a share of its total population, rounded down (shares in GAME_PARAMETERS).
+// Levies are not pooled: their max is the peasants that can be raised without going below raise_min_population_left.
 // Future cost / upkeep hooks would plug in next to these.
 static inline army_troop_count settlement_troop_max(const settlement_population& population)
 {
-	ui32 levyMax = population.peasants > RAISE_MIN_POPULATION_LEFT ? population.peasants - RAISE_MIN_POPULATION_LEFT : 0;
+	ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
+	ui32 levyMax = population.peasants > minLeft ? population.peasants - minLeft : 0;
 	return {
 		(ui16)(levyMax > 0xFFFF ? 0xFFFF : levyMax), // Levies
-		(ui16)((ui64)population.population_total * 2 / 100),     // Men at arms
-		(ui16)((ui64)population.population_total * 1 / 100),     // Horsemen
-		(ui16)((ui64)population.population_total * 5 / 1000),    // Knights
+		(ui16)((ui64)population.population_total * GAME_PARAMETERS.men_at_arms_max_per_mille / 1000),
+		(ui16)((ui64)population.population_total * GAME_PARAMETERS.horsemen_max_per_mille / 1000),
+		(ui16)((ui64)population.population_total * GAME_PARAMETERS.knights_max_per_mille / 1000),
 	};
 }
 
