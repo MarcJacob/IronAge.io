@@ -8,12 +8,13 @@ export interface GaugeState
     label: string;
     color: string; // CSS color of the filled part.
     current: number;
+    raised?: number; // Amount out in the field (e.g. in armies), shown as "(X Raised)" and as a darker segment right after the current one. Without it nothing is shown.
     max?: number; // Without it no max is shown (nor allowed with a slider): the bar is drawn against scale instead.
     scale?: number; // Bar scale when there is no max (e.g. the largest current among the gauges).
-    slider?: number; // Position of the slider / marker (e.g. a ceiling or a target), 0..max. Without it only current and max are shown.
+    slider?: number; // Position of the slider / marker (e.g. a ceiling or a target), 0..max. With raised, it is on the total (current + raised) scale. Without it only current and max are shown.
     slider_name?: string; // What the slider means, shown in the text ("ceiling", "target").
     on_change?: (value: number) => void; // Makes the slider interactive. Called with the released value (not while dragging).
-    warn_below_current?: boolean; // Warn (red) while the slider is below current: releasing there discards the difference.
+    warn_below_current?: boolean; // Warn (red) while the slider is below current + raised: releasing there discards only current (never raised) down to the slider.
 }
 
 // How long a released value is kept shown while waiting for the game state to catch up with it.
@@ -24,6 +25,7 @@ export class GaugeElement
     readonly root = document.createElement("div");
     private text = document.createElement("div");
     private fill = document.createElement("div");
+    private raised_fill = document.createElement("div");
     private marker = document.createElement("div");
     private slider: HTMLInputElement | null = null;
     private dragging = false;
@@ -38,8 +40,9 @@ export class GaugeElement
         const bar = document.createElement("div");
         bar.className = "gauge_bar";
         this.fill.className = "gauge_fill";
+        this.raised_fill.className = "gauge_raised";
         this.marker.className = "gauge_marker";
-        bar.append(this.fill, this.marker);
+        bar.append(this.fill, this.raised_fill, this.marker);
         this.root.append(this.text, bar);
     }
 
@@ -95,17 +98,21 @@ export class GaugeElement
         const state = this.state;
         if (state === null) return;
 
-        const scale = Math.max(state.max ?? state.scale ?? 0, state.current, shown ?? 0, 1);
-        const warn = state.warn_below_current === true && shown !== undefined && shown < state.current;
+        const raised = state.raised ?? 0;
+        const scale = Math.max(state.max ?? state.scale ?? 0, state.current + raised, shown ?? 0, 1);
+        const discards = shown === undefined ? 0 : Math.max(0, state.current - Math.max(0, shown - raised));
+        const warn = state.warn_below_current === true && discards > 0;
 
         this.fill.style.width = `${100 * state.current / scale}%`;
         this.fill.style.background = state.color;
+        this.raised_fill.style.width = `${100 * raised / scale}%`;
+        this.raised_fill.style.background = `color-mix(in srgb, ${state.color} 45%, black)`;
         this.marker.hidden = shown === undefined;
         this.marker.style.left = `${100 * (shown ?? 0) / scale}%`;
         this.marker.classList.toggle("warn", warn);
 
-        this.text.textContent = `${state.label} ${state.current}` + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}` : "")
-            + (warn ? `  (discards ${state.current - (shown ?? 0)})` : "");
+        this.text.textContent = `${state.label} ${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}` : "")
+            + (warn ? `  (discards ${discards})` : "");
         this.text.classList.toggle("warn", warn);
         if (this.slider !== null) this.slider.classList.toggle("warn", warn);
     }

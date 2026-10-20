@@ -409,13 +409,15 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	// Raw value stored as is, never clamped.
 	*settlement_troops_field(settlements.troop_ceilings[index], command.troop_type) = command.ceiling;
 
-	// Only lowering the ceiling itself below the current count releases the excess troops back to peasants (a pool above max is kept).
+	// The ceiling applies to home + raised: lowering it below that total releases only HOME troops back to peasants (raised ones are never touched).
 	settlement_population& population = settlements.populations[index];
 	ui16* count = settlement_troops_field(population.home, command.troop_type);
-	if (*count > command.ceiling)
+	ui16 raised = *settlement_troops_field(population.raised, command.troop_type);
+	ui16 homeAllowed = command.ceiling > raised ? command.ceiling - raised : 0;
+	if (*count > homeAllowed)
 	{
-		population.peasants += *count - command.ceiling;
-		*count = command.ceiling;
+		population.peasants += *count - homeAllowed;
+		*count = homeAllowed;
 	}
 }
 

@@ -36,10 +36,10 @@ static ui32 settlement_effective_output(ui32 base_land_output, ui32 peasants)
     return base_land_output + surplus / (1 + surplus / base_land_output);
 }
 
-// Wealth produced by an effective land output. 1 per unit for now. Bonuses (buildings...) plug in here.
+// Wealth produced by an effective land output.
 static ui32 land_output_to_wealth(ui32 effective_output)
 {
-    return effective_output;
+    return effective_output + effective_output / 2;
 }
 
 // Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
@@ -114,10 +114,10 @@ static void settlement_apply_growth(world_entity_settlements& settlements, ui32 
 
     // Available was the local wealth after tax, before consumption.
     ui32 available = finances.consumption_paid + finances.excess;
-    finances.growth_per_mille = settlement_growth_per_mille(available, finances.consumption_required, finances.excess);
+    population.growth_per_mille = settlement_growth_per_mille(available, finances.consumption_required, finances.excess);
 
-    i32 change = (i32)((i64)atHome * finances.growth_per_mille / 1000);
-    if (change == 0) change = finances.growth_per_mille > 0 ? 1 : (finances.growth_per_mille < 0 ? -1 : 0); // Minimum of 1 either way.
+    i32 change = (i32)((i64)atHome * population.growth_per_mille / 1000);
+    if (change == 0) change = population.growth_per_mille > 0 ? 1 : (population.growth_per_mille < 0 ? -1 : 0); // Minimum of 1 either way.
 
     if (change > 0)
     {
@@ -133,7 +133,7 @@ static void settlement_apply_growth(world_entity_settlements& settlements, ui32 
         population.population_total -= deaths;
         change = -(i32)deaths;
     }
-    finances.population_change = change;
+    population.population_change = change;
 }
 
 // Runs daily, all settlements on the same tick. Writes the settlement's finances (last day's figures).
@@ -156,11 +156,14 @@ void world_system_economy_daily_tick(match_world_state& world)
     }
 }
 
-// Trains peasants into soldiers of a type (up to GAME_PARAMETERS.troop_growth_per_day), limited by its ceiling and by the peasants above the minimum.
-static void train_troop(ui32& peasants, ui16& troops, ui16 ceiling)
+// Trains peasants into soldiers of a type (up to GAME_PARAMETERS.troop_growth_per_day), limited by the lower of its ceiling and max applied to the
+// total (home + raised), and by the peasants above the minimum. Never removes troops.
+static void train_troop(ui32& peasants, ui16& troops, ui16 raised, ui16 ceiling, ui16 max)
 {
     ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
-    ui32 room = troops < ceiling ? ceiling - troops : 0;
+    ui32 owned = (ui32)troops + raised;
+    ui32 limit = ia_min(ceiling, max);
+    ui32 room = owned < limit ? limit - owned : 0;
     ui32 available = peasants > minLeft ? peasants - minLeft : 0;
     ui32 trained = ia_min(ia_min(room, available), GAME_PARAMETERS.troop_growth_per_day);
 
@@ -168,7 +171,7 @@ static void train_troop(ui32& peasants, ui16& troops, ui16 ceiling)
     peasants -= trained;
 }
 
-// Local troop pool growth, daily: each troop type gains troop_growth_per_day while below its effective ceiling, trained from peasants (1:1).
+// Local troop pool growth, daily: each troop type gains troop_growth_per_day while home + raised is below its effective ceiling,trained from peasants (1:1).
 // Only while peasants stay above raise_min_population_left. Never reduces counts. The total population is unchanged.
 void world_system_economy_troop_growth(match_world_state& world)
 {
@@ -183,8 +186,10 @@ void world_system_economy_troop_growth(match_world_state& world)
         settlement_population& population = settlements.populations[settlementIndex];
         army_troop_count ceilings = settlement_troop_effective_ceilings(population, settlements.troop_ceilings[settlementIndex]);
 
-        train_troop(population.peasants, population.home.men_at_arms, ceilings.men_at_arms);
-        train_troop(population.peasants, population.home.horsemen, ceilings.horsemen);
-        train_troop(population.peasants, population.home.knights, ceilings.knights);
+        army_troop_count max = settlement_troop_max(population);
+
+        train_troop(population.peasants, population.home.men_at_arms, population.raised.men_at_arms, ceilings.men_at_arms, max.men_at_arms);
+        train_troop(population.peasants, population.home.horsemen, population.raised.horsemen, ceilings.horsemen, max.horsemen);
+        train_troop(population.peasants, population.home.knights, population.raised.knights, ceilings.knights, max.knights);
     }
 }

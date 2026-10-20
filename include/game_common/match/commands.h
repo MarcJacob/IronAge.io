@@ -29,7 +29,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	BUILD_ROAD, // Has a settlement start building a road between two tiles, within its territory.
 
-	SET_SETTLEMENT_TROOP_CEILING, // Sets a settlement's raw local troop ceiling for one poolable troop type; troops above the effective ceiling are lost.
+	SET_SETTLEMENT_TROOP_CEILING, // Sets a settlement's raw local troop ceiling for one poolable troop type; the ceiling applies to home + raised; home troops above it are discarded back to peasants (raised are kept).
 
 	SET_ARMY_RAISE_TARGETS, // Overwrites the target counts of an army that is still raising.
 

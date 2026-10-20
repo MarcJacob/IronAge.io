@@ -1,12 +1,12 @@
 // In-match UI (HUD overlay on top of the canvas). An extension of input.ts: it works from input.ts's state (selection).
-// The debug entity inspection panel (no actions), and the per-frame feed of the calendar and treasury elements (world state, not selection).
+// The debug entity inspection panel (no actions), and the per-frame feed of the calendar and player state elements (world state, not selection).
 // DOM is only touched when the text / visibility actually changed.
 
 import * as Backend from "../backend.js"
 import { get_selected_entity_view } from "../input.js"
 import { GAME_DATA_PROP_TYPE, get_game_parameters, type EntityData } from "../gdo.js"
 import { submit_calendar } from "./ui_element_calendar.js"
-import { submit_treasury } from "./ui_element_treasury.js"
+import { submit_player_state } from "./ui_element_player_state.js"
 
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
@@ -69,19 +69,16 @@ function entity_text(entity: EntityData): string
     return rows.map(([name, value]) => `${name} = ${value}`).join('\n');
 }
 
-// Calendar: the day is the world age in ticks over ticks_per_day, shown from day 1. Time left comes from the match's tick rate.
+// Calendar: the day is the world age in ticks over ticks_per_day, shown from day 1.
 function update_calendar(): void
 {
-    const ticks_per_day = get_game_parameters().ticks_per_day;
-    const tick_rate = Backend.get_match_tick_rate();
-    if (ticks_per_day === 0 || tick_rate === 0) { submit_calendar(null); return; }
+    const ticks_per_day = get_game_parameters().get_number("ticks_per_day");
+    if (ticks_per_day === 0) { submit_calendar(null); return; }
 
     const age = Backend.get_world_age();
-    const tick_in_day = age % ticks_per_day;
     submit_calendar({
         day: Math.floor(age / ticks_per_day) + 1,
-        progress: tick_in_day / ticks_per_day,
-        seconds_left: (ticks_per_day - tick_in_day) / tick_rate,
+        progress: (age % ticks_per_day) / ticks_per_day,
     });
 }
 
@@ -89,7 +86,7 @@ function update_calendar(): void
 export function update_game_ui(): void
 {
     update_calendar();
-    submit_treasury(Backend.get_local_player_treasury());
+    submit_player_state({ gold: Backend.get_local_player_treasury() });
 
     if (selectedPanelElement === null || selectedTextElement === null) return;
 

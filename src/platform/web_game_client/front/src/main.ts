@@ -17,7 +17,7 @@ import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
 import { init_ui_element_properties_panel } from './ui/inspection/ui_element_properties_panel.js';
 import { init_ui_element_tooltip } from './ui/inspection/ui_element_tooltip.js';
 import { init_ui_element_calendar } from './ui/ui_element_calendar.js';
-import { init_ui_element_treasury } from './ui/ui_element_treasury.js';
+import { init_ui_element_player_state } from './ui/ui_element_player_state.js';
 import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
@@ -150,7 +150,7 @@ async function start()
     init_ui_element_properties_panel();
     init_ui_element_tooltip();
     init_ui_element_calendar();
-    init_ui_element_treasury();
+    init_ui_element_player_state();
 
     // Nothing but the lobby until the server says otherwise.
     Core.start_mode_stack(new LobbyBase());

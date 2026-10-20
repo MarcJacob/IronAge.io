@@ -91,21 +91,14 @@ export function read_GDO_values(gdo_offset: number, schema?: GDOPropDef[]): { [n
     return values;
 }
 
-// Entity inspection. Entity GDOs have their own buffer in the backend, overwritten by every query: the values are lifted out right away.
-// The schema of an entity type never changes at runtime, so it is read once per type (the entity type is the low byte of the guid).
-const ENTITY_SCHEMAS = new Map<number, GDOPropDef[]>();
-
-// A snapshot of an entity's state, lifted out of the backend: its properties in definition order, and by name.
-// Raw values, named as in the entity's GDO (world_entities.h). Stays as it was when queried: query again to see changes.
-export class EntityData
+// A snapshot of a GDO's properties, lifted out of the backend: in definition order, and readable by name.
+export class GDOData
 {
-    entity_type: number; // ENTITY_TYPE, from the guid.
-    properties: GDOProperty[] = [];
+    properties: GDOProperty[];
     private values = new Map<string, GDOValue>();
 
-    constructor(public guid: number, properties: GDOProperty[])
+    constructor(properties: GDOProperty[])
     {
-        this.entity_type = guid & 0xFF;
         this.properties = properties;
         for (const property of properties) this.values.set(property.name, property.value);
     }
@@ -122,6 +115,22 @@ export class EntityData
     {
         const value = this.values.get(name);
         return value !== undefined && typeof value !== "number" ? value : { x: 0, y: 0 };
+    }
+}
+
+// Entity inspection. Entity GDOs have their own buffer in the backend, overwritten by every query: the values are lifted out right away.
+// The schema of an entity type never changes at runtime, so it is read once per type (the entity type is the low byte of the guid).
+const ENTITY_SCHEMAS = new Map<number, GDOPropDef[]>();
+
+// A snapshot of an entity's state. Raw values, named as in the entity's GDO (world_entities.h). Stays as it was when queried: query again to see changes.
+export class EntityData extends GDOData
+{
+    entity_type: number; // ENTITY_TYPE, from the guid.
+
+    constructor(public guid: number, properties: GDOProperty[])
+    {
+        super(properties);
+        this.entity_type = guid & 0xFF;
     }
 }
 
@@ -143,34 +152,16 @@ export function query_entity(guid: number): EntityData | null
     return new EntityData(guid, read_GDO_properties(offset, schema));
 }
 
-// Global game parameters (game_parameters in include/game_common/match/game_parameters.h), named as its fields. Update here if the fields change.
-// Per mille = thousandths (20 = 2%).
-export interface GameParameters
-{
-    ticks_per_day: number;
-    raise_min_population_left: number;
-    troop_growth_per_day: number;
-    men_at_arms_max_per_mille: number;
-    horsemen_max_per_mille: number;
-    knights_max_per_mille: number;
-    consumption_per_person: number;
-    growth_enough_per_mille: number;
-    growth_max_per_mille: number;
-    growth_zero_ratio_per_mille: number;
-    growth_floor_ratio_per_mille: number;
-    growth_floor_per_mille: number;
-    tax_rate_min: number;
-    tax_rate_max: number;
-}
+let GAME_PARAMETERS: GDOData | null = null;
 
-let GAME_PARAMETERS: GameParameters | null = null;
-
-// The global game parameters. They are constants of the build: read from the backend once, then cached.
-export function get_game_parameters(): GameParameters
+// The global game parameters (game_parameters in include/game_common/match/game_parameters.h): read them with get_number(<field name>).
+// Per mille values are thousandths (20 = 2%). They are constants of the build: read from the backend once, then cached.
+export function get_game_parameters(): GDOData
 {
     if (GAME_PARAMETERS === null)
     {
-        GAME_PARAMETERS = read_GDO_values(Backend.game_parameters_gdo_get_offset()) as unknown as GameParameters;
+        const offset = Backend.game_parameters_gdo_get_offset();
+        GAME_PARAMETERS = new GDOData(read_GDO_properties(offset));
     }
     return GAME_PARAMETERS;
 }

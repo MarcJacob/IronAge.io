@@ -18,9 +18,9 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
             delta: income - tax_paid - consumption_paid,
             tooltip: [
                 "Last day",
-                `Income +${income} (effective output ${settlement.get_number("finance_effective_output")})`,
-                `Tax paid -${tax_paid}`,
-                `Consumption paid -${consumption_paid}`,
+                `Land Output +${income}`,
+                `Tax -${tax_paid}`,
+                `Consumption -${consumption_paid}`,
                 `Excess ${settlement.get_number("finance_excess")}`,
             ],
         } },
@@ -28,8 +28,8 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
             ? { kind: "slider", id: "tax_rate", state: {
                 label: "Tax rate",
                 value: settlement.get_number("tax_rate"),
-                min: get_game_parameters().tax_rate_min,
-                max: get_game_parameters().tax_rate_max,
+                min: get_game_parameters().get_number("tax_rate_min"),
+                max: get_game_parameters().get_number("tax_rate_max"),
                 unit: "%",
                 on_change: on_tax_rate,
             } }
@@ -37,28 +37,30 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
     ];
 }
 
-// Total population, its change over the last day, and who it is made of.
+// Home population (the total without the troops raised into armies), its change over the last day, the raised count after it, and who is at home.
 export function population_section(settlement: EntityData): PanelRow[]
 {
-    const population = settlement.get_number("population");
     const peasants = settlement.get_number("peasants");
     // Levies have no home pool (always 0 at home), so the home soldiers are the pooled types.
     const soldiers_home = settlement.get_number("troops_men_at_arms") + settlement.get_number("troops_horsemen") + settlement.get_number("troops_knights");
-    // Not a property of its own: the total is peasants + soldiers at home + soldiers raised.
-    const soldiers_raised = Math.max(0, population - peasants - soldiers_home);
-    const growth_percent = settlement.get_number("finance_growth_per_mille") / 10;
+    const raised = settlement.get_number("raised_levies") + settlement.get_number("raised_men_at_arms")
+        + settlement.get_number("raised_horsemen") + settlement.get_number("raised_knights");
+    const population = Math.max(0, settlement.get_number("population") - raised);
+    const growth_percent = settlement.get_number("population_growth_per_mille") / 10;
 
     return [
         { kind: "value", id: "population", state: {
             label: "Population",
             value: String(population),
-            delta: settlement.get_number("finance_population_change"),
+            delta: settlement.get_number("population_change"),
+            note: `(+ ${raised} Raised)`,
             tooltip: [
+                `Home population ${population}`,
                 `Peasants ${peasants}`,
-                `Soldiers at home ${soldiers_home}`,
-                `Soldiers raised ${soldiers_raised}`,
+                `Soldiers (at home) ${soldiers_home}`,
+                raised > 0 ? `Soldiers (raised) ${raised}` : "",
                 `Growth ${growth_percent.toFixed(1)}% per day`,
-                `Consumption ${settlement.get_number("finance_consumption_paid")} paid / ${settlement.get_number("finance_consumption_required")} required`,
+                `Consumption ${settlement.get_number("finance_consumption_required")}`,
             ],
         } },
     ];

@@ -18,7 +18,7 @@ const TROOPS = [
 const CEILING_SATURATED = 0xFFFF; // Raw ceiling meaning "follows max".
 const MAX_COUNT = 0xFFFF; // Counts are ui16.
 
-// Local pool of a settlement, one gauge per pooled type (no levies): current, ceiling slider, max.
+// Local pool of a settlement, one gauge per pooled type (no levies): current (at home), raised (in armies), ceiling slider, max.
 // on_ceiling: called on release with the troop_type of SET_SETTLEMENT_TROOP_CEILING and the raw ceiling to send.
 export function settlement_pool_section(settlement: EntityData, on_ceiling?: (troop_type: number, ceiling: number) => void): PanelRow[]
 {
@@ -27,9 +27,10 @@ export function settlement_pool_section(settlement: EntityData, on_ceiling?: (tr
         return { kind: "gauge", id: `troops_${troop.name}`, state: {
             label: troop.label,
             color: troop.color,
-            current: settlement.get_number(`troops_${troop.name}`),
+            current: settlement.get_number(`troops_${troop.name}`), // At home.
+            raised: settlement.get_number(`raised_${troop.name}`), // In armies.
             max,
-            slider: settlement.get_number(`ceiling_${troop.name}`), // Effective ceiling.
+            slider: settlement.get_number(`ceiling_${troop.name}`), // Effective ceiling, on the total (home + raised).
             slider_name: "ceiling",
             warn_below_current: true,
             on_change: on_ceiling === undefined ? undefined : (value: number) => on_ceiling(i, value >= max ? CEILING_SATURATED : value),
@@ -56,7 +57,7 @@ export function army_raise_section(army: EntityData | null, home: EntityData | n
         {
             // Pooled types: the home max, or the pool if it holds more (pool above max is kept) so the existing troops can be drawn.
             max = i === 0
-                ? Math.max(0, home.get_number("peasants") - get_game_parameters().raise_min_population_left)
+                ? Math.max(0, home.get_number("peasants") - get_game_parameters().get_number("raise_min_population_left"))
                 : Math.max(home.get_number(`max_${troop.name}`), home.get_number(`troops_${troop.name}`));
         }
         return { kind: "gauge", id: `army_${troop.name}`, state: {

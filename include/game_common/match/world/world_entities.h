@@ -110,6 +110,9 @@ struct settlement_population
 	army_troop_count home; // Soldiers at home: the local troop pool. Levies have no home pool: home.levies is always 0.
 	army_troop_count raised; // Soldiers in armies raised from the settlement. Levies in the field count here.
 
+    i32 population_change;
+	i32 growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
+
 	inline ui32 soldiers_home() const { return (ui32)home.levies + home.men_at_arms + home.horsemen + home.knights; }
 	inline ui32 at_home() const { return peasants + soldiers_home(); }
 };
@@ -123,8 +126,6 @@ struct settlement_finances
 	ui32 consumption_required; // Wealth the people at home needed.
 	ui32 consumption_paid; // Wealth actually consumed.
 	ui32 excess; // Wealth available after tax that was not consumed (stays as local wealth).
-	i32 growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
-	i32 population_change; // Peasants gained (positive) or lost (negative).
 };
 
 // Property arrays for a world's settlements.
@@ -178,25 +179,33 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(population, population.population_total, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(population_change, population.population_change, GAME_DATA_PROP_TYPE::I32)
+	GAME_DATA_PROPERTY_PATH(population_growth_rate, population.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
+
 	GAME_DATA_PROPERTY_PATH(peasants, population.peasants, GAME_DATA_PROP_TYPE::UI32)
+
 	GAME_DATA_PROPERTY(base_land_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(local_wealth, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
+
 	GAME_DATA_PROPERTY_PATH(finance_effective_output, finances.effective_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_income, finances.income, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_tax_paid, finances.tax_paid, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_required, finances.consumption_required, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_paid, finances.consumption_paid, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_excess, finances.excess, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_growth_per_mille, finances.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
-	GAME_DATA_PROPERTY_PATH(finance_population_change, finances.population_change, GAME_DATA_PROP_TYPE::I32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_pressure, territory.pressure, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY_PATH(territory_size, territory.tile_count, GAME_DATA_PROP_TYPE::UI16)
 
-	GAME_DATA_PROPERTY_PATH(troops_men_at_arms, population.home.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raised_levies, population.raised.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raised_men_at_arms, population.raised.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raised_horsemen, population.raised.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raised_knights, population.raised.knights, GAME_DATA_PROP_TYPE::UI16)
+
+	GAME_DATA_PROPERTY_PATH(troops_men_at_arms,population.home.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(ceiling_men_at_arms, troop_effective_ceilings.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(max_men_at_arms, troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 

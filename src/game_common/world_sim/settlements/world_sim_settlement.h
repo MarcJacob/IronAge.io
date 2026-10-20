@@ -44,7 +44,7 @@ static inline army_troop_count settlement_troop_max(const settlement_population&
 	};
 }
 
-// Ceiling actually in force: the raw player-set ceiling capped by max.
+// Ceiling actually in force: the raw player-set ceiling capped by max. It applies to the total of a type (home + raised).
 static inline army_troop_count settlement_troop_effective_ceilings(const settlement_population& population, const army_troop_count& raw_ceilings)
 {
 	army_troop_count max = settlement_troop_max(population);

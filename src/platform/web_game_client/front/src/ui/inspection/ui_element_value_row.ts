@@ -1,5 +1,5 @@
 // UI element: a value row of the properties panel (the panel owns the row list, see ui_element_properties_panel.ts).
-// Shows a label, a value and optionally a signed delta (green above 0, red below, neutral at 0) on one line.
+// Shows a label, a value, optionally a signed delta (green above 0, red below, neutral at 0) and a trailing note on one line.
 // With tooltip lines, hovering the row shows them in the tooltip (ui_element_tooltip.ts) near the mouse; leaving hides it.
 // The panel creates one ValueRowElement per row and calls submit with the row's state every frame (the DOM is only touched when something changes).
 // While hovered, a submit refreshes the tooltip lines in place, so live values don't flicker or close it.
@@ -11,6 +11,7 @@ export interface ValueRowState
     label: string;
     value: string;
     delta?: number; // Signed change, shown after the value. Without it nothing is shown.
+    note?: string; // Text shown after the delta (e.g. "(30 Raised)"). Without it nothing is shown.
     tooltip?: string[]; // Lines of the hover window. Without them the row has none.
 }
 
@@ -20,6 +21,7 @@ export class ValueRowElement
     private label = document.createElement("span");
     private value = document.createElement("span");
     private delta = document.createElement("span");
+    private note = document.createElement("span");
     private state: ValueRowState | null = null;
     private hovered = false;
     private mouse_x = 0;
@@ -30,7 +32,8 @@ export class ValueRowElement
         this.root.className = "text_row value_row";
         this.label.className = "text_row_label";
         this.delta.className = "value_row_delta";
-        this.root.append(this.label, this.value, this.delta);
+        this.note.className = "value_row_note";
+        this.root.append(this.label, this.value, this.delta, this.note);
 
         this.root.addEventListener("mouseenter", (event) => { this.hovered = true; this.track(event); });
         this.root.addEventListener("mousemove", (event) => this.track(event));
@@ -70,6 +73,9 @@ export class ValueRowElement
         const sign = delta === undefined ? "" : delta > 0 ? "positive" : delta < 0 ? "negative" : "neutral";
         const class_name = "value_row_delta " + sign;
         if (this.delta.className !== class_name) this.delta.className = class_name;
+
+        const note = state.note ?? "";
+        if (this.note.textContent !== note) this.note.textContent = note;
 
         this.root.classList.toggle("has_tooltip", state.tooltip !== undefined);
         this.refresh_tooltip();

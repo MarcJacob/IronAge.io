@@ -1,12 +1,11 @@
 // UI element: the calendar at the top of the screen (container in index.html, content built here).
-// Shows the current day and the time left until the next daily tick, as text and a bar. Pure display, emits nothing.
+// Shows the current day as text and how far it has gone as a bar. Pure display, emits nothing.
 // submit_calendar can be called every frame (the DOM is only touched when something changes); null clears it.
 
 export interface CalendarState
 {
     day: number; // Day to display.
     progress: number; // 0..1, how far the day has gone.
-    seconds_left: number; // Until the next daily tick.
 }
 
 let calendarElement: HTMLElement | null = null;
@@ -32,7 +31,7 @@ export function submit_calendar(state: CalendarState | null): void
     }
 
     calendarElement.hidden = false;
-    const text = `Day ${state.day}  -  next in ${Math.ceil(state.seconds_left)}s`;
+    const text = `Day ${state.day}`;
     if (textElement.textContent !== text) textElement.textContent = text;
     const width = `${Math.round(100 * state.progress)}%`;
     if (fillElement.style.width !== width) fillElement.style.width = width;
