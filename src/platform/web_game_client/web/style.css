@@ -179,6 +179,86 @@ body {
     color: #9aa0a6;
 }
 
+.value_row_delta {
+    margin-left: 0.5rem;
+}
+
+.value_row_delta.positive {
+    color: #5fd068;
+}
+
+.value_row_delta.negative {
+    color: #ff6b6b;
+}
+
+.value_row_delta.neutral {
+    color: #9aa0a6;
+}
+
+.value_row.has_tooltip {
+    cursor: help;
+}
+
+/* The one generic tooltip: follows the mouse, never takes input. Fixed so it is placed in screen coordinates. */
+#game_hud_tooltip {
+    position: fixed;
+    z-index: 10;
+    max-width: 24rem;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    background: rgba(20, 22, 26, 0.95);
+    color: #e8eaed;
+    border: 1px solid #c7cbd1;
+    border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    pointer-events: none;
+}
+
+/* Calendar: top center. The placement overlay (#placement_ui) is never shown at the same time. */
+#game_hud_calendar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    width: 14rem;
+    padding: 6px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    color: #e8eaed;
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+    font-family: monospace;
+    text-align: center;
+}
+
+#game_hud_calendar_bar {
+    margin-top: 4px;
+    height: 6px;
+    background: #14161a;
+    border: 1px solid #c7cbd1;
+}
+
+#game_hud_calendar_fill {
+    width: 0;
+    height: 100%;
+    background: #c7cbd1;
+}
+
+/* Treasury: top left. Not bottom left: the properties panel's left edge reaches there on wide screens. */
+#game_hud_treasury {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 6px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    color: #f0b040;
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+    font-family: monospace;
+    font-weight: bold;
+}
+
 /* Clickable header of the debug panel: collapses / expands its text. */
 #game_hud_selected_header {
     cursor: pointer;

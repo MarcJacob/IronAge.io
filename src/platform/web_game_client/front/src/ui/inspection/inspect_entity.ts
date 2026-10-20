@@ -1,0 +1,60 @@
+// Entity inspection: the entry point modes call to fill the properties panel for a selected entity.
+//   submit_properties_panel(inspect_entity(view, context))
+// The inspector of the entity's type composes sections (section_*.ts, each a function returning panel rows) into a title and a row list.
+// Display only: whether the local player may act on the entity is decided by the caller, which passes callbacks in the context
+// only for what it allows (without a callback the matching sliders are read-only). Everything inspection-related lives in this folder.
+// To add a section: write a function returning PanelRow[] in a section_*.ts file and call it from the inspectors below.
+// To give an entity type its own inspector: write a function (view, context) => PropertiesPanelState and add it to the switch in inspect_entity.
+
+import * as Backend from "../../backend.js"
+import { query_entity, type EntityData } from "../../gdo.js"
+import type { PropertiesPanelState } from "./ui_element_properties_panel.js"
+import { basic_section } from "./section_basic.js"
+import { wealth_section, population_section } from "./section_economy.js"
+import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
+
+export interface InspectionContext
+{
+    // Settlement: makes the ceiling sliders interactive. Called on release with the troop_type of SET_SETTLEMENT_TROOP_CEILING and the raw ceiling to send.
+    on_ceiling?: (troop_type: number, ceiling: number) => void;
+
+    // Settlement: shows the troops an army raised from it would have ("Raise army") against these targets instead of its own troops.
+    raise_targets?: number[];
+
+    // Army being raised (or settlement with raise_targets): makes the target sliders interactive. Called on release with all the targets, the released one updated.
+    on_raise_targets?: (targets: number[]) => void;
+}
+
+function inspect_settlement(view: EntityData, context: InspectionContext): PropertiesPanelState
+{
+    if (context.raise_targets !== undefined)
+        return { title: "Raise army", rows: army_raise_section(null, view, context.raise_targets, context.on_raise_targets) };
+
+    return { title: "Settlement", rows: [...wealth_section(view), ...population_section(view), ...settlement_pool_section(view, context.on_ceiling)] };
+}
+
+function inspect_army(view: EntityData, context: InspectionContext): PropertiesPanelState
+{
+    // While raising: current / target slider / max. Otherwise just the current counts (no max, no target).
+    if (view.get_number("raising") === 1)
+        return { title: "Army troops", rows: army_raise_section(view, query_entity(view.get_number("home_settlement")), army_raise_targets(view), context.on_raise_targets) };
+
+    return { title: "Army troops", rows: army_count_section(view) };
+}
+
+// Entity types without sections of their own (builder, battle...).
+function inspect_generic(view: EntityData): PropertiesPanelState
+{
+    const name = Backend.ENTITY_TYPE[view.entity_type] ?? "Entity";
+    return { title: name.charAt(0) + name.slice(1).toLowerCase(), rows: basic_section(view) };
+}
+
+export function inspect_entity(view: EntityData, context: InspectionContext): PropertiesPanelState
+{
+    switch (view.entity_type)
+    {
+    case Backend.ENTITY_TYPE.SETTLEMENT: return inspect_settlement(view, context);
+    case Backend.ENTITY_TYPE.ARMY: return inspect_army(view, context);
+    default: return inspect_generic(view);
+    }
+}

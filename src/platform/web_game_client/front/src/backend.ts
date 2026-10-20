@@ -153,8 +153,13 @@ export function process_net_message(bytes: ByteBuffer)
     new ByteBuffer(CLIENT_BACKEND.memory.buffer, bufferOffset, bytes.length).set(bytes);
 
     const messageType: MESSAGE_TYPE = CLIENT_BACKEND.client_process_net_message(bytes.length);
+    if (messageType === MESSAGE_TYPE.MATCH_STARTED) MATCH_TICK_RATE = read_match_started_tick_rate();
     return messageType;
 }
+
+// Ticks per second of the current match, from the match start parameters of MATCH_STARTED. 0 before the first match.
+let MATCH_TICK_RATE: number = 0;
+export function get_match_tick_rate(): number { return MATCH_TICK_RATE; }
 
 // Payloads of the last processed message are read straight from the net message buffer (valid until the next process_net_message).
 // game_message_header is packed: message_type (ui8), payload_size (ui16), so payloads start at offset 3.
@@ -216,6 +221,13 @@ export function read_match_started_placement_countdown_ms(): number
 {
     const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 4);
     return view.getUint32(0, true);
+}
+
+// tick_rate of the match_start_params of the same payload: match_start_params @10 (same layout as in the lobby payload), so tick_rate (ui8) is @16.
+function read_match_started_tick_rate(): number
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 17);
+    return view.getUint8(16);
 }
 
 export interface PlacementPick
