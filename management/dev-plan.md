@@ -28,6 +28,7 @@ when it finishes.
 - `work_units/start_location_choice_2026-10-03.md` [DONE]
 - `work_units/road_construction_2026-10-03.md` [DONE]
 - `work_units/straight_line_movement_2026-10-15.md`
+- `work_units/road_system_2026-10-21.md`
 - `work_units/command_wiring_simplification_2026-10-18.md` [DONE]
 - `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/world_sim_simplification_2026-10-19.md`

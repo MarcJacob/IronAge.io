@@ -51,6 +51,9 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 
     world_influence_claim_tile(world, regionIndex, tileIndex, freeIndex);
 
+    // A settlement's tile counts as a road. Left as is if the settlement is destroyed.
+    world.terrain->regions[regionIndex].status[tileIndex].is_road = true;
+
 	return newID;
 }
 

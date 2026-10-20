@@ -59,20 +59,26 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Open questions
 
-- Which existing periodic mechanics move to the daily tick (growth `GROWTH_TICK_PERIOD` 50, troop pool growth, battle round interval 20, raising draw)?
+- Buildings (see Buildings design): knights cap before Keep, free starting Barracks, project queue, recruitment rate, split into own unit file.
 - Upkeep split for armies (treasury): see `alpha_troops_recruitment`.
 - Caravan return trip, or disappear at target?
 - What does a caravan carry (plunder gives "carried gold")?
 - How are sea lanes established?
 
-## Current state (survey done, before simplification)
+## Buildings design (proposed, awaiting user answers)
 
-- Local wealth and caravans were removed by `world_sim_simplification`; this unit rebuilds them.
-- Land output exists: terrain base output + proximity decay, summed in `land_outputs`; drives target population only.
-- Cost hooks are stubs: `raise_army_can_afford` (true), `raise_army_charge` (empty), in match_commands.cpp.
-- No treasury / tax / upkeep / buildings / per-player state anywhere in world state (players are only ids on entities).
-- No top-level per-player HUD readout; client has no non-entity query.
-- Growth: `GROWTH_TICK_PERIOD` 50, staggered by guid. Validity error flags mirrored by hand in input.ts.
+- First building: Barracks (3 of the doc: 5 days, 500 wealth, +10 men-at-arms and +5 horsemen capacity per level). Goal is a general building system; mechanics iterate later. Housing deferred (pop cap meaning unclear in the consumption model).
+- Definitions: constexpr table in `game_parameters` (build days, cost, max level, effect params).
+- Settlement state: level per building type + one construction project slot (type, days done); GDO.
+- Financing: daily tick pays cost / days from local wealth and advances one day; short on wealth = suspended.
+- Command `BUILD_BUILDING {settlement, building_type}`: owner only, no running project, below max level.
+- Troop caps: `settlement_troop_max` = levels x capacity per type; per-mille parameters removed; levy max stays peasants - 10.
+- UI: Buildings section in the inspector (levels, project progress row) + Build actions in the settlement action bar.
+- Questions for the user: (1) knights cap 0 until a Keep exists? (2) starting settlement gets 1 free Barracks level? (3) one project at a time vs queue? (4) keep recruitment +2 per type per day global for now? (5) split buildings into `settlement_buildings` unit file?
+
+## Current state
+
+- Wealth, treasury, tax, consumption-based growth, per-player state, calendar and player panel exist (see Next step). Cost hooks `raise_army_can_afford` / `raise_army_charge` are still stubs (match_commands.cpp). Validity error flags mirrored by hand in input.ts.
 
 ## Depends on
 
@@ -80,15 +86,15 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Next step
 
-State (2026-10-20): time system, accounting, daily tick, game parameters, inspection feature, tax command, player state panel, ceiling change: all coded. User hand-tested the first batch OK; since then untested: ceiling change (quirk: slider range 0..max, marker can pass the end if home + raised > max), GDO buffer fix (384 -> 1024, static_asserts per entity GDO; command GDO buffer is 128 bytes, largest command 82), `world_player_state` + income / deficit next to gold.
+State: time system, accounting, daily tick, game parameters, inspection feature, tax command, player state panel (incl. `settlement_count`, `total_population`, `total_troops`), ceiling change, entity helpers + `world_update_player_stats`: all coded. First batch hand-tested OK; untested since: ceiling change (quirk: slider range 0..max, marker can pass the end if home + raised > max), GDO buffer fix (384 -> 1024; command GDO buffer is 128 bytes, largest command 82), `world_player_state` income / deficit, entity helpers (`world_sim_army.h` / `world_sim_settlement.h`, `TROOP_TYPE_*`; player stats lag one tick; disband returns exactly the released amount).
 
-Decided along the way: army gauges show current vs raised count as max (no "(X Raised)"); `GAME_PARAMETERS` stays where it is; ceiling targets home + raised (training room = min(ceiling, max) - (home + raised); lowering discards only home troops down to ceiling - raised; `ceiling_*` GDO = effective total ceiling); enemy info is not hidden in inspection panels; remaining constants sweep (territory, battle, movement, army reach, terrain) happens with the systems they belong to.
+Decided: army gauges show current vs raised count as max; `GAME_PARAMETERS` stays where it is; ceiling targets home + raised (training room = min(ceiling, max) - (home + raised); lowering discards only home troops down to ceiling - raised; `ceiling_*` GDO = effective total ceiling); enemy info visible in inspection panels; remaining constants sweep (territory, battle, movement, army reach, terrain) happens with the systems they belong to; all mutations of population / troops / owner go through the entity helpers.
 
-Housekeeping for the user: delete stale compiled .js in web/src (ui/ui_element_treasury.js, troop_gauges.js, ui_element_hint.js, ui_element_properties_panel.js, mode_hint_ui.js, settlement_bar_ui.js).
+Housekeeping for the user: delete stale compiled .js in web/src (ui/ui_element_treasury.js, troop_gauges.js, ui_element_hint.js, ui_element_properties_panel.js, mode_hint_ui.js, settlement_bar_ui.js). Imprints that could mention `game_parameters.h`, `world_player_state`, `ui/inspection/` (user's call).
 
-UI walkthrough done (user caught up). User added `settlement_count`, `total_population`, `total_troops` to `world_player_state` with ROWS entries, tested OK; peer added `soldiers_raised()` / `soldiers_total()` to `settlement_population`. Player totals are updated inline at ~10 sites (settlement spawn / destroy / owner change, siege levies, disband, casualties, found settlement, ceiling lowering).
+Side task (client-only, user bonus 2026-10-21): road rendering as drawn shapes from the 8-neighbour road mask, same style / color as the path preview; coded in render.ts (`draw_roads`), untested. Roads now controlled only by `show_infrastructure` (not `show_territory`). Road flag change not planned. Settlements now set `is_road` on their tile at spawn (world_sim_settlement.cpp), untested; destroy leaves the road; client road origin check in `road_building.ts` now uses server validity feedback (`get_command_feedback("BUILD_ROAD", ...)`, `ORIGIN_INVALID`, right-hand neighbour as stand-in destination); coded, untested.
 
-Decided: both. Primitive inlined helpers per entity in `world_sim_<entity>.h` (world + index, every mutation of population / troops / owner goes through them; they maintain settlement invariants, not player stats); `world_update_player_stats` in world_sim_main.cpp after each tick recomputes settlement_count, total_population, total_troops. Coded, untested (helpers in `world_sim_army.h` / `world_sim_settlement.h`, `TROOP_TYPE_*`; stats lag one tick; disband returns exactly the released amount). Then design buildings (housing vs consumption-based growth, no target pop) and trade.
+Next: user hand-tests the untested items; answers the Buildings design questions; then a builder does the first building task (table, settlement state + GDO, new troop-cap rule). After: `straight_line_movement`, then trade. Smaller candidates: war economy costs / upkeep (`alpha_troops_recruitment`), replacement for found settlement.
 
 ## UI wishes (user, 2026-10-20)
 

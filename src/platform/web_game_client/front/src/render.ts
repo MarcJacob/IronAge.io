@@ -347,8 +347,8 @@ function draw_territory(render_state: Backend.RenderState)
     const OWNER_COLOR_LOCAL = [0, 255, 0];
     const OWNER_COLOR_OTHER = [128, 128, 128];
     const CONTESTATION_COLOR = [255, 0, 0];
-    const OWNED_ALPHA = 0.33;
-    const HOVERED_ALPHA = 0.5;
+    const OWNED_ALPHA = 0.15;
+    const HOVERED_ALPHA = 0.35;
 
     const drawBytes = new Uint8ClampedArray(tileCount * 4);
     for (let i = 0; i < tileCount; i++)
@@ -372,15 +372,6 @@ function draw_territory(render_state: Backend.RenderState)
             drawBytes[pixelOffset + 2] = 0;
             drawBytes[pixelOffset + 3] = 196;
         }
-
-        // Roads: translucent gray over the whole tile, on top of everything including borders.
-        if (RENDER_CONFIG.show_infrastructure && (flagBytes[i] & TILE_FLAG_ROAD) !== 0)
-        {
-            drawBytes[pixelOffset] = 150;
-            drawBytes[pixelOffset + 1] = 150;
-            drawBytes[pixelOffset + 2] = 150;
-            drawBytes[pixelOffset + 3] = 170;
-        }
     }
 
     const territoryImg = new ImageData(drawBytes, render_state.world_size.width, render_state.world_size.height);
@@ -388,6 +379,77 @@ function draw_territory(render_state: Backend.RenderState)
     offscreenCtx.putImageData(territoryImg, 0, 0);
 
     draw_tile_layer(canvas_offscreen_tiles_territory);
+}
+
+// Same translucent gray the road tile coloration used.
+const ROAD_COLOR = 'rgba(150, 150, 150, 0.67)';
+
+// Neighbour offsets (x, y in world, Y up) of the 8 neighbours. The first 4 are the ones a segment is drawn toward
+// from each road tile (E, N, NE, NW): the opposite ones are drawn by the neighbour itself, so each segment is drawn once.
+const ROAD_NEIGHBOUR_DX = [1, 0, 1, -1, -1, 0, -1, 1];
+const ROAD_NEIGHBOUR_DY = [0, 1, 1, 1, 0, -1, -1, -1];
+
+function is_road_tile(flagBytes: Uint8Array, worldW: number, worldH: number, x: number, y: number): boolean
+{
+    return x >= 0 && y >= 0 && x < worldW && y < worldH && (flagBytes[y * worldW + x] & TILE_FLAG_ROAD) !== 0;
+}
+
+// Draws roads as lines between the centers of adjacent road tiles (8-neighbourhood), isolated road tiles as a dot.
+// Visible tiles only (plus a 1 tile margin so segments coming from just off-screen tiles are drawn). The neighbour mask
+// is read straight from the tile flags (no per-tile allocation). Everything is one path / one stroke so
+// overlapping segments don't stack their translucency.
+function draw_roads(render_state: Backend.RenderState)
+{
+    const flagBytes = Backend.get_tile_flags_view();
+    if (flagBytes === null) return;
+
+    const worldW = render_state.world_size.width;
+    const worldH = render_state.world_size.height;
+    const viewMin = canvas_to_world(0, canvas.height);
+    const viewMax = canvas_to_world(canvas.width, 0);
+    const x0 = Math.max(0, Math.floor(viewMin.x) - 1);
+    const x1 = Math.min(worldW - 1, Math.ceil(viewMax.x) + 1);
+    const y0 = Math.max(0, Math.floor(viewMin.y) - 1);
+    const y1 = Math.min(worldH - 1, Math.ceil(viewMax.y) + 1);
+
+    const s = RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+    ctx.strokeStyle = ROAD_COLOR;
+    ctx.lineWidth = Math.max(2, 0.2 * s);
+    ctx.lineCap = 'round'; // Joins the segments meeting at a tile center, and makes a zero-length segment a dot.
+    ctx.beginPath();
+    for (let y = y0; y <= y1; y++)
+    {
+        for (let x = x0; x <= x1; x++)
+        {
+            if ((flagBytes[y * worldW + x] & TILE_FLAG_ROAD) === 0) continue;
+
+            const center = world_to_canvas(x + 0.5, y + 0.5);
+            let hasNeighbour = false;
+            for (let d = 0; d < 8; d++)
+            {
+                const nx = x + ROAD_NEIGHBOUR_DX[d];
+                const ny = y + ROAD_NEIGHBOUR_DY[d];
+                if (nx < 0 || ny < 0 || nx >= worldW || ny >= worldH) continue;
+                if ((flagBytes[ny * worldW + nx] & TILE_FLAG_ROAD) === 0) continue;
+
+                hasNeighbour = true;
+                // A diagonal is skipped if either orthogonal cell it cuts across is a road (avoids triangles at junctions).
+                if (d < 4 && (d < 2 || (!is_road_tile(flagBytes, worldW, worldH, x + ROAD_NEIGHBOUR_DX[d], y)
+                    && !is_road_tile(flagBytes, worldW, worldH, x, y + ROAD_NEIGHBOUR_DY[d]))))
+                {
+                    ctx.moveTo(center.x, center.y);
+                    ctx.lineTo(center.x + ROAD_NEIGHBOUR_DX[d] * s, center.y - ROAD_NEIGHBOUR_DY[d] * s);
+                }
+            }
+            if (!hasNeighbour)
+            {
+                ctx.moveTo(center.x, center.y);
+                ctx.lineTo(center.x, center.y);
+            }
+        }
+    }
+    ctx.stroke();
+    ctx.lineCap = 'butt';
 }
 
 // Highlights the world tile under the mouse, if any.
@@ -472,6 +534,7 @@ export function draw(render_state: Backend.RenderState | null)
 
     if (RENDER_CONFIG.show_terrain) draw_terrain();
     if (RENDER_CONFIG.show_territory) draw_territory(render_state);
+    if (RENDER_CONFIG.show_infrastructure) draw_roads(render_state);
     if (RENDER_CONFIG.show_hover_tile) draw_hovered_tile();
     draw_path_preview(); // Only draws with a path_preview_start.
     if (RENDER_CONFIG.show_world_border) draw_world_border();

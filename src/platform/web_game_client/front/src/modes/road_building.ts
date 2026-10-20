@@ -6,7 +6,7 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, send_command, is_command_valid } from "../input.js"
+import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_INVALID_PATH } from "../input.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
@@ -91,23 +91,13 @@ export class RoadBuilding extends Core.Mode
         return true;
     }
 
-    // Whether a road can start from the tile: the settlement's own tile, or a road tile in the settlement's territory.
+    // Whether a road can start from the tile, as the server's validity check says (the settlement's own tile, or a road tile of its territory).
+    // The destination is not known yet: a neighbouring tile stands in for it, so that the check does not stop at "origin is destination"
+    // (which would hide the origin error). Other errors (e.g. out of bounds destination) are ignored, only the origin verdict is read.
     private is_origin_candidate(tile: { x: number, y: number }): boolean
     {
-        const view = query_entity(this.settlement_guid);
-        if (view === null) return false;
-        const settlementLocation = view.get_location("location");
-        if (tile.x === settlementLocation.x && tile.y === settlementLocation.y) return true;
-
-        const state = Backend.LAST_RENDER_STATE;
-        const flags = Backend.get_tile_flags_view();
-        const owners = Backend.get_owner_settlement_tiles_view();
-        if (state === null || flags === null || owners === null) return false;
-
-        const tileIndex = tile.y * state.world_size.width + tile.x;
-        if ((flags[tileIndex] & Render.TILE_FLAG_ROAD) === 0 || (flags[tileIndex] & Render.TILE_FLAG_OWNED) === 0) return false;
-
-        // The owner is the settlement's slot: the index part of its entity_guid (bits 8-19), as in render.ts.
-        return owners[tileIndex] === ((this.settlement_guid >>> 8) & 0xFFF);
+        const feedback = get_command_feedback("BUILD_ROAD", { settlement: this.settlement_guid, origin: tile, destination: { x: tile.x + 1, y: tile.y } });
+        // Empty values: the command could not be built.
+        return feedback.values.invalid_path_reason !== undefined && feedback.values.invalid_path_reason !== COMMAND_INVALID_PATH.ORIGIN_INVALID;
     }
 }
