@@ -1,6 +1,7 @@
 // Population systems: settlement expansion pressure, daily economy (wealth, tax, consumption, population growth) and troop pool growth.
 
 #include "game_common/match/game_parameters.h"
+#include "game_common/match/world/world.h"
 #include "game_common/match/world/world_entities.h"
 
 #include "../world_sim.h"
@@ -106,8 +107,10 @@ static i32 settlement_growth_per_mille(ui32 available, ui32 required, ui32 exces
 }
 
 // GROWTH: creates new peasants, or kills peasants only. Never kills more than the peasants or the last one at home.
-static void settlement_apply_growth(world_entity_settlements& settlements, ui32 settlement_index)
+static void settlement_apply_growth(match_world_state& world, ui32 settlement_index)
 {
+    world_entity_settlements& settlements = world.entities->settlements;
+
     settlement_finances& finances = settlements.finances[settlement_index];
     settlement_population& population = settlements.populations[settlement_index];
     ui32 atHome = population.at_home();
@@ -136,6 +139,12 @@ static void settlement_apply_growth(world_entity_settlements& settlements, ui32 
         change = -(i32)deaths;
     }
     population.population_change = change;
+
+    match_player_id& settlementOwner = settlements.owners[settlement_index];
+    if (settlementOwner < world.player_count)
+    {
+        world.player_states[settlementOwner].total_population += change;
+    }
 }
 
 // Runs daily, all settlements on the same tick. Writes the settlement's finances (last day's figures).
@@ -164,13 +173,7 @@ void world_system_economy_daily_tick(match_world_state& world)
         settlement_wealth_add_income(settlements, settlementIndex);
         settlement_wealth_pay_tax(world, settlementIndex);
         settlement_wealth_pay_consumption(settlements, settlementIndex);
-        settlement_apply_growth(settlements, settlementIndex);
-    }
-
-    for (ui32 playerIndex = 0; playerIndex < world.player_count; playerIndex++)
-    {
-        world_player_state& player = world.player_states[playerIndex];
-        player.net_change = (i32)player.income - (i32)player.expenses;
+        settlement_apply_growth(world, settlementIndex);
     }
 }
 
@@ -206,8 +209,18 @@ void world_system_economy_troop_growth(match_world_state& world)
 
         army_troop_count max = settlement_troop_max(population);
 
+        ui32 soldiersHome = population.soldiers_home();
+
         train_troop(population.peasants, population.home.men_at_arms, population.raised.men_at_arms, ceilings.men_at_arms, max.men_at_arms);
         train_troop(population.peasants, population.home.horsemen, population.raised.horsemen, ceilings.horsemen, max.horsemen);
         train_troop(population.peasants, population.home.knights, population.raised.knights, ceilings.knights, max.knights);
+
+        ui32 gained = population.soldiers_home() - soldiersHome;
+
+        const match_player_id& settlementOwner = settlements.owners[settlementIndex];
+        if (settlementOwner < world.player_count)
+        {
+            world.player_states[settlementOwner].total_troops += gained;
+        }
     }
 }

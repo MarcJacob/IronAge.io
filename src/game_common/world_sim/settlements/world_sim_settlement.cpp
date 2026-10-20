@@ -1,4 +1,5 @@
 #include "world_sim_settlement.h"
+#include "game_common/match/world/world.h"
 #include "game_common/match/world/world_terrain.h"
 #include "../world_sim.h"
 
@@ -20,6 +21,11 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 
 	// Apply start state.
 	world.entities->settlements.owners[freeIndex] = start_state.owner;
+    if (start_state.owner < world.player_count)
+    {
+        world.player_states[start_state.owner].settlement_count++;
+    }
+
 	world.entities->settlements.locations[freeIndex] = start_state.location;
     world.entities->settlements.founding_ticks[freeIndex] = world.age;
 
@@ -36,6 +42,11 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(population.peasants, 100);
 	population.population_total = population.at_home() + population.raised.levies + population.raised.men_at_arms + population.raised.horsemen + population.raised.knights;
+    if (start_state.owner < world.player_count)
+    {
+        world.player_states[start_state.owner].total_population += population.population_total;
+        world.player_states[start_state.owner].total_troops += population.soldiers_total();
+    }
     SET_DEFAULT_VAL_STRUCT(world.entities->settlements.territories[freeIndex], (world_entity_settlements::territory
             {
                 .bounds_min = world.entities->settlements.locations[freeIndex],
@@ -57,6 +68,15 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement)
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 	world_entity_settlements& settlements = world.entities->settlements;
 
+    if (settlements.owners[settlement.get_index()] < world.player_count)
+    {
+        world_player_state& ownerState = world.player_states[settlements.owners[settlement.get_index()]];
+        const settlement_population& population = settlements.populations[settlement.get_index()];
+        ownerState.settlement_count--;
+        ownerState.total_population -= population.population_total;
+        ownerState.total_troops -= population.soldiers_total();
+    }
+
 	settlements.guids[settlement.get_index()] = INVALID_ENTITY_GUID;
 	settlements.active_count--;
 }
@@ -64,22 +84,27 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement)
 
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner)
 {
-	world.entities->settlements.owners[settlement_index] = new_owner;
+    match_player_id& owner = world.entities->settlements.owners[settlement_index];
+    // Population and soldiers (raised ones included) change hands with the settlement.
+    const settlement_population& population = world.entities->settlements.populations[settlement_index];
+    if (owner < world.player_count)
+    {
+        world.player_states[owner].settlement_count--;
+        world.player_states[owner].total_population -= population.population_total;
+        world.player_states[owner].total_troops -= population.soldiers_total();
+    }
+
+	owner = new_owner;
+
+    if (owner < world.player_count)
+    {
+        world.player_states[owner].settlement_count++;
+        world.player_states[owner].total_population += population.population_total;
+        world.player_states[owner].total_troops += population.soldiers_total();
+    }
+
+    // Reset tax rate to 0 / neutral.
 	world.entities->settlements.tax_rates[settlement_index] = 0;
-}
-
-void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount)
-{
-	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
-	settlement_population& population = world.entities->settlements.populations[settlement.get_index()];
-
-	ui32 removed = amount < population.peasants ? amount : population.peasants;
-	population.peasants -= removed;
-	population.population_total -= removed;
-	if (population.population_total == 0)
-	{
-		world_destroy_settlement(world, settlement);
-	}
 }
 
 bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state)

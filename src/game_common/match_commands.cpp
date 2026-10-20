@@ -173,10 +173,19 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	if (world_entity_is_valid(world, home) && home.get_type() == ENTITY_TYPE::SETTLEMENT)
 	{
 		settlement_population& homePop = world.entities->settlements.populations[home.get_index()];
-		homePop.population_total -= found_release_raised(homePop.raised.levies, composition.levies)
+		ui32 released = found_release_raised(homePop.raised.levies, composition.levies)
 			+ found_release_raised(homePop.raised.men_at_arms, composition.men_at_arms)
 			+ found_release_raised(homePop.raised.horsemen, composition.horsemen)
 			+ found_release_raised(homePop.raised.knights, composition.knights);
+		homePop.population_total -= released;
+
+		// Soldiers leaving the home settlement are no longer soldiers nor home population (the new settlement adds them back as peasants).
+		match_player_id homeOwner = world.entities->settlements.owners[home.get_index()];
+		if (homeOwner < world.player_count)
+		{
+			world.player_states[homeOwner].total_population -= released;
+			world.player_states[homeOwner].total_troops -= released;
+		}
 	}
 
 	world_spawn_settlement(world, newSettlement);
@@ -418,8 +427,10 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	ui16 homeAllowed = command.ceiling > raised ? command.ceiling - raised : 0;
 	if (*count > homeAllowed)
 	{
-		population.peasants += *count - homeAllowed;
+		ui16 discarded = *count - homeAllowed;
+		population.peasants += discarded;
 		*count = homeAllowed;
+		if (player < world.player_count) world.player_states[player].total_troops -= discarded; // Soldiers back to peasants.
 	}
 }
 

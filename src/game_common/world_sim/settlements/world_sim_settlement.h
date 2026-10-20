@@ -22,9 +22,6 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 // Gives the settlement to a new owner. Its tax rate resets to 0 (local wealth stays with the settlement).
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner);
 
-// Removes population from a settlement's peasants, destroying the settlement if no population is left.
-void world_settlement_decrease_population(match_world_state& world, entity_guid settlement, ui32 amount);
-
 // Claims a tile in the world for the given settlement using the origin proximity value as proximity base.
 // Ensure settlement's influence bounds rectangle is kept up to date !
 ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);

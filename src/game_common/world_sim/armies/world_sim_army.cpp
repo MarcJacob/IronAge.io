@@ -1,5 +1,6 @@
 #include "world_sim_army.h"
 #include "../world_sim.h"
+#include "game_common/match/world/world.h"
 
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state)
 {
@@ -63,8 +64,15 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	settlement_population& population = world.entities->settlements.populations[settlement.get_index()];
 
 	// Levies become peasants again.
-	population.raised.levies -= ia_min(population.raised.levies, men.levies);
+	ui16 leviesReleased = ia_min(population.raised.levies, men.levies);
+	population.raised.levies -= leviesReleased;
 	population.peasants += men.levies;
+
+    const match_player_id& settlementOwner = world.entities->settlements.owners[settlement.get_index()];
+    if (settlementOwner < world.player_count)
+    {
+        world.player_states[settlementOwner].total_troops -= leviesReleased;
+    }
 
 	// Other types rejoin the local troops (home), clamped to ui16.
 	disband_return_troops(population.raised.men_at_arms, population.home.men_at_arms, men.men_at_arms);
@@ -88,21 +96,36 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, ui64
 
 	ui32 before[world_entity_battles::UNIT_TYPES];
 	army_unit_counts(composition, before);
+
 	army_remove_manpower(composition, amount);
+
 	ui32 after[world_entity_battles::UNIT_TYPES];
 	army_unit_counts(composition, after);
+
 	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++) out_dead[unitType] = before[unitType] - after[unitType];
+
+    match_player_id& armyOwner = armies.owners[army.get_index()];
 
 	// The dead also leave their home settlement (raised counts and total population). Skipped if the home is gone.
 	entity_guid home = armies.home_settlements[army.get_index()];
-	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
+	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)
+            || world.entities->settlements.owners[home.get_index()] != armyOwner) return;
 
 	settlement_population& population = world.entities->settlements.populations[home.get_index()];
 	ui32 released = casualties_release_raised(population.raised.levies, out_dead[0])
 		+ casualties_release_raised(population.raised.men_at_arms, out_dead[1])
 		+ casualties_release_raised(population.raised.horsemen, out_dead[2])
 		+ casualties_release_raised(population.raised.knights, out_dead[3]);
-	population.population_total -= ia_min(population.population_total, released);
+
+    ui32 lostPopulation = ia_min(population.population_total, released);
+	population.population_total -= lostPopulation;
+
+    if (armyOwner < world.player_count)
+    {
+        // Totals follow the home settlement's counts: the raised men released are the soldiers lost.
+        world.player_states[armyOwner].total_population -= lostPopulation;
+        world.player_states[armyOwner].total_troops -= released;
+    }
 }
 
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state)

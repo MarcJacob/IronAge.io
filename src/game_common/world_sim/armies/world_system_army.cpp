@@ -1,5 +1,6 @@
 // Army systems: armies reaching their attack targets and the resolution of those attacks. Siege start is resolved here too.
 
+#include "game_common/match/world/world.h"
 #include "game_common/match/world/world_entities.h"
 #include "world_sim_army.h"
 
@@ -42,6 +43,7 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		if (levies > population.peasants) levies = population.peasants; // SIEGE ADAPTATION: levies come out of the peasants.
 		population.peasants -= levies;
 		population.raised.levies += levies;
+		if (settlements.owners[targetIndex] < world.player_count) world.player_states[settlements.owners[targetIndex]].total_troops += levies; // Peasants became soldiers.
 
 		army_troop_count& pool = population.home;
 		world_entity_armies::single defenders = {};
@@ -118,7 +120,8 @@ void world_system_armies_raising(match_world_state& world)
 
 		// Raising ends if the home settlement is gone or changed hands. The army is kept as is.
 		entity_guid home = armies.home_settlements[armyIndex];
-		if (!world_entity_is_valid(world, home) || settlements.owners[home.get_index()] != armies.owners[armyIndex])
+        const match_player_id& homeOwner = settlements.owners[home.get_index()];
+		if (!world_entity_is_valid(world, home) || homeOwner != armies.owners[armyIndex])
 		{
 			armies.raising[armyIndex] = 0;
 			continue;
@@ -132,12 +135,18 @@ void world_system_armies_raising(match_world_state& world)
 		const army_troop_count& target = armies.raised_troops[armyIndex];
 		settlement_population& population = settlements.populations[homeIndex];
 
+
 		// Levies come out of the peasants, one per tick, never leaving less than the minimum. They become raised soldiers of the settlement.
 		if (composition.levies < target.levies && population.peasants > GAME_PARAMETERS.raise_min_population_left)
 		{
 			composition.levies++;
 			population.peasants--;
 			population.raised.levies++;
+
+            if (homeOwner < world.player_count)
+            {
+                world.player_states[homeOwner].total_troops++;
+            }
 		}
 
 		raise_draw_from_pool(composition.men_at_arms, target.men_at_arms, population.home.men_at_arms, population.raised.men_at_arms);

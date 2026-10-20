@@ -166,8 +166,7 @@ export function get_game_parameters(): GDOData
     return GAME_PARAMETERS;
 }
 
-// The local player's state (world_player_state in include/game_common/match/world/world.h): treasury, income, expenses, net_change (signed), by get_number(<field name>).
-// Not a constant: it is read from the backend on every call (zeroed without a match).
+// The local player's state (world_player_state in include/game_common/match/world/world.h).
 export function get_local_player_state(): GDOData
 {
     return new GDOData(read_GDO_properties(Backend.player_state_gdo_get_offset()));

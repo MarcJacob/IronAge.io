@@ -24,14 +24,16 @@ struct world_terrain;
 struct world_entities;
 struct world_path_store; // Opaque outside the world simulation, see world_sim.h.
 
-// State of one player, indexed by match_player_id in the world state. Zero is a valid (empty) value.
-// All fields are 4 bytes on purpose: no padding, and the GDO below reads them as UI32 / I32.
+// State of one player, indexed by match_player_id in the world state.
 struct world_player_state
 {
     ui32 treasury; // Wealth held by the player. Only deposits (daily tax) for now.
     ui32 income; // Last day's deposits into the treasury.
     ui32 expenses; // Last day's spending from the treasury. Nothing spends yet: future spending hooks add to it.
-    i32 net_change; // income - expenses. Derived: refreshed at the end of the daily economy tick.
+    
+    ui16 settlement_count;
+    ui32 total_population;
+    ui32 total_troops;
 };
 
 // Not an entity: the GDO covers the structure directly. Property names are the field names.
@@ -39,7 +41,10 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_player_state)
     GAME_DATA_PROPERTY(treasury, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(income, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(expenses, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(net_change, GAME_DATA_PROP_TYPE::I32)
+
+    GAME_DATA_PROPERTY(settlement_count, GAME_DATA_PROP_TYPE::UI16)
+    GAME_DATA_PROPERTY(total_population, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(total_troops, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 // Contains the match's world state, namely its active entities, and static elements such as tiles.

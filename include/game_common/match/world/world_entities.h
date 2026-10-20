@@ -114,6 +114,8 @@ struct settlement_population
 	i32 growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
 
 	inline ui32 soldiers_home() const { return (ui32)home.levies + home.men_at_arms + home.horsemen + home.knights; }
+	inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
+	inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
 	inline ui32 at_home() const { return peasants + soldiers_home(); }
 };
 
@@ -195,7 +197,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(finance_tax_paid, finances.tax_paid, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_required, finances.consumption_required, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_paid, finances.consumption_paid, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_excess, finances.excess, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)

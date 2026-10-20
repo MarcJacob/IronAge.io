@@ -20,7 +20,10 @@ function per_day_delta(change: number): { text: string, tone: Tone }
 // One row per displayed fact, top to bottom. big: large type (the headline figure).
 // value: the row's text. delta: optional text + color shown next to the value.
 const ROWS: { label: string, big: boolean, value: (state: GDOData) => string, delta?: (state: GDOData) => { text: string, tone: Tone } }[] = [
-    { label: "Gold", big: true, value: (state) => String(state.get_number("treasury")), delta: (state) => per_day_delta(state.get_number("net_change")) },
+    { label: "Gold", big: true, value: (state) => String(state.get_number("treasury")), delta: (state) => per_day_delta(state.get_number("income") - state.get_number("expenses")) },
+    { label: "Settlements", big: false, value: (state) => String(state.get_number("settlement_count")) },
+    { label: "Pop", big: false, value: (state) => String(state.get_number("total_population")) },
+    { label: "Soldiers", big: false, value: (state) => String(state.get_number("total_troops")) },
 ];
 
 let panelElement: HTMLElement | null = null;

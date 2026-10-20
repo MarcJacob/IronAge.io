@@ -21,7 +21,6 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
                 `Land Output +${income}`,
                 `Tax -${tax_paid}`,
                 `Consumption -${consumption_paid}`,
-                `Excess ${settlement.get_number("finance_excess")}`,
             ],
         } },
         on_tax_rate !== undefined
