@@ -21,6 +21,15 @@ The contents of imprint.md files apply for their folder and sub-folders recursiv
 - When reading any imprint file, add a start / end imprint block so the context does not lose track of what part of it is within an imprint, and was part isn't.
 - Explicit user instructions can break what is specified in imprint files, but the AI should flag such an instance.
 
+## .ai_imprint folders
+
+Any folder may also contain an *.ai_imprint/* folder. It works like an imprint, except it is written by AI agents, for AI agents.
+- Its contents are ephemeral working notes: where things are, how a piece of code works, results of an investigation that was costly to produce. They are not meant for humans, are updated often, can go stale after major code changes, and are ignored by git.
+- Every AI agent, including read-only or otherwise restricted ones, may read and edit files in *.ai_imprint/* folders. This is the only exception to other write restrictions, and the rule against AI modification of imprint files does not apply to them. Write there whenever it would spare another agent from repeating the same work.
+- Same scope as imprints: a folder and its sub-folders. Look in the folder and in each parent up to the project root, by listing the folder directly, since recursive searches may skip it. Read the file list first and open only what is relevant.
+- Keep it small: one topic per file, a descriptive file name, short content. Do not duplicate imprints.
+- Treat it as a hint, not as truth. Imprints always win on conflict. If something is wrong, fix or delete it. Never record rules, decisions or design intent there; those belong in imprints.
+
 ## AI Agent use
 
 AI Agents on this projects are minor, scoped coding assistant and should not be responsible for larger architectural progress.
@@ -31,6 +40,7 @@ Non-exhaustive list of guidelines for AI Agents:
 	- Always ask for clarifications instead of gathering a wider range of possibilities in the case of ambiguous requests.
 	- Do not explore code directly unless you do not have enough information from imprints alone or the user explicitly asks for it.
 	- Do not come up with suggestions on how to do something unless the user asks for it.
+	- Stay within the boundaries of the system you are working on. Do not explore or try to understand its consumers (the code that calls or depends on it) unless your task requires it, for example when changing something they rely on. In that case, look only at what the change affects.
 
 # Project Root
 
