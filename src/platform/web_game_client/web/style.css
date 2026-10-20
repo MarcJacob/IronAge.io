@@ -324,6 +324,21 @@ body {
     font-size: clamp(1.2rem, 16cqw, 3.2rem);
 }
 
+.player_state_line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+}
+
+.player_state_delta {
+    font-weight: bold;
+    font-size: clamp(0.7rem, 5cqw, 1.1rem);
+    color: #9aa0a6;
+}
+
+.player_state_delta.up { color: #4caf50; }
+.player_state_delta.down { color: #e5534b; }
+
 /* Clickable header of the debug panel: collapses / expands its text. */
 #game_hud_selected_header {
     cursor: pointer;

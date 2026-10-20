@@ -56,12 +56,12 @@ ui64 game_client_query_world_age(game_client& backend)
 	return backend.local_match->world->age;
 }
 
-ui32 game_client_query_controlled_player_treasury(game_client& backend)
+world_player_state game_client_query_controlled_player_state(game_client& backend)
 {
-	if (backend.local_match == nullptr) return 0;
+	if (backend.local_match == nullptr) return {};
 	const match_world_state& world = *backend.local_match->world;
-	if (backend.controlled_player_id >= world.player_count) return 0;
-	return world.player_treasuries[backend.controlled_player_id];
+	if (backend.controlled_player_id >= world.player_count) return {};
+	return world.player_states[backend.controlled_player_id];
 }
 
 // Fills a GDO of the given type from the entity's single state (read by the given query function) and copies it into the buffer.

@@ -4,7 +4,7 @@
 
 import * as Backend from "../backend.js"
 import { get_selected_entity_view } from "../input.js"
-import { GAME_DATA_PROP_TYPE, get_game_parameters, type EntityData } from "../gdo.js"
+import { GAME_DATA_PROP_TYPE, get_game_parameters, get_local_player_state, type EntityData } from "../gdo.js"
 import { submit_calendar } from "./ui_element_calendar.js"
 import { submit_player_state } from "./ui_element_player_state.js"
 
@@ -86,7 +86,7 @@ function update_calendar(): void
 export function update_game_ui(): void
 {
     update_calendar();
-    submit_player_state({ gold: Backend.get_local_player_treasury() });
+    submit_player_state(get_local_player_state());
 
     if (selectedPanelElement === null || selectedTextElement === null) return;
 

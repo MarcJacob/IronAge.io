@@ -133,6 +133,7 @@ struct world_entity_settlements : public world_entity_container
 {
 	match_player_id*	owners;
 	world_location*		locations;
+    ui64*                founding_ticks;
 
     // Base economic factors.
 	settlement_population* populations;
@@ -159,8 +160,9 @@ struct world_entity_settlements : public world_entity_container
 	{
 		match_player_id owner;
 		world_location location;
+        ui64 founding_tick;
 
-		settlement_population population; // Input of the spawn function (population_total is computed by it) and output of the query.
+		settlement_population population;
         ui32 base_land_output;
         ui32 local_wealth;
         i8 tax_rate;

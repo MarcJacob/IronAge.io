@@ -166,6 +166,13 @@ export function get_game_parameters(): GDOData
     return GAME_PARAMETERS;
 }
 
+// The local player's state (world_player_state in include/game_common/match/world/world.h): treasury, income, expenses, net_change (signed), by get_number(<field name>).
+// Not a constant: it is read from the backend on every call (zeroed without a match).
+export function get_local_player_state(): GDOData
+{
+    return new GDOData(read_GDO_properties(Backend.player_state_gdo_get_offset()));
+}
+
 // Reads the property definitions of the GDO at the given wasm memory offset, for debugging.
 // Layout (packed, wasm32): game_data_object header = total size, data size, props offset (ui32 each), then the struct copy,
 // then one GAME_DATA_PROP_DEF per property = name pointer (ui32 @0), type (ui8 @4), offset in struct (ui32 @5), 9 bytes.

@@ -18,17 +18,8 @@ static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
     20, // WATER_SEA
 };
 
-// Contestation parameters. Contestation is a per tile value from 0 to CONTESTATION_MAX.
-static constexpr ui8 CONTESTATION_MAX = 255;
-static constexpr ui8 CONTESTATION_GAIN = 24; // Per tick, per foreign neighbour tile (diagonals included).
-static constexpr ui8 CONTESTATION_DECAY = 2; // Per tick.
-static constexpr ui8 CONTESTATION_FALLOFF = 32; // Lost per tile when spreading to neighbouring tiles of the same settlement.
-static constexpr ui8 CONTESTATION_MAX_FOREIGN_NEIGHBOURS = 7; // Number of foreign neighbours that gives full contestation. All 8 is a special case for later.
-
 // Proximity at which land output is reduced to 90%, stacking.
-static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 20;
-// Proximity at which a border tile cannot expand into more tiles.
-static constexpr ui16 MAX_EXPANSION_PROXIMITY = LAND_OUTPUT_DECREASE_STEP_DIST * 10;
+static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 3;
 
 // Returns the land output of a tile based on its terrain base output and proximity to settlement root.
 static ui32 world_get_tile_land_output(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 proximity)
@@ -222,7 +213,7 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     return 1;
 }
 
-void world_system_economy_proximity_recalc(match_world_state& world)
+void world_system_settlement_territory_proximity_recalc(match_world_state& world)
 {
     world_terrain& terrain = *world.terrain;
     world_entity_settlements& settlements = world.entities->settlements;

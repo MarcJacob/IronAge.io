@@ -138,8 +138,8 @@ ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8*
 // Age of the local match's world in ticks. 0 if there is no local match.
 ui64 game_client_query_world_age(game_client& backend);
 
-// Treasury of the controlled player in the local match's world. 0 if there is no local match or the player is not in it.
-ui32 game_client_query_controlled_player_treasury(game_client& backend);
+// State of the controlled player in the local match's world. Zeroed if there is no local match or the player is not in it.
+world_player_state game_client_query_controlled_player_state(game_client& backend);
 
 // PATH QUERY
 

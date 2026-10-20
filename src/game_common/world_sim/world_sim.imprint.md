@@ -24,3 +24,7 @@ Put it in the file of its theme, in the folder of the entity it mostly acts on (
 ## Adding an entity type
 
 New subfolder with *world_sim_<entity>.h* and *.cpp* (alloc, spawn, destroy, query), included from *world_sim_main.cpp*. Its state structure goes in *include/game_common/match/world/world_entities.h*.
+
+## Simulation parameters
+
+Global parameters ruling the simulation's dynamics belong in a single centralized structure in include/game_common/match/game_parameters.h

@@ -93,7 +93,7 @@ interface ClientExports extends WebAssembly.Exports
 
     client_get_game_parameters_gdo_offset(): number; // Fills and returns the offset of the game_parameters GDO buffer.
     client_query_world_age(): number; // Ticks, as a double (exact to 2^53). 0 without a match.
-    client_query_controlled_player_treasury(): number; // wasm i32: read as unsigned. 0 without a match.
+    client_get_player_state_gdo_offset(): number; // Fills and returns the offset of the local player's world_player_state GDO buffer (zeroed without a match).
 
     // Path query
 
@@ -319,8 +319,8 @@ export function game_parameters_gdo_get_offset(): number { return CLIENT_BACKEND
 // Age of the local match's world in ticks (a JS number: the backend gives a double, so there is no 64 bit issue). 0 without a match.
 export function get_world_age(): number { return CLIENT_BACKEND.client_query_world_age(); }
 
-// Treasury of the local player. 0 without a match.
-export function get_local_player_treasury(): number { return CLIENT_BACKEND.client_query_controlled_player_treasury() >>> 0; }
+// Offset of the local player's world_player_state GDO (include/game_common/match/world/world.h), refreshed by this call. Read it with gdo.ts (get_local_player_state).
+export function player_state_gdo_get_offset(): number { return CLIENT_BACKEND.client_get_player_state_gdo_offset(); }
 
 // Fresh view of the whole wasm memory. Do NOT hold the result across calls into the backend, as memory growth detaches it.
 export function get_memory_bytes(): Uint8Array<ArrayBuffer>

@@ -1,5 +1,6 @@
 // Population systems: settlement expansion pressure, daily economy (wealth, tax, consumption, population growth) and troop pool growth.
 
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_entities.h"
 
 #include "../world_sim.h"
@@ -7,7 +8,7 @@
 
 // Updates settlement pressure based on population and land output.
 // Pressure = population - land_output * 3. Positive pressure means surplus population wanting to expand.
-void world_system_economy_update_pressure(match_world_state& world)
+void world_system_settlement_territory_update_pressure(match_world_state& world)
 {
     world_entity_settlements& settlements = world.entities->settlements;
 
@@ -39,7 +40,7 @@ static ui32 settlement_effective_output(ui32 base_land_output, ui32 peasants)
 // Wealth produced by an effective land output.
 static ui32 land_output_to_wealth(ui32 effective_output)
 {
-    return effective_output + effective_output / 2;
+    return effective_output + effective_output / (100 / GAME_PARAMETERS.peasant_production_percent_base);
 }
 
 // Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
@@ -69,7 +70,8 @@ static void settlement_wealth_pay_tax(match_world_state& world, ui32 settlement_
 
     ui32 taxed = (ui32)((ui64)settlements.local_wealth[settlement_index] * (ui64)taxRate / 100);
     settlements.local_wealth[settlement_index] -= taxed;
-    world.player_treasuries[owner] += taxed;
+    world.player_states[owner].treasury += taxed;
+    world.player_states[owner].income += taxed;
     settlements.finances[settlement_index].tax_paid = taxed;
 }
 
@@ -143,16 +145,32 @@ void world_system_economy_daily_tick(match_world_state& world)
 
     world_entity_settlements& settlements = world.entities->settlements;
 
+    // Player figures are last day's: reset, then every deposit adds to income. Future spending from the treasury adds to expenses.
+    for (ui32 playerIndex = 0; playerIndex < world.player_count; playerIndex++)
+    {
+        world.player_states[playerIndex].income = 0;
+        world.player_states[playerIndex].expenses = 0;
+    }
+
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.populations[settlementIndex].population_total == 0) continue;
 
         settlements.finances[settlementIndex] = {};
+ 
+        // Settlements run no economy logic on their first 10 ticks so they can claim their initial territory.
+        if (world.age < settlements.founding_ticks[settlementIndex] + 10) continue; 
 
         settlement_wealth_add_income(settlements, settlementIndex);
         settlement_wealth_pay_tax(world, settlementIndex);
         settlement_wealth_pay_consumption(settlements, settlementIndex);
         settlement_apply_growth(settlements, settlementIndex);
+    }
+
+    for (ui32 playerIndex = 0; playerIndex < world.player_count; playerIndex++)
+    {
+        world_player_state& player = world.player_states[playerIndex];
+        player.net_change = (i32)player.income - (i32)player.expenses;
     }
 }
 

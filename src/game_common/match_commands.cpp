@@ -55,7 +55,9 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
     world_entity_settlements::single startSettlement = {
         .owner = command.spawned_player,
         .location = command.spawn_location,
-        .population = { .peasants = 500 },
+        .population = { .peasants = 200 },
+        .local_wealth = 200,
+        .tax_rate = 5,
     };
 
     world_spawn_settlement(world, startSettlement);

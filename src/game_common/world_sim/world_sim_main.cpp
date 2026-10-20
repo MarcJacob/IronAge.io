@@ -11,7 +11,7 @@
 
 #include "settlements/world_sim_settlement.cpp"
 #include "settlements/world_system_territory.cpp"
-#include "settlements/world_system_population.cpp"
+#include "settlements/world_system_economy.cpp"
 
 #include "armies/world_sim_army.cpp"
 #include "armies/world_system_army.cpp"
@@ -110,8 +110,9 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 	newWorld->player_count = start_params.player_count;
 	if (newWorld->player_count > 0)
 	{
-		newWorld->player_treasuries = memory.alloc<ui32>(newWorld->player_count); // Zeroed: players start with an empty treasury.
-		if (newWorld->player_treasuries == nullptr) goto WORLD_INIT_FAIL;
+		newWorld->player_states = memory.alloc<world_player_state>(newWorld->player_count);
+		if (newWorld->player_states == nullptr) goto WORLD_INIT_FAIL;
+		ia_memzero(newWorld->player_states, sizeof(world_player_state) * newWorld->player_count); // Players start with an empty treasury.
 	}
 
 	newWorld->path_store = world_path_store_init(memory);
@@ -149,8 +150,8 @@ void world_state_tick(match_world_state& world)
     world_system_economy_daily_tick(world);
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_territory(world);
-    world_system_economy_proximity_recalc(world);
-    world_system_economy_update_pressure(world);
+    world_system_settlement_territory_proximity_recalc(world);
+    world_system_settlement_territory_update_pressure(world);
 
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);

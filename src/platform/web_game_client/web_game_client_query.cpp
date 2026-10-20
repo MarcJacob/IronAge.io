@@ -46,11 +46,18 @@ WASM_EXPORT double client_query_world_age()
 	return (double)game_client_query_world_age(*WEB_CLIENT.backend);
 }
 
-// Treasury of the controlled player. Returned as a wasm i32, so JS must read it as unsigned (>>> 0).
-WASM_EXPORT ui32 client_query_controlled_player_treasury()
+// State of the controlled player (world_player_state) as a Game Data Object, in its own buffer. JS calls client_get_player_state_gdo_offset (which fills it:
+// the values change, so read it again every time) and reads the properties by name. Zeroed without a match. Plain bytes on purpose, see the global constructor note in web_game_client.h.
+static ui8 PLAYER_STATE_GDO_BUFFER[sizeof(gdo_world_player_state)];
+
+WASM_EXPORT ui8* client_get_player_state_gdo_offset()
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
-	return game_client_query_controlled_player_treasury(*WEB_CLIENT.backend);
+	world_player_state state = game_client_query_controlled_player_state(*WEB_CLIENT.backend);
+	gdo_world_player_state gdo; // Built on the stack then copied, as for the game parameters.
+	ia_memcpy(&gdo._data, &state, sizeof(world_player_state));
+	ia_memcpy(PLAYER_STATE_GDO_BUFFER, &gdo, sizeof(gdo_world_player_state));
+	return PLAYER_STATE_GDO_BUFFER;
 }
 
 // Path query: JS calls client_query_path, which returns how many waypoints it wrote, then reads that many (x, y) ui16 pairs

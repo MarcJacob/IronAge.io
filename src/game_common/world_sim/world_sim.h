@@ -76,10 +76,10 @@ static inline void world_movement_stop(world_entity_movement& movement, world_lo
     movement.path_handle = INVALID_PATH_HANDLE;
 }
 
-void world_system_economy_proximity_recalc(match_world_state& world);
+void world_system_settlement_territory_proximity_recalc(match_world_state& world);
 void world_system_settlement_territory(match_world_state& world);
 
-void world_system_economy_update_pressure(match_world_state& world);
+void world_system_settlement_territory_update_pressure(match_world_state& world);
 
 // Daily, per settlement: output -> wealth, tax, consumption, population growth. See world_system_population.cpp.
 void world_system_economy_daily_tick(match_world_state& world);

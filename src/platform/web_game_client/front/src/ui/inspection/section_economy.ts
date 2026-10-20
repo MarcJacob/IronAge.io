@@ -46,21 +46,20 @@ export function population_section(settlement: EntityData): PanelRow[]
     const raised = settlement.get_number("raised_levies") + settlement.get_number("raised_men_at_arms")
         + settlement.get_number("raised_horsemen") + settlement.get_number("raised_knights");
     const population = Math.max(0, settlement.get_number("population") - raised);
-    const growth_percent = settlement.get_number("population_growth_per_mille") / 10;
+    const growth_percent = settlement.get_number("population_growth_rate") / 10;
 
     return [
         { kind: "value", id: "population", state: {
             label: "Population",
             value: String(population),
             delta: settlement.get_number("population_change"),
-            note: `(+ ${raised} Raised)`,
+            note: raised > 0 ? `(+ ${raised} Raised)` : ``,
             tooltip: [
                 `Home population ${population}`,
                 `Peasants ${peasants}`,
                 `Soldiers (at home) ${soldiers_home}`,
                 raised > 0 ? `Soldiers (raised) ${raised}` : "",
                 `Growth ${growth_percent.toFixed(1)}% per day`,
-                `Consumption ${settlement.get_number("finance_consumption_required")}`,
             ],
         } },
     ];

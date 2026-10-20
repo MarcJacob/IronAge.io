@@ -21,16 +21,17 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	// Apply start state.
 	world.entities->settlements.owners[freeIndex] = start_state.owner;
 	world.entities->settlements.locations[freeIndex] = start_state.location;
-	// Every property is written from the start state: the slot may have been used before.
-	settlement_population& population = world.entities->settlements.populations[freeIndex];
-	population = start_state.population;
-	population.home.levies = 0; // No home pool for levies.
+    world.entities->settlements.founding_ticks[freeIndex] = world.age;
+
     world.entities->settlements.base_land_outputs[freeIndex] = start_state.base_land_output;
-	world.entities->settlements.local_wealth[freeIndex] = 0; // New settlements start with no wealth, no tax and no finance history.
-	world.entities->settlements.tax_rates[freeIndex] = 0;
-	world.entities->settlements.finances[freeIndex] = {};
+	world.entities->settlements.local_wealth[freeIndex] = start_state.local_wealth;
+	world.entities->settlements.tax_rates[freeIndex] = start_state.tax_rate;
+	world.entities->settlements.finances[freeIndex] = start_state.finances; 
     world.entities->settlements.territories[freeIndex] = start_state.territory;
-	world.entities->settlements.troop_ceilings[freeIndex] = { 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF }; // Saturated: effective ceiling = max.
+	world.entities->settlements.troop_ceilings[freeIndex] = start_state.troop_ceilings;
+
+	settlement_population& population = world.entities->settlements.populations[freeIndex];
+    population = start_state.population;
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(population.peasants, 100);
@@ -91,6 +92,7 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 	out_state = {
 		.owner = settlements.owners[i],
 		.location = settlements.locations[i],
+        .founding_tick = settlements.founding_ticks[i],
 		.population = settlements.populations[i],
 		.base_land_output = settlements.base_land_outputs[i],
 		.local_wealth = settlements.local_wealth[i],
@@ -148,6 +150,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 	settlements.locations = memory.alloc<world_location>(count);
 	if (settlements.locations == nullptr) return false;
+
+    settlements.founding_ticks = memory.alloc<ui64>(count);
+    if (settlements.founding_ticks == nullptr) return false;
 
 	settlements.populations = memory.alloc<settlement_population>(count);
 	if (settlements.populations == nullptr) return false;
