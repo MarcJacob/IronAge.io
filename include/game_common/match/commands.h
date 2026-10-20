@@ -35,6 +35,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	STOP_RAISING_ARMY, // Ends an army's raising where it stands: its raise targets are kept (remembered for a later re-raise).
 
+	SET_SETTLEMENT_TAX_RATE, // Sets a settlement's tax rate, within the game parameters' limits.
+
 	TYPE_COUNT,
 };
 
@@ -73,6 +75,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 7, // No free slot for the entity the command would create.
 	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses move and attack orders.
 	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
+	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 10, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits).
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -273,6 +276,24 @@ bool command_stop_raising_army_validity_check(const match_world_state& world, ma
 void command_stop_raising_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// SET SETTLEMENT TAX RATE
+struct command_data_set_settlement_tax_rate
+{
+	entity_guid settlement;
+	i8 tax_rate; // % of local wealth moved to the owner's treasury each day. Must be within the game parameters' tax_rate_min..tax_rate_max.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_settlement_tax_rate)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_settlement_tax_rate_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_settlement_tax_rate_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -381,6 +402,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_army_raise_targets_validity_check, command_set_army_raise_targets_apply },
 	{ "STOP_RAISING_ARMY", MATCH_COMMAND_TYPE::STOP_RAISING_ARMY, sizeof(command_data_stop_raising_army),
 		command_stop_raising_army_validity_check, command_stop_raising_army_apply },
+		{ "SET_SETTLEMENT_TAX_RATE", MATCH_COMMAND_TYPE::SET_SETTLEMENT_TAX_RATE, sizeof(command_data_set_settlement_tax_rate),
+			command_set_settlement_tax_rate_validity_check, command_set_settlement_tax_rate_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

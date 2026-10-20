@@ -8,11 +8,13 @@
 import { GaugeElement, type GaugeState } from "./ui_element_gauge.js"
 import { TextRowElement, type TextRowState } from "./ui_element_text_row.js"
 import { ValueRowElement, type ValueRowState } from "./ui_element_value_row.js"
+import { SliderRowElement, type SliderRowState } from "./ui_element_slider_row.js"
 
 export type PanelRow =
     | { kind: "gauge", id: string, state: GaugeState }
     | { kind: "text", id: string, state: TextRowState }
-    | { kind: "value", id: string, state: ValueRowState };
+    | { kind: "value", id: string, state: ValueRowState }
+    | { kind: "slider", id: string, state: SliderRowState };
 
 export interface PropertiesPanelState
 {
@@ -20,7 +22,8 @@ export interface PropertiesPanelState
     rows: PanelRow[];
 }
 
-type RowElement = { kind: "gauge", element: GaugeElement } | { kind: "text", element: TextRowElement } | { kind: "value", element: ValueRowElement };
+type RowElement = { kind: "gauge", element: GaugeElement } | { kind: "text", element: TextRowElement } | { kind: "value", element: ValueRowElement }
+    | { kind: "slider", element: SliderRowElement };
 
 let panelElement: HTMLElement | null = null;
 let titleElement: HTMLElement | null = null;
@@ -42,6 +45,7 @@ function make_row(row: PanelRow): RowElement
     case "gauge": return { kind: "gauge", element: new GaugeElement() };
     case "text": return { kind: "text", element: new TextRowElement() };
     case "value": return { kind: "value", element: new ValueRowElement() };
+    case "slider": return { kind: "slider", element: new SliderRowElement() };
     }
 }
 
@@ -50,6 +54,7 @@ function update_row(built_row: RowElement, row: PanelRow): void
     if (built_row.kind === "gauge" && row.kind === "gauge") built_row.element.submit(row.state);
     else if (built_row.kind === "text" && row.kind === "text") built_row.element.submit(row.state);
     else if (built_row.kind === "value" && row.kind === "value") built_row.element.submit(row.state);
+    else if (built_row.kind === "slider" && row.kind === "slider") built_row.element.submit(row.state);
 }
 
 // Value rows may be showing the tooltip: hide it with them.

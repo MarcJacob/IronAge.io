@@ -419,6 +419,35 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	}
 }
 
+// SET SETTLEMENT TAX RATE
+
+bool command_set_settlement_tax_rate_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_set_settlement_tax_rate& command = command_header.get_command_data<command_data_set_settlement_tax_rate>();
+
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	if (world.entities->settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	if ((command.tax_rate < GAME_PARAMETERS.tax_rate_min || command.tax_rate > GAME_PARAMETERS.tax_rate_max)
+		&& command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_set_settlement_tax_rate_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_set_settlement_tax_rate_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_set_settlement_tax_rate& command = command_header.get_command_data<command_data_set_settlement_tax_rate>();
+	world.entities->settlements.tax_rates[command.settlement.get_index()] = command.tax_rate;
+}
+
 // SET ARMY RAISE TARGETS
 
 bool command_set_army_raise_targets_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,

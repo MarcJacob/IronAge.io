@@ -53,6 +53,7 @@ export class SettlementSelected extends Core.Mode
         // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
         submit_properties_panel(inspect_entity(view, {
             on_ceiling: (troop_type, ceiling) => send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling }),
+            on_tax_rate: (tax_rate) => send_command("SET_SETTLEMENT_TAX_RATE", { settlement: view.guid, tax_rate }),
         }));
     }
 

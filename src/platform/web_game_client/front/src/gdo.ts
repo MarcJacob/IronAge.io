@@ -159,6 +159,8 @@ export interface GameParameters
     growth_zero_ratio_per_mille: number;
     growth_floor_ratio_per_mille: number;
     growth_floor_per_mille: number;
+    tax_rate_min: number;
+    tax_rate_max: number;
 }
 
 let GAME_PARAMETERS: GameParameters | null = null;

@@ -31,6 +31,10 @@ struct game_parameters
     ui32 growth_zero_ratio_per_mille; // r at which growth is 0.
     ui32 growth_floor_ratio_per_mille; // r at and below which growth is growth_floor.
     i32 growth_floor_per_mille; // Lowest growth (shrinking).
+
+    // TAXES
+    i32 tax_rate_min; // Lowest tax rate (%) a player can set. Negative would be investment (treasury -> settlement), not applied yet.
+    i32 tax_rate_max; // Highest tax rate (%) a player can set.
 };
 
 static constexpr game_parameters GAME_PARAMETERS = {
@@ -48,6 +52,9 @@ static constexpr game_parameters GAME_PARAMETERS = {
     .growth_zero_ratio_per_mille = 900,
     .growth_floor_ratio_per_mille = 500,
     .growth_floor_per_mille = -200,
+
+    .tax_rate_min = 0,
+    .tax_rate_max = 10,
 };
 
 // Not an entity: the GDO covers the parameters structure the same way. Property names are the field names.
@@ -64,6 +71,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(growth_zero_ratio_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(growth_floor_ratio_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(growth_floor_per_mille, GAME_DATA_PROP_TYPE::I32)
+    GAME_DATA_PROPERTY(tax_rate_min, GAME_DATA_PROP_TYPE::I32)
+    GAME_DATA_PROPERTY(tax_rate_max, GAME_DATA_PROP_TYPE::I32)
 GAME_DATA_OBJECT_DEF_END()
 
 #endif // GAME_PARAMETERS_INCLUDED

@@ -179,6 +179,40 @@ body {
     color: #9aa0a6;
 }
 
+.slider_row {
+    margin-bottom: 4px;
+}
+
+.slider_row input[type=range] {
+    width: 100%;
+    margin: 2px 0 0;
+}
+
+/* Sign colors of the slider row: negative blue, positive yellow, zero neutral. */
+.slider_row_value.negative {
+    color: #5aa9ff;
+}
+
+.slider_row_value.positive {
+    color: #ffd84a;
+}
+
+.slider_row_value.zero {
+    color: #9aa0a6;
+}
+
+.slider_row input[type=range].negative {
+    accent-color: #5aa9ff;
+}
+
+.slider_row input[type=range].positive {
+    accent-color: #ffd84a;
+}
+
+.slider_row input[type=range].zero {
+    accent-color: #9aa0a6;
+}
+
 .value_row_delta {
     margin-left: 0.5rem;
 }

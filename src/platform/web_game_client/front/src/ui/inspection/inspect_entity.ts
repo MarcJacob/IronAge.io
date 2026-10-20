@@ -18,6 +18,9 @@ export interface InspectionContext
     // Settlement: makes the ceiling sliders interactive. Called on release with the troop_type of SET_SETTLEMENT_TROOP_CEILING and the raw ceiling to send.
     on_ceiling?: (troop_type: number, ceiling: number) => void;
 
+    // Settlement: turns the tax rate row into a slider. Called on release with the tax_rate of SET_SETTLEMENT_TAX_RATE to send.
+    on_tax_rate?: (tax_rate: number) => void;
+
     // Settlement: shows the troops an army raised from it would have ("Raise army") against these targets instead of its own troops.
     raise_targets?: number[];
 
@@ -30,7 +33,7 @@ function inspect_settlement(view: EntityData, context: InspectionContext): Prope
     if (context.raise_targets !== undefined)
         return { title: "Raise army", rows: army_raise_section(null, view, context.raise_targets, context.on_raise_targets) };
 
-    return { title: "Settlement", rows: [...wealth_section(view), ...population_section(view), ...settlement_pool_section(view, context.on_ceiling)] };
+    return { title: "Settlement", rows: [...wealth_section(view, context.on_tax_rate),...population_section(view), ...settlement_pool_section(view, context.on_ceiling)] };
 }
 
 function inspect_army(view: EntityData, context: InspectionContext): PropertiesPanelState
