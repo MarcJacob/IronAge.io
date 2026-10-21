@@ -19,6 +19,9 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
   A mode that drives an element keeps its own full state for it (and may keep mutating it while it is not visible), submits it on entry and on resume,
   and clears the element on exit. A child mode may override an element by submitting its own state; the parent submits its own again on resume.
   Hotkeys are handled by the modes in their own *on_key_down*, not by the elements.
+  The bottom of the screen is the bottom section, a three part grid: player state (left), inspection panel (center), action panel (right).
+  Rows of the inspection panel can be put in areas (*in_area*): a main part on top, left and right halves of one line, and a bottom part. See *ui/inspection/*.
+  Entity data reaches the interface only through *query_entity* (*gdo.ts*): the entity's properties, plus *extra* for data the web layer builds for the UI.
 
 - *input.ts* is a library plus the DOM listener registration. It forwards clicks, keys and Escape to the modes
   and holds input state (selection, held keys, camera input) and the generic command functions (*send_command*, *is_command_valid*).
