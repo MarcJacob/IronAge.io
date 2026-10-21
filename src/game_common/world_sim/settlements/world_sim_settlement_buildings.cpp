@@ -12,7 +12,7 @@ void settlement_building_barracks_on_added(match_world_state& world, entity_guid
     ui16 settlementIndex = settlement.get_index();
     world.entities->settlements.populations[settlementIndex].troop_max.men_at_arms += GAME_PARAMETERS.barracks_maa_max_increase;
     // @TODO(Marc): Add enumeration for troop types.
-    world.entities->settlements.populations[settlementIndex].troop_training[1].amount += 1;
+    world.entities->settlements.populations[settlementIndex].troop_training[1].amount += 2;
 }
 
 void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement)
@@ -22,7 +22,7 @@ void settlement_building_barracks_on_removed(match_world_state& world, entity_gu
     ui16 settlementIndex = settlement.get_index();
     world.entities->settlements.populations[settlementIndex].troop_max.men_at_arms -= GAME_PARAMETERS.barracks_maa_max_increase;
     // @TODO(Marc): Add enumeration for troop types.
-    world.entities->settlements.populations[settlementIndex].troop_training[1].amount -= 1;
+    world.entities->settlements.populations[settlementIndex].troop_training[1].amount -= 2;
 }
 
 // ...

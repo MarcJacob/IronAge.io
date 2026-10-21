@@ -10,14 +10,18 @@ import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
+import { SettlementFounding } from "./settlement_founding.js"
 
 export class SettlementSelected extends Core.Mode
 {
     private raise_item = this.make_item("Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
 
+    private found_item = this.make_item("Found Settlement", 'Digit3', (guid, key) => new SettlementFounding(guid, key));
+
     private bar: ActionBarState = { items: [
         this.make_item("Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
         this.raise_item,
+        this.found_item,
     ] };
 
     on_entry(): void
@@ -47,8 +51,8 @@ export class SettlementSelected extends Core.Mode
             return;
         }
 
-        // The panel belongs to the raise army mode while it is active.
-        if (this.raise_item.state === 'selected') return;
+        // The panel belongs to the raise army and found settlement modes while they are active.
+        if (this.raise_item.state === 'selected' || this.found_item.state === 'selected') return;
 
         // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
         submit_properties_panel(inspect_entity(view, {
