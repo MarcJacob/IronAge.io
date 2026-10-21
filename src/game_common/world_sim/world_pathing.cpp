@@ -117,15 +117,21 @@ static path_node* path_node_get(path_search& s, ui32 tile)
     return nullptr;
 }
 
-// Estimated cost left to the target: chamfer distance, 
-// assuming the cheapest tile costs 1.
+// Cheapest land terrain cost (LAND_PLAINS..LAND_MOUNTAINS are the first entries of the table). Searches are land-only.
+static constexpr ui32 min_land_cost(ui32 a, ui32 b, ui32 c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
+static constexpr ui32 HEURISTIC_TILE_COST = min_land_cost(TILE_TERRAIN_TRAVEL_COST[(ui8)TERRAIN_TILE_TYPE::LAND_PLAINS],
+    TILE_TERRAIN_TRAVEL_COST[(ui8)TERRAIN_TILE_TYPE::LAND_HILLS], TILE_TERRAIN_TRAVEL_COST[(ui8)TERRAIN_TILE_TYPE::LAND_MOUNTAINS]);
+
+// Estimated cost left to the target: chamfer distance, assuming every tile costs the cheapest ordinary (non-road) terrain.
+// Deliberately NOT admissible on roads (cost 1 < HEURISTIC_TILE_COST): paths across roads may be marginally suboptimal,
+// in exchange for far fewer expanded nodes. Shared by sim and client preview, so both stay deterministic.
 static ui32 path_heuristic(world_location from, world_location to)
 {
     ui32 dx = from.x > to.x ? from.x - to.x : to.x - from.x;
     ui32 dy = from.y > to.y ? from.y - to.y : to.y - from.y;
     ui32 diagonal = dx < dy ? dx : dy;
 
-    return PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal;
+    return HEURISTIC_TILE_COST * (PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal);
 }
 
 void world_path_find(const world_terrain& terrain, world_location start, world_location end, const path_params& params,

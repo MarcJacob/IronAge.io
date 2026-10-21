@@ -11,7 +11,7 @@
 // TERRAIN TRAVEL
 
 // Travel difficulty over each terrain type. Used for tile proximity and pathfinding.
-static const ui8 TILE_TERRAIN_TRAVEL_COST[] = {
+static constexpr ui8 TILE_TERRAIN_TRAVEL_COST[] = {
     3, // LAND_PLAINS
     5, // LAND_HILLS
     10, // LAND_MOUNTAINS
