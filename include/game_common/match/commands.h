@@ -39,6 +39,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	BUILD_SETTLEMENT_BUILDING, // Has a settlement start constructing a building (a row of the settlement building table).
 
+	DISBAND_ARMY, // Disbands an army standing in its home settlement's territory: its men return to the home settlement.
+
 	TYPE_COUNT,
 };
 
@@ -78,6 +80,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses move and attack orders.
 	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
 	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 10, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits).
+	COMMAND_ERROR_NOT_IN_HOME_TERRITORY = 1 << 11, // The army is not inside its home settlement's territory.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -316,6 +319,22 @@ bool command_build_settlement_building_validity_check(const match_world_state& w
 void command_build_settlement_building_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// DISBAND ARMY
+struct command_data_disband_army
+{
+	entity_guid army;
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_disband_army)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_disband_army_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_disband_army_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -428,6 +447,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 			command_set_settlement_tax_rate_validity_check, command_set_settlement_tax_rate_apply },
 	{ "BUILD_SETTLEMENT_BUILDING", MATCH_COMMAND_TYPE::BUILD_SETTLEMENT_BUILDING, sizeof(command_data_build_settlement_building),
 		command_build_settlement_building_validity_check, command_build_settlement_building_apply },
+	{ "DISBAND_ARMY", MATCH_COMMAND_TYPE::DISBAND_ARMY, sizeof(command_data_disband_army),
+		command_disband_army_validity_check, command_disband_army_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

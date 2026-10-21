@@ -576,6 +576,51 @@ void command_stop_raising_army_apply(match_world_state& world, match_player_id p
 	armies.raising[armyIndex] = 0;
 }
 
+// DISBAND ARMY
+
+bool command_disband_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_disband_army& command = command_header.get_command_data<command_data_disband_army>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_armies& armies = world.entities->armies;
+	ui16 armyIndex = command.army.get_index();
+
+	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// An army in a battle is counted in it: no dedicated error, reported as unspecified.
+	if (armies.battles[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
+	// The men go back to the home settlement, which must still exist.
+	entity_guid home = armies.home_settlements[armyIndex];
+	if (!home.is_valid() || !world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	// The army must stand on a tile of its home settlement's territory.
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, armies.locations[armyIndex], regionIndex, tileIndex);
+	if (world.terrain->regions[regionIndex].owners[tileIndex] != home.get_index() && command_add_error(feedback, COMMAND_ERROR_NOT_IN_HOME_TERRITORY)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_disband_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_disband_army_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_disband_army& command = command_header.get_command_data<command_data_disband_army>();
+	world_disband_army(world, command.army, world.entities->armies.home_settlements[command.army.get_index()]);
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS

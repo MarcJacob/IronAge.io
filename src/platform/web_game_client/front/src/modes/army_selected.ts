@@ -1,13 +1,13 @@
-// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (stop raising, no hotkey; no bar otherwise).
+// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (stop raising while raising, disband; no hotkeys).
 // Leaves when the selection stops being an own army. Escape clears the selection.
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, clear_selected_entity, send_command } from "../input.js"
+import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
-import { submit_action_bar, type ActionBarState } from "../ui/ui_element_action_bar.js"
+import { submit_action_bar, type ActionBarItem } from "../ui/ui_element_action_bar.js"
 import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
 import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { raise_target_props } from "./army_raising.js"
@@ -17,11 +17,13 @@ export class ArmySelected extends Core.Mode
     // army_guid: the selected own army this mode is about.
     constructor(private army_guid: number) { super(); }
 
-    private raising = false; // Whether the bar currently offers to stop raising.
+    private raising: boolean | null = null; // Whether the bar currently offers to stop raising (null: no bar submitted yet).
+    private can_disband: boolean | null = null; // Whether the bar currently shows Disband as selectable.
 
-    private bar: ActionBarState = { items: [
-        { name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) },
-    ] };
+    private stop_item: ActionBarItem = { name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) };
+
+    // Disband is refused (greyed out) unless the army is in its home settlement's territory.
+    private disband_item: ActionBarItem = { name: "Disband", state: 'unselectable', on_activate: () => send_command("DISBAND_ARMY", { army: this.army_guid }) };
 
     on_exit(): void
     {
@@ -44,14 +46,17 @@ export class ArmySelected extends Core.Mode
         this.update_path_preview();
     }
 
-    // The bar offers to stop raising while the army is raising. The panel's target sliders (while raising) send the new targets.
+    // The bar offers to stop raising while the army is raising, and to disband it (when allowed). The panel's target sliders (while raising) send the new targets.
     private update_panel(army: EntityData): void
     {
         const raising = army.get_number("raising") === 1;
-        if (raising !== this.raising)
+        const canDisband = is_command_valid("DISBAND_ARMY", { army: this.army_guid });
+        if (raising !== this.raising || canDisband !== this.can_disband)
         {
             this.raising = raising;
-            submit_action_bar(raising ? this.bar : null);
+            this.can_disband = canDisband;
+            this.disband_item.state = canDisband ? 'selectable' : 'unselectable';
+            submit_action_bar({ items: raising ? [this.stop_item, this.disband_item] : [this.disband_item] });
         }
 
         submit_properties_panel(inspect_entity(army, {
