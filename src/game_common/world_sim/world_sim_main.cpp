@@ -9,18 +9,18 @@
 // Unity-include the entire world simulation code. 
 #include "world_terrain.cpp"
 
-#include "settlements/world_sim_settlement.cpp"
-#include "settlements/world_system_territory.cpp"
-#include "settlements/world_system_economy.cpp"
+#include "settlements/world_sim_entity_settlement.cpp"
+#include "settlements/world_system_settlement_territory.cpp"
+#include "settlements/world_system_settlement_economy.cpp"
 
-#include "armies/world_sim_army.cpp"
+#include "armies/world_sim_entity_army.cpp"
 #include "armies/world_system_army.cpp"
 #include "armies/world_system_battle.cpp"
 
-#include "battles/world_sim_battle.cpp"
+#include "battles/world_sim_entity_battle.cpp"
 
-#include "builders/world_sim_builder.cpp"
-#include "builders/world_system_construction.cpp"
+#include "builders/world_sim_entity_builder.cpp"
+#include "builders/world_system_builder_construction.cpp"
 
 #include "world_system_movement.cpp"
 #include "world_pathing.cpp"

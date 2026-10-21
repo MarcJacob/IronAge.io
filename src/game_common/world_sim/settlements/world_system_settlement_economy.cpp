@@ -5,7 +5,7 @@
 #include "game_common/match/world/world_entities.h"
 
 #include "../world_sim.h"
-#include "world_sim_settlement.h"
+#include "world_sim_entity_settlement.h"
 
 // Updates settlement pressure based on population and land output.
 // Pressure = population - land_output * 3. Positive pressure means surplus population wanting to expand.
@@ -47,7 +47,9 @@ static ui32 land_output_to_wealth(ui32 effective_output)
 // Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
 static ui32 settlement_consumption_required(const settlement_population& population)
 {
-    return population.at_home() * GAME_PARAMETERS.consumption_per_person;
+    //@TEST(Marc): Need to figure out economy rules that make sense. For now raised population / soldiers does not consume at all from their home settlement,
+    // they are paid from the treasury.
+    return population.at_home() * GAME_PARAMETERS.consumption_per_person; 
 }
 
 // WEALTH MOVEMENT 1: land output -> local wealth.

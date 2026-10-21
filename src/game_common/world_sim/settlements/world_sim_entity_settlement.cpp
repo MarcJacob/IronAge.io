@@ -1,7 +1,6 @@
-#include "world_sim_settlement.h"
+#include "world_sim_entity_settlement.h"
 #include "game_common/match/world/world.h"
 #include "game_common/match/world/world_terrain.h"
-#include "../world_sim.h"
 
 entity_guid world_spawn_settlement(match_world_state& world, const world_entity_settlements::single& start_state)
 {

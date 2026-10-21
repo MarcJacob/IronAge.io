@@ -1,5 +1,4 @@
-#include "world_sim_battle.h"
-#include "../world_sim.h"
+#include "world_sim_entity_battle.h"
 
 entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state)
 {

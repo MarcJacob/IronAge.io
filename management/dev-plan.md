@@ -116,10 +116,10 @@ work to a line or two.
 3. **Alpha gameplay & framework** - gameplay additions forming a coherent "Mini" version
    of the game (design doc's Alpha section, to be written), plus game-framework work.
    Ends with the last Alpha version.
-   - Preparation, before any feature work below:
-     - Simplify command wiring: fewer places to touch to go from a game feature to a
+   - [DONE] Preparation, before any feature work below:
+     - [DONE] Simplify command wiring: fewer places to touch to go from a game feature to a
        command to a client modal control scheme. (`command_wiring_simplification`)
-     - Reorganize world simulation code: one implementation file per system, helper
+     - [DONE] Reorganize world simulation code: one implementation file per system / category, helper
        headers per theme. (`world_sim_reorganization`)
    - Alpha features, in this order, after the preparation: `basic_world_economy`
      (time system, wealth / treasury, buildings, trade), `alpha_troops_recruitment` (war economy),

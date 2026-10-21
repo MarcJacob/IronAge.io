@@ -2,7 +2,8 @@
 
 #include "game_common/match/world/world.h"
 #include "world_sim.h"
-#include "world_movement.h"
+
+#include "battles/world_sim_entity_battle.h"
 
 // What entities can cross for now: land only.
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
@@ -105,6 +106,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 	}
 }
 
+// @TODO(Marc): Move this to Army code, in a "Army AI" system.
 void world_system_entity_movement(match_world_state& world)
 {
     world_entity_armies& armies = world.entities->armies;

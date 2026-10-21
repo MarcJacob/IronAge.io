@@ -1,5 +1,4 @@
-#include "world_sim_builder.h"
-#include "../world_sim.h"
+#include "world_sim_entity_builder.h"
 
 entity_guid world_spawn_builder(match_world_state& world, const world_entity_builders::single& start_state)
 {

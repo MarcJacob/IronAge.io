@@ -4,9 +4,11 @@
 #include "game_common/match/world/world_entities.h"
 
 #include "../world_sim.h"
-#include "../battles/world_sim_battle.h"
-#include "world_sim_army.h"
+#include "../battles/world_sim_entity_battle.h"
 
+#include "world_sim_entity_army.h"
+
+// @TODO(Marc): Move this to army-specific file
 void army_battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)
 {
 	world_entity_armies& armies = world.entities->armies;
@@ -31,6 +33,7 @@ constexpr ui32 BATTLE_MAX_DAMAGE_PERCENT = 10;
 // Battles resolve one round every this many world ticks (1 = every tick). Battle duration counts rounds.
 constexpr ui32 BATTLE_TICK_INTERVAL = 20;
 
+// @TODO(Marc): Post separation of battle code from army code, move this to battle entity folder.
 void world_system_battles(match_world_state& world)
 {
 	if (world.age % BATTLE_TICK_INTERVAL != 0) return;

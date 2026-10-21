@@ -3,7 +3,7 @@
 #include "game_common/match/world/world.h"
 
 #include "../world_sim.h"
-#include "../builders/world_sim_builder.h"
+#include "../builders/world_sim_entity_builder.h"
 
 // Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
 static void world_tile_set_road(match_world_state& world, world_location location)

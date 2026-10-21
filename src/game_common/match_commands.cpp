@@ -4,7 +4,7 @@
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_entities.h"
 #include "world_sim/world_sim.h"
-#include "world_sim/settlements/world_sim_settlement.h"
+#include "world_sim/settlements/world_sim_entity_settlement.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 

@@ -2,14 +2,14 @@
 
 #include "game_common/match/world/world.h"
 #include "game_common/match/world/world_entities.h"
-#include "world_sim_army.h"
+#include "world_sim_entity_army.h"
 
-#include "../battles/world_sim_battle.h"
-#include "../settlements/world_sim_settlement.h"
+#include "../battles/world_sim_entity_battle.h"
+#include "../settlements/world_sim_entity_settlement.h"
 
 #include "../world_sim.h"
 
-// Resolves an attack of an army that reached its target. The attacker is destroyed here if it loses.
+// Resolves an attack of an army that reached its target.
 static void world_resolve_attack(match_world_state& world, entity_guid attacker, entity_guid target)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
