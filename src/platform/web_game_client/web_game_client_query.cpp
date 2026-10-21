@@ -160,7 +160,7 @@ WASM_EXPORT ui8* client_get_player_state_gdo_offset()
 // Path query: JS calls client_query_path, which returns how many waypoints it wrote, then reads that many (x, y) ui16 pairs
 // at the offset given by client_get_path_buffer_offset. The start tile is not part of the waypoints, see struct path.
 // A plain ui16 array rather than world_location on purpose: see the global constructor note in web_game_client.h.
-static constexpr ui16 PATH_BUFFER_CAPACITY = 256; // In waypoints.
+static constexpr ui16 PATH_BUFFER_CAPACITY = 1024; // In waypoints.
 static ui16 PATH_BUFFER[PATH_BUFFER_CAPACITY * 2];
 static_assert(sizeof(world_location) == 4, "PATH_BUFFER is read as (x, y) ui16 pairs, matching world_location.");
 

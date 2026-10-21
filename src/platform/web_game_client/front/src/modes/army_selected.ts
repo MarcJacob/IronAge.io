@@ -12,6 +12,9 @@ import { submit_properties_panel } from "../ui/inspection/ui_element_properties_
 import { inspect_entity } from "../ui/inspection/inspect_entity.js"
 import { raise_target_props } from "./army_raising.js"
 
+const ARMY_PATH_COLOR_MOVE = 'rgba(40, 220, 60, 0.9)';
+const ARMY_PATH_COLOR_ATTACK = 'rgba(255, 40, 40, 0.9)';
+
 export class ArmySelected extends Core.Mode
 {
     // army_guid: the selected own army this mode is about.
@@ -91,17 +94,21 @@ export class ArmySelected extends Core.Mode
         return true;
     }
 
-    // Previews the path from the army to the hovered tile (movement). No preview while the mouse is off the map.
+    // Shows the path the army is following to its destination: green while moving, red while chasing an attack target. None when it is not going anywhere.
+    // The path is queried from the army's tile to its destination, as the simulation does at every step.
     private update_path_preview(): void
     {
         Render.RENDER_CONFIG.path_preview = null;
 
         const army = query_entity(this.army_guid);
-        const hovered = Render.get_hovered_tile();
-        if (army === null || hovered === null) return;
+        if (army === null) return;
 
         const start = army.get_location("location");
-        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, hovered), valid: true };
+        const destination = army.get_location("movement_destination");
+        if (start.x === destination.x && start.y === destination.y) return;
+
+        const attacking = army.get_number("action_target") !== 0;
+        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination), valid: true, color: attacking ? ARMY_PATH_COLOR_ATTACK : ARMY_PATH_COLOR_MOVE };
     }
 
     // The tile a move order to the given clicked tile goes to: clamped inside the world. Return null instead to ignore clicks outside the world.
