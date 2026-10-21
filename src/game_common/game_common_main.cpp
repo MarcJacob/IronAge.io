@@ -37,6 +37,7 @@ constexpr ui64 match_get_required_mem(game_match_start_params& params)
         + sizeof(match_world_state) + sizeof(world_terrain) + sizeof(world_entities) // World structures.
         + sizeof(world_path_store) + WORLD_PATH_STORE_SCRATCH_SIZE // Path store and its search memory.
         + settlementCount * sizeof(world_entity_settlements::single) // Settlements.
+        + settlementCount * SETTLEMENT_BUILDING_TYPE_COUNT * sizeof(ui16) // Settlement building counts.
         + microEntityCount * sizeof(world_entity_armies::single) // Armies.
         + microEntityCount * sizeof(world_entity_battles::single) // Battles.
         + microEntityCount * sizeof(world_entity_workers::single) // Workers.

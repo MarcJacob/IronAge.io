@@ -16,10 +16,6 @@ struct game_parameters
 
     // TROOPS
     ui32 raise_min_population_left = 10; // Raising levies / training troops never takes a settlement's peasants below this.
-    ui32 troop_growth_per_day = 1; // Troops gained per type per day in a settlement's local pool, trained from peasants (1:1).
-    ui32 men_at_arms_max_per_mille = 50; // Max local men at arms, as a share of the settlement's total population.
-    ui32 horsemen_max_per_mille = 10; // Same, for horsemen.
-    ui32 knights_max_per_mille = 1; // Same, for knights. (Levies are not pooled: their max is peasants - raise_min_population_left.)
 
     // ECONOMY
 
@@ -49,10 +45,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(ticks_per_day, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(troop_growth_per_day, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(men_at_arms_max_per_mille, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(horsemen_max_per_mille, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(knights_max_per_mille, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(peasant_production_percent_base, GAME_DATA_PROP_TYPE::UI8)
 

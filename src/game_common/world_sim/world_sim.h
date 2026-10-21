@@ -66,7 +66,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 // SYSTEMS & HELPERS
 
 // Advances all construction projects (workers) by one tick, destroying the finished ones.
-void world_system_construction(match_world_state& world);
+void world_system_worker_construction(match_world_state& world);
 
 // Makes an entity stop where it is, dropping its path and the step it was making.
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)
@@ -85,6 +85,9 @@ void world_system_settlement_territory_update_pressure(match_world_state& world)
 void world_system_economy_daily_tick(match_world_state& world);
 
 void world_system_economy_troop_growth(match_world_state& world);
+
+// Daily: runs the on_daily_tick event of every building type a settlement has at least one unit of.
+void world_system_settlement_buildings_daily_tick(match_world_state& world);
 
 void world_system_entity_movement_decision(match_world_state& world);
 

@@ -75,6 +75,35 @@ static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid
 	return guid_a._value == guid_b._value; // Whole value, so _extra is compared too.
 }
 
+struct match_world_state;
+
+
+// Optional (nullptr = nothing happens) type-specific behavior. Implemented in world_sim_settlement_buildings.cpp.
+struct settlement_building_events
+{
+	void (*on_added)(match_world_state& world, entity_guid settlement) = nullptr; // After a unit of the type was added to the settlement.
+	void (*on_removed)(match_world_state& world, entity_guid settlement) = nullptr; // After a unit of the type was removed from the settlement.
+	void (*on_daily_tick)(match_world_state& world, entity_guid settlement) = nullptr; // Once per day, for settlements having at least one unit of the type.
+};
+
+struct settlement_building_def
+{
+	const char* name;
+	ui16 build_days; // Construction time.
+	ui32 cost_per_day; // Wealth per day while under construction.
+	ui8 workers; // Workers taken from the peasants while under construction.
+	settlement_building_events events;
+};
+
+// SETTLEMENT BUILDING TYPES TABLE
+// Settlements keep a count per row of this table.
+static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
+{
+	{ "Barracks", 5, 100, 10, {} }, // Placeholder values.
+};
+
+constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
+
 struct world_entity_container
 {
 	ui16 max_count;
@@ -101,14 +130,27 @@ struct army_troop_count
     ui16 knights;
 };
 
+// Training of one troop type in a settlement: every duration_days days, up to amount peasants become soldiers of the type.
+struct settlement_troop_training
+{
+	ui16 amount; // Soldiers per training. 0 = no training.
+	ui16 duration_days; // Days between trainings. 0 is treated as 1.
+	ui16 progress_days; // Days since the last training.
+};
+
 // Population accounting of a settlement.
 // population_total = peasants + all soldiers (home and raised). It is stored: whatever changes the sum (births, deaths, spawn) must update it.
+// @NOTE: the soldiers stuff (home, raised, troop_max, troop_training) could maybe move to a settlement_military struct.
 struct settlement_population
 {
 	ui32 population_total;
 	ui32 peasants; // Everyone at home who is not a soldier.
 	army_troop_count home; // Soldiers at home: the local troop pool. Levies have no home pool: home.levies is always 0.
 	army_troop_count raised; // Soldiers in armies raised from the settlement. Levies in the field count here.
+
+	// Set by the settlement's buildings (see their events). Levies are neither capped nor trained: their fields are unused.
+	army_troop_count troop_max; // Max of each soldier type, home + raised.
+	settlement_troop_training troop_training[4]; // Indexed by troop type (TROOP_TYPE_*).
 
     i32 population_change;
 	i32 growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
@@ -145,6 +187,9 @@ struct world_entity_settlements : public world_entity_container
 	i8*                 tax_rates; // -100..100, % of local wealth moved to the owner's treasury each day. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
 	settlement_finances* finances; // Last day's figures.
 
+	ui16* building_counts; // max_count rows of SETTLEMENT_BUILDING_TYPE_COUNT counts (units per building type). Use building_count().
+	inline ui16& building_count(ui16 settlement_index, ui8 building_type) { return building_counts[settlement_index * SETTLEMENT_BUILDING_TYPE_COUNT + building_type]; }
+
     struct territory
     {
         world_location bounds_min, bounds_max; // Rectangle bounds of all currently claimed tiles.
@@ -172,7 +217,6 @@ struct world_entity_settlements : public world_entity_container
         territory territory;
 
 		army_troop_count troop_ceilings;
-		army_troop_count troop_max;
 		army_troop_count troop_effective_ceilings;
 	};
 };
@@ -210,15 +254,21 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 
 	GAME_DATA_PROPERTY_PATH(troops_men_at_arms,population.home.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(ceiling_men_at_arms, troop_effective_ceilings.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(max_men_at_arms, troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_men_at_arms, population.troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_men_at_arms_amount, population.troop_training[1].amount, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_men_at_arms_days, population.troop_training[1].duration_days, GAME_DATA_PROP_TYPE::UI16)
 
 	GAME_DATA_PROPERTY_PATH(troops_horsemen, population.home.horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(ceiling_horsemen, troop_effective_ceilings.horsemen, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(max_horsemen, troop_max.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_horsemen, population.troop_max.horsemen, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_horsemen_amount, population.troop_training[2].amount, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_horsemen_days, population.troop_training[2].duration_days, GAME_DATA_PROP_TYPE::UI16)
 
 	GAME_DATA_PROPERTY_PATH(troops_knights, population.home.knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(ceiling_knights, troop_effective_ceilings.knights, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(max_knights, troop_max.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_knights, population.troop_max.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_knights_amount, population.troop_training[3].amount, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(training_knights_days, population.troop_training[3].duration_days, GAME_DATA_PROP_TYPE::UI16)
 
 GAME_DATA_OBJECT_DEF_END()
 
@@ -289,11 +339,11 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
     GAME_DATA_PROPERTY(battle_side,                                             GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
-// Small byte buffer for the data a build type keeps about its project. Its layout is entirely defined by the build type's logic.
-static constexpr ui8 WORLD_BUILD_ACTION_DATA_SIZE = 16;
+// Small byte buffer for the data a work type keeps about its project. Its layout is entirely defined by the work type's logic.
+static constexpr ui8 WORLD_WORKER_ACTION_DATA_SIZE = 16;
 struct world_worker_action_data
 {
-	alignas(4) ui8 bytes[WORLD_BUILD_ACTION_DATA_SIZE]; // Aligned so build types can overlay structures on it.
+	alignas(4) ui8 bytes[WORLD_WORKER_ACTION_DATA_SIZE]; // Aligned so work types can overlay structures on it.
 };
 
 // Every archetype of work project a worker can be assigned to.
@@ -313,18 +363,18 @@ struct build_road_data
     world_location head; // Last tile built, which is where the road continues from.
     world_location destination; // Tile the road is going towards.
 };
-static_assert(sizeof(build_road_data) <= WORLD_BUILD_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
+static_assert(sizeof(build_road_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
 
 // Workers are the entities carrying out work projects (roads & building construction, colonization...). 
 // Each is tied to an origin entity, and destroyed when it goes away / is done.
 struct world_entity_workers : public world_entity_container
 {
-	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the build type. Locates the builder.
+	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the work type. Locates the worker.
 	WORK_TYPE* work_types; // What is being built.
-	ui32* work_times; // Ticks since the project started. How the build type uses it is up to it.
+	ui32* work_times; // Ticks since the project started. How the work type uses it is up to it.
 	world_worker_action_data* action_data;
 
-	// Consolidated representation of a single builder for viewing purposes.
+	// Consolidated representation of a single worker for viewing purposes.
 	struct single
 	{
 		entity_guid origin_entity;

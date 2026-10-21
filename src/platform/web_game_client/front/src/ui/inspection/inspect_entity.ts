@@ -45,7 +45,7 @@ function inspect_army(view: EntityData, context: InspectionContext): PropertiesP
     return { title: "Army troops", rows: army_count_section(view) };
 }
 
-// Entity types without sections of their own (builder, battle...).
+// Entity types without sections of their own (worker, battle...).
 function inspect_generic(view: EntityData): PropertiesPanelState
 {
     const name = Backend.ENTITY_TYPE[view.entity_type] ?? "Entity";

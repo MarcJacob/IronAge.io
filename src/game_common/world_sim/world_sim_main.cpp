@@ -12,6 +12,7 @@
 #include "settlements/world_sim_entity_settlement.cpp"
 #include "settlements/world_system_settlement_territory.cpp"
 #include "settlements/world_system_settlement_economy.cpp"
+#include "settlements/world_sim_settlement_buildings.cpp"
 
 #include "armies/world_sim_entity_army.cpp"
 #include "armies/world_system_army.cpp"
@@ -171,10 +172,11 @@ void world_state_tick(match_world_state& world)
     // @TODO(Marc): Figure out an appropriate abstraction for systems 
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
-    world_system_construction(world); // Before proximity recalc, so new roads count this tick.
+    world_system_worker_construction(world); // Before proximity recalc, so new roads count this tick.
 
     world_system_economy_daily_tick(world);
     world_system_economy_troop_growth(world); // After the daily tick's growth.
+    world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
     world_system_settlement_territory(world);
     world_system_settlement_territory_proximity_recalc(world);
     world_system_settlement_territory_update_pressure(world);

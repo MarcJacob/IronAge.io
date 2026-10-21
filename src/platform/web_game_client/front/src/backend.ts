@@ -32,7 +32,7 @@ export enum ENTITY_TYPE
     INVALID = 0,
     SETTLEMENT = 1,
     ARMY = 2,
-    BUILDER = 3,
+    WORKER = 3,
     BATTLE = 4,
 };
 

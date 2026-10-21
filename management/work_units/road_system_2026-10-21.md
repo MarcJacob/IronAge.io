@@ -11,7 +11,7 @@ Make roads matter mechanically and give them direction:
 
 ## Current state
 
-- Road flag: `is_road` bitfield in `include/game_common/match/world/world_terrain.h`; set by the construction system (`world_tile_set_road`, builders/) and at settlement spawn (settlements are road tiles; destroy leaves the road).
+- Road flag: `is_road` bitfield in `include/game_common/match/world/world_terrain.h`; set by the construction system (`world_tile_set_road`, workers/) and at settlement spawn (settlements are road tiles; destroy leaves the road).
 - Travel cost: `ROAD_TRAVEL_COST` (1) in `world_movement.h`; road check comes before the territory check, so roads are passable in foreign territory. Movement speed does not use cost yet.
 - Road building validity: `match_commands.cpp` (origin = own settlement or own road tile; destination unchecked for road status). Client origin check uses server validity feedback (`road_building.ts`).
 - Rendering: `draw_roads` in client `render.ts`: segments from the 8-neighbour road mask, a diagonal is skipped when either shared orthogonal cell is a road; isolated tile = dot. Native renderer (`game_client_render.cpp`) reads `is_road` directly.

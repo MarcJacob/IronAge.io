@@ -31,6 +31,12 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     world.entities->settlements.territories[freeIndex] = start_state.territory;
 	world.entities->settlements.troop_ceilings[freeIndex] = start_state.troop_ceilings;
 
+	// Slots are reused: no buildings to start with.
+	for (ui8 buildingType = 0; buildingType < SETTLEMENT_BUILDING_TYPE_COUNT; buildingType++)
+	{
+		world.entities->settlements.building_count(freeIndex, buildingType) = 0;
+	}
+
 	settlement_population& population = world.entities->settlements.populations[freeIndex];
     population = start_state.population;
 
@@ -93,7 +99,6 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.finances = settlements.finances[i],
 		.territory = settlements.territories[i],
 		.troop_ceilings = settlements.troop_ceilings[i],
-		.troop_max = settlement_troop_max(settlements.populations[i]),
 		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
 	};
 	return true;
@@ -161,6 +166,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 	settlements.finances = memory.alloc<settlement_finances>(count);
 	if (settlements.finances == nullptr) return false;
+
+	settlements.building_counts = memory.alloc<ui16>(count * SETTLEMENT_BUILDING_TYPE_COUNT);
+	if (settlements.building_counts == nullptr) return false;
 
 	settlements.territories = memory.alloc<world_entity_settlements::territory>(count);
 	if (settlements.territories == nullptr) return false;

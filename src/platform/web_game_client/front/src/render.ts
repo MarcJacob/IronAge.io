@@ -96,7 +96,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
 {
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
     [Backend.ENTITY_TYPE.ARMY]: 2,
-    [Backend.ENTITY_TYPE.BUILDER]: 1, // Never drawn, only here to satisfy the lookup.
+    [Backend.ENTITY_TYPE.WORKER]: 1, // Never drawn, only here to satisfy the lookup.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
 }
 

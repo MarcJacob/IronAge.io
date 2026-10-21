@@ -340,15 +340,15 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 	return command_is_valid(feedback);
 }
 
-// Spawns a road builder tied to the settlement. The road itself is built over the following ticks (see the construction system).
+// Spawns a road worker tied to the settlement. The road itself is built over the following ticks (see the construction system).
 void command_build_road_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
-	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last builder slot.
+	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last worker slot.
 	if (!command_build_road_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_build_road& command = command_header.get_command_data<command_data_build_road>();
 
-    // Initialize builder entity to build a road from origin to destination.
+    // Initialize worker entity to build a road from origin to destination.
 	world_entity_workers::single worker = {};
 	worker.origin_entity = command.settlement;
 	worker.work_type = WORK_TYPE::BUILD_ROAD;

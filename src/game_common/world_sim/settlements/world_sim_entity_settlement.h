@@ -126,27 +126,46 @@ static inline ui16 settlement_release_raised(match_world_state& world, ui16 sett
 // Ensure settlement's influence bounds rectangle is kept up to date !
 ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);
 
-// Max local troops of a settlement: a share of its total population, rounded down (shares in GAME_PARAMETERS).
-// Levies are not pooled: their max is the peasants that can be raised without going below raise_min_population_left.
-// Future cost / upkeep hooks would plug in next to these.
-static inline army_troop_count settlement_troop_max(const settlement_population& population)
+// SETTLEMENT BUILDING PRIMITIVES
+// Every change to a settlement's building counts goes through these. They run the type's events (once per unit) and return how many units were actually added / removed.
+
+static inline ui16 settlement_building_add(match_world_state& world, ui16 settlement_index, ui8 building_type, ui16 count)
 {
-	ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
-	ui32 levyMax = population.peasants > minLeft ? population.peasants - minLeft : 0;
-	return {
-		(ui16)(levyMax > 0xFFFF ? 0xFFFF : levyMax), // Levies
-		(ui16)((ui64)population.population_total * GAME_PARAMETERS.men_at_arms_max_per_mille / 1000),
-		(ui16)((ui64)population.population_total * GAME_PARAMETERS.horsemen_max_per_mille / 1000),
-		(ui16)((ui64)population.population_total * GAME_PARAMETERS.knights_max_per_mille / 1000),
-	};
+	ASSERT(building_type < SETTLEMENT_BUILDING_TYPE_COUNT);
+	world_entity_settlements& settlements = world.entities->settlements;
+	ui16& units = settlements.building_count(settlement_index, building_type);
+	ui16 added = ia_min(count, (ui16)(0xFFFF - units));
+	for (ui16 i = 0; i < added; i++)
+	{
+		units++;
+		auto onAdded = SETTLEMENT_BUILDING_TABLE[building_type].events.on_added;
+		if (onAdded) onAdded(world, settlements.guids[settlement_index]);
+	}
+	return added;
 }
 
-// Ceiling actually in force: the raw player-set ceiling capped by max. It applies to the total of a type (home + raised).
+static inline ui16 settlement_building_remove(match_world_state& world, ui16 settlement_index, ui8 building_type, ui16 count)
+{
+	ASSERT(building_type < SETTLEMENT_BUILDING_TYPE_COUNT);
+	world_entity_settlements& settlements = world.entities->settlements;
+	ui16& units = settlements.building_count(settlement_index, building_type);
+	ui16 removed = ia_min(count, units);
+	for (ui16 i = 0; i < removed; i++)
+	{
+		units--;
+		auto onRemoved = SETTLEMENT_BUILDING_TABLE[building_type].events.on_removed;
+		if (onRemoved) onRemoved(world, settlements.guids[settlement_index]);
+	}
+	return removed;
+}
+
+// Ceiling actually in force: the raw player-set ceiling capped by the settlement's troop max. It applies to the total of a type (home + raised).
+// Levies have no max: their ceiling is the raw one.
 static inline army_troop_count settlement_troop_effective_ceilings(const settlement_population& population, const army_troop_count& raw_ceilings)
 {
-	army_troop_count max = settlement_troop_max(population);
+	const army_troop_count& max = population.troop_max;
 	return {
-		raw_ceilings.levies < max.levies ? raw_ceilings.levies : max.levies,
+		raw_ceilings.levies,
 		raw_ceilings.men_at_arms < max.men_at_arms ? raw_ceilings.men_at_arms : max.men_at_arms,
 		raw_ceilings.horsemen < max.horsemen ? raw_ceilings.horsemen : max.horsemen,
 		raw_ceilings.knights < max.knights ? raw_ceilings.knights : max.knights,

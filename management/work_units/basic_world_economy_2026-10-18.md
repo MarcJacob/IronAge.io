@@ -6,7 +6,7 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 - Simulation time: calendar days (N ticks), daily ticks as the unit economy mechanics hook into.
 - Local wealth per settlement (sources: land output, buildings, caravans), base cost per population, taxation into the owner's single treasury, treasury spending hooks. HUD display and tax control.
-- Settlement buildings: definitions (effect, ticks, cost, max level) and in-settlement construction on top of the builder / build type system from `road_construction_2026-10-03.md`. Timed and financed from local wealth (no wealth = suspended). Housing (pop cap) first. Roads are instant and free today, buildings are timed and paid.
+- Settlement buildings: definitions (effect, ticks, cost, max level) and in-settlement construction on top of the worker / work type system from `road_construction_2026-10-03.md`. Timed and financed from local wealth (no wealth = suspended). Housing (pop cap) first. Roads are instant and free today, buildings are timed and paid.
 - Trade (land and sea): road network graph, caravan spawn (pop, wealth, upgrades), weighted random target selection, wealth generated at stops for home and visited settlement, caravanserai cap. Sea trade lanes included.
 
 ## Order
@@ -26,7 +26,12 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
    - b. [DONE, untested] Daily economy tick: base land output, effective output, wealth, tax, consumption, growth. Per-player `world.player_states[player]` (`world_player_state`: treasury, income, expenses, net_change; GDO below the struct; deposit-only treasury), `tax_rates` signed, `settlement_finances`; GDO: `base_land_output`, `local_wealth`, `tax_rate`, `finance_*`. Territory `pressure` kept (used by expansion). To check: spawn starvation (500 peasants vs one tile), stockpile behavior.
    - c. [DONE, untested] Set-tax command `SET_SETTLEMENT_TAX_RATE {settlement, tax_rate}`: owner only, within `tax_rate_min` 0 / `tax_rate_max` 10 (game parameters; negative = future investment). Slider next to local wealth in the settlement inspector, negative blue / positive yellow, owned only.
    - d. [DONE, untested] UI: treasury readout, calendar, wealth / population rows (see task B notes).
-3-4. Buildings, trade: not broken down yet.
+3. Buildings (on workers; see Buildings design + decisions):
+   - a. Settlement building data: definition table (union: Upgrade stub / Building multiplied), per-settlement counts, GDO, Barracks effect on troop max / training rate. Not started.
+   - b. Settlement construction worker (in-settlement, `BUILD_SETTLEMENT_BUILDING`, data = building type): command, daily financing, stall, job accounting. Not started.
+   - c. Found-settlement worker (on-map, `FOUND_SETTLEMENT`, data = target location + colonist count): moves to the spot, founds a village, else returns home and rejoins the population. Not started.
+   - d. Client UI: bigger inspection panel over the old action bar, action bar becomes bottom-right action panel (RTS style), "Construction" action switches the inspection panel to the settlement's constructions (levels / counts + ongoing projects). Not started.
+4. Trade: not broken down yet.
 
 ## Decisions
 
@@ -67,6 +72,8 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Buildings design (proposed, awaiting user answers)
 
+Direction (user, 2026-10-21): settlement construction runs on worker entities (formerly builders; generalized to bounded-life civilian processes, design grows from real uses, no own work unit), plus a settlement-specific upgrades / buildings mechanic. First application: local troops max and training rates. The "project slot / daily tick pays cost" mechanics below are superseded where workers cover them.
+
 - First building: Barracks (3 of the doc: 5 days, 500 wealth, +10 men-at-arms and +5 horsemen capacity per level). Goal is a general building system; mechanics iterate later. Housing deferred (pop cap meaning unclear in the consumption model).
 - Definitions: constexpr table in `game_parameters` (build days, cost, max level, effect params).
 - Settlement state: level per building type + one construction project slot (type, days done); GDO.
@@ -74,7 +81,23 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 - Command `BUILD_BUILDING {settlement, building_type}`: owner only, no running project, below max level.
 - Troop caps: `settlement_troop_max` = levels x capacity per type; per-mille parameters removed; levy max stays peasants - 10.
 - UI: Buildings section in the inspector (levels, project progress row) + Build actions in the settlement action bar.
-- Questions for the user: (1) knights cap 0 until a Keep exists? (2) starting settlement gets 1 free Barracks level? (3) one project at a time vs queue? (4) keep recruitment +2 per type per day global for now? (5) split buildings into `settlement_buildings` unit file?
+- Answers (user, 2026-10-21): knights cap 0 until a Keep exists (yes); no free starting Barracks (maybe some levies raisable immediately / uncapped, irrelevant for now); no project queue: any number of constructions in parallel as long as they do not conflict (two upgrades of the same building cannot run in parallel; new instances of a building can). Every active construction costs per day; short on manpower / resources = stalls. Barracks sets troop max and training rates; values are placeholders. No separate unit file.
+- Supersedes above: "one construction project slot" and "level per building type".
+- Building storage: every building type is a per-settlement "settlement building" entry with level / count starting at 0. Two kinds: unique (upgraded to a max level: keep, walls, trade center) and multiplied (count grows: housing, barracks, storage). Alpha scope now: multiplied only (barracks, housing). No on-map buildings for now (outside roads).
+- Construction manpower: a financed project is a "job" that takes workers out of the peasant pool for as long as it is financed. They still count as settlement population (consumption, growth) exactly like peasants. Financing: money moves treasury -> local wealth as the workers are paid. Open: fixed wealth / day per project vs a player slider.
+- Financing: fixed wealth / day per project (from the definition), treasury -> local wealth as workers are paid; cost multipliers later. Unfinanced = stalls, workers return to peasants. Project workers leave base land output but count in consumption / growth. Population categories for Alpha: peasants, workers, soldiers (general job system later maybe).
+- No generic start-project command: two concrete operations, found settlement (on-map worker) and settlement construction (in-settlement worker). Shared only: worker entity + work type, separate logic in the worker update system (`world_system_worker_construction`).
+- Parallel rule: several Building units of a type can be built in parallel; Upgrades of one unique building cannot.
+- Working rule (user): no game-design concerns until said so; temporary broken mechanics are fine; major systems first.
+
+## Peer brief (task 3a)
+
+- Goal: settlement building data, designed with the user (exact design matters). No worker, command, daily financing or UI.
+- Scope: definition table in game parameters (`game_parameters.h`); each entry carries everything a building may need (name, cost / day, days, max, effect params); internal union: Upgrade (stub: unique, levels, effects TBD) vs Building (multiplied, units, parallel). First entries: Barracks, Housing (placeholder values; housing no effect yet). Per-settlement count array by building type, zero-init, reset on slot reuse, mutated through entity helpers (`world_sim_settlement.h`). GDO exposing counts. Barracks count drives settlement troop max + training rate, replacing the per-mille parameters; knights cap 0 until a Keep exists; levy max rule unchanged.
+- Imprints: chain for `include/game_common/match/world`, `src/game_common/world_sim` (+ settlements folder); notes in `src/game_common/world_sim/.ai_imprint/`.
+- Decisions: see Decisions section above (Buildings design answers, building storage, parallel rule). No game-design concerns; values are placeholders; temporary broken mechanics fine.
+- Open: how Upgrade stub is shaped; where training rate lives; wire / GDO format for the count array.
+- Done: compiles by reading (no builds run by agent), user reviews design.
 
 ## Current state
 

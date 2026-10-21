@@ -171,23 +171,29 @@ void world_system_economy_daily_tick(match_world_state& world)
     }
 }
 
-// Trains peasants into soldiers of a type (up to GAME_PARAMETERS.troop_growth_per_day), limited by the lower of its ceiling and max applied to the
-// total (home + raised), and by the peasants above the minimum. Never removes troops.
-static void train_troop(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 ceiling, ui16 max)
+// Daily training of a troop type: every duration_days days, trains up to the type's amount of peasants into soldiers, limited by the ceiling (already capped
+// by max) applied to the total (home + raised), and by the peasants above the minimum. Never removes troops.
+// A training that finds no room or no peasants is skipped, the progress resets anyway.
+static void train_troop(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 ceiling)
 {
     settlement_population& population = world.entities->settlements.populations[settlement_index];
+    settlement_troop_training& training = population.troop_training[troop_type];
+
+    training.progress_days++;
+    if (training.progress_days < (training.duration_days > 0 ? training.duration_days : 1)) return;
+    training.progress_days = 0;
+
     ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
     ui32 owned = (ui32)troop_count_field(population.home, troop_type) + troop_count_field(population.raised, troop_type);
-    ui32 limit = ia_min(ceiling, max);
-    ui32 room = owned < limit ? limit - owned : 0;
+    ui32 room = owned < ceiling ? ceiling - owned : 0;
     ui32 available = population.peasants > minLeft ? population.peasants - minLeft : 0;
-    ui32 trained = ia_min(ia_min(room, available), GAME_PARAMETERS.troop_growth_per_day);
+    ui32 trained = ia_min(ia_min(room, available), (ui32)training.amount);
 
     settlement_train_soldiers(world, settlement_index, troop_type, trained);
 }
 
-// Local troop pool growth, daily: each troop type gains troop_growth_per_day while home + raised is below its effective ceiling,trained from peasants (1:1).
-// Only while peasants stay above raise_min_population_left. Never reduces counts. The total population is unchanged.
+// Local troop pool growth, daily: each troop type is trained from peasants (1:1) following the settlement's training values, while home + raised is below
+// its effective ceiling. Only while peasants stay above raise_min_population_left. Never reduces counts. The total population is unchanged.
 void world_system_economy_troop_growth(match_world_state& world)
 {
     if (!world_is_daily_tick(world)) return;
@@ -201,10 +207,29 @@ void world_system_economy_troop_growth(match_world_state& world)
         settlement_population& population = settlements.populations[settlementIndex];
         army_troop_count ceilings = settlement_troop_effective_ceilings(population, settlements.troop_ceilings[settlementIndex]);
 
-        army_troop_count max = settlement_troop_max(population);
+        train_troop(world, settlementIndex, TROOP_TYPE_MEN_AT_ARMS, ceilings.men_at_arms);
+        train_troop(world, settlementIndex, TROOP_TYPE_HORSEMEN, ceilings.horsemen);
+        train_troop(world, settlementIndex, TROOP_TYPE_KNIGHTS, ceilings.knights);
+    }
+}
 
-        train_troop(world, settlementIndex, TROOP_TYPE_MEN_AT_ARMS, ceilings.men_at_arms, max.men_at_arms);
-        train_troop(world, settlementIndex, TROOP_TYPE_HORSEMEN, ceilings.horsemen, max.horsemen);
-        train_troop(world, settlementIndex, TROOP_TYPE_KNIGHTS, ceilings.knights, max.knights);
+void world_system_settlement_buildings_daily_tick(match_world_state& world)
+{
+    if (!world_is_daily_tick(world)) return;
+
+    world_entity_settlements& settlements = world.entities->settlements;
+
+    for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+    {
+        if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+        for (ui8 buildingType = 0; buildingType < SETTLEMENT_BUILDING_TYPE_COUNT; buildingType++)
+        {
+            auto onDailyTick = SETTLEMENT_BUILDING_TABLE[buildingType].events.on_daily_tick;
+            if (onDailyTick && settlements.building_count(settlementIndex, buildingType) > 0)
+            {
+                onDailyTick(world, settlements.guids[settlementIndex]);
+            }
+        }
     }
 }
