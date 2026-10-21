@@ -20,7 +20,7 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 // Road crew: starts at the first non-road tile of the path (road tiles are skipped for free), walks to the tile and builds it there, one tile at a time.
 // Building a tile takes GAME_PARAMETERS.road_build_ticks_per_cost ticks per point of its travel cost without a road. The crew is paid for a day (GAME_PARAMETERS.road_crew_cost_per_day, treasury -> settlement's
 // local wealth) at its first tick and then on each daily tick; it only works while the current day is paid. Returns true when the project is finished:
-// the destination is reached, or no further progress is possible (unreachable, or the territory ends).
+// the destination is reached, or no further progress is possible (unreachable).
 static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_index)
 {
     world_entity_workers& workers = world.entities->workers;
@@ -37,7 +37,6 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
 
     path_params params = {};
     params.passable_terrain = PATH_TERRAIN_LAND;
-    params.within_settlement_territory = workers.origin_entity[worker_index];
 
     // Find the next tile to build, skipping the ones that are already roads.
     world_location next;
@@ -66,7 +65,15 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     if (location != next) return !world_entity_follow_path(world, movement, location);
 
     // On the tile: the first tick sets the build time (the tile is not a road, so this is its terrain cost), then the tile is built when it runs out.
-    if (data.ticks_left == 0) data.ticks_left = (ui16)(ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)) * GAME_PARAMETERS.road_build_ticks_per_cost);
+    // Tiles not owned by the settlement's player (unowned, or another player's) take road_build_foreign_multiplier times longer.
+    if (data.ticks_left == 0)
+    {
+        data.ticks_left = (ui16)(ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)) * GAME_PARAMETERS.road_build_ticks_per_cost);
+        ui16 tileOwner = world.terrain->regions[regionIndex].owners[tileIndex];
+        match_player_id crewOwner = world.entities->settlements.owners[workers.origin_entity[worker_index].get_index()];
+        if (tileOwner == world_terrain::UNOWNED_TILE || world.entities->settlements.owners[tileOwner] != crewOwner)
+            data.ticks_left *= GAME_PARAMETERS.road_build_foreign_multiplier;
+    }
     data.ticks_left--;
     if (data.ticks_left == 0)
     {

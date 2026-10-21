@@ -1,5 +1,5 @@
 // Building roads from a settlement. The player picks an origin (the settlement itself, or a road tile in its territory; the settlement
-// by default) and a destination (any tile: the server builds up to the edge of the settlement's territory).
+// by default) and a destination (any tile: building outside the player's territory takes longer).
 // While the mouse is over the map, the path from origin to hovered tile is previewed, red if the order would be refused.
 // Stays active after an order, so several roads can be built in a row. Escape leaves.
 
@@ -48,8 +48,7 @@ export class RoadBuilding extends Core.Mode
             return;
         }
 
-        // The preview is limited to the settlement's territory, as the build will be.
-        const points = Backend.query_path(this.origin, hovered, this.settlement_guid);
+        const points = Backend.query_path(this.origin, hovered);
         const valid = points.length > 0 && is_command_valid("BUILD_ROAD", { settlement: this.settlement_guid, origin: this.origin, destination: hovered });
         Render.RENDER_CONFIG.path_preview = { start: this.origin, points, valid };
     }
