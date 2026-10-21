@@ -1,5 +1,5 @@
 // Inspection section: basics. Text rows for what any entity can show: its owner and its location, when it has them
-// (or when the entity it is tied to, its origin_entity, has them: builders).
+// (or when the entity it is tied to, its origin_entity, has them: workers).
 
 import { query_entity, type EntityData } from "../../gdo.js"
 import type { PanelRow } from "./ui_element_properties_panel.js"

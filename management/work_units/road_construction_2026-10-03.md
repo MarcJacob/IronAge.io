@@ -92,7 +92,7 @@ separate work units, planned from the Alpha design doc.
 
 - Proximity recalc now uses `world_tile_move_cost` (fixed). Unverified: road build flags tiles for proximity recalc. Possibly unused `tileTerrain` at world_system_economy.cpp:296.
 - `BUILD_ROAD` origin == destination must be invalid: user adds it to the validity check himself.
-- Builder slots use `MICRO_ENTITIES_PER_TYPE_PER_REGION` (32/region); make dynamic eventually. `match_get_required_mem` does not count builders (32 MiB headroom covers it for now).
+- Worker slots use `MICRO_ENTITIES_PER_TYPE_PER_REGION` (32/region); make dynamic eventually. `match_get_required_mem` does not count builders (32 MiB headroom covers it for now).
 - Nothing of task 5 committed yet (user's call).
 - Diagonals can cut between two blocked tiles.
 - Heuristic assumes min tile cost 1 (wide search on plains); improve if previews get slow.

@@ -20,7 +20,7 @@ enum ENTITY_TYPE : ui8
 
 	MICRO_TYPES_START,
 	ARMY = MICRO_TYPES_START,
-	BUILDER,
+	WORKER,
 	BATTLE,
 	// ...
 };
@@ -291,36 +291,56 @@ GAME_DATA_OBJECT_DEF_END()
 
 // Small byte buffer for the data a build type keeps about its project. Its layout is entirely defined by the build type's logic.
 static constexpr ui8 WORLD_BUILD_ACTION_DATA_SIZE = 16;
-struct world_build_action_data
+struct world_worker_action_data
 {
 	alignas(4) ui8 bytes[WORLD_BUILD_ACTION_DATA_SIZE]; // Aligned so build types can overlay structures on it.
 };
 
-// Builders are the entities carrying out construction projects (roads, buildings...). Each is tied to an origin entity, and destroyed when it goes away.
-struct world_entity_builders : public world_entity_container
+// Every archetype of work project a worker can be assigned to.
+enum class WORK_TYPE : ui16
+{
+    FOUND_SETTLEMENT, // Worker is on the map and goes to found a settlement at specific.
+    BUILD_ROAD, // Worker is on the map and builds a road from origin to destination.
+    BUILD_SETTLEMENT_BUILDING, // Worker is inside the settlement and builds a building / upgrade.
+
+    WORK_TYPE_COUNT,
+};
+
+// Layout of the action data of a road project.
+struct build_road_data
+{
+    world_location start; // Tile the road starts from.
+    world_location head; // Last tile built, which is where the road continues from.
+    world_location destination; // Tile the road is going towards.
+};
+static_assert(sizeof(build_road_data) <= WORLD_BUILD_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
+
+// Workers are the entities carrying out work projects (roads & building construction, colonization...). 
+// Each is tied to an origin entity, and destroyed when it goes away / is done.
+struct world_entity_workers : public world_entity_container
 {
 	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the build type. Locates the builder.
-	ui16* build_types; // What is being built (BUILD_TYPE, see world_sim.h).
-	ui32* build_times; // Ticks since the project started. How the build type uses it is up to it.
-	world_build_action_data* action_data;
+	WORK_TYPE* work_types; // What is being built.
+	ui32* work_times; // Ticks since the project started. How the build type uses it is up to it.
+	world_worker_action_data* action_data;
 
 	// Consolidated representation of a single builder for viewing purposes.
 	struct single
 	{
 		entity_guid origin_entity;
-		ui16 build_type;
-		ui32 build_time;
-		world_build_action_data action_data;
+		WORK_TYPE work_type;
+		ui32 work_time;
+		world_worker_action_data action_data;
 	};
 };
 
-using world_entity_builder = world_entity_builders::single;
+using world_entity_worker = world_entity_workers::single;
 
 // action_data is left out: it is a byte buffer, which has no property type yet.
-GAME_DATA_OBJECT_DEF_BEGIN(world_entity_builder)
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_worker)
 	GAME_DATA_PROPERTY(origin_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-	GAME_DATA_PROPERTY(build_type, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY(build_time, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(work_type, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(work_time, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 // A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
@@ -371,7 +391,7 @@ struct world_entities
 {
     world_entity_settlements settlements;
     world_entity_armies armies;
-    world_entity_builders builders;
+    world_entity_workers workers;
     world_entity_battles battles;
 };
 
@@ -385,7 +405,7 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
 
-bool world_entity_query_builder(const match_world_state& world, entity_guid entity, world_entity_builders::single& out_state);
+bool world_entity_query_worker(const match_world_state& world, entity_guid entity, world_entity_workers::single& out_state);
 
 bool world_entity_query_battle(const match_world_state& world, entity_guid entity, world_entity_battles::single& out_state);
 

@@ -3,7 +3,10 @@
 #include "game_common/match/commands.h"
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_entities.h"
+
 #include "world_sim/world_sim.h"
+
+#include "world_sim/workers/world_sim_entity_worker.h"
 #include "world_sim/settlements/world_sim_entity_settlement.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
@@ -331,8 +334,8 @@ bool command_build_road_validity_check(const match_world_state& world, match_pla
 		if (!originUsable && command_add_path_error(feedback, COMMAND_INVALID_PATH_ORIGIN_INVALID)) return false;
 	}
 
-	const world_entity_builders& builders = world.entities->builders;
-	if (builders.active_count >= builders.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+	const world_entity_workers& workers = world.entities->workers;
+	if (workers.active_count >= workers.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -346,18 +349,18 @@ void command_build_road_apply(match_world_state& world, match_player_id player, 
 	const command_data_build_road& command = command_header.get_command_data<command_data_build_road>();
 
     // Initialize builder entity to build a road from origin to destination.
-	world_entity_builders::single builder = {};
-	builder.origin_entity = command.settlement;
-	builder.build_type = BUILD_TYPE_ROAD;
+	world_entity_workers::single worker = {};
+	worker.origin_entity = command.settlement;
+	worker.work_type = WORK_TYPE::BUILD_ROAD;
     
     // Init payload. @TODO: Could probably just init head on tick 0 of the build logic...
-	*(build_road_data*)builder.action_data.bytes = {
+	*(build_road_data*)worker.action_data.bytes = {
         .start = command.origin,
         .head = command.origin,
         .destination = command.destination 
     };
 
-	world_spawn_builder(world, builder);
+	world_spawn_worker(world, worker);
 }
 
 // SET SETTLEMENT TROOP CEILING

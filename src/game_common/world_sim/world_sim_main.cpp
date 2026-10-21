@@ -19,8 +19,8 @@
 
 #include "battles/world_sim_entity_battle.cpp"
 
-#include "builders/world_sim_entity_builder.cpp"
-#include "builders/world_system_builder_construction.cpp"
+#include "workers/world_sim_entity_worker.cpp"
+#include "workers/world_system_worker_construction.cpp"
 
 #include "world_system_movement.cpp"
 #include "world_pathing.cpp"
@@ -41,8 +41,8 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::ARMY:
 		container = &world.entities->armies;
 		break;
-	case ENTITY_TYPE::BUILDER:
-		container = &world.entities->builders;
+	case ENTITY_TYPE::WORKER:
+		container = &world.entities->workers;
 		break;
 	case ENTITY_TYPE::BATTLE:
 		container = &world.entities->battles;
@@ -66,9 +66,9 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 		return world.entities->settlements.locations[entity.get_index()];
 	case ENTITY_TYPE::ARMY:
 		return world.entities->armies.locations[entity.get_index()];
-	case ENTITY_TYPE::BUILDER:
-		// Builders have no location of their own for now: they are where their origin is.
-		return world_entity_get_location(world, world.entities->builders.origin_entity[entity.get_index()]);
+	case ENTITY_TYPE::WORKER:
+		// Workers have no location of their own for now: they are where their origin is.
+		return world_entity_get_location(world, world.entities->workers.origin_entity[entity.get_index()]);
 	case ENTITY_TYPE::BATTLE:
 		return world.entities->battles.states[entity.get_index()].location;
 	default:
@@ -125,7 +125,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 
 		if (!world_alloc_settlements(*newWorld, memory, settlement_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_armies(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
-		if (!world_alloc_builders(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_workers(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_battles(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 

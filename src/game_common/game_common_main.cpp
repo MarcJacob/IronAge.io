@@ -39,7 +39,7 @@ constexpr ui64 match_get_required_mem(game_match_start_params& params)
         + settlementCount * sizeof(world_entity_settlements::single) // Settlements.
         + microEntityCount * sizeof(world_entity_armies::single) // Armies.
         + microEntityCount * sizeof(world_entity_battles::single) // Battles.
-        + microEntityCount * sizeof(world_entity_builders::single) // Builders.
+        + microEntityCount * sizeof(world_entity_workers::single) // Workers.
         + KiB(4); // Margin for the alignment padding of the ~30 allocations.
 }
 

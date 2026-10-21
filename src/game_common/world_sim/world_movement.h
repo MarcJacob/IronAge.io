@@ -4,6 +4,7 @@
 #define WORLD_MOVEMENT_INCLUDED
 
 #include "core.h"
+
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_pathing.h"
 

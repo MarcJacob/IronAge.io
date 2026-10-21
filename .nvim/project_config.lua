@@ -12,8 +12,6 @@ vim.env.MYVIMRC = debug.getinfo(1, "S").source:sub(2)
 -- Config functions, called at the end of the file if IronAge dev env was correctly setup.
 
 local run_command_term = function(cmd, auto_close, switch_modes)
-    print("Running command terminal:" .. cmd)
-
     local buf = vim.api.nvim_create_buf(false, true)
     vim.cmd("rightbelow vsplit")
     local win = vim.api.nvim_get_current_win()

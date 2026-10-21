@@ -8,10 +8,10 @@ Unity build: *world_sim_main.cpp* includes every implementation file of this fol
 *world_sim.h* is the cross-theme API: system declarations, cross-entity functions, shared constants and inline helpers. It includes the entity headers.
 
 - A **system** is a function called once per tick from `world_state_tick`, which holds the tick order (it matters for the result: do not reorder).
-- **Entity folders**: each entity type has a subfolder (settlements, armies, battles, builders) with *world_sim_<entity>.h* and *world_sim_<entity>.cpp*.
+- **Entity folders**: each entity type has a subfolder (settlements, armies, battles, workers) with *world_sim_<entity>.h* and *world_sim_<entity>.cpp*.
 	- The cpp holds the entity's alloc, spawn, destroy, query and commonly used functions that are not tied to a particular system.
 	- The header declares them, plus constants / helpers shared by several themes.
-- **Systems** are in *world_system_<theme>.cpp*, placed in the folder of the entity they mostly act on (battle system is in armies, construction in builders, territory and population in settlements).
+- **Systems** are in *world_system_<theme>.cpp*, placed in the folder of the entity they mostly act on (battle system is in armies, construction in workers, territory and population in settlements).
 - Files at this level: cross-entity functions (*world_entities.cpp*), world init and tick (*world_sim_main.cpp*), terrain generation (*world_terrain.cpp*), pathfinding (*world_pathing.cpp*), movement (*world_system_movement.cpp*, *world_movement.h*).
 - Helpers or constants used by one theme stay in its file.
 - Functions used by their own file only are `static`.

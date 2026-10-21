@@ -3,7 +3,7 @@
 #include "game_common/match/world/world.h"
 
 #include "../world_sim.h"
-#include "../builders/world_sim_entity_builder.h"
+#include "world_sim_entity_worker.h"
 
 // Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
 static void world_tile_set_road(match_world_state& world, world_location location)
@@ -18,16 +18,16 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 
 // Builds one more tile of the road, within the origin settlement's territory. Returns true when the project is finished:
 // the destination is reached, or no further progress is possible (unreachable, or the territory ends).
-static bool builder_tick_build_road(match_world_state& world, ui16 builder_index)
+static bool worker_logic_build_road_tick(match_world_state& world, ui16 builder_index)
 {
-    world_entity_builders& builders = world.entities->builders;
-    build_road_data& data = *(build_road_data*)builders.action_data[builder_index].bytes;
+    world_entity_workers& workers = world.entities->workers;
+    build_road_data& data = *(build_road_data*)workers.action_data[builder_index].bytes;
 
     if (data.head == data.destination) return true;
 
     path_params params = {};
     params.passable_terrain = PATH_TERRAIN_LAND;
-    params.within_settlement_territory = builders.origin_entity[builder_index];
+    params.within_settlement_territory = workers.origin_entity[builder_index];
 
     // Recalculated every tick, like movement. To be replaced by the path cache.
     path_result result;
@@ -41,21 +41,22 @@ static bool builder_tick_build_road(match_world_state& world, ui16 builder_index
 
 void world_system_construction(match_world_state& world)
 {
-    world_entity_builders& builders = world.entities->builders;
+    world_entity_workers& workers = world.entities->workers;
 
-    for (ui16 builderIndex = 0; builderIndex < builders.max_count; builderIndex++)
+    for (ui16 builderIndex = 0; builderIndex < workers.max_count; builderIndex++)
     {
-        if (!builders.guids[builderIndex].is_valid()) continue;
+        if (!workers.guids[builderIndex].is_valid()) continue;
 
         // A project can't go on without the entity it is tied to.
-        bool finished = !world_entity_is_valid(world, builders.origin_entity[builderIndex]);
+        bool finished = !world_entity_is_valid(world, workers.origin_entity[builderIndex]);
 
         if (!finished)
         {
-            switch ((BUILD_TYPE)builders.build_types[builderIndex])
+            // @TODO(Marc): Similarly to input command, have an application logic function for each work type.
+            switch ((WORK_TYPE)workers.work_types[builderIndex])
             {
-            case BUILD_TYPE_ROAD:
-                finished = builder_tick_build_road(world, builderIndex);
+            case WORK_TYPE::BUILD_ROAD:
+                finished = worker_logic_build_road_tick(world, builderIndex);
                 break;
             default:
                 finished = true; // Unknown build type.
@@ -65,11 +66,11 @@ void world_system_construction(match_world_state& world)
 
         if (finished)
         {
-            world_destroy_builder(world, builders.guids[builderIndex]);
+            world_destroy_worker(world, workers.guids[builderIndex]);
             continue;
         }
 
         // Increment Time spent working on the project, so it is 0 during the first tick.
-        builders.build_times[builderIndex]++;
+        workers.work_times[builderIndex]++;
     }
 }

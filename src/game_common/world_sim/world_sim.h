@@ -65,7 +65,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 
 // SYSTEMS & HELPERS
 
-// Advances all construction projects (builders) by one tick, destroying the finished ones.
+// Advances all construction projects (workers) by one tick, destroying the finished ones.
 void world_system_construction(match_world_state& world);
 
 // Makes an entity stop where it is, dropping its path and the step it was making.

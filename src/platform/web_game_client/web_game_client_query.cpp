@@ -12,7 +12,7 @@ static constexpr ui32 ENTITY_GDO_BUFFER_SIZE = 1024; // Must fit the largest ent
 static ui8 ENTITY_GDO_BUFFER[ENTITY_GDO_BUFFER_SIZE];
 static_assert(sizeof(gdo_world_entity_settlement) <= ENTITY_GDO_BUFFER_SIZE, "Settlement GDO does not fit ENTITY_GDO_BUFFER_SIZE.");
 static_assert(sizeof(gdo_world_entity_army) <= ENTITY_GDO_BUFFER_SIZE, "Army GDO does not fit ENTITY_GDO_BUFFER_SIZE.");
-static_assert(sizeof(gdo_world_entity_builder) <= ENTITY_GDO_BUFFER_SIZE, "Builder GDO does not fit ENTITY_GDO_BUFFER_SIZE.");
+static_assert(sizeof(gdo_world_entity_worker) <= ENTITY_GDO_BUFFER_SIZE, "Builder GDO does not fit ENTITY_GDO_BUFFER_SIZE.");
 static_assert(sizeof(gdo_world_entity_battle) <= ENTITY_GDO_BUFFER_SIZE, "Battle GDO does not fit ENTITY_GDO_BUFFER_SIZE.");
 
 WASM_EXPORT ui8* client_get_entity_gdo_buffer_offset()

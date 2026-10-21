@@ -17,7 +17,7 @@ Game common + client. Strip economy back, tidy army / battle, restructure world 
 - World sim system files go into proper subfolders.
 - Troop pools / ceilings / raising: fate not decided (settlement-army link). Audit to report.
 
-- Entity folders under world_sim: settlements, armies, battles, builders; each with header + cpp (spawn / destroy / alloc / query / shared helpers). Systems live in the folder of the entity they mostly act on, except construction moves to builders/.
+- Entity folders under world_sim: settlements, armies, battles, workers; each with header + cpp (spawn / destroy / alloc / query / shared helpers). Systems live in the folder of the entity they mostly act on, except construction moves to builders/.
 
 ## Tasks
 

@@ -11,7 +11,7 @@ Read first: *src/game_common/game_common.imprint.md*, *src/game_common/world_sim
 ## Where things are
 
 - State: *include/game_common/match/world.h*: tiles / terrain and the entity containers
-  (settlements, caravans, armies, builders, battles), `match_world_state`.
+  (settlements, caravans, armies, workers, battles), `match_world_state`.
 - Simulation: *src/game_common/world_sim/*. A mechanic is a **system**: a
   `world_system_<what>` function called once per tick, in a fixed order, from
   `world_state_tick` (*world_sim_main.cpp*). Declarations and shared constants are in *world_sim.h*.
