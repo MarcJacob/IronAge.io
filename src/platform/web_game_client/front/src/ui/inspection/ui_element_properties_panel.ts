@@ -1,4 +1,4 @@
-// UI element: the entity properties panel, left of the bottom action bar (container in index.html, content built here).
+// UI element: the entity properties panel (container in index.html, content built here).
 // Shows general information about what is selected, as a title and an ordered list of rows. A row is one reusable element
 // (gauge: ui_element_gauge.ts, text: ui_element_text_row.ts, value with delta and hover tooltip: ui_element_value_row.ts). Pure display: rows only emit their own callbacks.
 // A mode keeps its callbacks, submits the state with submit_properties_panel (every frame is fine: the panel updates in place) and submits null to clear it.

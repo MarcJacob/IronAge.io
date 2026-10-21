@@ -24,10 +24,10 @@ _ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;
 static constexpr ui64 CLIENT_MEMORY_SIZE = MiB(256); // @TEMP(Marc): Generous amount of memory.
 ui8 CLIENT_MEMORY_BLOCK[CLIENT_MEMORY_SIZE];
 
-
 // Platform implementation of the core assertion functions: no way to report a message here, so just trap.
 void ASSERT_EXIT_FUNC() { __builtin_trap(); }
 void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...) { __builtin_trap(); }
+
 WASM_EXPORT bool web_client_start()
 {
 	WEB_CLIENT = {};

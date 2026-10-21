@@ -78,6 +78,7 @@ struct GAME_DATA_PROP_DEF
     const char* name;
     GAME_DATA_PROP_TYPE type;
     ui32 offset;
+    ui16 count; // Number of elements. If 0 or 1, is single element. If above 1, is array.
 };
 
 // "Header" structure for any type of underlying game data object.
@@ -129,46 +130,47 @@ struct game_data_object
     // Returns a reference to the value of the given property, interpreted as the given type.
     // @TODO(Marc): Add some security in there. For now we assume the property exists and has the correct offset, AND correct underlying type.
     template<typename ValType>
-    inline ValType& access_property_val(const GAME_DATA_PROP_DEF& prop)
+    inline ValType& access_property_val(const GAME_DATA_PROP_DEF& prop, ui16 index = 0)
     {
         ASSERT_MSG(sizeof(ValType) == get_data_prop_size(prop.type), "Invalid access type to property. Access Type size = %d, Property Value size = %d", sizeof(ValType), get_data_prop_size(prop.type));
-
-        ui8* dataPtr = (ui8*)this + sizeof(game_data_object) + prop.offset; // With a standard layout, the data lives right after the structure data.
+ 
+        // With a standard layout, the data lives right after the structure data.
+        ui8* dataPtr = (ui8*)this + sizeof(game_data_object) + prop.offset + index * get_data_prop_size(prop.type);
         return *(ValType*)dataPtr;
     }
 
     // Returns a reference to the value of the given property, interpreted as the given type.
     template<typename ValType>
-    inline bool get_property_def(const ia_string_view& prop_name, ValType& out_val)
+    inline bool get_property_def(const ia_string_view& prop_name, ValType& out_val, ui16 index = 0)
     {
         const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
         if (propDef == nullptr) return false;
 
-        out_val = access_property_val<ValType>(*propDef);
+        out_val = access_property_val<ValType>(*propDef, index);
         return true;
     }
 
     // Outputs the value associated with the given property index, interpreted with the given type.
     // Returns whether the property existed.
     template<typename ValType>
-    inline bool get_property_val(ui16 prop_index, ValType& out_val)
+    inline bool get_property_val(ui16 prop_index, ValType& out_val, ui16 index = 0)
     {
         const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_index);
         if (propDef == nullptr) return false;
 
-        out_val = access_property_val<ValType>(*propDef);
+        out_val = access_property_val<ValType>(*propDef, index);
         return true;
     }
 
     // Sets the internal value associated with the given property index.
     // Returns whether the property did exist and was set.
     template<typename ValType>
-    inline bool set_property_val(ui16 prop_index, ValType value)
+    inline bool set_property_val(ui16 prop_index, ValType value, ui16 index = 0)
     {
         const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_index);
         if (propDef == nullptr) return false;
 
-        ValType& val = access_property_val<ValType>(*propDef);
+        ValType& val = access_property_val<ValType>(*propDef, index);
         val = value;
         return true;
     }
@@ -176,12 +178,12 @@ struct game_data_object
     // Sets the internal value associated with the given property index.
     // Returns whether the property did exist and was set.
     template<typename ValType>
-    inline bool set_property_val(const ia_string_view& prop_name, ValType value)
+    inline bool set_property_val(const ia_string_view& prop_name, ValType value, ui16 index = 0)
     {
         const GAME_DATA_PROP_DEF* propDef = get_property_def(prop_name);
         if (propDef == nullptr) return false;
 
-        ValType& val = access_property_val<ValType>(*propDef);
+        ValType& val = access_property_val<ValType>(*propDef, index);
         val = value;
         return true;
     }
@@ -201,11 +203,14 @@ struct game_data_object
             {}
 
 #define GAME_DATA_PROPERTY(PropName, PropType) \
-            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, PropName) };
+            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, PropName), 1 };
 
 // Same as GAME_DATA_PROPERTY for a value reached through a member path (e.g. influence.bounds_min). PropName is the flat name of the property.
 #define GAME_DATA_PROPERTY_PATH(PropName, MemberPath, PropType) \
-            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, MemberPath) };
+            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, MemberPath), 1 };
+
+#define GAME_DATA_PROPERTY_PATH_ARRAY(PropName, MemberPath, PropType, ArraySize) \
+            GAME_DATA_PROP_DEF PropName = { #PropName, PropType, __builtin_offsetof(_StructType, MemberPath), ArraySize };
 
 #define GAME_DATA_OBJECT_DEF_END() \
         }; \

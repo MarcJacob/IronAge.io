@@ -178,6 +178,12 @@ struct settlement_finances
 	ui32 excess; // Wealth available after tax that was not consumed (stays as local wealth).
 };
 
+// Buildings-related data for a settlement.
+struct settlement_buildings
+{
+    ui16 building_counts[SETTLEMENT_BUILDING_TYPE_COUNT]; // Building count for each type.
+};
+
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
@@ -193,8 +199,7 @@ struct world_entity_settlements : public world_entity_container
 	i8*                 tax_rates; // -100..100, % of local wealth moved to the owner's treasury each day. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
 	settlement_finances* finances; // Last day's figures.
 
-	ui16* building_counts; // max_count rows of SETTLEMENT_BUILDING_TYPE_COUNT counts (units per building type). Use building_count().
-	inline ui16& building_count(ui16 settlement_index, ui8 building_type) { return building_counts[settlement_index * SETTLEMENT_BUILDING_TYPE_COUNT + building_type]; }
+    settlement_buildings* buildings;
 
     struct territory
     {
@@ -216,11 +221,15 @@ struct world_entity_settlements : public world_entity_container
         ui64 founding_tick;
 
 		settlement_population population;
-        ui32 base_land_output;
+        
         ui32 local_wealth;
         i8 tax_rate;
         settlement_finances finances;
+
         territory territory;
+        ui32 base_land_output;
+
+        settlement_buildings buildings;
 
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
@@ -242,6 +251,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY(base_land_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(local_wealth, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
+
+    GAME_DATA_PROPERTY_PATH_ARRAY(building_counts, buildings.building_counts, GAME_DATA_PROP_TYPE::UI16, SETTLEMENT_BUILDING_TYPE_COUNT);
 
 	GAME_DATA_PROPERTY_PATH(finance_effective_output, finances.effective_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_income, finances.income, GAME_DATA_PROP_TYPE::UI32)
@@ -397,6 +408,9 @@ struct world_entity_workers : public world_entity_container
 	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the work type. Locates the worker.
 	WORK_TYPE* work_types; // What is being built.
 	ui32* work_times; // Ticks since the project started. How the work type uses it is up to it.
+
+    ui8* work_progress_ratios; // Progress indicator in range [0, 255] freely settable by worker logic.
+
 	world_worker_action_data* action_data;
 	world_location* locations; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
 	world_entity_movement* movements; // Movement state, used by work types that travel (like armies').
@@ -407,6 +421,9 @@ struct world_entity_workers : public world_entity_container
 		entity_guid origin_entity;
 		WORK_TYPE work_type;
 		ui32 work_time;
+
+        ui8 work_progress_ratio;
+
 		world_worker_action_data action_data;
 		world_location position;
 		world_entity_movement movement;

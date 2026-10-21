@@ -25,6 +25,8 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 	world.entities->workers.origin_entity[freeIndex] = start_state.origin_entity;
 	world.entities->workers.work_types[freeIndex] = start_state.work_type;
 	world.entities->workers.work_times[freeIndex] = start_state.work_time;
+    world.entities->workers.work_progress_ratios[freeIndex] = start_state.work_progress_ratio;
+
 	world.entities->workers.action_data[freeIndex] = start_state.action_data;
 
 	// Every worker starts at its origin. Moving work types take it from there (start_state.position / movement are not read).
@@ -60,6 +62,7 @@ bool world_entity_query_worker(const match_world_state& world, entity_guid entit
 		.origin_entity = workers.origin_entity[i],
 		.work_type = workers.work_types[i],
 		.work_time = workers.work_times[i],
+        .work_progress_ratio = workers.work_progress_ratios[i],
 		.action_data = workers.action_data[i],
 		.position = workers.locations[i],
 		.movement = workers.movements[i],
@@ -85,6 +88,9 @@ bool world_alloc_workers(match_world_state& world, mem_arena& memory, ui32 count
 
 	workers.work_times = memory.alloc<ui32>(count);
 	if (workers.work_times == nullptr) return false;
+
+    workers.work_progress_ratios = memory.alloc<ui8>(count);
+    if (workers.work_progress_ratios == nullptr) return false;
 
 	workers.action_data = memory.alloc<world_worker_action_data>(count);
 	if (workers.action_data == nullptr) return false;

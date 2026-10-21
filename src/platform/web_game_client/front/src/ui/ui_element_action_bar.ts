@@ -1,4 +1,4 @@
-// UI element: the bottom action bar (container in index.html, buttons built here). Shows the actions of the current mode.
+// UI element: the action bar (container in index.html, buttons built here). Shows the actions of the current mode.
 // A mode keeps its own full ActionBarState, submits it with submit_action_bar when it should be shown (entry, resume) and submits null to clear the bar.
 // Only generates signals: pressing a button calls the item's on_activate. Hotkeys are handled by the modes, the hotkey of an item is only shown.
 
@@ -43,7 +43,6 @@ export function submit_action_bar(state: ActionBarState | null): void
 
     barElement.replaceChildren();
     barElement.hidden = state === null;
-    hudElement.classList.toggle("has_bottom_bar", state !== null); // Makes room for the bar.
     if (state === null) return;
 
     for (const item of state.items)
@@ -53,8 +52,8 @@ export function submit_action_bar(state: ActionBarState | null): void
         button.disabled = item.state === 'unselectable';
         button.classList.toggle("selected", item.state === 'selected');
 
-        // Placeholder until the bar has named sections: items with a hotkey on the left, items without one on the right.
-        button.classList.toggle("bar_right", item.hotkey === undefined);
+        // Placeholder until the bar has named sections: items with a hotkey on the top, items without one on the bottom.
+        button.classList.toggle("bar_bottom", item.hotkey === undefined);
 
         button.addEventListener('click', () => { button.blur(); item.on_activate(); });
         barElement.appendChild(button);

@@ -223,10 +223,10 @@ void world_system_settlement_buildings_daily_tick(match_world_state& world)
     {
         if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-        for (ui8 buildingType = 0; buildingType < SETTLEMENT_BUILDING_TYPE_COUNT; buildingType++)
+        for (ui8 buildingTypeIndex = 0; buildingTypeIndex < SETTLEMENT_BUILDING_TYPE_COUNT; buildingTypeIndex++)
         {
-            auto onDailyTick = SETTLEMENT_BUILDING_TABLE[buildingType].events.on_daily_tick;
-            if (onDailyTick && settlements.building_count(settlementIndex, buildingType) > 0)
+            auto onDailyTick = SETTLEMENT_BUILDING_TABLE[buildingTypeIndex].events.on_daily_tick;
+            if (onDailyTick && settlements.buildings[settlementIndex].building_counts[buildingTypeIndex] > 0)
             {
                 onDailyTick(world, settlements.guids[settlementIndex]);
             }

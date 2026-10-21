@@ -40,11 +40,28 @@ body {
     display: none;
 }
 
+#game_hud_section_bottom {
+    position: absolute;
+    height: 24vh;
+    left: 12px;
+    right: 12px;
+    bottom: 20px;
+
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr; /* 25% 50% 25% width split */
+    column-gap: 12px;
+    align-items: stretch;
+    pointer-events: none;
+}
+
 /* Sized to its content but never beyond the container: wraps / scrolls instead of leaving the screen. */
 #game_hud_selected_panel {
     position: absolute;
     right: 12px;
-    bottom: 12px;
+    top: 12px;
+    bottom:auto;
+
     box-sizing: border-box;
     width: max-content;
     max-width: min(24rem, calc(100% - 24px));
@@ -59,27 +76,20 @@ body {
     pointer-events: auto;
 }
 
-/* Makes room for the action bar (matters on narrow screens, where they could overlap). */
-#game_hud.has_bottom_bar #game_hud_selected_panel {
-    bottom: 112px;
-}
-
-/* Action bar: actions of the selected settlement / army. Floating, centered, a third of the screen wide, buttons from the left.
-   Actions without a hotkey (committed actions) go to the right. */
+/* Action bar: actions of the selected settlement / army.
+   Actions without a hotkey (committed actions) go to the bottom. */
 #game_hud_action_bar {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 20px;
-    width: 33.333%;
-    min-width: 22rem;
-    max-width: calc(100% - 24px);
+
+    grid-column:3;
+    box-sizing: border-box;
+    min-width: 0;
+
     display: flex;
     justify-content: flex-start;
     align-items: stretch;
+    flex-direction: column;
     gap: 12px;
     box-sizing: border-box;
-    padding: 16px 20px;
     background: rgba(36, 39, 45, 0.9);
     border: 1px solid #c7cbd1;
     border-radius: 6px;
@@ -88,7 +98,7 @@ body {
 }
 
 #game_hud_action_bar button {
-    min-height: 3rem;
+    align-items: stretch;
     padding: 8px 18px;
     font-family: inherit;
     font-size: 1.1rem;
@@ -101,19 +111,17 @@ body {
     font-weight: bold;
 }
 
-#game_hud_action_bar .bar_right {
-    margin-left: auto;
+#game_hud_action_bar .bar_bottom {
+    margin-top: auto;
 }
 
 /* Entity properties panel: general info about the selection, floating just left of the action bar (same bottom, bar edge = 50% - half its width). */
 #game_hud_properties_panel {
-    position: absolute;
-    right: calc(50% + max(16.667%, 11rem) + 12px);
-    bottom: 20px;
+    grid-column: 2;
+
     box-sizing: border-box;
-    width: 18rem;
-    max-width: calc(50% - max(16.667%, 11rem) - 24px);
-    max-height: calc(100% - 40px);
+    min-width: 0;
+
     overflow: auto;
     padding: 10px 12px;
     background: rgba(36, 39, 45, 0.9);
@@ -126,6 +134,7 @@ body {
 #game_hud_properties_title {
     margin-bottom: 6px;
     font-weight: bold;
+    text-align: center;
 }
 
 .gauge {
@@ -260,10 +269,10 @@ body {
 #game_hud_calendar {
     position: absolute;
     top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 12px;
+    width: 18vw;
+
     box-sizing: border-box;
-    width: 14rem;
     padding: 6px 12px;
     background: rgba(36, 39, 45, 0.9);
     color: #e8eaed;
@@ -286,15 +295,12 @@ body {
     background: #c7cbd1;
 }
 
-/* Player state: bottom left, fills the space between the screen edge and the properties panel.
-   Width = (properties panel's left edge) - 12px (screen edge) - 12px (gap), with the panel's left edge = its right edge (50% - bar half width - 12px) - its width
-   (same expressions as #game_hud_properties_panel). It shrinks with the screen; its text scales with its width (container units). */
 #game_hud_player_state {
-    position: absolute;
-    left: 12px;
-    bottom: 20px;
+    grid-column: 1;
+
     box-sizing: border-box;
-    width: max(0px, calc(50% - max(16.667%, 11rem) - 12px - min(18rem, calc(50% - max(16.667%, 11rem) - 24px)) - 24px));
+    min-width: 0;
+
     container-type: inline-size;
     overflow: hidden;
     padding: 12px 16px;

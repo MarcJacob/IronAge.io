@@ -21,6 +21,7 @@ export interface GDOPropDef
     name: string;
     type: GAME_DATA_PROP_TYPE;
     offset: number; // In the covered struct.
+    count: number; // Number of items (>1 = array).
 }
 
 const TEXT_DECODER = new TextDecoder();
@@ -174,7 +175,7 @@ export function get_local_player_state(): GDOData
 
 // Reads the property definitions of the GDO at the given wasm memory offset, for debugging.
 // Layout (packed, wasm32): game_data_object header = total size, data size, props offset (ui32 each), then the struct copy,
-// then one GAME_DATA_PROP_DEF per property = name pointer (ui32 @0), type (ui8 @4), offset in struct (ui32 @5), 9 bytes.
+// then one GAME_DATA_PROP_DEF per property = name pointer (ui32 @0), type (ui8 @4), offset in struct (ui32 @5), item count (ui16 @9), 11 bytes.
 export function read_GDO_schema(gdo_offset: number): GDOPropDef[]
 {
     const memory = Backend.get_memory_bytes();
@@ -184,7 +185,7 @@ export function read_GDO_schema(gdo_offset: number): GDOPropDef[]
     const view = new DataView(memory.buffer, gdo_offset, totalSize);
 
     const props: GDOPropDef[] = [];
-    for (let at = propsOffset; at + 9 <= totalSize; at += 9)
+    for (let at = propsOffset; at + 9 <= totalSize; at += 11)
     {
         const nameStart = view.getUint32(at, true);
         let nameEnd = nameStart;
@@ -193,6 +194,7 @@ export function read_GDO_schema(gdo_offset: number): GDOPropDef[]
             name: TEXT_DECODER.decode(memory.subarray(nameStart, nameEnd)),
             type: view.getUint8(at + 4),
             offset: view.getUint32(at + 5, true),
+            count: view.getUint16(at + 9, true),
         });
     }
     return props;

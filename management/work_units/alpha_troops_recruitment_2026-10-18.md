@@ -17,7 +17,7 @@ Deferred: barracks / keep pools, upkeep, desertion / disbanding when out of gold
 - Pool above max is kept when population drops; troops are lost only if the player manually lowers the ceiling below the count (UI must handle that case).
 - Raising: `RAISE_ARMY` extended with target counts per type. Army walks to `raise_location`, stays there raising, refuses move orders until done. Second command edits targets of a raising army. Third command stops raising (ready immediately). No cancel.
 - Raising is suspended while the army is in a battle, resumes after if it survives. Raising armies stay targetable.
-- UI: new "Entity properties panel" left of the bottom action bar, general info about the selection.
+- UI: new "Entity properties panel" at the center bottom, general info about the selection.
   - Settlement selected: gauges current / max local troops per type, one color per type.
   - ArmyRaising mode: panel shows per type gauges current / target / max, target is a mouse slider; max = home settlement's.
   - ArmySelected mode: same controls when the army is inside its home settlement territory.

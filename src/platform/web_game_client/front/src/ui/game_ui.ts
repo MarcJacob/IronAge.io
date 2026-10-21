@@ -11,7 +11,7 @@ import { submit_player_state } from "./ui_element_player_state.js"
 let selectedPanelElement: HTMLElement | null = null;
 let selectedTextElement: HTMLElement | null = null;
 let selectedHeaderElement: HTMLElement | null = null;
-let debugPanelCollapsed = false;
+let debugPanelCollapsed = true;
 
 export function init_game_ui(): void
 {

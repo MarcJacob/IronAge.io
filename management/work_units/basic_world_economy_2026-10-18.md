@@ -91,6 +91,16 @@ Direction (user, 2026-10-21): settlement construction runs on worker entities (f
 - Colonists of a founding worker leave the population entirely while out (maybe generalize "raised" to "on the field" later). Worker destroyed when attacked.
 - Working rule (user): no game-design concerns until said so; temporary broken mechanics are fine; major systems first.
 
+## Peer brief (task 3d)
+
+- Goal: RTS-style client UI, designed with the user. Inspection panel much bigger, placed over where the action bar is now, so mode changes are evident. Action bar becomes an action panel, bottom right. A "Construction" action on a selected owned settlement switches the inspection panel to that settlement's constructions: building counts (current level / count per type) + ongoing projects (worker, progress) + a way to start a `BUILD_SETTLEMENT_BUILDING` (barracks for now).
+- Also in scope if small: UI to start `FOUND_SETTLEMENT {settlement, target}` (pick owned settlement + target tile; preview validity with `client_command_query_valid`, mirror `DESTINATION_INVALID` in `input.ts` feedback enums). Ask the user.
+- Server-side gaps the UI needs (ask the user before doing): per-building-type counts not in GDO (waits on dynamic GDO properties); worker progress not in GDO (idea: common progress value or getter).
+- Imprints: chain for `src/platform/web_game_client/front/src` (+ ui/inspection, modes), root `front_src.imprint.md` mode tree; notes in `src/game_common/world_sim/.ai_imprint/`.
+- Decisions: see Decisions above (workers, buildings, parallel projects, found settlement). UI wishes section below (generic panel design, genericity, no hint element) still holds. No game-design concerns; values are placeholders.
+- Open: panel layout/sizes, how project list is fed to the client, dynamic GDO properties.
+- Done: user hand-tests in browser.
+
 ## Current state
 
 - Wealth, treasury, tax, consumption-based growth, per-player state, calendar and player panel exist (see Next step). Cost hooks `raise_army_can_afford` / `raise_army_charge` are still stubs (match_commands.cpp). Validity error flags mirrored by hand in input.ts.

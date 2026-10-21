@@ -86,9 +86,10 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			visibleCount++;
 		}
 
-		// WORKERS (If outside their origin entity)
+		// WORKERS
 		for (ui16 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
 		{
+            // Active workers who are outside their origin entity.
 			if (!workers.guids[workerIndex].is_valid()
                     || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.locations[workerIndex]) continue;
 

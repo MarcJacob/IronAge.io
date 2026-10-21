@@ -166,31 +166,31 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
 // SETTLEMENT BUILDING PRIMITIVES
 // Every change to a settlement's building counts goes through these. They run the type's events (once per unit) and return how many units were actually added / removed.
 
-static inline ui16 settlement_building_add(match_world_state& world, ui16 settlement_index, ui8 building_type, ui16 count)
+static inline ui16 settlement_building_add(match_world_state& world, ui16 settlement_index, ui8 building_type_index, ui16 count)
 {
-	ASSERT(building_type < SETTLEMENT_BUILDING_TYPE_COUNT);
+	ASSERT(building_type_index < SETTLEMENT_BUILDING_TYPE_COUNT);
 	world_entity_settlements& settlements = world.entities->settlements;
-	ui16& units = settlements.building_count(settlement_index, building_type);
+	ui16& units = settlements.buildings[settlement_index].building_counts[building_type_index];
 	ui16 added = ia_min(count, (ui16)(0xFFFF - units));
 	for (ui16 i = 0; i < added; i++)
 	{
 		units++;
-		auto onAdded = SETTLEMENT_BUILDING_TABLE[building_type].events.on_added;
+		auto onAdded = SETTLEMENT_BUILDING_TABLE[building_type_index].events.on_added;
 		if (onAdded) onAdded(world, settlements.guids[settlement_index]);
 	}
 	return added;
 }
 
-static inline ui16 settlement_building_remove(match_world_state& world, ui16 settlement_index, ui8 building_type, ui16 count)
+static inline ui16 settlement_building_remove(match_world_state& world, ui16 settlement_index, ui8 building_type_index, ui16 count)
 {
-	ASSERT(building_type < SETTLEMENT_BUILDING_TYPE_COUNT);
+	ASSERT(building_type_index < SETTLEMENT_BUILDING_TYPE_COUNT);
 	world_entity_settlements& settlements = world.entities->settlements;
-	ui16& units = settlements.building_count(settlement_index, building_type);
+	ui16& units = settlements.buildings[settlement_index].building_counts[building_type_index];
 	ui16 removed = ia_min(count, units);
 	for (ui16 i = 0; i < removed; i++)
 	{
 		units--;
-		auto onRemoved = SETTLEMENT_BUILDING_TABLE[building_type].events.on_removed;
+		auto onRemoved = SETTLEMENT_BUILDING_TABLE[building_type_index].events.on_removed;
 		if (onRemoved) onRemoved(world, settlements.guids[settlement_index]);
 	}
 	return removed;
