@@ -3,6 +3,8 @@
 #include "game_client.h"
 #include "game_client/game_client_backend.h"
 #include "game_common/match/world/world.h"
+#include "game_common/match/world/world_entities.h"
+
 
 static constexpr ui8 SETTLEMENT_RENDER_SIZE = 12; // Square size of a settlement icon in viewport tiles.
 static constexpr ui8 CARAVAN_RENDER_SIZE = 6; // Square size of a caravan icon in viewport tiles.
@@ -33,6 +35,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 
 	const world_entity_settlements& settlements = world.entities->settlements;
 	const world_entity_armies& armies = world.entities->armies;
+	const world_entity_workers& workers = world.entities->workers;
 	const world_entity_battles& battles = world.entities->battles;
 
 	render_state.frame.entity_count = 0;
@@ -43,6 +46,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 
 	ui32 totalEntityCount = settlements.active_count
 		+ armies.active_count
+		+ workers.active_count
 		+ battles.active_count;
 
 	if (totalEntityCount > 0)
@@ -78,6 +82,24 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = armies.owners[armyIndex];
 			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = armyLoc - render_state.viewport.bottom_left;
+
+			visibleCount++;
+		}
+
+		// WORKERS (If outside their origin entity)
+		for (ui16 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
+		{
+			if (!workers.guids[workerIndex].is_valid()
+                    || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.locations[workerIndex]) continue;
+
+			vec2<float> workerLoc = workers.locations[workerIndex];
+			if (!is_visible_in_viewport(workerLoc, render_state.viewport)) continue;
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::WORKER;
+			outEntity.owner = world.entities->settlements.owners[workers.origin_entity[workerIndex].get_index()]; // Owner of the origin (a destroyed origin leaves a stale owner for one frame).
+			outEntity.guid = workers.guids[workerIndex];
+			outEntity.viewport_location = workerLoc - render_state.viewport.bottom_left;
 
 			visibleCount++;
 		}

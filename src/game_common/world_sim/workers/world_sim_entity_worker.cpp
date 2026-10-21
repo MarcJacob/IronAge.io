@@ -27,6 +27,16 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 	world.entities->workers.work_times[freeIndex] = start_state.work_time;
 	world.entities->workers.action_data[freeIndex] = start_state.action_data;
 
+	// Every worker starts at its origin. Moving work types take it from there (start_state.position / movement are not read).
+	world_location start = world_entity_get_location(world, start_state.origin_entity);
+	world.entities->workers.locations[freeIndex] = start;
+	world_entity_movement& movement = world.entities->workers.movements[freeIndex];
+	movement = {};
+	movement.travel_speed = 4; // Same as armies.
+	movement.destination = start;
+	movement.move_target = start;
+	movement.path_handle = INVALID_PATH_HANDLE;
+
 	return newID;
 }
 
@@ -51,6 +61,8 @@ bool world_entity_query_worker(const match_world_state& world, entity_guid entit
 		.work_type = workers.work_types[i],
 		.work_time = workers.work_times[i],
 		.action_data = workers.action_data[i],
+		.position = workers.locations[i],
+		.movement = workers.movements[i],
 	};
 	return true;
 }
@@ -76,6 +88,12 @@ bool world_alloc_workers(match_world_state& world, mem_arena& memory, ui32 count
 
 	workers.action_data = memory.alloc<world_worker_action_data>(count);
 	if (workers.action_data == nullptr) return false;
+
+	workers.locations = memory.alloc<world_location>(count);
+	if (workers.locations == nullptr) return false;
+
+	workers.movements = memory.alloc<world_entity_movement>(count);
+	if (workers.movements == nullptr) return false;
 
 	return true;
 }

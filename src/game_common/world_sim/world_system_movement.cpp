@@ -62,12 +62,11 @@ static void process_entity_movement (world_entity_movement& movement, world_loca
 
 }
 
-// Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
-static void world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location)
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location)
 {
     if (location == movement.move_target)
     {
-        if (location == movement.destination) return; // Arrived.
+        if (location == movement.destination) return true; // Arrived.
 
         // The path handle is always invalid for now, so the path is recalculated from the current tile every time.
         path_result result;
@@ -75,12 +74,13 @@ static void world_entity_follow_path(match_world_state& world, world_entity_move
         movement.path_handle = result.handle;
 
         // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
-        if (result.count == 0) return;
+        if (result.count == 0) return false;
 
         movement.move_target = world_path_next_tile(location, result.next_point);
     }
 
     process_entity_movement(movement, location);
+    return true;
 }
 
 void world_system_entity_movement_decision(match_world_state& world)

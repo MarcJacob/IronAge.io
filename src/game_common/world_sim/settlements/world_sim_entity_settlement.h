@@ -122,6 +122,43 @@ static inline ui16 settlement_release_raised(match_world_state& world, ui16 sett
 	return moved;
 }
 
+// Construction manpower. Moves up to count free peasants into workers. Returns how many were moved. population_total is unchanged.
+static inline ui32 settlement_assign_workers(match_world_state& world, ui16 settlement_index, ui32 count)
+{
+	settlement_population& population = world.entities->settlements.populations[settlement_index];
+	ui32 moved = ia_min(count, population.peasants);
+	population.peasants -= moved;
+	population.workers += moved;
+	return moved;
+}
+
+// Construction manpower. Moves up to count workers back to free peasants. Returns how many were moved.
+static inline ui32 settlement_release_workers(match_world_state& world, ui16 settlement_index, ui32 count)
+{
+	settlement_population& population = world.entities->settlements.populations[settlement_index];
+	ui32 moved = ia_min(count, population.workers);
+	population.workers -= moved;
+	population.peasants += moved;
+	return moved;
+}
+
+// TREASURY -> LOCAL WEALTH
+// Moves up to amount from the settlement's owner treasury to the settlement's local wealth and records it as the owner's expenses.
+// The treasury never goes below 0 (and an owner outside the player range pays nothing). Returns how much was actually paid.
+static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world, ui16 settlement_index, ui32 amount)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	match_player_id owner = settlements.owners[settlement_index];
+	if (owner >= world.player_count) return 0;
+
+	world_player_state& player = world.player_states[owner];
+	ui32 paid = ia_min(amount, player.treasury);
+	player.treasury -= paid;
+	player.expenses += paid;
+	settlements.local_wealth[settlement_index] += paid;
+	return paid;
+}
+
 // Claims a tile in the world for the given settlement using the origin proximity value as proximity base.
 // Ensure settlement's influence bounds rectangle is kept up to date !
 ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);

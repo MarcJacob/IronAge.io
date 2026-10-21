@@ -14,8 +14,10 @@ struct game_parameters
     // TIME
     ui32 ticks_per_day = 100; // A calendar day is this many world ticks. Slow systems (growth...) run once per day.
 
-    // TROOPS
+    // MILITARY
     ui32 raise_min_population_left = 10; // Raising levies / training troops never takes a settlement's peasants below this.
+    
+    ui8 barracks_maa_max_increase = 50; // How much Men At Arms max is increased per barracks in a settlement.
 
     // ECONOMY
 
@@ -32,6 +34,9 @@ struct game_parameters
     ui32 growth_zero_ratio_per_mille = 900; // r at which growth is 0.
     ui32 growth_floor_ratio_per_mille = 500; // r at and below which growth is growth_floor.
     i32 growth_floor_per_mille = -200; // Lowest growth (shrinking).
+
+    // COLONIZATION
+    ui32 found_settlement_colonists = 150; // Peasants a founding worker takes from its origin settlement. They become the new settlement's population.
 
     // TAXES
     i32 tax_rate_min = 0; // Lowest tax rate (%) a player can set. Negative would be investment (treasury -> settlement), not applied yet.
@@ -54,6 +59,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(growth_zero_ratio_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(growth_floor_ratio_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(growth_floor_per_mille, GAME_DATA_PROP_TYPE::I32)
+
+    GAME_DATA_PROPERTY(found_settlement_colonists, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(tax_rate_min, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(tax_rate_max, GAME_DATA_PROP_TYPE::I32)

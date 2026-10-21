@@ -95,11 +95,16 @@ struct settlement_building_def
 	settlement_building_events events;
 };
 
+// Building type events.
+
+void settlement_building_barracks_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement);
+
 // SETTLEMENT BUILDING TYPES TABLE
 // Settlements keep a count per row of this table.
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
-	{ "Barracks", 5, 100, 10, {} }, // Placeholder values.
+	{ "Barracks", 5, 100, 10, settlement_building_events { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
@@ -139,12 +144,13 @@ struct settlement_troop_training
 };
 
 // Population accounting of a settlement.
-// population_total = peasants + all soldiers (home and raised). It is stored: whatever changes the sum (births, deaths, spawn) must update it.
+// population_total = peasants + workers + all soldiers (home and raised). It is stored: whatever changes the sum (births, deaths, spawn) must update it.
 // @NOTE: the soldiers stuff (home, raised, troop_max, troop_training) could maybe move to a settlement_military struct.
 struct settlement_population
 {
 	ui32 population_total;
-	ui32 peasants; // Everyone at home who is not a soldier.
+	ui32 peasants; // Free peasants: at home, not a soldier, not a worker. The only ones working the land.
+	ui32 workers; // At home, assigned to construction projects (see BUILD_SETTLEMENT_BUILDING). Consume and grow like peasants, but don't work the land.
 	army_troop_count home; // Soldiers at home: the local troop pool. Levies have no home pool: home.levies is always 0.
 	army_troop_count raised; // Soldiers in armies raised from the settlement. Levies in the field count here.
 
@@ -158,7 +164,7 @@ struct settlement_population
 	inline ui32 soldiers_home() const { return (ui32)home.levies + home.men_at_arms + home.horsemen + home.knights; }
 	inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
 	inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
-	inline ui32 at_home() const { return peasants + soldiers_home(); }
+	inline ui32 at_home() const { return peasants + workers + soldiers_home(); }
 };
 
 // Last day's economy figures of a settlement, written by the daily economy tick every day. Zero is a valid (empty) value.
@@ -231,6 +237,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(population_growth_rate, population.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
 
 	GAME_DATA_PROPERTY_PATH(peasants, population.peasants, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(workers, population.workers, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY(base_land_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(local_wealth, GAME_DATA_PROP_TYPE::UI32)
@@ -365,6 +372,24 @@ struct build_road_data
 };
 static_assert(sizeof(build_road_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
 
+// Layout of the action data of a settlement founding project. The worker walks to the target carrying the colonists (taken out of the origin settlement).
+struct found_settlement_data
+{
+    world_location target; // Tile the settlement is founded at.
+    ui32 colonists; // Peasants carried. Start population of the new settlement, or given back to the origin if the worker has to return.
+    ui8 returning; // 0 = going to the target, 1 = going back to the origin settlement.
+};
+static_assert(sizeof(found_settlement_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Found settlement action data doesn't fit the worker action data buffer.");
+
+// Layout of the action data of a settlement building project. Zero is the state of a project that hasn't started.
+struct build_settlement_building_data
+{
+    ui8 building_type; // Row of SETTLEMENT_BUILDING_TABLE.
+    ui8 held_workers; // Workers currently taken from the settlement's peasants for the project (0 or the row's workers).
+    ui16 progress_days; // Days financed so far.
+};
+static_assert(sizeof(build_settlement_building_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Settlement building action data doesn't fit the worker action data buffer.");
+
 // Workers are the entities carrying out work projects (roads & building construction, colonization...). 
 // Each is tied to an origin entity, and destroyed when it goes away / is done.
 struct world_entity_workers : public world_entity_container
@@ -373,6 +398,8 @@ struct world_entity_workers : public world_entity_container
 	WORK_TYPE* work_types; // What is being built.
 	ui32* work_times; // Ticks since the project started. How the work type uses it is up to it.
 	world_worker_action_data* action_data;
+	world_location* locations; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
+	world_entity_movement* movements; // Movement state, used by work types that travel (like armies').
 
 	// Consolidated representation of a single worker for viewing purposes.
 	struct single
@@ -381,6 +408,8 @@ struct world_entity_workers : public world_entity_container
 		WORK_TYPE work_type;
 		ui32 work_time;
 		world_worker_action_data action_data;
+		world_location position;
+		world_entity_movement movement;
 	};
 };
 
@@ -391,6 +420,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_worker)
 	GAME_DATA_PROPERTY(origin_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(work_type, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(work_time, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(location, position, GAME_DATA_PROP_TYPE::WORLD_LOCATION) // Named like the other entities' so generic inspection shows it.
 GAME_DATA_OBJECT_DEF_END()
 
 // A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.

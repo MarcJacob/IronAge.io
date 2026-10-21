@@ -68,8 +68,7 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 	case ENTITY_TYPE::ARMY:
 		return world.entities->armies.locations[entity.get_index()];
 	case ENTITY_TYPE::WORKER:
-		// Workers have no location of their own for now: they are where their origin is.
-		return world_entity_get_location(world, world.entities->workers.origin_entity[entity.get_index()]);
+		return world.entities->workers.locations[entity.get_index()];
 	case ENTITY_TYPE::BATTLE:
 		return world.entities->battles.states[entity.get_index()].location;
 	default:
@@ -172,11 +171,10 @@ void world_state_tick(match_world_state& world)
     // @TODO(Marc): Figure out an appropriate abstraction for systems 
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
-    world_system_worker_construction(world); // Before proximity recalc, so new roads count this tick.
-
     world_system_economy_daily_tick(world);
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
+    world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
     world_system_settlement_territory(world);
     world_system_settlement_territory_proximity_recalc(world);
     world_system_settlement_territory_update_pressure(world);

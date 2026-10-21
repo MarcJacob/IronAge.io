@@ -89,6 +89,10 @@ void world_system_economy_troop_growth(match_world_state& world);
 // Daily: runs the on_daily_tick event of every building type a settlement has at least one unit of.
 void world_system_settlement_buildings_daily_tick(match_world_state& world);
 
+// Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
+// Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location);
+
 void world_system_entity_movement_decision(match_world_state& world);
 
 void world_system_entity_movement(match_world_state& world);

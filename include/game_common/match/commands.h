@@ -20,7 +20,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 {
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
-	FOUND_SETTLEMENT, // Turns an army into a settlement at its location.
+	FOUND_SETTLEMENT, // Has a settlement send colonists (a worker) to a target tile, where they found a new settlement.
 	RAISE_ARMY, // Spawns an empty army that moves to a raise location, then draws the target counts from its settlement.
 
     // SERVER COMMANDS
@@ -36,6 +36,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 	STOP_RAISING_ARMY, // Ends an army's raising where it stands: its raise targets are kept (remembered for a later re-raise).
 
 	SET_SETTLEMENT_TAX_RATE, // Sets a settlement's tax rate, within the game parameters' limits.
+
+	BUILD_SETTLEMENT_BUILDING, // Has a settlement start constructing a building (a row of the settlement building table).
 
 	TYPE_COUNT,
 };
@@ -84,7 +86,7 @@ enum COMMAND_INVALID_PATH_REASON : ui8
 	COMMAND_INVALID_PATH_NONE,
 	COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION, // Origin and destination are the same tile.
 	COMMAND_INVALID_PATH_ORIGIN_INVALID, // The origin is not usable: neither the settlement nor a road tile in its territory.
-	COMMAND_INVALID_PATH_DESTINATION_INVALID, // The destination is not usable. Nothing sets it yet (the destination is only checked for bounds).
+	COMMAND_INVALID_PATH_DESTINATION_INVALID, // The destination is not usable (found settlement: not a valid settlement location). Road commands only check bounds.
 };
 
 struct match_command_validity_feedback
@@ -155,11 +157,13 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 // FOUND SETTLEMENT
 struct command_data_found_settlement
 {
-	entity_guid army;
+	entity_guid settlement; // Origin settlement, which pays the colonists (GAME_PARAMETERS.found_settlement_colonists peasants).
+	world_location target; // Tile the new settlement is founded at.
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_found_settlement)
-	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_found_settlement_validity_check(const match_world_state& world, match_player_id player,
@@ -294,6 +298,24 @@ bool command_set_settlement_tax_rate_validity_check(const match_world_state& wor
 void command_set_settlement_tax_rate_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// BUILD SETTLEMENT BUILDING
+struct command_data_build_settlement_building
+{
+	entity_guid settlement;
+	ui8 building_type; // Row of SETTLEMENT_BUILDING_TABLE.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_build_settlement_building)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(building_type, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_build_settlement_building_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_build_settlement_building_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -404,6 +426,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_stop_raising_army_validity_check, command_stop_raising_army_apply },
 		{ "SET_SETTLEMENT_TAX_RATE", MATCH_COMMAND_TYPE::SET_SETTLEMENT_TAX_RATE, sizeof(command_data_set_settlement_tax_rate),
 			command_set_settlement_tax_rate_validity_check, command_set_settlement_tax_rate_apply },
+	{ "BUILD_SETTLEMENT_BUILDING", MATCH_COMMAND_TYPE::BUILD_SETTLEMENT_BUILDING, sizeof(command_data_build_settlement_building),
+		command_build_settlement_building_validity_check, command_build_settlement_building_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

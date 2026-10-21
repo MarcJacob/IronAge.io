@@ -148,7 +148,7 @@ void world_system_economy_daily_tick(match_world_state& world)
 
     world_entity_settlements& settlements = world.entities->settlements;
 
-    // Player figures are last day's: reset, then every deposit adds to income. Future spending from the treasury adds to expenses.
+    // Player figures are last day's: reset, then every deposit adds to income. Spending from the treasury adds to expenses (the worker system runs after this).
     for (ui32 playerIndex = 0; playerIndex < world.player_count; playerIndex++)
     {
         world.player_states[playerIndex].income = 0;

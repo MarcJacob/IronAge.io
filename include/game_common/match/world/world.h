@@ -27,9 +27,9 @@ struct world_path_store; // Opaque outside the world simulation, see world_sim.h
 // State of one player, indexed by match_player_id in the world state.
 struct world_player_state
 {
-    ui32 treasury; // Wealth held by the player. Only deposits (daily tax) for now.
+    ui32 treasury; // Wealth held by the player. Deposits: daily tax. Spending: construction projects (settlement_wealth_fund_from_treasury).
     ui32 income; // Last day's deposits into the treasury.
-    ui32 expenses; // Last day's spending from the treasury. Nothing spends yet: future spending hooks add to it.
+    ui32 expenses; // Last day's spending from the treasury. Reset by the daily economy tick, so spenders must run after it.
     
     ui16 settlement_count;
     ui32 total_population;

@@ -128,55 +128,57 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 {
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
 
-	if (!world_entity_is_valid(world, command.army)) return false;
-	if (command.army.get_type() != ENTITY_TYPE::ARMY) return false;
-	if (world.entities->armies.owners[command.army.get_index()] != player) return false;
-	if (world.entities->armies.raising[command.army.get_index()]) return false; // Not ready yet: an empty army would found a free settlement.
-
-	// The army is kept if the location is invalid or there is no room for the settlement.
-	if (!world_is_valid_settlement_location(world, world.entities->armies.locations[command.army.get_index()], player)) return false;
-
-	const world_entity_settlements& settlements = world.entities->settlements;
-	return settlements.active_count < settlements.max_count;
-}
-
-// Removes up to men from a raised count and returns how many were removed.
-// Spawns a settlement at the army's location with its owner and total manpower as peasants, then destroys the army.
-void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
-{
-	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
-
-	// Checked again: earlier commands in the same tick may have destroyed this army, filled the last settlement slot or made the location invalid.
-	if (!world_entity_is_valid(world, command.army)) return;
-	if (command.army.get_type() != ENTITY_TYPE::ARMY) return;
-	if (world.entities->armies.raising[command.army.get_index()]) return;
-	if (!world_is_valid_settlement_location(world, world.entities->armies.locations[command.army.get_index()], player)) return;
-
-	const world_entity_settlements& settlements = world.entities->settlements;
-	if (settlements.active_count >= settlements.max_count) return;
-
-	ui16 armyIndex = command.army.get_index();
-	const world_entity_armies& armies = world.entities->armies;
-	army_troop_count composition = armies.compositions[armyIndex];
-
-	world_entity_settlements::single newSettlement = {};
-	newSettlement.owner = armies.owners[armyIndex];
-	newSettlement.location = armies.locations[armyIndex];
-	newSettlement.population.peasants = (ui32)composition.levies + composition.men_at_arms
-		+ composition.horsemen + composition.knights;
-
-	// The men leave their home settlement's raised counts (and its population) to become the new settlement's peasants.
-	entity_guid home = armies.home_settlements[armyIndex];
-	if (world_entity_is_valid(world, home) && home.get_type() == ENTITY_TYPE::SETTLEMENT)
+	// An active settlement is needed to check anything else.
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
 	{
-		for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
-		{
-			settlement_remove_soldiers_raised(world, home.get_index(), troopType, troop_count_field(composition, troopType));
-		}
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
 	}
 
-	world_spawn_settlement(world, newSettlement);
-	world_destroy_army(world, command.army);
+	ui16 settlementIndex = command.settlement.get_index();
+	const world_entity_settlements& settlements = world.entities->settlements;
+	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// The target must be a place where the player could found a settlement (it is checked again when the colonists get there).
+	if (!world_is_valid_settlement_location(world, command.target, player) && command_add_path_error(feedback, COMMAND_INVALID_PATH_DESTINATION_INVALID)) return false;
+
+	// The colonists are taken out of the settlement's peasants.
+	ui32 colonists = GAME_PARAMETERS.found_settlement_colonists;
+	ui32 peasants = settlements.populations[settlementIndex].peasants;
+	if (feedback != nullptr)
+	{
+		feedback->population_needed = colonists;
+		feedback->population_current = peasants;
+	}
+	if (peasants < colonists && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
+
+	// Room for the worker, and for the settlement it will found.
+	const world_entity_workers& workers = world.entities->workers;
+	if ((workers.active_count >= workers.max_count || settlements.active_count >= settlements.max_count)
+		&& command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+// Takes the colonists out of the settlement and spawns the worker carrying them. It walks to the target over the following ticks (see the construction system).
+void command_found_settlement_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	// Checked again: earlier commands in the same tick may have changed the settlement or filled the last slots.
+	if (!command_found_settlement_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
+
+	ui32 colonists = settlement_remove_peasants(world, command.settlement.get_index(), GAME_PARAMETERS.found_settlement_colonists);
+
+	world_entity_workers::single worker = {};
+	worker.origin_entity = command.settlement;
+	worker.work_type = WORK_TYPE::FOUND_SETTLEMENT;
+	*(found_settlement_data*)worker.action_data.bytes = {
+		.target = command.target,
+		.colonists = colonists,
+	};
+
+	world_spawn_worker(world, worker);
 }
 
 // RAISE ARMY
@@ -442,6 +444,45 @@ void command_set_settlement_tax_rate_apply(match_world_state& world, match_playe
 
 	const command_data_set_settlement_tax_rate& command = command_header.get_command_data<command_data_set_settlement_tax_rate>();
 	world.entities->settlements.tax_rates[command.settlement.get_index()] = command.tax_rate;
+}
+
+// BUILD SETTLEMENT BUILDING
+
+bool command_build_settlement_building_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_build_settlement_building& command = command_header.get_command_data<command_data_build_settlement_building>();
+
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	if (world.entities->settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	if (command.building_type >= SETTLEMENT_BUILDING_TYPE_COUNT && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+
+	// No limit on parallel projects, only on worker slots.
+	const world_entity_workers& workers = world.entities->workers;
+	if (workers.active_count >= workers.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+	return command_is_valid(feedback);
+}
+
+// Spawns a construction worker tied to the settlement. The project is financed daily by the worker system.
+void command_build_settlement_building_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_build_settlement_building_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_build_settlement_building& command = command_header.get_command_data<command_data_build_settlement_building>();
+
+	world_entity_workers::single worker = {};
+	worker.origin_entity = command.settlement;
+	worker.work_type = WORK_TYPE::BUILD_SETTLEMENT_BUILDING;
+	*(build_settlement_building_data*)worker.action_data.bytes = { .building_type = command.building_type };
+
+	world_spawn_worker(world, worker);
 }
 
 // SET ARMY RAISE TARGETS

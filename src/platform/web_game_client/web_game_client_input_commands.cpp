@@ -47,6 +47,7 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::SET_ARMY_RAISE_TARGETS: return gdo_buffer_place<gdo_command_data_set_army_raise_targets>(command_type);
 	case MATCH_COMMAND_TYPE::STOP_RAISING_ARMY: return gdo_buffer_place<gdo_command_data_stop_raising_army>(command_type);
 	case MATCH_COMMAND_TYPE::SET_SETTLEMENT_TAX_RATE: return gdo_buffer_place<gdo_command_data_set_settlement_tax_rate>(command_type);
+	case MATCH_COMMAND_TYPE::BUILD_SETTLEMENT_BUILDING: return gdo_buffer_place<gdo_command_data_build_settlement_building>(command_type);
 	default: return COMMAND_CREATE_NO_GDO;
 	}
 }

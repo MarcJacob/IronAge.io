@@ -4,6 +4,7 @@
 
 #include "../world_sim.h"
 #include "world_sim_entity_worker.h"
+#include "../settlements/world_sim_entity_settlement.h"
 
 // Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
 static void world_tile_set_road(match_world_state& world, world_location location)
@@ -39,6 +40,88 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     return false;
 }
 
+// Walks to the target with the colonists, then founds a settlement there; if that is not possible, walks back and gives the colonists back.
+// Returns true when the project is finished.
+static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 worker_index)
+{
+    world_entity_workers& workers = world.entities->workers;
+    found_settlement_data& data = *(found_settlement_data*)workers.action_data[worker_index].bytes;
+    world_entity_movement& movement = workers.movements[worker_index];
+    world_location& location = workers.locations[worker_index];
+
+    const world_entity_settlements& settlements = world.entities->settlements;
+    ui16 originIndex = workers.origin_entity[worker_index].get_index();
+
+    movement.destination = data.returning ? settlements.locations[originIndex] : data.target;
+
+    if (location != movement.destination)
+    {
+        // No path: give up on the target and go home. Going home with no path either means waiting (like armies do).
+        if (!world_entity_follow_path(world, movement, location)) data.returning = 1;
+        return false;
+    }
+
+    // Back home: the colonists rejoin the peasants.
+    if (data.returning)
+    {
+        settlement_add_peasants(world, originIndex, data.colonists);
+        return true;
+    }
+
+    // At the target. Checked again: the situation may have changed since the worker left (location taken, slots filled, owner changed).
+    match_player_id owner = settlements.owners[originIndex];
+    if (!world_is_valid_settlement_location(world, data.target, owner) || settlements.active_count >= settlements.max_count)
+    {
+        data.returning = 1;
+        return false;
+    }
+
+    world_entity_settlements::single newSettlement = {};
+    newSettlement.owner = owner;
+    newSettlement.location = data.target;
+    newSettlement.population.peasants = data.colonists;
+    world_spawn_settlement(world, newSettlement);
+    return true;
+}
+
+// Daily financing of a settlement building project. A day is financed when the project holds its workers (taken from the free peasants) AND the owner's
+// treasury can pay the row's cost_per_day (moved to the settlement's local wealth); then progress +1. Otherwise the day stalls: held workers return to the
+// peasants and nothing is paid. When the build time is reached the workers are released and the building is added. Returns true when the project is finished.
+static bool worker_logic_build_settlement_building_tick(match_world_state& world, ui16 worker_index)
+{
+    if (!world_is_daily_tick(world)) return false;
+
+    world_entity_workers& workers = world.entities->workers;
+    build_settlement_building_data& data = *(build_settlement_building_data*)workers.action_data[worker_index].bytes;
+    if (data.building_type >= SETTLEMENT_BUILDING_TYPE_COUNT) return true; // Unknown building type.
+
+    const settlement_building_def& def = SETTLEMENT_BUILDING_TABLE[data.building_type];
+    const world_entity_settlements& settlements = world.entities->settlements;
+    ui16 settlementIndex = workers.origin_entity[worker_index].get_index();
+    match_player_id owner = settlements.owners[settlementIndex];
+
+    // Take the missing workers, then pay: no payment happens unless the whole day can be financed.
+    data.held_workers += (ui8)settlement_assign_workers(world, settlementIndex, def.workers - data.held_workers);
+    bool hasWorkers = data.held_workers == def.workers;
+    bool canPay = owner < world.player_count && world.player_states[owner].treasury >= def.cost_per_day;
+
+    if (!hasWorkers || !canPay)
+    {
+        settlement_release_workers(world, settlementIndex, data.held_workers);
+        data.held_workers = 0;
+        return false;
+    }
+
+    settlement_wealth_fund_from_treasury(world, settlementIndex, def.cost_per_day);
+    data.progress_days++;
+    if (data.progress_days < def.build_days) return false;
+
+    settlement_release_workers(world, settlementIndex, data.held_workers);
+    data.held_workers = 0;
+    settlement_building_add(world, settlementIndex, data.building_type, 1);
+    return true;
+}
+
 void world_system_worker_construction(match_world_state& world)
 {
     world_entity_workers& workers = world.entities->workers;
@@ -57,6 +140,12 @@ void world_system_worker_construction(match_world_state& world)
             {
             case WORK_TYPE::BUILD_ROAD:
                 finished = worker_logic_build_road_tick(world, workerIndex);
+                break;
+            case WORK_TYPE::BUILD_SETTLEMENT_BUILDING:
+                finished = worker_logic_build_settlement_building_tick(world, workerIndex);
+                break;
+            case WORK_TYPE::FOUND_SETTLEMENT:
+                finished = worker_logic_found_settlement_tick(world, workerIndex);
                 break;
             default:
                 finished = true; // Unknown work type.

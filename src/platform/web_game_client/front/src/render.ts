@@ -28,6 +28,7 @@ export const RENDER_CONFIG =
     show_entity_type: {
         [Backend.ENTITY_TYPE.SETTLEMENT]: true,
         [Backend.ENTITY_TYPE.ARMY]: true,
+        [Backend.ENTITY_TYPE.WORKER]: true,
         [Backend.ENTITY_TYPE.BATTLE]: true,
     } as Record<number, boolean>,
 
@@ -96,7 +97,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
 {
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
     [Backend.ENTITY_TYPE.ARMY]: 2,
-    [Backend.ENTITY_TYPE.WORKER]: 1, // Never drawn, only here to satisfy the lookup.
+    [Backend.ENTITY_TYPE.WORKER]: 1, // Only the workers walking on the map are sent by the backend.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
 }
 
@@ -556,6 +557,18 @@ export function draw(render_state: Backend.RenderState | null)
             draw_entity_army(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
             draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
+        }
+        else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
+            // Simple marker, no sprite yet: green if owned by the local player, red otherwise.
+            const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+            const size = compute_entity_canvas_size(entity.entity_type);
+            ctx.fillStyle = entity.owner === render_state.controlled_player_id ? 'lime' : 'red';
+            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+            if (isSelected) {
+                ctx.strokeStyle = '#0c0';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(center.x - size / 2 - 4, center.y - size / 2 - 4, size + 8, size + 8);
+            }
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
             // Simple red marker.

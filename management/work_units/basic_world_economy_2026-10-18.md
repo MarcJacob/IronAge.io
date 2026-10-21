@@ -27,10 +27,10 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
    - c. [DONE, untested] Set-tax command `SET_SETTLEMENT_TAX_RATE {settlement, tax_rate}`: owner only, within `tax_rate_min` 0 / `tax_rate_max` 10 (game parameters; negative = future investment). Slider next to local wealth in the settlement inspector, negative blue / positive yellow, owned only.
    - d. [DONE, untested] UI: treasury readout, calendar, wealth / population rows (see task B notes).
 3. Buildings (on workers; see Buildings design + decisions):
-   - a. Settlement building data: definition table (union: Upgrade stub / Building multiplied), per-settlement counts, GDO, Barracks effect on troop max / training rate. Not started.
-   - b. Settlement construction worker (in-settlement, `BUILD_SETTLEMENT_BUILDING`, data = building type): command, daily financing, stall, job accounting. Not started.
-   - c. Found-settlement worker (on-map, `FOUND_SETTLEMENT`, data = target location + colonist count): moves to the spot, founds a village, else returns home and rejoins the population. Not started.
-   - d. Client UI: bigger inspection panel over the old action bar, action bar becomes bottom-right action panel (RTS style), "Construction" action switches the inspection panel to the settlement's constructions (levels / counts + ongoing projects). Not started.
+   - a. [DONE] Settlement building data: building type table (rows with optional events) in `world_entities.h` next to per-settlement counts; `troop_max` / `troop_training` in `settlement_population` + GDO; per-mille params and `troop_growth_per_day` removed; daily building tick as own system; Barracks handlers, training and max hand-tested OK. Housing row dropped on purpose; per-building-type GDO lines wait on dynamic GDO properties.
+   - b. Settlement construction worker (in-settlement, `BUILD_SETTLEMENT_BUILDING`, data = building type): command, daily financing, stall, job accounting. [DONE, untested] `BUILD_SETTLEMENT_BUILDING` command, `workers` in `settlement_population` (counts in consumption / growth, not land output), `settlement_wealth_fund_from_treasury`. Worker system now runs after the settlement buildings daily tick (was first). No UI; test via console `send_command`.
+   - c. Found-settlement worker (on-map, `FOUND_SETTLEMENT`, data = target location + colonist count): moves to the spot, founds a village, else returns home and rejoins the population. [DONE, untested] Command `FOUND_SETTLEMENT {settlement, target}` replaces the army-based one; colonists (150, game parameter) leave population on spawn; workers have `positions` / `movements`, drawn as squares; attack-on-worker not built (hook: `world_resolve_attack`). No UI; test via console.
+   - d. [WIP, peer] Client UI: bigger inspection panel over the old action bar, action bar becomes bottom-right action panel (RTS style), "Construction" action switches the inspection panel to the settlement's constructions (levels / counts + ongoing projects). Not started.
 4. Trade: not broken down yet.
 
 ## Decisions
@@ -88,16 +88,8 @@ Direction (user, 2026-10-21): settlement construction runs on worker entities (f
 - Financing: fixed wealth / day per project (from the definition), treasury -> local wealth as workers are paid; cost multipliers later. Unfinanced = stalls, workers return to peasants. Project workers leave base land output but count in consumption / growth. Population categories for Alpha: peasants, workers, soldiers (general job system later maybe).
 - No generic start-project command: two concrete operations, found settlement (on-map worker) and settlement construction (in-settlement worker). Shared only: worker entity + work type, separate logic in the worker update system (`world_system_worker_construction`).
 - Parallel rule: several Building units of a type can be built in parallel; Upgrades of one unique building cannot.
+- Colonists of a founding worker leave the population entirely while out (maybe generalize "raised" to "on the field" later). Worker destroyed when attacked.
 - Working rule (user): no game-design concerns until said so; temporary broken mechanics are fine; major systems first.
-
-## Peer brief (task 3a)
-
-- Goal: settlement building data, designed with the user (exact design matters). No worker, command, daily financing or UI.
-- Scope: definition table in game parameters (`game_parameters.h`); each entry carries everything a building may need (name, cost / day, days, max, effect params); internal union: Upgrade (stub: unique, levels, effects TBD) vs Building (multiplied, units, parallel). First entries: Barracks, Housing (placeholder values; housing no effect yet). Per-settlement count array by building type, zero-init, reset on slot reuse, mutated through entity helpers (`world_sim_settlement.h`). GDO exposing counts. Barracks count drives settlement troop max + training rate, replacing the per-mille parameters; knights cap 0 until a Keep exists; levy max rule unchanged.
-- Imprints: chain for `include/game_common/match/world`, `src/game_common/world_sim` (+ settlements folder); notes in `src/game_common/world_sim/.ai_imprint/`.
-- Decisions: see Decisions section above (Buildings design answers, building storage, parallel rule). No game-design concerns; values are placeholders; temporary broken mechanics fine.
-- Open: how Upgrade stub is shaped; where training rate lives; wire / GDO format for the count array.
-- Done: compiles by reading (no builds run by agent), user reviews design.
 
 ## Current state
 
