@@ -28,6 +28,7 @@ struct game_parameters
 
     // CONSTRUCTION
     ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's local wealth) while a road worker is building.
+    ui16 road_build_ticks_per_cost = 30; // Ticks to build a road tile, per point of its travel cost without a road.
 
     // PRODUCTION
     ui8 peasant_production_percent_base = 6; // Percent surplus output per peasant (each peasant will produce at most 1 wealth + surplus%)
@@ -65,6 +66,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)
 
     GAME_DATA_PROPERTY(peasant_production_percent_base, GAME_DATA_PROP_TYPE::UI8)
 

@@ -394,7 +394,7 @@ struct build_road_data
     world_location head; // Last tile built, which is where the road continues from.
     world_location destination; // Tile the road is going towards.
     ui8 funded; // 1 if the current day is paid for. The crew only walks / builds while it is.
-    ui8 ticks_left; // Ticks left to build the tile the crew is on. 0 = not started on the next tile.
+    ui16 ticks_left; // Ticks left to build the tile the crew is on. 0 = not started on the next tile.
 };
 static_assert(sizeof(build_road_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
 

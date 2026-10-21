@@ -18,7 +18,7 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 }
 
 // Road crew: starts at the first non-road tile of the path (road tiles are skipped for free), walks to the tile and builds it there, one tile at a time.
-// Building a tile takes as many ticks as its travel cost without a road. The crew is paid for a day (GAME_PARAMETERS.road_crew_cost_per_day, treasury -> settlement's
+// Building a tile takes GAME_PARAMETERS.road_build_ticks_per_cost ticks per point of its travel cost without a road. The crew is paid for a day (GAME_PARAMETERS.road_crew_cost_per_day, treasury -> settlement's
 // local wealth) at its first tick and then on each daily tick; it only works while the current day is paid. Returns true when the project is finished:
 // the destination is reached, or no further progress is possible (unreachable, or the territory ends).
 static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_index)
@@ -66,7 +66,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     if (location != next) return !world_entity_follow_path(world, movement, location);
 
     // On the tile: the first tick sets the build time (the tile is not a road, so this is its terrain cost), then the tile is built when it runs out.
-    if (data.ticks_left == 0) data.ticks_left = ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params));
+    if (data.ticks_left == 0) data.ticks_left = (ui16)(ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)) * GAME_PARAMETERS.road_build_ticks_per_cost);
     data.ticks_left--;
     if (data.ticks_left == 0)
     {
