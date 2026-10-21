@@ -99,6 +99,9 @@ void world_system_entity_movement(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);
 
+// Daily: every army costs upkeep per troop, paid by its owner's treasury (down to 0, no debt). Adds to the player's expenses.
+void world_system_armies_upkeep(match_world_state& world);
+
 // Raising armies standing on their destination (and not in a battle) draw men from their home settlement.
 void world_system_armies_raising(match_world_state& world);
 

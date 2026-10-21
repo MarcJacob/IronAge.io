@@ -16,6 +16,7 @@
 
 #include "armies/world_sim_entity_army.cpp"
 #include "armies/world_system_army.cpp"
+#include "armies/world_system_army_upkeep.cpp"
 #include "armies/world_system_battle.cpp"
 
 #include "battles/world_sim_entity_battle.cpp"
@@ -175,6 +176,7 @@ void world_state_tick(match_world_state& world)
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
     world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
+    world_system_armies_upkeep(world); // After the daily economy reset expenses.
     world_system_settlement_territory(world);
     world_system_settlement_territory_proximity_recalc(world);
     world_system_settlement_territory_update_pressure(world);

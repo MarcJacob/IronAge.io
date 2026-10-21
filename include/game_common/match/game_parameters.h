@@ -20,6 +20,11 @@ struct game_parameters
     ui8 barracks_maa_max_increase = 50; // How much Men At Arms max is increased per barracks in a settlement.
 
     // ECONOMY
+    // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (500 = 0.5), computed on the army's levy total and rounded down.
+    ui32 upkeep_levy_per_mille = 500;
+    ui32 upkeep_men_at_arms = 2;
+    ui32 upkeep_horseman = 10;
+    ui32 upkeep_knight = 30;
 
     // PRODUCTION
     ui8 peasant_production_percent_base = 6; // Percent surplus output per peasant (each peasant will produce at most 1 wealth + surplus%)
@@ -50,6 +55,11 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(ticks_per_day, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
+
+    GAME_DATA_PROPERTY(upkeep_levy_per_mille, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(peasant_production_percent_base, GAME_DATA_PROP_TYPE::UI8)
 
