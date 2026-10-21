@@ -5,6 +5,7 @@
 
 // Only functions marked WASM_EXPORT are exported (build uses -fvisibility=hidden).
 #include "core/assert.h"
+#include "game_common/match/world/world_entities.h"
 #define WASM_EXPORT extern "C" __attribute__((visibility("default")))
 
 #include "core.h"
@@ -22,6 +23,21 @@ struct web_client_state
 	mem_arena backend_memory;
 	game_client* backend;
 };
+
+#pragma pack(push, 1)
+
+// Data about an entity currently being inspected on the frontend, with a data layout / contents depending on entity type.
+struct entity_inspection_context
+{
+    entity_guid inspected_entity_guid;
+
+    ui32 extra_data_offset; // Offset at which inspected entity GDO ends and extra data (constituted per entity type if needed) begins.
+
+    static constexpr ui32 BUFFER_SIZE = 4096;
+    ui8 inspection_buffer[BUFFER_SIZE];
+};
+
+#pragma pack(pop)
 
 extern web_client_state WEB_CLIENT;
 

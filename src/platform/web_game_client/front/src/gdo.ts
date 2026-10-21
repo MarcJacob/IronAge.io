@@ -36,13 +36,39 @@ export interface GDOProperty
 {
     name: string;
     type: GAME_DATA_PROP_TYPE;
-    value: GDOValue;
+    value: GDOValue; // The value, or the first item of an array property.
+    items?: GDOValue[]; // All the items of an array property (count > 1).
+}
+
+// Byte size of one item of a property type (mirrors get_data_prop_size). 0 for unsupported types.
+function get_GDO_prop_size(type: GAME_DATA_PROP_TYPE): number
+{
+    switch (type)
+    {
+    case GAME_DATA_PROP_TYPE.UI8:
+    case GAME_DATA_PROP_TYPE.I8: return 1;
+    case GAME_DATA_PROP_TYPE.UI16:
+    case GAME_DATA_PROP_TYPE.I16:
+    case GAME_DATA_PROP_TYPE.VEC2_UI8:
+    case GAME_DATA_PROP_TYPE.VEC2_I8:
+    case GAME_DATA_PROP_TYPE.PLAYER_ID: return 2;
+    case GAME_DATA_PROP_TYPE.UI32:
+    case GAME_DATA_PROP_TYPE.I32:
+    case GAME_DATA_PROP_TYPE.VEC2_UI16:
+    case GAME_DATA_PROP_TYPE.VEC2_I16:
+    case GAME_DATA_PROP_TYPE.WORLD_LOCATION:
+    case GAME_DATA_PROP_TYPE.ENTITY_GUID: return 4;
+    case GAME_DATA_PROP_TYPE.VEC2_UI32:
+    case GAME_DATA_PROP_TYPE.VEC2_I32: return 8;
+    default: return 0;
+    }
 }
 
 // Reads one property value from the struct copy of a GDO (data starts at the copy). Null for unsupported types (64 bit ones).
-function read_GDO_value(data: DataView, prop: GDOPropDef): GDOValue | null
+// index: item of an array property.
+function read_GDO_value(data: DataView, prop: GDOPropDef, index: number = 0): GDOValue | null
 {
-    const at = prop.offset;
+    const at = prop.offset + index * get_GDO_prop_size(prop.type);
     switch (prop.type)
     {
     case GAME_DATA_PROP_TYPE.UI8: return data.getUint8(at);
@@ -75,7 +101,15 @@ export function read_GDO_properties(gdo_offset: number, schema?: GDOPropDef[]): 
     for (const prop of schema ?? read_GDO_schema(gdo_offset))
     {
         const value = read_GDO_value(data, prop);
-        if (value !== null) properties.push({ name: prop.name, type: prop.type, value });
+        if (value === null) continue;
+
+        const property: GDOProperty = { name: prop.name, type: prop.type, value };
+        if (prop.count > 1)
+        {
+            property.items = [value];
+            for (let index = 1; index < prop.count; index++) property.items.push(read_GDO_value(data, prop, index)!);
+        }
+        properties.push(property);
     }
     return properties;
 }
@@ -97,11 +131,35 @@ export class GDOData
 {
     properties: GDOProperty[];
     private values = new Map<string, GDOValue>();
+    private arrays = new Map<string, GDOValue[]>();
 
     constructor(properties: GDOProperty[])
     {
         this.properties = properties;
-        for (const property of properties) this.values.set(property.name, property.value);
+        for (const property of properties)
+        {
+            this.values.set(property.name, property.value);
+            if (property.items !== undefined) this.arrays.set(property.name, property.items);
+        }
+    }
+
+    // Items of a numeric array property (ints, guids, player ids). Empty if there is no such property, or it is not an array.
+    get_array(name: string): number[]
+    {
+        const items = this.arrays.get(name);
+        return items === undefined ? [] : items.filter((item): item is number => typeof item === "number");
+    }
+
+    // Text of an array property of bytes (I8 / UI8 items), up to the first null. Empty if there is no such property.
+    get_string(name: string): string
+    {
+        const bytes: number[] = [];
+        for (const item of this.get_array(name))
+        {
+            if (item === 0) break;
+            bytes.push(item & 0xFF);
+        }
+        return TEXT_DECODER.decode(new Uint8Array(bytes));
     }
 
     // Value of a numeric property (ints, guids, player ids). 0 if there is no such property.
@@ -119,19 +177,25 @@ export class GDOData
     }
 }
 
-// Entity inspection. Entity GDOs have their own buffer in the backend, overwritten by every query: the values are lifted out right away.
-// The schema of an entity type never changes at runtime, so it is read once per type (the entity type is the low byte of the guid).
+// Entity inspection. The backend writes the entity's GDO (and extra data for some types) in its inspection buffer, overwritten by every inspection:
+// the values are lifted out right away. The schemas of an entity type never change at runtime, so they are read once per type (the entity type is the low byte of the guid).
 const ENTITY_SCHEMAS = new Map<number, GDOPropDef[]>();
+const ENTITY_EXTRA_SCHEMAS = new Map<number, GDOPropDef[]>();
 
 // A snapshot of an entity's state. Raw values, named as in the entity's GDO (world_entities.h). Stays as it was when queried: query again to see changes.
 export class EntityData extends GDOData
 {
     entity_type: number; // ENTITY_TYPE, from the guid.
 
-    constructor(public guid: number, properties: GDOProperty[])
+    // Data the entity's GDO doesn't provide, built by the web layer for the UI (web_game_client_query.cpp). Null for entity types without any.
+    // Settlement: construction_project_count, and arrays construction_project_building_type / construction_project_progress (0..255) with that many items used.
+    extra: GDOData | null;
+
+    constructor(public guid: number, properties: GDOProperty[], extra: GDOData | null = null)
     {
         super(properties);
         this.entity_type = guid & 0xFF;
+        this.extra = extra;
     }
 }
 
@@ -139,9 +203,10 @@ export class EntityData extends GDOData
 // Cost: one backend call, plus one object per property.
 export function query_entity(guid: number): EntityData | null
 {
-    if (Backend.entity_gdo_query(guid) === 0) return null;
+    const totalSize = Backend.entity_inspect(guid);
+    if (totalSize === 0) return null;
 
-    const offset = Backend.entity_gdo_get_buffer_offset();
+    const offset = Backend.inspected_entity_gdo_get_offset();
     const entityType = guid & 0xFF;
 
     let schema = ENTITY_SCHEMAS.get(entityType);
@@ -150,7 +215,23 @@ export function query_entity(guid: number): EntityData | null
         schema = read_GDO_schema(offset);
         ENTITY_SCHEMAS.set(entityType, schema);
     }
-    return new EntityData(guid, read_GDO_properties(offset, schema));
+    const properties = read_GDO_properties(offset, schema);
+
+    // The extra data GDO follows the entity's GDO: there is some if more than the entity GDO was written (its size is the first ui32 of its header).
+    const gdoSize = new DataView(Backend.get_memory_bytes().buffer, offset, 4).getUint32(0, true);
+    let extra: GDOData | null = null;
+    if (totalSize > gdoSize)
+    {
+        const extraOffset = Backend.inspected_entity_extra_data_get_offset();
+        let extraSchema = ENTITY_EXTRA_SCHEMAS.get(entityType);
+        if (extraSchema === undefined)
+        {
+            extraSchema = read_GDO_schema(extraOffset);
+            ENTITY_EXTRA_SCHEMAS.set(entityType, extraSchema);
+        }
+        extra = new GDOData(read_GDO_properties(extraOffset, extraSchema));
+    }
+    return new EntityData(guid, properties, extra);
 }
 
 let GAME_PARAMETERS: GDOData | null = null;
@@ -165,6 +246,42 @@ export function get_game_parameters(): GDOData
         GAME_PARAMETERS = new GDOData(read_GDO_properties(offset));
     }
     return GAME_PARAMETERS;
+}
+
+// A settlement building type, from its row of SETTLEMENT_BUILDING_TABLE (world_entities.h). Type = index of the row, as in building_counts.
+export interface BuildingDefinition
+{
+    name: string;
+    description: string;
+    build_days: number;
+    cost_per_day: number; // Wealth per day while under construction.
+    workers: number; // Workers taken from the peasants while under construction.
+}
+
+// The table is constant: each type is read from the backend once, then cached. Schema (same for all rows) cached too.
+const BUILDING_DEFINITIONS = new Map<number, BuildingDefinition>();
+let BUILDING_DEFINITION_SCHEMA: GDOPropDef[] | null = null;
+
+// Definition of a building type, or null if there is no such type.
+export function get_building_definition(type: number): BuildingDefinition | null
+{
+    const cached = BUILDING_DEFINITIONS.get(type);
+    if (cached !== undefined) return cached;
+
+    const offset = Backend.building_definition_gdo_get_offset(type);
+    if (offset === 0) return null;
+
+    if (BUILDING_DEFINITION_SCHEMA === null) BUILDING_DEFINITION_SCHEMA = read_GDO_schema(offset);
+    const data = new GDOData(read_GDO_properties(offset, BUILDING_DEFINITION_SCHEMA));
+    const definition: BuildingDefinition = {
+        name: data.get_string("name"),
+        description: data.get_string("description"),
+        build_days: data.get_number("build_days"),
+        cost_per_day: data.get_number("cost_per_day"),
+        workers: data.get_number("workers"),
+    };
+    BUILDING_DEFINITIONS.set(type, definition);
+    return definition;
 }
 
 // The local player's state (world_player_state in include/game_common/match/world/world.h).
@@ -185,7 +302,7 @@ export function read_GDO_schema(gdo_offset: number): GDOPropDef[]
     const view = new DataView(memory.buffer, gdo_offset, totalSize);
 
     const props: GDOPropDef[] = [];
-    for (let at = propsOffset; at + 9 <= totalSize; at += 11)
+    for (let at = propsOffset; at + 11 <= totalSize; at += 11)
     {
         const nameStart = view.getUint32(at, true);
         let nameEnd = nameStart;

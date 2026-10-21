@@ -86,8 +86,13 @@ interface ClientExports extends WebAssembly.Exports
 
     // Entity inspection
 
-    client_query_entity_gdo(guid: number): number; // Byte size of the entity GDO written in its buffer, 0 on failure.
-    client_get_entity_gdo_buffer_offset(): number;
+    client_inspect_entity(guid: number): number; // Byte size written in the inspection buffer (entity GDO + extra data GDO if any), 0 on failure.
+    client_get_inspected_entity_gdo(): number; // Offset of the entity GDO, at the start of the inspection buffer.
+    client_get_inspected_entity_extra_data(): number; // Offset of the extra data GDO, right after the entity GDO (only there if the inspected size is above the GDO's size).
+
+    // Settlement building definitions
+
+    client_get_building_definition_gdo(type: number): number; // Fills and returns the offset of the GDO of a row of SETTLEMENT_BUILDING_TABLE, 0 if there is no such type.
 
     // Game parameters and world state values
 
@@ -308,10 +313,14 @@ export namespace ClientInput
     export function command_get_feedback_offset(): number { return CLIENT_BACKEND.client_command_get_feedback_offset(); }
 }
 
-// Entity inspection through Game Data Objects (see gdo.ts). The buffer is overwritten by every query: read it right away.
-// Returns the byte size of the GDO written, 0 if the entity doesn't exist (anymore), has no GDO yet or it doesn't fit the buffer.
-export function entity_gdo_query(guid: number): number { return CLIENT_BACKEND.client_query_entity_gdo(guid); }
-export function entity_gdo_get_buffer_offset(): number { return CLIENT_BACKEND.client_get_entity_gdo_buffer_offset(); }
+// Entity inspection through Game Data Objects (see gdo.ts). The inspection buffer is overwritten by every inspection: read it right away.
+// Returns the total byte size written (entity GDO + extra data GDO if the entity type has some), 0 if the entity doesn't exist (anymore), has no GDO yet or it doesn't fit the buffer.
+export function entity_inspect(guid: number): number { return CLIENT_BACKEND.client_inspect_entity(guid); }
+export function inspected_entity_gdo_get_offset(): number { return CLIENT_BACKEND.client_get_inspected_entity_gdo(); }
+export function inspected_entity_extra_data_get_offset(): number { return CLIENT_BACKEND.client_get_inspected_entity_extra_data(); }
+
+// Offset of the GDO of a settlement building type (SETTLEMENT_BUILDING_TABLE row, world_entities.h), refreshed by this call. 0 if there is no such type. Read it with gdo.ts (get_building_definition).
+export function building_definition_gdo_get_offset(type: number): number { return CLIENT_BACKEND.client_get_building_definition_gdo(type); }
 
 // Offset of the game_parameters GDO (include/game_common/match/game_parameters.h), refreshed by this call. Read it with gdo.ts (get_game_parameters).
 export function game_parameters_gdo_get_offset(): number { return CLIENT_BACKEND.client_get_game_parameters_gdo_offset(); }

@@ -60,7 +60,8 @@ function entity_text(entity: EntityData): string
     for (const property of entity.properties)
     {
         let value: string | number;
-        if (typeof property.value !== "number") value = `(${property.value.x}, ${property.value.y})`;
+        if (property.items !== undefined) value = `[${property.items.map(item => typeof item === "number" ? item : `(${item.x}, ${item.y})`).join(", ")}]`;
+        else if (typeof property.value !== "number") value = `(${property.value.x}, ${property.value.y})`;
         else if (property.type === GAME_DATA_PROP_TYPE.ENTITY_GUID) value = "0x" + property.value.toString(16);
         else value = property.value;
         rows.push([property.name, value]);

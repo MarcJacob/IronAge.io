@@ -30,7 +30,7 @@ void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...
 
 WASM_EXPORT bool web_client_start()
 {
-	WEB_CLIENT = {};
+    WEB_CLIENT = {};
 
     // Define assertion handler.
     WEB_CLIENT.assertion_handler.ASSERT_EXIT_FUNC = ASSERT_EXIT_FUNC;

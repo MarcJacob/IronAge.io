@@ -88,7 +88,11 @@ struct settlement_building_events
 
 struct settlement_building_def
 {
-	const char* name;
+	static constexpr ui8 NAME_MAX = 32;
+	static constexpr ui16 DESCRIPTION_MAX = 256;
+
+	char name[NAME_MAX]; // Null terminated. Fixed size so a GDO can cover it (array of I8).
+	char description[DESCRIPTION_MAX]; // Null terminated. Generic text for the UI.
 	ui16 build_days; // Construction time.
 	ui32 cost_per_day; // Wealth per day while under construction.
 	ui8 workers; // Workers taken from the peasants while under construction.
@@ -104,10 +108,19 @@ void settlement_building_barracks_on_removed(match_world_state& world, entity_gu
 // Settlements keep a count per row of this table.
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
-	{ "Barracks", 5, 100, 10, settlement_building_events { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
+	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.", 5, 100, 10, settlement_building_events { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
+
+// A row of the table as a Game Data Object, for the UI. Only what the UI needs: the row's function pointers are not exposed.
+GAME_DATA_OBJECT_DEF_BEGIN(settlement_building_def)
+	GAME_DATA_PROPERTY_PATH_ARRAY(name, name, GAME_DATA_PROP_TYPE::I8, settlement_building_def::NAME_MAX) // Null terminated text.
+	GAME_DATA_PROPERTY_PATH_ARRAY(description, description, GAME_DATA_PROP_TYPE::I8, settlement_building_def::DESCRIPTION_MAX) // Null terminated text.
+	GAME_DATA_PROPERTY(build_days, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(cost_per_day, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(workers, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_OBJECT_DEF_END();
 
 struct world_entity_container
 {
