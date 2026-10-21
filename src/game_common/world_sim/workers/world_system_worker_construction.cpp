@@ -17,26 +17,62 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
     if (region.owners[tileIndex] != world_terrain::UNOWNED_TILE) region.status[tileIndex].proximity_recalc = true;
 }
 
-// Builds one more tile of the road, within the origin settlement's territory. Returns true when the project is finished:
+// Road crew: starts at the first non-road tile of the path (road tiles are skipped for free), walks to the tile and builds it there, one tile at a time.
+// Building a tile takes as many ticks as its travel cost without a road. The crew is paid for a day (GAME_PARAMETERS.road_crew_cost_per_day, treasury -> settlement's
+// local wealth) at its first tick and then on each daily tick; it only works while the current day is paid. Returns true when the project is finished:
 // the destination is reached, or no further progress is possible (unreachable, or the territory ends).
 static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_index)
 {
     world_entity_workers& workers = world.entities->workers;
     build_road_data& data = *(build_road_data*)workers.action_data[worker_index].bytes;
 
-    if (data.head == data.destination) return true;
+    if (world_is_daily_tick(world) || workers.work_times[worker_index] == 0)
+    {
+        ui16 originIndex = workers.origin_entity[worker_index].get_index();
+        match_player_id owner = world.entities->settlements.owners[originIndex];
+        data.funded = owner < world.player_count && world.player_states[owner].treasury >= GAME_PARAMETERS.road_crew_cost_per_day;
+        if (data.funded) settlement_wealth_fund_from_treasury(world, originIndex, GAME_PARAMETERS.road_crew_cost_per_day);
+    }
+    if (!data.funded) return false; // Stalled until a day can be paid.
 
     path_params params = {};
     params.passable_terrain = PATH_TERRAIN_LAND;
     params.within_settlement_territory = workers.origin_entity[worker_index];
 
-    // Recalculated every tick, like movement. To be replaced by the path cache.
-    path_result result;
-    world_request_path(world, data.head, data.destination, params, result);
-    if (result.count == 0) return true;
+    // Find the next tile to build, skipping the ones that are already roads.
+    world_location next;
+    ui16 regionIndex, tileIndex;
+    while (true)
+    {
+        if (data.head == data.destination) return true;
 
-    data.head = world_path_next_tile(data.head, result.next_point);
-    world_tile_set_road(world, data.head);
+        // Recalculated every tick, like movement. To be replaced by the path cache.
+        path_result result;
+        world_request_path(world, data.head, data.destination, params, result);
+        if (result.count == 0) return true;
+
+        next = world_path_next_tile(data.head, result.next_point);
+        world_get_tile(*world.terrain, next, regionIndex, tileIndex);
+        if (!world.terrain->regions[regionIndex].status[tileIndex].is_road) break;
+
+        data.head = next;
+        data.ticks_left = 0;
+    }
+
+    // Walk to the tile.
+    world_entity_movement& movement = workers.movements[worker_index];
+    world_location& location = workers.locations[worker_index];
+    movement.destination = next;
+    if (location != next) return !world_entity_follow_path(world, movement, location);
+
+    // On the tile: the first tick sets the build time (the tile is not a road, so this is its terrain cost), then the tile is built when it runs out.
+    if (data.ticks_left == 0) data.ticks_left = ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params));
+    data.ticks_left--;
+    if (data.ticks_left == 0)
+    {
+        world_tile_set_road(world, next);
+        data.head = next;
+    }
     return false;
 }
 

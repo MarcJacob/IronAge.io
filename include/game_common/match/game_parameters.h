@@ -26,6 +26,9 @@ struct game_parameters
     ui32 upkeep_horseman = 10;
     ui32 upkeep_knight = 30;
 
+    // CONSTRUCTION
+    ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's local wealth) while a road worker is building.
+
     // PRODUCTION
     ui8 peasant_production_percent_base = 6; // Percent surplus output per peasant (each peasant will produce at most 1 wealth + surplus%)
 
@@ -60,6 +63,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
+
+    GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(peasant_production_percent_base, GAME_DATA_PROP_TYPE::UI8)
 

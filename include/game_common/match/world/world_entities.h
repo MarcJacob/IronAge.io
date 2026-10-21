@@ -381,7 +381,7 @@ struct world_worker_action_data
 enum class WORK_TYPE : ui16
 {
     FOUND_SETTLEMENT, // Worker is on the map and goes to found a settlement at specific.
-    BUILD_ROAD, // Worker is on the map and builds a road from origin to destination.
+    BUILD_ROAD, // Worker is on the map and builds a road from origin to destination, tile by tile.
     BUILD_SETTLEMENT_BUILDING, // Worker is inside the settlement and builds a building / upgrade.
 
     WORK_TYPE_COUNT,
@@ -393,6 +393,8 @@ struct build_road_data
     world_location start; // Tile the road starts from.
     world_location head; // Last tile built, which is where the road continues from.
     world_location destination; // Tile the road is going towards.
+    ui8 funded; // 1 if the current day is paid for. The crew only walks / builds while it is.
+    ui8 ticks_left; // Ticks left to build the tile the crew is on. 0 = not started on the next tile.
 };
 static_assert(sizeof(build_road_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
 
