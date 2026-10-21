@@ -8,10 +8,11 @@
 
 import * as Backend from "../../backend.js"
 import { query_entity, type EntityData } from "../../gdo.js"
-import type { PropertiesPanelState } from "./ui_element_properties_panel.js"
+import { in_area, type PropertiesPanelState } from "./ui_element_properties_panel.js"
 import { basic_section } from "./section_basic.js"
 import { wealth_section, population_section } from "./section_economy.js"
 import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
+import { construction_section } from "./section_construction.js"
 
 export interface InspectionContext
 {
@@ -20,6 +21,12 @@ export interface InspectionContext
 
     // Settlement: turns the tax rate row into a slider. Called on release with the tax_rate of SET_SETTLEMENT_TAX_RATE to send.
     on_tax_rate?: (tax_rate: number) => void;
+
+    // Settlement: gives the building rows a button starting a project of the given building type (row of the building table).
+    on_build_building?: (building_type: number) => void;
+
+    // Settlement: whether a project of the building type would be accepted now (the button is disabled otherwise). Without it the buttons are always enabled.
+    can_build_building?: (building_type: number) => boolean;
 
     // Settlement: shows the troops an army raised from it would have ("Raise army") against these targets instead of its own troops.
     raise_targets?: number[];
@@ -33,7 +40,12 @@ function inspect_settlement(view: EntityData, context: InspectionContext): Prope
     if (context.raise_targets !== undefined)
         return { title: "Raise army", rows: army_raise_section(null, view, context.raise_targets, context.on_raise_targets) };
 
-    return { title: "Settlement", rows: [...wealth_section(view, context.on_tax_rate),...population_section(view), ...settlement_pool_section(view, context.on_ceiling)] };
+    // Top left: population then finances. Top right: troops. Bottom: buildings.
+    return { title: "Settlement", rows: [
+        ...in_area("left", [...population_section(view), ...wealth_section(view, context.on_tax_rate)]),
+        ...in_area("right", settlement_pool_section(view, context.on_ceiling)),
+        ...in_area("bottom", construction_section(view, context.on_build_building, context.can_build_building)),
+    ] };
 }
 
 function inspect_army(view: EntityData, context: InspectionContext): PropertiesPanelState

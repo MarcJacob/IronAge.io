@@ -19,12 +19,16 @@ const CEILING_SATURATED = 0xFFFF; // Raw ceiling meaning "follows max".
 const MAX_COUNT = 0xFFFF; // Counts are ui16.
 
 // Local pool of a settlement, one gauge per pooled type (no levies): current (at home), raised (in armies), ceiling slider, max.
+// A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
 // on_ceiling: called on release with the troop_type of SET_SETTLEMENT_TROOP_CEILING and the raw ceiling to send.
 export function settlement_pool_section(settlement: EntityData, on_ceiling?: (troop_type: number, ceiling: number) => void): PanelRow[]
 {
-    return TROOPS.slice(1).map((troop, i): PanelRow => {
+    const rows: PanelRow[] = [];
+    TROOPS.slice(1).forEach((troop, i) => {
         const max = settlement.get_number(`max_${troop.name}`);
-        return { kind: "gauge", id: `troops_${troop.name}`, state: {
+        if (max === 0 && settlement.get_number(`troops_${troop.name}`) === 0 && settlement.get_number(`raised_${troop.name}`) === 0) return;
+
+        rows.push({ kind: "gauge", id: `troops_${troop.name}`, state: {
             label: troop.label,
             color: troop.color,
             current: settlement.get_number(`troops_${troop.name}`), // At home.
@@ -34,8 +38,9 @@ export function settlement_pool_section(settlement: EntityData, on_ceiling?: (tr
             slider_name: "ceiling",
             warn_below_current: true,
             on_change: on_ceiling === undefined ? undefined : (value: number) => on_ceiling(i, value >= max ? CEILING_SATURATED : value),
-        } };
+        } });
     });
+    return rows;
 }
 
 // The raise targets of an army, in troop order.
@@ -44,36 +49,42 @@ export function army_raise_targets(army: EntityData): number[]
     return TROOPS.map(troop => army.get_number(`raised_${troop.name}`));
 }
 
-// One gauge per troop type of an army being raised: current counts (zero without army), target slider, max (what the home settlement can give).
+// One gauge per troop type of an army being raised: current counts (zero without army), target slider, max (what the home settlement can give now).
+// A type with nothing available, no troops in the army and no target is left out (nothing to set).
 // army: null for an army not raised yet. home: null if unknown (max falls back to current). targets: the target per type, in troop order.
 // on_targets: called on release with all the targets, the released one updated.
 export function army_raise_section(army: EntityData | null, home: EntityData | null, targets: number[], on_targets?: (targets: number[]) => void): PanelRow[]
 {
-    return TROOPS.map((troop, i): PanelRow => {
+    const rows: PanelRow[] = [];
+    TROOPS.forEach((troop, i) => {
         const current = army === null ? 0 : army.get_number(`composition_${troop.name}`);
 
         let max = current;
         if (home !== null)
         {
-            // Pooled types: the home max, or the pool if it holds more (pool above max is kept) so the existing troops can be drawn.
+            // What the settlement can give: the free peasants above the population kept back for levies, the troops in the local pool for the others.
             max = i === 0
                 ? Math.max(0, home.get_number("peasants") - get_game_parameters().get_number("raise_min_population_left"))
-                : Math.max(home.get_number(`max_${troop.name}`), home.get_number(`troops_${troop.name}`));
+                : home.get_number(`troops_${troop.name}`);
         }
-        return { kind: "gauge", id: `army_${troop.name}`, state: {
+        if (max === 0 && current === 0 && targets[i] === 0) return;
+
+        rows.push({ kind: "gauge", id: `army_${troop.name}`, state: {
             label: troop.label,
             color: troop.color,
             current,
             max: Math.min(max, MAX_COUNT),
             slider: targets[i],
             slider_name: "target",
+            compact: true,
             on_change: on_targets === undefined ? undefined : (value: number) => {
                 const updated = targets.slice();
                 updated[i] = value;
                 on_targets(updated);
             },
-        } };
+        } });
     });
+    return rows;
 }
 
 // One gauge per troop type of an army that is not raising: current counts against max, no target marker or sliders.

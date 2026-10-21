@@ -15,6 +15,7 @@ export interface GaugeState
     slider_name?: string; // What the slider means, shown in the text ("ceiling", "target").
     on_change?: (value: number) => void; // Makes the slider interactive. Called with the released value (not while dragging).
     warn_below_current?: boolean; // Warn (red) while the slider is below current + raised: releasing there discards only current (never raised) down to the slider.
+    compact?: boolean; // Text reduced to the label and the slider value (the current value if there is no slider), with the max alone at the right end of the line above the bar.
 }
 
 // How long a released value is kept shown while waiting for the game state to catch up with it.
@@ -24,6 +25,7 @@ export class GaugeElement
 {
     readonly root = document.createElement("div");
     private text = document.createElement("div");
+    private max_text = document.createElement("div"); // Right end of the line above the bar, used by compact gauges.
     private fill = document.createElement("div");
     private raised_fill = document.createElement("div");
     private marker = document.createElement("div");
@@ -36,6 +38,11 @@ export class GaugeElement
     {
         this.root.className = "gauge";
         this.text.className = "gauge_text";
+        this.max_text.className = "gauge_max";
+
+        const header = document.createElement("div");
+        header.className = "gauge_header";
+        header.append(this.text, this.max_text);
 
         const bar = document.createElement("div");
         bar.className = "gauge_bar";
@@ -43,7 +50,7 @@ export class GaugeElement
         this.raised_fill.className = "gauge_raised";
         this.marker.className = "gauge_marker";
         bar.append(this.fill, this.raised_fill, this.marker);
-        this.root.append(this.text, bar);
+        this.root.append(header, bar);
     }
 
     // The range input exists only while the state is interactive.
@@ -111,8 +118,13 @@ export class GaugeElement
         this.marker.style.left = `${100 * (shown ?? 0) / scale}%`;
         this.marker.classList.toggle("warn", warn);
 
-        this.text.textContent = `${state.label} ${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}` : "")
-            + (warn ? `  (discards ${discards})` : "");
+        const text = state.compact === true
+            ? `${state.label} ${shown ?? state.current}`
+            : `${state.label} ${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}` : "")
+                + (warn ? `  (discards ${discards})` : "");
+        const max_text = state.compact === true && state.max !== undefined ? String(state.max) : "";
+        if (this.text.textContent !== text) this.text.textContent = text;
+        if (this.max_text.textContent !== max_text) this.max_text.textContent = max_text;
         this.text.classList.toggle("warn", warn);
         if (this.slider !== null) this.slider.classList.toggle("warn", warn);
     }

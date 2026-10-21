@@ -143,11 +143,12 @@ export class GDOData
         }
     }
 
-    // Items of a numeric array property (ints, guids, player ids). Empty if there is no such property, or it is not an array.
+    // Items of a numeric array property (ints, guids, player ids). Empty if there is no such property.
+    // An array of one item can't be told from a single value (count 1): it comes back as that one item.
     get_array(name: string): number[]
     {
-        const items = this.arrays.get(name);
-        return items === undefined ? [] : items.filter((item): item is number => typeof item === "number");
+        const items = this.arrays.get(name) ?? (this.values.has(name) ? [this.values.get(name)!] : []);
+        return items.filter((item): item is number => typeof item === "number");
     }
 
     // Text of an array property of bytes (I8 / UI8 items), up to the first null. Empty if there is no such property.

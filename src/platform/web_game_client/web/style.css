@@ -132,13 +132,47 @@ body {
 }
 
 #game_hud_properties_title {
-    margin-bottom: 6px;
+    margin-bottom: 10px;
+    font-size: 1.5rem;
     font-weight: bold;
     text-align: center;
 }
 
+/* Parts of the panel: the main one (rows without an area) full width, then left and right as halves of one line, then the bottom one full width. */
+#game_hud_properties_rows {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: start;
+}
+
+.panel_area {
+    min-width: 0;
+}
+
+.panel_area_main,
+.panel_area_bottom {
+    grid-column: 1 / -1;
+}
+
+.panel_area_main { order: 0; }
+.panel_area_left { order: 1; grid-column: 1; }
+.panel_area_right { order: 2; grid-column: 2; }
+.panel_area_bottom { order: 3; margin-top: 6px; }
+
 .gauge {
     margin-bottom: 8px;
+}
+
+/* Line above the bar: the text on the left, the max (compact gauges) at the right end. */
+.gauge_header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.gauge_max {
+    color: #9aa0a6;
 }
 
 .gauge_text.warn {
@@ -188,6 +222,66 @@ body {
 .text_row_label {
     margin-right: 0.5rem;
     color: #9aa0a6;
+}
+
+/* Building row: a small box per settlement building type (name as the icon, built count, one thin bar per ongoing project, build button top right).
+   Inline so several sit side by side at the bottom of the panel. */
+.building_row {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    width: 7.5rem;
+    min-height: 4rem;
+    margin: 0 6px 6px 0;
+    padding: 6px 24px 6px 8px;
+    vertical-align: top;
+    background: rgba(20, 22, 26, 0.9);
+    border: 1px solid #c7cbd1;
+    border-radius: 4px;
+    cursor: help;
+}
+
+.building_row_name {
+    display: block;
+    font-weight: bold;
+    overflow-wrap: anywhere;
+}
+
+.building_row_count {
+    color: #9aa0a6;
+}
+
+.building_row_bars {
+    margin-top: 4px;
+}
+
+.building_row_bar {
+    height: 5px;
+    margin-top: 2px;
+    background: #14161a;
+    border: 1px solid #c7cbd1;
+}
+
+.building_row_bar > div {
+    height: 100%;
+    background: #5fd068;
+}
+
+.building_row_button {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.building_row_button.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .slider_row {

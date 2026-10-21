@@ -3,7 +3,7 @@
 // The bar state is kept here. While an action's mode is active (a child of this mode) its item shows as selected.
 
 import * as Core from "../core.js"
-import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity, send_command } from "../input.js"
+import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity, send_command, is_command_valid } from "../input.js"
 import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
 import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
 import { inspect_entity } from "../ui/inspection/inspect_entity.js"
@@ -52,6 +52,8 @@ export class SettlementSelected extends Core.Mode
 
         // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
         submit_properties_panel(inspect_entity(view, {
+            on_build_building: (building_type) => send_command("BUILD_SETTLEMENT_BUILDING", { settlement: view.guid, building_type }),
+            can_build_building: (building_type) => is_command_valid("BUILD_SETTLEMENT_BUILDING", { settlement: view.guid, building_type }),
             on_ceiling: (troop_type, ceiling) => send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling }),
             on_tax_rate: (tax_rate) => send_command("SET_SETTLEMENT_TAX_RATE", { settlement: view.guid, tax_rate }),
         }));
