@@ -111,8 +111,13 @@ void world_system_entity_movement_decision(match_world_state& world)
 		}
 		else
 		{
-			armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
-			world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+            if (armies.action_targets[armyIndex]._value != INVALID_ENTITY_GUID._value)
+            {
+                // Target existed but was invalidated. Stop any movement.
+                armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
+                world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+            }
+            // ... Otherwise do nothing as we don't want to overwrite a destination set by itself.
 		}
 	}
 
