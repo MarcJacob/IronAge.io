@@ -78,8 +78,9 @@ void world_system_caravan_spawn(match_world_state& world);
 // Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.
 void world_system_caravan_trade(match_world_state& world);
 
-// Despawns a caravan, giving its value back to its origin's local wealth (no profit) if the origin is valid.
-void world_caravan_cancel(match_world_state& world, entity_guid caravan);
+// Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
+// With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
+void world_caravan_retarget(match_world_state& world, entity_guid caravan);
 
 // Advances all construction projects (workers) by one tick, destroying the finished ones.
 void world_system_worker_construction(match_world_state& world);
@@ -107,7 +108,8 @@ void world_system_settlement_buildings_daily_tick(match_world_state& world);
 
 // Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
 // Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location);
+// out_partial (optional) is set to true when the path found only gets partway to the destination (the entity still follows it).
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, bool* out_partial = nullptr);
 
 // Movement decision AI for entities. @TODO: Too centralized. Have an equivalent decision function for each entity type.
 void world_system_entity_movement_decision(match_world_state& world);

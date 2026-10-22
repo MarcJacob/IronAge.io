@@ -4,6 +4,7 @@
 #include "world_sim.h"
 
 #include "battles/world_sim_entity_battle.h"
+#include "caravans/world_sim_entity_caravan.h"
 
 // What entities can cross for now: land only.
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
@@ -62,7 +63,7 @@ static void process_entity_movement (world_entity_movement& movement, world_loca
 
 }
 
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location)
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, bool* out_partial)
 {
     if (location == movement.move_target)
     {
@@ -72,6 +73,7 @@ bool world_entity_follow_path(match_world_state& world, world_entity_movement& m
         path_result result;
         world_request_path(world, location, movement.destination, ENTITY_PATH_PARAMS, result);
         movement.path_handle = result.handle;
+        if (out_partial != nullptr) *out_partial = result.partial;
 
         // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
         if (result.count == 0) return false;
@@ -124,10 +126,22 @@ void world_system_entity_movement_decision(match_world_state& world)
 
     world_entity_caravans& caravans = world.entities->caravans;
     
-    // Caravans move towards their destination settlement. If it is gone, they stop (the trade system cancels them).
+    // Caravans move towards their destination settlement. If it is gone, they pick a new one.
     for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
     {
-        if (!caravans.guids[caravanIndex].is_valid()) continue;
+        entity_guid caravan = caravans.guids[caravanIndex];
+        if (!caravan.is_valid()) continue;
+
+        // Returning caravans only walk back to their origin (the trade system refunds them there). Without an origin they are lost.
+        if (((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0)
+        {
+            entity_guid origin = caravans.origin_settlements[caravanIndex];
+            if (origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin))
+                caravans.movements[caravanIndex].destination = world_entity_get_location(world, origin);
+            else
+                world_destroy_entity_caravan(world, caravan);
+            continue;
+        }
 
         entity_guid destination = caravans.destination_settlements[caravanIndex];
         if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
@@ -136,7 +150,7 @@ void world_system_entity_movement_decision(match_world_state& world)
         }
         else
         {
-            world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+            world_caravan_retarget(world, caravan);
         }
     }
 }
@@ -161,10 +175,16 @@ void world_system_entity_movement(match_world_state& world)
     for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
     {
         if (!caravans.guids[caravanIndex].is_valid()) continue;
-        // No path to follow means the destination is unreachable: the caravan is cancelled instead of staying stuck.
-        if (!world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]))
+
+        bool partial = false;
+        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], &partial);
+
+        // No (or only a partial) path means the destination is unreachable: pick another one.
+        // Returning caravans are left alone: they keep asking for a path home.
+        bool returning = ((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0;
+        if ((!hasPath || partial) && !returning)
         {
-            world_caravan_cancel(world, caravans.guids[caravanIndex]);
+            world_caravan_retarget(world, caravans.guids[caravanIndex]);
         }
     }
 }

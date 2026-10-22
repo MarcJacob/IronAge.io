@@ -26,22 +26,42 @@ static void settlement_trade_pool_add(match_world_state& world, ui16 settlement_
     settlement_wealth_add_clamped(world.entities->settlements.local_wealth[settlement_index], amount - added);
 }
 
-void world_caravan_cancel(match_world_state& world, entity_guid caravan)
+void world_caravan_retarget(match_world_state& world, entity_guid caravan)
 {
     world_entity_caravans& caravans = world.entities->caravans;
+    world_entity_settlements& settlements = world.entities->settlements;
     ui16 index = caravan.get_index();
 
-    // The investment goes back to the origin's trade pool without profit. Without a valid origin it is lost.
+    // Select from the origin if it exists (excluding it), otherwise from where the caravan stands. The caravan keeps its value.
     entity_guid origin = caravans.origin_settlements[index];
-    if (caravan_settlement_is_valid(world, origin))
+    bool originValid = caravan_settlement_is_valid(world, origin);
+    world_location source = originValid ? settlements.locations[origin.get_index()] : caravans.locations[index];
+
+    entity_guid newDestination;
+    ui32 pathCost; // Unused: the trade system measures the tile distance on arrival.
+    if (world_caravan_select_destination(world, source, origin, caravans.values[index], caravans.flags[index], newDestination, pathCost))
     {
-        settlement_trade_pool_add(world, origin.get_index(), caravans.values[index]);
+        caravans.destination_settlements[index] = newDestination;
+        world_movement_stop(caravans.movements[index], caravans.locations[index]);
+        caravans.movements[index].destination = settlements.locations[newDestination.get_index()];
+        return;
     }
 
-    world_destroy_entity_caravan(world, caravan); // Maintains the origin's counter.
+    // Nowhere to go: walk back home to refund the value, or give up if there is no home.
+    if (!originValid)
+    {
+        world_destroy_entity_caravan(world, caravan);
+        return;
+    }
+
+    caravans.flags[index] = (WORLD_ENTITY_CARAVAN_FLAGS)((ui8)caravans.flags[index] | (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME);
+    caravans.destination_settlements[index] = INVALID_ENTITY_GUID;
+    world_movement_stop(caravans.movements[index], caravans.locations[index]);
+    caravans.movements[index].destination = settlements.locations[origin.get_index()];
 }
 
-// Caravans standing on their destination settlement sell their goods and disappear. Caravans whose destination is gone are cancelled.
+// Caravans standing on their destination settlement sell their goods and disappear.
+// Returning caravans refund their value to their origin's trade pool on reaching it. Invalid destinations are handled by the movement decision.
 void world_system_caravan_trade(match_world_state& world)
 {
     world_entity_caravans& caravans = world.entities->caravans;
@@ -52,12 +72,19 @@ void world_system_caravan_trade(match_world_state& world)
         entity_guid caravan = caravans.guids[caravanIndex];
         if (!caravan.is_valid()) continue;
 
-        entity_guid destination = caravans.destination_settlements[caravanIndex];
-        if (!caravan_settlement_is_valid(world, destination))
+        if (((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0)
         {
-            world_caravan_cancel(world, caravan); // Retargeting comes later (task 6).
+            entity_guid origin = caravans.origin_settlements[caravanIndex];
+            if (caravan_settlement_is_valid(world, origin) && caravans.locations[caravanIndex] == settlements.locations[origin.get_index()])
+            {
+                settlement_trade_pool_add(world, origin.get_index(), caravans.values[caravanIndex]); // No profit, no trade result.
+                world_destroy_entity_caravan(world, caravan);
+            }
             continue;
         }
+
+        entity_guid destination = caravans.destination_settlements[caravanIndex];
+        if (!caravan_settlement_is_valid(world, destination)) continue;
 
         ui16 destinationIndex = destination.get_index();
         if (caravans.locations[caravanIndex] != settlements.locations[destinationIndex]) continue; // Still travelling.

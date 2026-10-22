@@ -529,6 +529,7 @@ GAME_DATA_OBJECT_DEF_END()
 enum class WORLD_ENTITY_CARAVAN_FLAGS : ui8
 {
     IS_SHIP = 1 << 0, // "Ships" are water caravans, as we all know.
+    RETURNING_HOME = 1 << 1, // Found no destination: walking back to the origin to refund its value there.
 };
 
 struct world_entity_caravans : public world_entity_container
