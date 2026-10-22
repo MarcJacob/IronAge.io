@@ -59,8 +59,8 @@ Started: 2026-10-22 (split from `basic_world_economy_2026-10-18.md` after trade 
 
 ## Open questions
 
-- Wider redesign of the wealth / consumption / growth model after the user tries this.
+- Wider redesign of the wealth / consumption / growth model: revisit as more game mechanics arrive.
 
 ## Next step
 
-User builds and plays (check pool fills ~10% of output / day, caravans spawn at pool >= 100 with a Caravanserai); then decide whether the redesign starts.
+None. Done for now (play-tested OK); revisit later.

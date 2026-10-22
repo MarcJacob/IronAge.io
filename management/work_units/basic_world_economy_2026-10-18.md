@@ -92,4 +92,4 @@ Started: 2026-10-18 (renamed from `alpha_wealth_treasury`; absorbs `alpha_settle
 
 ## Next step
 
-Trade continues in `trade_caravans_2026-10-22.md`. Then: army upkeep / cost hooks (`alpha_troops_recruitment`). Housekeeping for the user: delete stale compiled .js in web/src (ui/ui_element_treasury.js, troop_gauges.js, ui_element_hint.js, ui_element_properties_panel.js, mode_hint_ui.js, settlement_bar_ui.js). Backlog: `debug_test_commands`, `client_game_data_store`.
+Done for now; economy revisited later as more mechanics arrive. Next: army upkeep / cost hooks (`alpha_troops_recruitment`). Housekeeping for the user: delete stale compiled .js in web/src (ui/ui_element_treasury.js, troop_gauges.js, ui_element_hint.js, ui_element_properties_panel.js, mode_hint_ui.js, settlement_bar_ui.js). Backlog: `debug_test_commands`, `client_game_data_store`.

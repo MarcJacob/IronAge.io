@@ -32,9 +32,9 @@ when it finishes.
 - `work_units/command_wiring_simplification_2026-10-18.md` [DONE]
 - `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/world_sim_simplification_2026-10-19.md`
-- `work_units/basic_world_economy_2026-10-18.md` [WIP]
-- `work_units/trade_caravans_2026-10-22.md` [WIP]
-- `work_units/economy_revamp_2026-10-22.md` [WIP]
+- `work_units/basic_world_economy_2026-10-18.md` [DONE]
+- `work_units/trade_caravans_2026-10-22.md` [DONE]
+- `work_units/economy_revamp_2026-10-22.md` [DONE]
 - `work_units/alpha_troops_recruitment_2026-10-18.md`
 - `work_units/alpha_war_extensions_2026-10-18.md`
 - `work_units/alpha_diplomacy_chat_2026-10-18.md`
@@ -43,9 +43,14 @@ when it finishes.
 - `work_units/placement_pick_validity_2026-10-13.md` [DONE]
 - `work_units/public_hosting_2026-10-15.md` [DONE]
 - `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
+<<<<<<< Updated upstream
 - `work_units/map_gen_2026-10-22.md` [WIP]
 - `work_units/match_ai_2026-10-22.md` [WIP]
 - `work_units/entity_player_colors_2026-10-23.md` [WIP]
+=======
+- `work_units/map_gen_2026-10-22.md` [DONE]
+- `work_units/match_ai_2026-10-22.md` [DONE]
+>>>>>>> Stashed changes
 
 Finished units are moved to `management/archive/` after a time.
 

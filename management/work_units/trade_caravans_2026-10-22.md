@@ -63,4 +63,4 @@ All tasks coded (1-5 and 7-10 committed, 6 unbuilt). User builds and tests (dest
 
 ## Next step
 
-User builds and reviews tasks 1-3 (check client reads `trade_investment_percent` = 10; `game_client_query.cpp` still compiles with `path::cost`). Then delegate task 4 (daily spawn).
+None. Done for now (play-tested OK); revisit with economy as more mechanics arrive.
