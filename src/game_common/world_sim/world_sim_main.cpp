@@ -24,6 +24,8 @@
 #include "workers/world_sim_entity_worker.cpp"
 #include "workers/world_system_worker_construction.cpp"
 
+#include "caravans/world_sim_entity_caravan.cpp"
+
 #include "world_system_movement.cpp"
 #include "world_pathing.cpp"
 
@@ -49,6 +51,8 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::BATTLE:
 		container = &world.entities->battles;
 		break;
+    case ENTITY_TYPE::CARAVAN:
+        container = &world.entities->caravans;
 	default:
 		return false;
 	}
@@ -72,6 +76,8 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 		return world.entities->workers.locations[entity.get_index()];
 	case ENTITY_TYPE::BATTLE:
 		return world.entities->battles.states[entity.get_index()].location;
+    case ENTITY_TYPE::CARAVAN:
+        return world.entities->caravans.locations[entity.get_index()];
 	default:
 		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
 		return INVALID_WORLD_LOCATION;
@@ -128,6 +134,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_armies(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_workers(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_battles(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+        if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     world_terrain_generate(*newWorld->terrain);
@@ -177,6 +184,7 @@ void world_state_tick(match_world_state& world)
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
     world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
     world_system_armies_upkeep(world); // After the daily economy reset expenses.
+
     world_system_settlement_territory(world);
     world_system_settlement_territory_proximity_recalc(world);
     world_system_settlement_territory_update_pressure(world);

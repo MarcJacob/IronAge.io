@@ -92,8 +92,19 @@ void world_system_entity_movement_decision(match_world_state& world)
 	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
-		if (!armies.guids[armyIndex].is_valid() || !armies.action_targets[armyIndex].is_valid()) continue;
+		if (!armies.guids[armyIndex].is_valid()) continue;
 
+		// Armies in a battle walk to the battle location, and are pinned once close enough.
+		if (armies.battles[armyIndex].is_valid())
+		{
+			world_location battleLoc = world.entities->battles.states[armies.battles[armyIndex].get_index()].location;
+			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
+			armies.movements[armyIndex].destination = battleLoc;
+            break;
+		}
+
+        // Otherwise move to action target entity.
+        // @TODO(Marc): Merge battle guid into action target.
 		if (world_entity_is_valid(world, armies.action_targets[armyIndex]))
 		{
 			armies.movements[armyIndex].destination = world_entity_get_location(world, armies.action_targets[armyIndex]);
@@ -104,25 +115,55 @@ void world_system_entity_movement_decision(match_world_state& world)
 			world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 		}
 	}
+
+
+    world_entity_caravans& caravans = world.entities->caravans;
+    
+    // Caravans move towards their destination, or their origin if the destination is gone.
+    // If both are gone, stop movement.
+    for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+    {
+        if (!caravans.guids[caravanIndex].is_valid()) continue; 
+
+        world_location dest; 
+        if (caravans.destination_settlements[caravanIndex].is_valid())
+        {
+            dest = world_entity_get_location(world, caravans.destination_settlements[caravanIndex]);
+        }
+        else if (caravans.destination_settlements[caravanIndex].is_valid())
+        {
+            dest = world_entity_get_location(world, caravans.origin_settlements[caravanIndex]);
+        }
+        else
+        {
+            world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+            break;
+        }
+
+        caravans.movements[caravanIndex].destination = dest;
+    }
 }
 
-// @TODO(Marc): Move this to Army code, in a "Army AI" system.
 void world_system_entity_movement(match_world_state& world)
 {
     world_entity_armies& armies = world.entities->armies;
-
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-
-		// Armies in a battle walk to the battle location, and are pinned once close enough.
-		if (armies.battles[armyIndex].is_valid())
-		{
-			world_location battleLoc = world.entities->battles.states[armies.battles[armyIndex].get_index()].location;
-			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
-			armies.movements[armyIndex].destination = battleLoc;
-		}
-
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}
+
+    world_entity_workers& workers = world.entities->workers;
+    for (ui32 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
+    {
+        if (!workers.guids[workerIndex].is_valid()) continue;
+        world_entity_follow_path(world, workers.movements[workerIndex], workers.locations[workerIndex]);
+    }
+
+    world_entity_caravans& caravans = world.entities->caravans;
+    for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+    {
+        if (!caravans.guids[caravanIndex].is_valid()) continue;
+        world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+    }
 }

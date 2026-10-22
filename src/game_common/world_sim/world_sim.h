@@ -93,8 +93,10 @@ void world_system_settlement_buildings_daily_tick(match_world_state& world);
 // Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
 bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location);
 
+// Movement decision AI for entities. @TODO: Too centralized. Have an equivalent decision function for each entity type.
 void world_system_entity_movement_decision(match_world_state& world);
 
+// Movement application for entities that can move.
 void world_system_entity_movement(match_world_state& world);
 
 void world_system_armies_target_reached(match_world_state& world);

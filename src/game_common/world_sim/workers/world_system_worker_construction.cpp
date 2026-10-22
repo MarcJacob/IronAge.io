@@ -62,7 +62,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     world_entity_movement& movement = workers.movements[worker_index];
     world_location& location = workers.locations[worker_index];
     movement.destination = next;
-    if (location != next) return !world_entity_follow_path(world, movement, location);
+    if (location != next) return false;
 
     // On the tile: the first tick sets the build time (the tile is not a road, so this is its terrain cost), then the tile is built when it runs out.
     // Tiles not owned by the settlement's player (unowned, or another player's) take road_build_foreign_multiplier times longer.
@@ -96,11 +96,8 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
     ui16 originIndex = workers.origin_entity[worker_index].get_index();
 
     movement.destination = data.returning ? settlements.locations[originIndex] : data.target;
-
     if (location != movement.destination)
     {
-        // No path: give up on the target and go home. Going home with no path either means waiting (like armies do).
-        if (!world_entity_follow_path(world, movement, location)) data.returning = 1;
         return false;
     }
 
@@ -178,7 +175,6 @@ void world_system_worker_construction(match_world_state& world)
 
         if (!finished)
         {
-            // @TODO(Marc): Similarly to input command, have an application logic function for each work type.
             switch ((WORK_TYPE)workers.work_types[workerIndex])
             {
             case WORK_TYPE::BUILD_ROAD:

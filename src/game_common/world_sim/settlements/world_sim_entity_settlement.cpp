@@ -71,69 +71,6 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement)
 	settlements.active_count--;
 }
 
-
-void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner)
-{
-    // Population and soldiers (raised ones included) change hands with the settlement.
-	world.entities->settlements.owners[settlement_index] = new_owner;
-
-    // Reset tax rate to 0 / neutral.
-	world.entities->settlements.tax_rates[settlement_index] = 0;
-}
-
-bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state)
-{
-	if (entity.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, entity)) return false;
-
-	const world_entity_settlements& settlements = world.entities->settlements;
-	ui16 i = entity.get_index();
-
-	out_state = {
-		.owner = settlements.owners[i],
-		.location = settlements.locations[i],
-        .founding_tick = settlements.founding_ticks[i],
-		.population = settlements.populations[i],
-		.local_wealth = settlements.local_wealth[i],
-		.tax_rate = settlements.tax_rates[i],
-		.finances = settlements.finances[i],
-		.territory = settlements.territories[i],
-		.base_land_output = settlements.base_land_outputs[i],
-        .buildings = settlements.buildings[i],
-		.troop_ceilings = settlements.troop_ceilings[i],
-		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
-	};
-	return true;
-}
-
-bool world_is_valid_settlement_location(const match_world_state& world, world_location loc, match_player_id player)
-{
-	const world_terrain& terrain = *world.terrain;
-	if (loc.x >= terrain.size_tiles.x || loc.y >= terrain.size_tiles.y) return false;
-
-	ui16 regionIndex, tileIndex;
-	world_get_tile(terrain, loc, regionIndex, tileIndex);
-
-	TERRAIN_TILE_TYPE type = terrain.regions[regionIndex].terrain_types[tileIndex];
-	if (type != TERRAIN_TILE_TYPE::LAND_PLAINS && type != TERRAIN_TILE_TYPE::LAND_HILLS) return false;
-
-	const world_entity_settlements& settlements = world.entities->settlements;
-
-	// Tile owner is a settlement slot index.
-	ui16 tileOwner = terrain.regions[regionIndex].owners[tileIndex];
-	if (tileOwner != world_terrain::UNOWNED_TILE && settlements.owners[tileOwner] != player) return false;
-
-	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
-	{
-		if (!settlements.guids[settlementIndex].is_valid()) continue;
-
-		i32 dx = (i32)settlements.locations[settlementIndex].x - (i32)loc.x;
-		i32 dy = (i32)settlements.locations[settlementIndex].y - (i32)loc.y;
-		if (dx * dx + dy * dy < (i32)(SETTLEMENT_MIN_DISTANCE * SETTLEMENT_MIN_DISTANCE)) return false;
-	}
-
-	return true;
-}
-
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
@@ -179,3 +116,66 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 	return true;
 }
+
+bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state)
+{
+	if (entity.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, entity)) return false;
+
+	const world_entity_settlements& settlements = world.entities->settlements;
+	ui16 i = entity.get_index();
+
+	out_state = {
+		.owner = settlements.owners[i],
+		.location = settlements.locations[i],
+        .founding_tick = settlements.founding_ticks[i],
+		.population = settlements.populations[i],
+		.local_wealth = settlements.local_wealth[i],
+		.tax_rate = settlements.tax_rates[i],
+		.finances = settlements.finances[i],
+		.territory = settlements.territories[i],
+		.base_land_output = settlements.base_land_outputs[i],
+        .buildings = settlements.buildings[i],
+		.troop_ceilings = settlements.troop_ceilings[i],
+		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
+	};
+	return true;
+}
+
+void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner)
+{
+    // Population and soldiers (raised ones included) change hands with the settlement.
+	world.entities->settlements.owners[settlement_index] = new_owner;
+
+    // Reset tax rate to 0 / neutral.
+	world.entities->settlements.tax_rates[settlement_index] = 0;
+}
+
+bool world_is_valid_settlement_location(const match_world_state& world, world_location loc, match_player_id player)
+{
+	const world_terrain& terrain = *world.terrain;
+	if (loc.x >= terrain.size_tiles.x || loc.y >= terrain.size_tiles.y) return false;
+
+	ui16 regionIndex, tileIndex;
+	world_get_tile(terrain, loc, regionIndex, tileIndex);
+
+	TERRAIN_TILE_TYPE type = terrain.regions[regionIndex].terrain_types[tileIndex];
+	if (type != TERRAIN_TILE_TYPE::LAND_PLAINS && type != TERRAIN_TILE_TYPE::LAND_HILLS) return false;
+
+	const world_entity_settlements& settlements = world.entities->settlements;
+
+	// Tile owner is a settlement slot index.
+	ui16 tileOwner = terrain.regions[regionIndex].owners[tileIndex];
+	if (tileOwner != world_terrain::UNOWNED_TILE && settlements.owners[tileOwner] != player) return false;
+
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+		i32 dx = (i32)settlements.locations[settlementIndex].x - (i32)loc.x;
+		i32 dy = (i32)settlements.locations[settlementIndex].y - (i32)loc.y;
+		if (dx * dx + dy * dy < (i32)(SETTLEMENT_MIN_DISTANCE * SETTLEMENT_MIN_DISTANCE)) return false;
+	}
+
+	return true;
+}
+

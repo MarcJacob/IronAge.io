@@ -22,6 +22,7 @@ enum ENTITY_TYPE : ui8
 	ARMY = MICRO_TYPES_START,
 	WORKER,
 	BATTLE,
+    CARAVAN,
 	// ...
 };
 
@@ -104,11 +105,15 @@ struct settlement_building_def
 void settlement_building_barracks_on_added(match_world_state& world, entity_guid settlement);
 void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement);
 
+void settlement_building_tradepost_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement);
+
 // SETTLEMENT BUILDING TYPES TABLE
 // Settlements keep a count per row of this table.
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
-	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.", 5, 100, 10, settlement_building_events { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
+	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.", 5, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
+    { "Caravanserai", "Increases maximum amount of active caravans.", 10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
@@ -197,6 +202,13 @@ struct settlement_buildings
     ui16 building_counts[SETTLEMENT_BUILDING_TYPE_COUNT]; // Building count for each type.
 };
 
+// Trading-related data for a settlement.
+struct settlement_trading
+{
+    ui8 caravan_count; // Current number of active caravans originating from this settlement.
+    ui8 caravan_count_max; // Maximum number of active caravans a settlement can have.
+};
+
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
@@ -213,6 +225,8 @@ struct world_entity_settlements : public world_entity_container
 	settlement_finances* finances; // Last day's figures.
 
     settlement_buildings* buildings;
+
+    settlement_trading* trade;
 
     struct territory
     {
@@ -244,6 +258,8 @@ struct world_entity_settlements : public world_entity_container
 
         settlement_buildings buildings;
 
+        settlement_trading trade;
+
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
 	};
@@ -272,6 +288,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(finance_tax_paid, finances.tax_paid, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_required, finances.consumption_required, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(finance_consumption_paid, finances.consumption_paid, GAME_DATA_PROP_TYPE::UI32)
+
+    GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
+    GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
@@ -460,15 +479,18 @@ struct world_entity_battles : public world_entity_container
 {
 	static constexpr ui8 UNIT_TYPES = 4; // Army unit types, in comp order: levies, men at arms, horsemen, knights.
 
+    // Single state structure should work since everything gets read battle-by-battle anyway.
 	struct state
 	{
 		world_location location;
 		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
 		ui32 damage[2]; // Men killed this tick BY each side.
 		ui32 duration; // Rounds since the battle started (one round every BATTLE_TICK_INTERVAL ticks).
+                       
 		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
 		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
 		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.
+
 	} *states;
 
 	using single = state; // Consolidated representation of a single battle for viewing purposes.
@@ -495,6 +517,51 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_battle)
 	GAME_DATA_PROPERTY(siege_defenders, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_OBJECT_DEF_END()
 
+// Flags for Caravan entities.
+enum class WORLD_ENTITY_CARAVAN_FLAGS : ui8
+{
+    IS_SHIP = 1 << 0, // "Ships" are water caravans, as we all know.
+};
+
+struct world_entity_caravans : public world_entity_container
+{
+    world_location* locations;
+    world_entity_movement* movements;
+
+    WORLD_ENTITY_CARAVAN_FLAGS* flags;
+    entity_guid* origin_settlements;
+    entity_guid* destination_settlements;
+
+    ui16* values;
+
+    struct single
+    {
+        world_location location;
+        world_entity_movement movement;
+
+        WORLD_ENTITY_CARAVAN_FLAGS flags;
+        entity_guid origin_settlement;
+        entity_guid destination_settlement;
+
+        ui16 value;
+    };
+};
+
+using world_entity_caravan = world_entity_caravans::single;
+
+GAME_DATA_OBJECT_DEF_BEGIN(world_entity_caravan)
+GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_PROPERTY(flags, GAME_DATA_PROP_TYPE::UI8)
+
+GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_DATA_PROP_TYPE::VEC2_UI8)
+GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI8)
+
+GAME_DATA_PROPERTY(origin_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_PROPERTY(destination_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END();
+
 // Holds all entity data for a world state.
 // Currently is all pre-allocated for pre-estimated max possible usage.
 // TODO(Marc): We could have a single big "entities" arena (or maybe a macro vs micro one) that grows as needed block by block.
@@ -502,6 +569,7 @@ GAME_DATA_OBJECT_DEF_END()
 struct world_entities
 {
     world_entity_settlements settlements;
+    world_entity_caravans caravans;
     world_entity_armies armies;
     world_entity_workers workers;
     world_entity_battles battles;
@@ -513,13 +581,15 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity);
 
 world_location world_entity_get_location(const match_world_state& world, entity_guid entity);
 
-bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlements::single& out_state);
+bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlement& out_state);
 
-bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state);
+bool world_entity_query_caravan(const match_world_state& world, entity_guid entity, world_entity_caravan& out_state);
 
-bool world_entity_query_worker(const match_world_state& world, entity_guid entity, world_entity_workers::single& out_state);
+bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies& out_state);
 
-bool world_entity_query_battle(const match_world_state& world, entity_guid entity, world_entity_battles::single& out_state);
+bool world_entity_query_worker(const match_world_state& world, entity_guid entity, world_entity_workers& out_state);
+
+bool world_entity_query_battle(const match_world_state& world, entity_guid entity, world_entity_battles& out_state);
 
 
 // Returns whether the location is a valid place for the player to build a settlement: buildable terrain, tile unclaimed or owned by the player,
