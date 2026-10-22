@@ -7,6 +7,7 @@
 #include "world_sim.h"
 
 // Unity-include the entire world simulation code. 
+#include "../map_gen/map_gen_main.cpp"
 #include "world_terrain.cpp"
 
 #include "settlements/world_sim_entity_settlement.cpp"
@@ -141,7 +142,15 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
         if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
-    world_terrain_generate(*newWorld->terrain);
+    if (start_params.procedural_map)
+    {
+        if (!map_gen_generate(*newWorld->terrain, start_params.map_gen, newWorld->rand_gen.next<ui32>(), memory)) goto WORLD_INIT_FAIL;
+        world_terrain_init_tile_status(*newWorld->terrain);
+    }
+    else
+    {
+        world_terrain_generate(*newWorld->terrain);
+    }
 
 	world_update_player_stats(*newWorld);
 

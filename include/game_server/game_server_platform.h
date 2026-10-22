@@ -48,6 +48,16 @@ struct game_server_platform
 	template<typename... args_types>
 	inline void logf(const ia_string_view& format, args_types... args) { logf(LOG_NORMAL, format, args...); }
 
+	// PLATFORM ENTROPY
+
+	typedef ui64 (*get_entropy_fn)(game_server_platform& platform);
+	// Platform function: Returns a value that differs between calls and between server runs (e.g. wall-clock time mixed with a high-resolution counter).
+	// Not cryptographically secure. Meant to seed non-deterministic choices such as match seeds.
+	get_entropy_fn get_entropy_func;
+	ui64 get_entropy() {
+		return get_entropy_func(*this);
+	}
+
 	// PLATFORM NET
 
 	typedef ui32 net_connection_handle;	// Unique identifier for an active connection. Note that some platforms may re-use the same handle, 

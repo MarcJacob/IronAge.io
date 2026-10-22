@@ -129,6 +129,7 @@ void world_system_battles(match_world_state& world);
 
 // Generates the terrain of a world whose terrain size and regions are already set up.
 void world_terrain_generate(world_terrain& terrain);
+void world_terrain_init_tile_status(world_terrain& terrain); // For terrain whose tile types were set by something else (map generation).
 
 // Initializes a new world state into the given memory from match start parameters.
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params);

@@ -14,6 +14,7 @@
 #include "math/numerical.h"
 #include "math/vec2.h"
 #include "math/random.h"
+#include "math/noise.h"
 #include "math/crypto.h"
 
 #endif // CORE_MATH_INCLUDED

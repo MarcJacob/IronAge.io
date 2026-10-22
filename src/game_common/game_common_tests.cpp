@@ -19,6 +19,7 @@ game_match_start_params* match_test_scenario_get_params(mem_arena& memory, ui32 
 	params.random_seed = seed;
 	params.player_count = player_count;
 	params.world_size_regions = { 4, 4 };
+	params.procedural_map = true; // Set to false for the fixed flat map. Map gen params stay zero (defaults).
 
 	return &params;
 }

@@ -74,6 +74,16 @@ void win32_shutdown(game_server_platform& platform, int code)
 	win32Platform.exitRequested = true;
 }
 
+// Wall-clock time XOR raw high-resolution counter: differs between runs and between close-in-time calls.
+ui64 win32_get_entropy(game_server_platform& platform)
+{
+	FILETIME wallClock;
+	GetSystemTimeAsFileTime(&wallClock);
+	LARGE_INTEGER counter;
+	QueryPerformanceCounter(&counter);
+	return ((ui64)wallClock.dwLowDateTime | ((ui64)wallClock.dwHighDateTime << 32)) ^ (ui64)counter.QuadPart;
+}
+
 static constexpr ui32 WIN32_LOG_BUFF_SIZE = 1024;
 
 // Console color for a log type. 0 = leave the console's current color.
@@ -459,6 +469,8 @@ void win32_platform_init(const win32_startup_args& startup_args)
 
 	WIN32_PLATFORM.log_func = win32_platform_log;
 	WIN32_PLATFORM.logf_func = win32_platform_logf;
+
+	WIN32_PLATFORM.get_entropy_func = win32_get_entropy;
 
 	WIN32_PLATFORM.net_query_new_connections_func = win32_net_query_new_connections;
 	WIN32_PLATFORM.net_query_closed_connections_func = win32_net_query_closed_connections;
