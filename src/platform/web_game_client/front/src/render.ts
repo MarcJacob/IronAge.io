@@ -33,12 +33,41 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.CARAVAN]: true,
     } as Record<number, boolean>,
 
-    tint_entities: true, // Tint entities by ownership (own / other).
+    tint_entities: true, // Tint entities with the color given by entity_color.
+    outline_entities: true, // Outline entities with the color given by entity_outline_color.
+    // Color policies: the drawing code only asks these for a color and never decides one itself.
+    // A mode may replace them (e.g. to paint all territories gray but one). Defaults: see player_color and default_outline_color.
+    entity_color: ((owner: number, local_player: number): RGB => player_color(owner, local_player)),
+    territory_color: ((owner: number, local_player: number, settlement_slot: number): RGB => player_color(owner, local_player)),
+    // Entity outline color (CSS). Hook for diplomatic status: owner and local_player are given for that purpose.
+    entity_outline_color: ((owner: number, local_player: number): string => default_outline_color),
     outlined_entity: null as number | null, // GUID of the entity drawn with a selection outline.
     // If set, draws the path from start through points (waypoints, as returned by Backend.query_path). Drawn red if not valid, or in color if given.
     path_preview: null as { start: { x: number, y: number }, points: { x: number, y: number }[], valid: boolean, color?: string } | null,
     overlay_dots: [] as OverlayDot[],
 };
+
+// Opaque RGB color, 0..255 per channel.
+export type RGB = [number, number, number];
+
+const OWN_COLOR: RGB = [0, 250, 0];
+const UNKNOWN_OWNER_COLOR: RGB = [128, 128, 128];
+const default_outline_color = '#000';
+// Color per player, indexed by player index modulo table length. No bright green: too close to OWN_COLOR.
+const PLAYER_COLORS: RGB[] = [
+    [230, 25, 75], [0, 130, 200], [245, 130, 48], [145, 30, 180],
+    [240, 230, 40], [70, 240, 240], [240, 50, 230], [170, 110, 40],
+    [128, 0, 0], [0, 0, 128], [128, 128, 0], [0, 128, 128],
+    [250, 190, 190], [230, 190, 255], [255, 255, 255], [90, 90, 90],
+];
+
+// Default color policy: local player's own color, otherwise a color from the table by player index.
+function player_color(owner: number, local_player: number): RGB
+{
+    if (owner < 0) return UNKNOWN_OWNER_COLOR;
+    if (owner === local_player) return OWN_COLOR;
+    return PLAYER_COLORS[owner % PLAYER_COLORS.length];
+}
 
 let canvas: HTMLCanvasElement;
 
@@ -78,15 +107,6 @@ let RESOURCES: RESOURCES_STORE | null = null; // Run constructor to load resourc
 
 let BACKBUFFER_TILES_TERRAIN: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent terrain.
 let BACKBUFFER_TILES_TERRITORY: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent territory ownership & contestation.
-
-// Fill styles according to diplomatic status with local player.
-let DIPLOMATIC_TINTS =
-{
-    OWN: 'rgba(0, 250, 0, 0.45)',
-    FRIENDLY: 'rgba(40, 40, 200, 0.45)',
-    NEUTRAL: 'rgba(200, 40, 40, 0.45)',
-    ENEMY: 'rgba(200, 40, 40, 0.45)',
-}
 
 // Minimum view size (in canvas pixels) of entities before scale multiplier is taken into account.
 let ENTITY_MIN_VIEW_SIZE = 10;
@@ -223,29 +243,41 @@ function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
     return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
 
-function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+// Draws the sprite in 'color' (tint overlay, alpha 0.45) with an optional outline (CSS color, null = none). Any color is accepted.
+function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_y: number, size:number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     const center = entity_canvas_center(viewport_x, viewport_y);
     const drawX = center.x - size / 2;
     const drawY = center.y - size / 2;
 
+    // Fills the sprite's silhouette with a CSS color in tintCanvas.
+    const silhouette = (fill: string) =>
+    {
+        const w = Math.max(1, Math.ceil(size));
+        tintCanvas!.width = w;
+        tintCanvas!.height = w;
+        tintCtx!.drawImage(entity_img, 0, 0, w, w);
+        tintCtx!.globalCompositeOperation = 'source-in';
+        tintCtx!.fillStyle = fill;
+        tintCtx!.fillRect(0, 0, w, w);
+        tintCtx!.globalCompositeOperation = 'source-over';
+    };
+
+    // Outline: the silhouette drawn around the sprite in 8 directions, constant width in screen pixels.
+    if (outline_color !== null && tintCanvas !== null && tintCtx !== null)
+    {
+        silhouette(outline_color);
+        for (let a = 0; a < 8; a++)
+        {
+            ctx.drawImage(tintCanvas, drawX + Math.cos(a * Math.PI / 4) * 1.5, drawY + Math.sin(a * Math.PI / 4) * 1.5, size, size);
+        }
+    }
+
     ctx.drawImage(entity_img, drawX, drawY, size, size);
 
-    if (RENDER_CONFIG.tint_entities && tintCanvas !== null && tintCtx !== null)
+    if (color !== null && tintCanvas !== null && tintCtx !== null)
     {
-        const tintWidth = Math.max(1, Math.ceil(size));
-        const tintHeight = Math.max(1, Math.ceil(size));
-        tintCanvas.width = tintWidth;
-        tintCanvas.height = tintHeight;
-
-        tintCtx.clearRect(0, 0, tintWidth, tintHeight);
-        tintCtx.globalCompositeOperation = 'source-over';
-        tintCtx.drawImage(entity_img, 0, 0, tintWidth, tintHeight);
-        tintCtx.globalCompositeOperation = 'source-in';
-        tintCtx.fillStyle = owned_by_local_player ? DIPLOMATIC_TINTS.OWN : DIPLOMATIC_TINTS.ENEMY;
-        tintCtx.fillRect(0, 0, tintWidth, tintHeight);
-        tintCtx.globalCompositeOperation = 'source-over';
-
+        silhouette(`rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.45)`);
         ctx.drawImage(tintCanvas, drawX, drawY, size, size);
     }
 
@@ -260,30 +292,30 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
 }
 
 // Draws a settlement entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_settlement(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_settlement(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), color, outline_color, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_army(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), color, outline_color, is_selected);
 }
 
 // Draws a caravan entity icon at the given viewport location.
-function draw_entity_caravan(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+function draw_entity_caravan(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), color, outline_color, is_selected);
 }
 
 // Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -341,6 +373,13 @@ function draw_territory(render_state: Backend.RenderState)
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) settlementOwners[(entity.guid >>> 8) & 0xFFF] = entity.owner;
     }
 
+    // Color per settlement slot, from the territory color policy.
+    const slotColors: RGB[] = [];
+    for (let slot = 0; slot < settlementOwners.length; slot++)
+    {
+        slotColors.push(RENDER_CONFIG.territory_color(settlementOwners[slot], render_state.controlled_player_id, slot));
+    }
+
     // Settlement owning the tile under the mouse, if any. All tiles of that settlement get highlighted.
     let hoveredSettlement = -1;
     if (HOVER_PAGE_POS !== null)
@@ -353,12 +392,10 @@ function draw_territory(render_state: Backend.RenderState)
         }
     }
 
-    // Build explicit RGBA bytes. Owned tiles are green if owned by the local player, grey otherwise.
+    // Build explicit RGBA bytes. Owned tiles use the territory color policy's color for their settlement.
     // Color is a straight (non-premultiplied) lerp from that owner color to red by contestation fraction.
     // Opacity is max(owned ? OWNED_ALPHA : 0, contestation scaled by OWNED_ALPHA), so it never dips mid-transition
     // and unowned tiles remain transparent over the terrain. Tiles of the hovered settlement use HOVERED_ALPHA instead.
-    const OWNER_COLOR_LOCAL = [0, 255, 0];
-    const OWNER_COLOR_OTHER = [128, 128, 128];
     const CONTESTATION_COLOR = [255, 0, 0];
     const OWNED_ALPHA = 0.15;
     const HOVERED_ALPHA = 0.35;
@@ -367,7 +404,7 @@ function draw_territory(render_state: Backend.RenderState)
     for (let i = 0; i < tileCount; i++)
     {
         const isOwned = (flagBytes[i] & TILE_FLAG_OWNED) !== 0;
-        const ownerColor = isOwned && settlementOwners[ownerSettlementBytes[i]] === render_state.controlled_player_id ? OWNER_COLOR_LOCAL : OWNER_COLOR_OTHER;
+        const ownerColor = isOwned ? slotColors[ownerSettlementBytes[i]] : UNKNOWN_OWNER_COLOR;
         const ownedAlpha = isOwned && ownerSettlementBytes[i] === hoveredSettlement ? HOVERED_ALPHA : OWNED_ALPHA;
         const contestationVal = contestationBytes[i];
         const contestationFraction = contestationVal / 255;
@@ -560,25 +597,25 @@ export function draw(render_state: Backend.RenderState | null)
         const entity = render_state.entity_states[i];
         if (!RENDER_CONFIG.show_entity_type[entity.entity_type]) continue;
         const isSelected = selectedGuid !== null && entity.guid === selectedGuid;
+        const local = render_state.controlled_player_id;
+        const color = RENDER_CONFIG.tint_entities ? RENDER_CONFIG.entity_color(entity.owner, local) : null;
+        const outline = RENDER_CONFIG.outline_entities ? RENDER_CONFIG.entity_outline_color(entity.owner, local) : null;
 
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
-            draw_entity_settlement(entity.viewport_x, entity.viewport_y,
-                entity.owner === render_state.controlled_player_id, isSelected);
+            draw_entity_settlement(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
-            draw_entity_army(entity.viewport_x, entity.viewport_y,
-                entity.owner == render_state.controlled_player_id, isSelected);
+            draw_entity_army(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
             draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(entity.viewport_x, entity.viewport_y,
-                entity.owner === render_state.controlled_player_id, isSelected);
+            draw_entity_caravan(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
-            // Simple marker, no sprite yet: green if owned by the local player, red otherwise.
+            // Simple marker, no sprite yet: filled with the entity color (red if tinting is off).
             const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
             const size = compute_entity_canvas_size(entity.entity_type);
-            ctx.fillStyle = entity.owner === render_state.controlled_player_id ? 'lime' : 'red';
+            ctx.fillStyle = color !== null ? `rgb(${color[0]}, ${color[1]}, ${color[2]})` : 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
             if (isSelected) {
                 ctx.strokeStyle = '#0c0';
