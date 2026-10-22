@@ -152,10 +152,6 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 
         // Link AI players buffer.
         slot.match.ai_players = (ai_player_state*)AIPlayersMem.mem_start;
-
-        // Room for the observed world state they share (zero = empty world).
-        slot.match.ai_observed = slot.slot_memory.alloc<ai_observed_world_state>();
-        ASSERT(slot.match.ai_observed != nullptr);
    }
 
     // Allocate input commands memory according to total player count.
@@ -315,7 +311,7 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 		for (ui16 aiPlayerIndex = 0; aiPlayerIndex < slot.match.ai_player_count; aiPlayerIndex++)
 		{
 			ai_player_state& aiState = slot.match.ai_players[aiPlayerIndex];
-			ai_output_commands(*slot.match.ai_observed, *slot.match.match_ptr, aiState, slot.match.next_tick_commands_builder);
+			ai_update(*slot.match.match_ptr, aiState, slot.match.next_tick_commands_builder);
 		}
 
 		match_tick_commands& tickCommands = *slot.match.next_tick_commands_builder._tick_commands_start;
@@ -344,8 +340,6 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 
 		// Perform server-side match tick.
 		match_tick(*slot.match.match_ptr, tickCommands);
-
-		if (slot.match.ai_observed != nullptr) ai_observe_world(*slot.match.match_ptr->world, *slot.match.ai_observed);
 
 		// Placeholder end condition, checked every few ticks.
 		// Never with a single player: they would trivially hold 100% from the start.

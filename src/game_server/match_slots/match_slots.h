@@ -78,7 +78,6 @@ struct match_slot
 
 			ui16 ai_player_count; 
 			ai_player_state* ai_players;
-			ai_observed_world_state* ai_observed; // Shared by all AI players, rebuilt after each tick. nullptr without AI players.
 
 		} match;					// Valid when the slot state is MATCH_*
 	};

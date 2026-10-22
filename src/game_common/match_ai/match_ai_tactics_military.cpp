@@ -1,0 +1,150 @@
+// Military tactics: raising armies, defending against nearby foreign armies, and the campaign (gather at the rally settlement, then attack the target together).
+
+#include "match_ai_internal.h"
+
+constexpr ui32 AI_DEFEND_GATHER_RADIUS = 40; // Own idle armies this close to a threat help against it.
+
+// The biggest foreign army within AI_THREAT_RADIUS of one of our settlements.
+static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat)
+{
+	bool found = false;
+	ai_army_view army;
+	for (ui16 slot = 0; slot < ai_world_army_slots(ctx.world); slot++)
+	{
+		if (!ai_view_army(ctx.world, slot, army) || army.owner == ctx.player || (found && army.troops <= out_threat.troops)) continue;
+
+		for (ui16 own = 0; own < ctx.settlement_count; own++)
+		{
+			if (ai_dist_sq(army.location, ctx.settlements[own].location) > AI_THREAT_RADIUS * AI_THREAT_RADIUS) continue;
+
+			out_threat = army;
+			found = true;
+			break;
+		}
+	}
+	return found;
+}
+
+static bool ai_push_attack(ai_context& ctx, entity_guid attacker, entity_guid target)
+{
+	auto* attack = ai_push<command_data_set_entity_attack_target>(ctx, MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET);
+	if (attack == nullptr) return false;
+	attack->attacker_entity = attacker;
+	attack->target_entity = target;
+	return true;
+}
+
+// Idle armies near a foreign army that threatens us all attack it together, if together they clearly outnumber it (1.3x).
+static void ai_tactics_defend(ai_context& ctx)
+{
+	ai_army_view threat;
+	if (!ai_find_threat(ctx, threat)) return;
+
+	ui32 strength = 0;
+	for (ui16 index = 0; index < ctx.army_count; index++)
+	{
+		const ai_army_view& army = ctx.armies[index];
+		if (army.idle && ai_dist_sq(army.location, threat.location) <= AI_DEFEND_GATHER_RADIUS * AI_DEFEND_GATHER_RADIUS) strength += army.troops;
+	}
+	if (strength * 10 < threat.troops * 13 + 50) return;
+
+	ui32 orders = 0;
+	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
+	{
+		const ai_army_view& army = ctx.armies[index];
+		if (!army.idle || ai_dist_sq(army.location, threat.location) > AI_DEFEND_GATHER_RADIUS * AI_DEFEND_GATHER_RADIUS) continue;
+		if (!ai_push_attack(ctx, army.guid, threat.guid)) return;
+		orders++;
+	}
+}
+
+static bool ai_settlement_is_raising(const ai_context& ctx, entity_guid settlement)
+{
+	for (ui16 index = 0; index < ctx.army_count; index++)
+	{
+		if (ctx.armies[index].raising && ctx.armies[index].home == settlement) return true;
+	}
+	return false;
+}
+
+// Outside of EXPAND, until the armies reach the wanted strength (the target's attack need, at least AI_MIN_ARMY_STRENGTH), raises an army from
+// up to two settlements of the window that have the peasants and no raise going on: a share of the peasants as levies, plus the whole men at arms pool.
+static void ai_tactics_raise_armies(ai_context& ctx)
+{
+	if (ctx.state.mode == AI_MODE_EXPAND || ctx.army_count + 8 > AI_MAX_OWNED_ARMIES) return;
+
+	ai_settlement_view target;
+	ui32 wanted = ia_max(AI_MIN_ARMY_STRENGTH, ai_target_is_valid(ctx, target) ? ai_attack_need(target) : 0);
+	ui32 raised = 0, raises = 0;
+	for (ui32 index = 0; index < ai_window_size(ctx) && raises < 2 && ctx.army_strength + raised < wanted; index++)
+	{
+		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
+		if (settlement.peasants < AI_MIN_RAISE_PEASANTS || ai_settlement_is_raising(ctx, settlement.guid)) continue;
+
+		auto* raise = ai_push<command_data_raise_army>(ctx, MATCH_COMMAND_TYPE::RAISE_ARMY);
+		if (raise == nullptr) return;
+		raise->settlement = settlement.guid;
+		raise->raise_location = settlement.location;
+		raise->target_levies = (ui16)ia_min(settlement.peasants * AI_RAISE_PERCENT_OF_PEASANTS / 100, 400u);
+		raise->target_men_at_arms = settlement.home_troops.men_at_arms;
+		raised += raise->target_levies + raise->target_men_at_arms;
+		raises++;
+	}
+}
+
+// In ATTACK: idle armies walk to the rally settlement; once the idle armies around it add up to the target's attack need, they all attack the target.
+static void ai_tactics_campaign(ai_context& ctx)
+{
+	if (ctx.state.mode != AI_MODE_ATTACK) return;
+
+	ai_settlement_view target, rally;
+	if (!ai_target_is_valid(ctx, target) || !ai_view_settlement_by_guid(ctx.world, ctx.state.rally_settlement, rally)) return;
+
+	ui32 gathered = 0, orders = 0;
+	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
+	{
+		const ai_army_view& army = ctx.armies[index];
+		if (!army.idle || army.troops == 0) continue;
+
+		if (ai_dist_sq(army.location, rally.location) <= AI_RALLY_RADIUS * AI_RALLY_RADIUS) { gathered += army.troops; continue; }
+
+		auto* move = ai_push<command_data_set_entity_move_target>(ctx, MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
+		if (move == nullptr) return;
+		move->entity = army.guid;
+		move->move_target = rally.location;
+		orders++;
+	}
+	if (gathered < ai_attack_need(target)) return;
+
+	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
+	{
+		const ai_army_view& army = ctx.armies[index];
+		if (!army.idle || army.troops == 0 || ai_dist_sq(army.location, rally.location) > AI_RALLY_RADIUS * AI_RALLY_RADIUS) continue;
+		if (!ai_push_attack(ctx, army.guid, target.guid)) return;
+		orders++;
+	}
+}
+
+static bool ai_is_next_to_own_settlement(const ai_context& ctx, const ai_army_view& army)
+{
+	for (ui16 index = 0; index < ctx.settlement_count; index++)
+	{
+		if (ctx.settlements[index].guid == army.home) return ai_dist_sq(army.location, ctx.settlements[index].location) <= 3 * 3;
+	}
+	return false;
+}
+
+// Idle remnants of battles standing next to their home settlement are disbanded into it (a few per run).
+static void ai_tactics_disband_remnants(ai_context& ctx)
+{
+	ui32 disbands = 0;
+	for (ui16 index = 0; index < ctx.army_count && disbands < 3; index++)
+	{
+		if (!ctx.armies[index].idle || ctx.armies[index].troops >= AI_TINY_ARMY || !ai_is_next_to_own_settlement(ctx, ctx.armies[index])) continue;
+
+		auto* disband = ai_push<command_data_disband_army>(ctx, MATCH_COMMAND_TYPE::DISBAND_ARMY);
+		if (disband == nullptr) return;
+		disband->army = ctx.armies[index].guid;
+		disbands++;
+	}
+}

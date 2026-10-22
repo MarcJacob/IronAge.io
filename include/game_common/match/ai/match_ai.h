@@ -1,5 +1,6 @@
 // Public symbols of the match AI component (server side only). See src/game_common/match_ai/ for the implementation and its imprint.
-// The host observes the world after each tick into ONE shared observed state, then asks each AI player for its commands from it.
+// The host asks each AI player to update every tick; the AI decides on its own staggered ticks, reading the world directly (never writing it)
+// and emitting commands through the validated command path.
 
 #ifndef MATCH_AI_INCLUDED
 #define MATCH_AI_INCLUDED
@@ -11,64 +12,39 @@
 #include "game_common/match/world/world.h"
 #include "game_common/match/world/world_entities.h"
 
-// Capacities of the observed state. Entities beyond them are not observed.
-constexpr ui16 AI_OBSERVED_MAX_PLAYERS = 256;
-constexpr ui16 AI_OBSERVED_MAX_SETTLEMENTS = 256;
-constexpr ui16 AI_OBSERVED_MAX_ARMIES = 256;
+// Opinions are tracked for the first players only; others are ignored by the AI's opinion / target logic.
+constexpr ui8 AI_MAX_TRACKED_PLAYERS = 32;
 
-struct ai_observed_settlement
+// Strategic modes of an AI player. Zero (EXPAND) is the default.
+enum AI_MODE : ui8
 {
-	entity_guid guid;
-	match_player_id owner;
-	world_location location;
-	ui32 population;
-	ui32 peasants;
-	ui32 workers; // Peasants busy on a construction project: non-zero = something is being built.
-	ui32 local_wealth;
-	i8 tax_rate;
-	army_troop_count home_troops; // Pooled soldiers at home.
-	settlement_buildings buildings;
+	AI_MODE_EXPAND, // Colonize free land, grow the economy.
+	AI_MODE_BUILD_UP, // Build barracks, train and raise armies.
+	AI_MODE_ATTACK, // Gather the armies and conquer the target settlement of the target player.
 };
 
-struct ai_observed_army
-{
-	entity_guid guid;
-	match_player_id owner;
-	world_location location;
-	ui32 troops; // All troop types.
-	ui8 idle; // 1 if not raising, not in a battle, not chasing a target and not walking anywhere.
-};
-
-// Copy of what the AI players know about the world, rebuilt after each world tick. Full information game: shared by all AI players.
-// Owns all its data (no pointers into the world). Zero = empty world.
-struct ai_observed_world_state
-{
-	ui64 tick; // World age.
-	ui64 day;
-
-	ui16 player_count;
-	ui32 treasuries[AI_OBSERVED_MAX_PLAYERS]; // Indexed by player.
-
-	ui16 settlement_count;
-	ai_observed_settlement settlements[AI_OBSERVED_MAX_SETTLEMENTS];
-
-	ui16 army_count;
-	ai_observed_army armies[AI_OBSERVED_MAX_ARMIES];
-};
-
-// State of one AI player. Zero is valid. Only the controlled player is set by the host.
+// State of one AI player. Zero is valid (EXPAND, neutral opinions, no target). Only controlled_player is set by the host.
 struct ai_player_state
 {
 	match_player_id controlled_player;
+
+	ui8 mode; // AI_MODE.
+	ui8 expand_failures; // Consecutive site searches that found nothing.
+	ui8 has_target; // 1 if target_player is set.
+	match_player_id target_player;
+	ui32 mode_start_day;
+	ui32 decision_index; // Count of decisions taken: drives the per-layer sub-cadences.
+	ui16 settlement_cursor; // Round-robin position in the owned settlements for per-settlement tactics.
+	entity_guid target_settlement; // Settlement the campaign aims at.
+	entity_guid rally_settlement; // Own settlement the armies gather at before attacking.
+
+	i16 opinions[AI_MAX_TRACKED_PLAYERS]; // Per other player. Zero = neutral, negative = hostile (preferred target), positive = friendly / feared.
+	ui32 rng_state; // 0 = seeded on first use.
 };
 
-// Rebuilds the observed state from the world. Call after each match tick.
-void ai_observe_world(const match_world_state& world, ai_observed_world_state& out_observed);
-
-// Pushes a command sequence for the AI's player into the next tick's commands, if it decides to act this tick.
-// Decisions use the observed state only; the match is only used to validate the commands (invalid ones are dropped).
+// Lets the AI player act on this tick, if it is its decision tick. Reads the match's world, and pushes a validated command sequence for the AI's player
+// into the next tick's commands. Call once per AI per tick, before match_tick (the world is then the result of the previous tick).
 // Returns false if the commands could not be pushed (builder memory full).
-bool ai_output_commands(const ai_observed_world_state& observed, const game_match& match, ai_player_state& ai_state,
-	match_tick_commands_builder& commands_builder);
+bool ai_update(const game_match& match, ai_player_state& ai_state, match_tick_commands_builder& commands_builder);
 
 #endif // MATCH_AI_INCLUDED

@@ -46,6 +46,8 @@ Top-level implementation files, by theme:
 - *match_commands.cpp*: input command implementations, per command type.
 - *game_common_tests.cpp*: various test functions.
 
+- */match_ai/*: AI players (server side, emit input commands through the validated path). See its imprint.
+
 *game_common_internals.h* is meant for symbols shared between game_common implementation files but not outside. It is currently an empty include guard.
 
 */world_sim/* contains the world simulation implementation which covers most of the work done within a match tick. See its imprint.
