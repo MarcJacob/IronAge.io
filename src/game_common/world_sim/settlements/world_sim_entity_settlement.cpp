@@ -25,9 +25,9 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     world.entities->settlements.founding_ticks[freeIndex] = world.age;
 
     world.entities->settlements.base_land_outputs[freeIndex] = start_state.base_land_output;
-	world.entities->settlements.local_wealth[freeIndex] = start_state.local_wealth;
+	world.entities->settlements.pending_incomes[freeIndex] = start_state.pending_income;
 	world.entities->settlements.tax_rates[freeIndex] = start_state.tax_rate;
-	world.entities->settlements.finances[freeIndex] = start_state.finances; 
+	world.entities->settlements.economies[freeIndex] = start_state.economy;
     world.entities->settlements.territories[freeIndex] = start_state.territory;
 	world.entities->settlements.troop_ceilings[freeIndex] = start_state.troop_ceilings;
 
@@ -99,14 +99,14 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.base_land_outputs = memory.alloc<ui32>(count);
 	if (settlements.base_land_outputs == nullptr) return false;
 
-	settlements.local_wealth = memory.alloc<ui32>(count);
-	if (settlements.local_wealth == nullptr) return false;
+	settlements.pending_incomes = memory.alloc<settlement_pending_income>(count);
+	if (settlements.pending_incomes == nullptr) return false;
 
 	settlements.tax_rates = memory.alloc<i8>(count);
 	if (settlements.tax_rates == nullptr) return false;
 
-	settlements.finances = memory.alloc<settlement_finances>(count);
-	if (settlements.finances == nullptr) return false;
+	settlements.economies = memory.alloc<settlement_economy>(count);
+	if (settlements.economies == nullptr) return false;
 
 	settlements.buildings = memory.alloc<settlement_buildings>(count);
 	if (settlements.buildings == nullptr) return false;
@@ -135,9 +135,9 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.location = settlements.locations[i],
         .founding_tick = settlements.founding_ticks[i],
 		.population = settlements.populations[i],
-		.local_wealth = settlements.local_wealth[i],
+		.pending_income = settlements.pending_incomes[i],
 		.tax_rate = settlements.tax_rates[i],
-		.finances = settlements.finances[i],
+		.economy = settlements.economies[i],
 		.territory = settlements.territories[i],
 		.base_land_output = settlements.base_land_outputs[i],
         .buildings = settlements.buildings[i],

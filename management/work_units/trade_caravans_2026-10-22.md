@@ -26,7 +26,7 @@ Settlements invest local wealth into caravans; caravans path to a destination se
 
 - `settlement_trading` (active / max caravans) exists in settlement entities; caravan entity exists (location, movement, origin, destination, value, ship flags). `world_spawn_entity_caravan` / `world_destroy_entity_caravan` exist but do not maintain counters; caravan container init (max_count, active_count, guids, zeroed arrays) is incomplete.
 - `world_request_path` returns `path_result` with `length` in tiles only (no cost); existence = `count > 0 && !partial`; `start == end` gives count 0. A* computes cost internally (`g`, chamfer-weighted 5 / 7) but never outputs it. Task 3 blocked on this.
-- Daily economy resets `settlement_finances`: trade results need a dedicated field (last profit / income / investment / distance), not the land-economy figures.
+- Trade revenue now flows to settlements' pending income (see `economy_revamp_2026-10-22.md`); no dedicated trade-result record.
 
 ## Decisions
 

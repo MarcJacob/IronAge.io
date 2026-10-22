@@ -16,25 +16,25 @@ static inline ui32 trade_tile_distance(world_location from, world_location to)
     return ia_max(dx, dy) + ia_min(dx, dy) * 2 / 5;
 }
 
-// Profit = the extra value ON TOP of the base, of delivering a caravan worth caravan_value to a settlement holding destination_local_wealth,
+// Profit = the extra value ON TOP of the base, of delivering a caravan worth caravan_value to a settlement whose last daily income is destination_income,
 // over travel_distance (tile distance between origin and destination, see trade_tile_distance; not the path cost). Revenue (trade_revenue below) = base + profit is what is paid out on arrival.
 //   profit = value_bonus + distance_bonus + flat_bonus, with flat_bonus = max(value * profit_flat_percent%, 1): always applies, so profit is never 0 for value > 0.
-//   value_bonus   = value * value_bonus_max_percent% * r, with r = wealth / (wealth + value) in [0, 1]:
+//   value_bonus   = value * value_bonus_max_percent% * r, with r = income / (income + value) in [0, 1]:
 //                    near 1 for a small caravan next to a rich destination, 0.5 when equal, towards 0 as the caravan outgrows it.
 //   distance_bonus = value * distance_bonus_max_percent% * f, with f = log2(1 + steepness * d / mid) / log2(1 + steepness * saturation / mid),
 //                    d = min(travel_distance, saturation). f is in [0, 1], rises fast then slowly, and is flat from the saturation on.
-// Edge cases: value 0 -> 0, any other value -> at least 1. wealth 0 -> no value bonus. distance 0 -> no distance bonus. curve_mid or saturation 0 -> no distance bonus.
+// Edge cases: value 0 -> 0, any other value -> at least 1. income 0 -> no value bonus. distance 0 -> no distance bonus. curve_mid or saturation 0 -> no distance bonus.
 // Huge inputs: the percents are clamped (10000), distance is clamped to the saturation, intermediates are ui64 and cannot overflow.
-static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_local_wealth, ui32 travel_distance, const game_trade_parameters& trade_parameters)
+static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_income, ui32 travel_distance, const game_trade_parameters& trade_parameters)
 {
     ui64 value = caravan_value;
     if (value == 0) return 0;
 
     ui64 profit = 0;
 
-    // Value bonus. wealth + value > 0 here.
-    ui64 destinationWealth = destination_local_wealth;
-    ui64 wealthShare = destinationWealth * 1000 / (destinationWealth + value); // Per mille.
+    // Value bonus. income + value > 0 here.
+    ui64 income = destination_income;
+    ui64 wealthShare = income * 1000 / (income + value); // Per mille.
     profit += value * ia_min(trade_parameters.value_bonus_max_percent, (ui32)10000) * wealthShare / (100 * 1000);
 
     // Distance bonus.
@@ -61,10 +61,10 @@ static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_local_wealt
 
 // Full amount paid out on arrival: value * profit_base_multiplier (clamped to 1000) + trade_profit. Same arguments as trade_profit. 0 for value 0.
 // ui64: at most 2^32 * 1000 + profit (profit <= 2^32 * 10000 * 3 / 100), no overflow.
-static inline ui64 trade_revenue(ui32 caravan_value, ui32 destination_local_wealth, ui32 travel_distance, const game_trade_parameters& trade_parameters)
+static inline ui64 trade_revenue(ui32 caravan_value, ui32 destination_income, ui32 travel_distance, const game_trade_parameters& trade_parameters)
 {
     ui64 base = (ui64)caravan_value * ia_min(trade_parameters.profit_base_multiplier, (ui32)1000);
-    return base + trade_profit(caravan_value, destination_local_wealth, travel_distance, trade_parameters);
+    return base + trade_profit(caravan_value, destination_income, travel_distance, trade_parameters);
 }
 
 #endif // WORLD_TRADE_INCLUDED

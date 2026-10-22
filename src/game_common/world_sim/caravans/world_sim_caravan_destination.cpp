@@ -3,12 +3,13 @@
 #include "game_common/match/world/world_trade.h"
 
 // Weight of a candidate: potential profit (the extra on top of the base, flat bonus included, not the revenue) per unit of path cost.
+// destination_income is the candidate's last daily income.
 // The profit uses the tile distance between source and candidate, the path cost is only the divisor.
 // Fixed point with 3 decimals (profit * 1000 / cost), so far candidates do not round down to 0. Zero profit = 0, zero cost counts as 1.
-static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_wealth, ui32 tile_distance, ui32 path_cost)
+static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_income, ui32 tile_distance, ui32 path_cost)
 {
     static constexpr ui64 WEIGHT_SCALE = 1000;
-    ui64 profit = trade_profit(caravan_value, destination_wealth, tile_distance, GAME_PARAMETERS.trade);
+    ui64 profit = trade_profit(caravan_value, destination_income, tile_distance, GAME_PARAMETERS.trade);
     if (profit == 0) return 0;
     return profit * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
 }
@@ -44,7 +45,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 
         pathCosts[index] = result.cost;
         candidateCount++;
-        totalWeight += caravan_candidate_weight(caravan_value, settlements.local_wealth[index], trade_tile_distance(source, settlements.locations[index]), result.cost);
+        totalWeight += caravan_candidate_weight(caravan_value, settlements.economies[index].income, trade_tile_distance(source, settlements.locations[index]), result.cost);
     }
 
     if (candidateCount == 0) return false; // No random number drawn.
@@ -62,7 +63,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
     {
         if (pathCosts[index] == 0) continue;
 
-        ui64 weight = uniform ? 1 : caravan_candidate_weight(caravan_value, settlements.local_wealth[index], trade_tile_distance(source, settlements.locations[index]), pathCosts[index]);
+        ui64 weight = uniform ? 1 : caravan_candidate_weight(caravan_value, settlements.economies[index].income, trade_tile_distance(source, settlements.locations[index]), pathCosts[index]);
         if (roll < weight)
         {
             out_destination = settlements.guids[index];

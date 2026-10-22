@@ -60,7 +60,6 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
         .owner = command.spawned_player,
         .location = command.spawn_location,
         .population = { .peasants = 200 },
-        .local_wealth = 200,
         .tax_rate = 5,
     };
 

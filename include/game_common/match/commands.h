@@ -287,7 +287,7 @@ void command_stop_raising_army_apply(match_world_state& world, match_player_id p
 struct command_data_set_settlement_tax_rate
 {
 	entity_guid settlement;
-	i8 tax_rate; // % of local wealth moved to the owner's treasury each day. Must be within the game parameters' tax_rate_min..tax_rate_max.
+	i8 tax_rate; // % of the settlement's daily income moved to the owner's treasury. Must be within the game parameters' tax_rate_min..tax_rate_max.
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_settlement_tax_rate)

@@ -1,30 +1,32 @@
-// Inspection section: economy. Panel rows for the wealth and the population of a settlement, with last day's change beside the value
-// and the breakdown of that change in the hover tooltip. Reads entity snapshots only (the finance_* properties are last day's figures), so it works for any owner.
+// Inspection section: economy. Panel rows for the income, consumption and the population of a settlement, with last day's change beside the value
+// and the breakdown of that change in the hover tooltip. Reads entity snapshots only (the economy_* properties are last day's figures), so it works for any owner.
 
 import { get_game_parameters, type EntityData } from "../../gdo.js"
 import type { PanelRow } from "./ui_element_properties_panel.js"
 
-// Local wealth, its change over the last day, and the tax rate (a slider within the game parameters' limits with on_tax_rate, else read-only text).
-export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: number) => void): PanelRow[]
+// Last day's income (production + trade + wages) with the breakdown of where it goes in the tooltip, and the tax rate taken on it
+// (a slider within the game parameters' limits with on_tax_rate, else read-only text).
+export function income_section(settlement: EntityData, on_tax_rate?: (tax_rate: number) => void): PanelRow[]
 {
-    const income = settlement.get_number("finance_income");
-    const trade_set_aside = settlement.get_number("finance_trade_set_aside");
-    const construction_wages = settlement.get_number("finance_construction_wages");
-    const tax_paid = settlement.get_number("finance_tax_paid");
-    const consumption_paid = settlement.get_number("finance_consumption_paid");
+    const consumption_budget = settlement.get_number("economy_consumption_budget");
+    const trade_release = settlement.get_number("economy_trade_release");
+    const trade_overflow = settlement.get_number("economy_trade_overflow");
+    const trade_other = settlement.get_number("economy_trade_income") - trade_release - trade_overflow; // E.g. refunds.
 
     return [
-        { kind: "value", id: "wealth", state: {
-            label: "Wealth",
-            value: String(settlement.get_number("local_wealth")),
-            delta: income + construction_wages - trade_set_aside - tax_paid - consumption_paid,
+        { kind: "value", id: "income", state: {
+            label: "Income",
+            value: `${settlement.get_number("economy_income")} / day`,
             tooltip: [
                 "Last day",
-                `Land Output +${income}`,
-                `Construction wages +${construction_wages}`,
-                `Set aside for trade -${trade_set_aside}`,
-                `Tax -${tax_paid}`,
-                `Consumption -${consumption_paid}`,
+                `Production +${settlement.get_number("economy_production")}`,
+                `Trade (import release) +${trade_release}`,
+                `Trade (arrivals) +${trade_overflow}`,
+                ...(trade_other > 0 ? [`Trade (other) +${trade_other}`] : []),
+                `Wages +${settlement.get_number("economy_wages")}`,
+                `Tax -${settlement.get_number("economy_tax")}`,
+                `Trade pool set-aside -${settlement.get_number("economy_trade_set_aside")}`,
+                `Available for consumption ${consumption_budget}`,
             ],
         } },
         on_tax_rate !== undefined
@@ -37,6 +39,28 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
                 on_change: on_tax_rate,
             } }
             : { kind: "text", id: "tax_rate", state: { label: "Tax rate", text: `${settlement.get_number("tax_rate")}%` } },
+    ];
+}
+
+// Last day's consumption budget against what the population requires, with the population growth it produced beside it.
+export function consumption_section(settlement: EntityData): PanelRow[]
+{
+    const budget = settlement.get_number("economy_consumption_budget");
+    const required = settlement.get_number("economy_consumption_required");
+    const growth = settlement.get_number("population_change");
+
+    return [
+        { kind: "value", id: "consumption", state: {
+            label: "Consumption",
+            value: `${budget} / ${required}`,
+            delta: growth,
+            tooltip: [
+                "Last day",
+                `Budget ${budget}`,
+                `Required ${required}`,
+                `Growth ${growth} per day`,
+            ],
+        } },
     ];
 }
 

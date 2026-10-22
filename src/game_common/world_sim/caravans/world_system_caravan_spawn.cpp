@@ -14,7 +14,7 @@ static ui32 caravan_spawn_chance_percent(ui32 missing_slots)
     return (ui32)((i32)trade.spawn_chance_min_percent + range * (i32)(missing_slots - 1) / (i32)(trade.spawn_chance_max_missing_slots - 1));
 }
 
-// Daily: every settlement rolls once per missing caravan slot. A success invests part of its trade pool in a caravan towards a selected destination.
+// Daily: every settlement rolls once per missing caravan slot. A success invests part of its export pool in a caravan towards a selected destination.
 void world_system_caravan_spawn(match_world_state& world)
 {
     if (!world_is_daily_tick(world)) return;
@@ -38,10 +38,13 @@ void world_system_caravan_spawn(match_world_state& world)
         {
             // Re-checked every time: earlier spawns changed the count and the pool.
             if (settlementTrade.caravan_count >= settlementTrade.caravan_count_max) break;
-            if (settlementTrade.trade_pool < trade.min_trade_pool_to_spawn) break;
+            if (settlementTrade.export_pool < trade.min_export_pool_to_spawn) break;
 
-            // Investment is capped by what a caravan can hold (ui16 value).
-            ui32 investment = (ui32)ia_min((ui64)settlementTrade.trade_pool * trade.investment_percent / 100, (ui64)0xFFFF);
+            // Investment = a share of the pool, at least investment_min (or the whole pool if it holds less). Capped by what a caravan can hold (ui16 value).
+            ui64 pool = settlementTrade.export_pool;
+            ui64 share = pool * trade.investment_percent / 100;
+            ui64 minimum = ia_min((ui64)trade.investment_min, pool);
+            ui32 investment = (ui32)ia_min(ia_min(ia_max(share, minimum), pool), (ui64)0xFFFF); // Never more than the pool, even above 100%.
             if (investment == 0) break;
 
             if (world.rand_gen.next<ui32>() % 100 >= chance) continue;
@@ -55,7 +58,7 @@ void world_system_caravan_spawn(match_world_state& world)
                 break; // Nothing changes, and another roll would find nothing either.
             }
 
-            settlementTrade.trade_pool -= investment;
+            settlementTrade.export_pool -= investment;
 
             caravan.origin_settlement = origin;
             caravan.value = (ui16)investment;

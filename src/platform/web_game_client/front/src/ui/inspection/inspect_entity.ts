@@ -10,7 +10,7 @@ import * as Backend from "../../backend.js"
 import { query_entity, type EntityData } from "../../gdo.js"
 import { in_area, type PropertiesPanelState } from "./ui_element_properties_panel.js"
 import { basic_section } from "./section_basic.js"
-import { wealth_section, population_section } from "./section_economy.js"
+import { income_section, consumption_section, population_section } from "./section_economy.js"
 import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
 import { construction_section } from "./section_construction.js"
 import { caravan_section, trade_pool_section } from "./section_trade.js"
@@ -41,11 +41,11 @@ function inspect_settlement(view: EntityData, context: InspectionContext): Prope
     if (context.raise_targets !== undefined)
         return { title: "Raise army", rows: army_raise_section(null, view, context.raise_targets, context.on_raise_targets) };
 
-    // Top left: population then finances. Top right: troops. Bottom: buildings.
+    // Top left: population then economy. Top right: troops. Bottom: buildings.
     return { title: "Settlement", rows: [
-        ...in_area("left", [...population_section(view), ...wealth_section(view, context.on_tax_rate),
+        ...in_area("left", [...population_section(view), ...income_section(view, context.on_tax_rate),
             // Own settlements only: on_tax_rate is given only for those.
-            ...(context.on_tax_rate !== undefined ? trade_pool_section(view) : [])]),
+            ...(context.on_tax_rate !== undefined ? [...consumption_section(view), ...trade_pool_section(view)] : [])]),
         ...in_area("right", settlement_pool_section(view, context.on_ceiling)),
         ...in_area("bottom", construction_section(view, context.on_build_building, context.can_build_building)),
     ] };

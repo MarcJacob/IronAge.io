@@ -113,7 +113,7 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
 	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.", 5, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
-    { "Caravanserai", "Increases maximum amount of active caravans.", 10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
+    { "Caravanserai", "Increases maximum amount of active caravans. Increases trade export and import pool sizes.", 10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
@@ -186,16 +186,27 @@ struct settlement_population
 };
 
 // Last day's economy figures of a settlement, written by the daily economy tick every day. Zero is a valid (empty) value.
-struct settlement_finances
+// Nothing is carried over to the next day: the consumption budget is used up by the population at home.
+struct settlement_economy
 {
 	ui32 raw_output; // Land output actually worked by the peasants (work units, before conversion to wealth).
-	ui32 income; // Wealth produced from the raw output (before the trade set-aside): income - trade_set_aside is added to local wealth.
-	ui32 trade_set_aside; // Part of the income moved to the trade pool instead of local wealth.
-	ui32 construction_wages; // Wealth received from the owner's treasury for construction workers (roads, buildings). Added after the daily reset, as workers run after the daily economy tick.
-	ui32 tax_paid; // Wealth moved from local wealth to the owner's treasury.
+	ui32 production; // Wealth produced from the raw output.
+	ui32 wages; // Wealth received from the owner's treasury for construction workers (roads, buildings) since the previous daily tick.
+	ui32 trade_release; // Taken from the import pool today (import_release_percent of its contents).
+	ui32 trade_overflow; // Pending trade income since the previous daily tick: arrived revenue that did not fit the import pool, export refunds that did not fit the export pool.
+	ui32 trade_income; // trade_release + trade_overflow.
+	ui32 income; // production + wages + trade_income.
+	ui32 tax; // Part of the income moved to the owner's treasury.
+	ui32 trade_set_aside; // Part of the income moved to the export pool.
+	ui32 consumption_budget; // What the population at home lives on: income - tax - trade_set_aside.
 	ui32 consumption_required; // Wealth the people at home needed.
-	ui32 consumption_paid; // Wealth actually consumed.
-	ui32 excess; // Wealth available after tax that was not consumed (stays as local wealth).
+};
+
+// External income received by a settlement between two daily ticks (adds saturate). The daily economy tick turns it into that day's income and zeroes it.
+struct settlement_pending_income
+{
+	ui32 wages; // From the owner's treasury, for construction workers.
+	ui32 trade; // Caravan revenue that did not fit the import pool, and export refunds that did not fit the export pool.
 };
 
 // Buildings-related data for a settlement.
@@ -209,8 +220,11 @@ struct settlement_trading
 {
     ui8 caravan_count; // Current number of active caravans originating from this settlement.
     ui8 caravan_count_max; // Maximum number of active caravans a settlement can have.
-    ui32 trade_pool; // Wealth set aside from the land output for trade. Caravans are funded from it. Zero by default.
-    ui32 trade_pool_max; // Cap of trade_pool: 200 per Caravanserai (constant in the building events), kept by the building's added / removed events. Adds stop at it, a pool above it is kept.
+    // Caps are kept by the Caravanserai's added / removed events (constants there). Adds stop at a cap, a pool above it is kept.
+    ui32 export_pool; // Wealth set aside from the daily income for trade. Caravans are funded from it. Zero by default.
+    ui32 export_pool_max;
+    ui32 import_pool; // Revenue of arrived caravans, released into the daily income a share at a time. Zero by default.
+    ui32 import_pool_max;
 };
 
 // Property arrays for a world's settlements.
@@ -224,9 +238,9 @@ struct world_entity_settlements : public world_entity_container
 	settlement_population* populations;
     ui32*               base_land_outputs; // Peasants that can work the land at full efficiency.
 
-	ui32*               local_wealth; // Wealth held by the settlement. Never negative.
-	i8*                 tax_rates; // -100..100, % of local wealth moved to the owner's treasury each day. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
-	settlement_finances* finances; // Last day's figures.
+	settlement_pending_income* pending_incomes; // External income received since the last daily tick.
+	i8*                 tax_rates; // -100..100, % of the daily income moved to the owner's treasury. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
+	settlement_economy* economies; // Last day's figures.
 
     settlement_buildings* buildings;
 
@@ -253,9 +267,9 @@ struct world_entity_settlements : public world_entity_container
 
 		settlement_population population;
         
-        ui32 local_wealth;
+        settlement_pending_income pending_income;
         i8 tax_rate;
-        settlement_finances finances;
+        settlement_economy economy;
 
         territory territory;
         ui32 base_land_output;
@@ -282,23 +296,27 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(workers, population.workers, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY(base_land_output, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY(local_wealth, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
 
     GAME_DATA_PROPERTY_PATH_ARRAY(building_counts, buildings.building_counts, GAME_DATA_PROP_TYPE::UI16, SETTLEMENT_BUILDING_TYPE_COUNT);
 
-	GAME_DATA_PROPERTY_PATH(finance_raw_output, finances.raw_output, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_income, finances.income, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_trade_set_aside, finances.trade_set_aside, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_construction_wages, finances.construction_wages, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_tax_paid,finances.tax_paid, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_consumption_required, finances.consumption_required, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(finance_consumption_paid, finances.consumption_paid, GAME_DATA_PROP_TYPE::UI32)
-
+	GAME_DATA_PROPERTY_PATH(economy_raw_output, economy.raw_output, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_production, economy.production, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_wages, economy.wages, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_trade_release, economy.trade_release, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_trade_overflow, economy.trade_overflow, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_trade_income, economy.trade_income, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_income, economy.income, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_tax, economy.tax, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_trade_set_aside, economy.trade_set_aside, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_consumption_budget, economy.consumption_budget, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_consumption_required, economy.consumption_required, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
-    GAME_DATA_PROPERTY_PATH(trading_pool, trade.trade_pool, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trading_pool_max, trade.trade_pool_max, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_export_pool, trade.export_pool, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_export_pool_max, trade.export_pool_max, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_import_pool, trade.import_pool, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_import_pool_max, trade.import_pool_max, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)

@@ -14,14 +14,24 @@ function settlement_text(guid: number, fallback: string): string
     return `Settlement (${location.x}, ${location.y})`;
 }
 
-// Settlement trade pool (funds its caravans) and what was set aside into it last day. Own settlements only: the caller decides.
+// Settlement export pool (funds its caravans) and import pool (receives caravan revenue), each against its maximum, as read-only gauges (no on_change, so no slider).
+// Gauges have no tooltip support. Own settlements only: the caller decides.
 export function trade_pool_section(settlement: EntityData): PanelRow[]
 {
     return [
-        { kind: "value", id: "trade_pool", state: {
-            label: "Trade pool",
-            value: `${settlement.get_number("trading_pool")} / ${settlement.get_number("trading_pool_max")}`, // The value row has no max field.
-            delta: settlement.get_number("finance_trade_set_aside"),
+        { kind: "gauge", id: "export_pool", state: {
+            label: "Export pool",
+            color: "#d4a93c",
+            current: settlement.get_number("trading_export_pool"),
+            max: settlement.get_number("trading_export_pool_max"),
+            compact: true,
+        } },
+        { kind: "gauge", id: "import_pool", state: {
+            label: "Import pool",
+            color: "#4fa3a8",
+            current: settlement.get_number("trading_import_pool"),
+            max: settlement.get_number("trading_import_pool_max"),
+            compact: true,
         } },
     ];
 }

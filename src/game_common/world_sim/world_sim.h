@@ -72,7 +72,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 
 // SYSTEMS & HELPERS
 
-// Daily: settlements roll for each missing caravan slot, investing local wealth in caravans towards a selected destination.
+// Daily: settlements roll for each missing caravan slot, investing part of their export pool in caravans towards a selected destination.
 void world_system_caravan_spawn(match_world_state& world);
 
 // Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.

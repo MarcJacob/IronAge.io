@@ -21,7 +21,7 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement);
 // Allocates the settlements' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count);
 
-// Gives the settlement to a new owner. Its tax rate resets to 0 (local wealth stays with the settlement).
+// Gives the settlement to a new owner. Its tax rate resets to 0 (trade pools and pending income stay with the settlement).
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner);
 
 // SETTLEMENT POPULATION PRIMITIVES
@@ -142,8 +142,14 @@ static inline ui32 settlement_release_workers(match_world_state& world, ui16 set
 	return moved;
 }
 
-// TREASURY -> LOCAL WEALTH
-// Moves up to amount from the settlement's owner treasury to the settlement's local wealth and records it as the owner's expenses.
+// Adds to one of a settlement's pending income counters (settlement_pending_income) without wrapping around.
+static inline void settlement_pending_income_add(ui32& pending, ui64 amount)
+{
+	pending = (ui32)ia_min((ui64)pending + amount, (ui64)0xFFFFFFFF);
+}
+
+// TREASURY -> PENDING WAGES
+// Moves up to amount from the settlement's owner treasury to the settlement's pending wages (income on the next daily economy tick) and records it as the owner's expenses.
 // The treasury never goes below 0 (and an owner outside the player range pays nothing). Returns how much was actually paid.
 static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world, ui16 settlement_index, ui32 amount)
 {
@@ -155,8 +161,7 @@ static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world
 	ui32 paid = ia_min(amount, player.treasury);
 	player.treasury -= paid;
 	player.expenses += paid;
-	settlements.local_wealth[settlement_index] += paid;
-	settlements.finances[settlement_index].construction_wages += paid; // Reset by the daily economy tick, which runs before the workers.
+	settlement_pending_income_add(settlements.pending_incomes[settlement_index].wages, paid);
 	return paid;
 }
 
