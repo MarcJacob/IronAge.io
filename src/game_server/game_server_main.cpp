@@ -4,6 +4,7 @@
 // Main "chaining" of game server platform and game server internals.
 #include "core/assert.h"
 #include "core/math/random.h"
+#include "core/math/noise.h"
 #include "core/memory.h"
 #include "core/string.h"
 #include "game_common/game_data_object.h"
@@ -321,8 +322,11 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 
         if (slot.state == MATCH_SLOT_STATE::WAITING)
         {
-            // Test parameters, random seed.
-            slot.match_params = match_test_scenario_get_params(slot.slot_memory, ia_xorshift_i32(), PLAYERS_PER_MATCH);
+            // Test parameters, with a seed from platform entropy (game_common stays deterministic), mixed with the slot index.
+            ui64 entropy = server.platform->get_entropy();
+            ui32 seed = ia_hash_ui32((ui32)entropy ^ ia_hash_ui32((ui32)(entropy >> 32)) ^ ia_hash_ui32(slotIndex));
+            slot.match_params = match_test_scenario_get_params(slot.slot_memory, seed, PLAYERS_PER_MATCH);
+            server.logf("MATCH SLOTS", LOG_NORMAL, "Slot %u: match seed %u", (ui32)slotIndex, seed);
             game_server_open_lobby(server, slotIndex);
         }
     }

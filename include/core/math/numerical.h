@@ -83,6 +83,8 @@ static inline Numeric ia_clamped(Numeric val, Numeric min, Numeric max)
     return val < min ? min : (val > max ? max : val);
 }
 
+// FIXED-POINT HELPERS
+
 // Approximate log2(n) in fixed point with 8 fractional bits (256 = 1.0). n = 0 returns 0.
 // Piecewise linear between powers of two: exact at powers of two, monotonic non-decreasing.
 static inline ui32 ia_log2_q8(ui64 val)
@@ -95,6 +97,22 @@ static inline ui32 ia_log2_q8(ui64 val)
 	ui64 aboveLowerPowerOfTwo = val - ((ui64)1 << mostSignificantBit); // < 2^mostSignificantBit
 	ui32 fractionQ8 = (ui32)(mostSignificantBit >= 8 ? aboveLowerPowerOfTwo >> (mostSignificantBit - 8) : aboveLowerPowerOfTwo << (8 - mostSignificantBit)); // < 256
 	return mostSignificantBit * 256 + fractionQ8;
+}
+
+// Fractions are ui32 values in [0, IA_FIXED_ONE] with 16 fractional bits. Integer-only, so results are identical on every machine.
+static constexpr ui32 IA_FIXED_ONE = 1 << 16;
+
+// Linear interpolation from a to b, with t a fixed-point fraction (0 = a, IA_FIXED_ONE = b).
+static inline i32 ia_lerp_fixed(i32 a, i32 b, ui32 t)
+{
+	return a + (i32)(((i64)(b - a) * (i64)t) / (i64)IA_FIXED_ONE);
+}
+
+// Smoothstep curve (3t^2 - 2t^3) of a fixed-point fraction in [0, IA_FIXED_ONE]. Returns a fixed-point fraction.
+static inline ui32 ia_smoothstep_fixed(ui32 t)
+{
+	ui64 t2 = ((ui64)t * t) / IA_FIXED_ONE;
+	return (ui32)((t2 * (3ull * IA_FIXED_ONE - 2ull * t)) / IA_FIXED_ONE);
 }
 
 #endif // NUMERICAL_INCLUDED

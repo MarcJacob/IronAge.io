@@ -174,6 +174,17 @@ export interface MatchStartParams
     player_count: number;
     tick_rate: number;
     random_seed: number;
+    procedural_map: boolean;
+    map_gen: MapGenParams; // Only used if procedural_map is set.
+}
+
+// Mirrors game_map_gen_params (include/game_common/match/map_gen_params.h).
+export interface MapGenParams
+{
+    sea_level_bias: number; // Signed.
+    hills_bias: number; // Signed.
+    mountains_bias: number; // Signed.
+    feature_scale_tiles: number; // 0 = default.
 }
 
 export interface LobbyState
@@ -184,14 +195,15 @@ export interface LobbyState
     match_start_params: MatchStartParams;
 }
 
-// Mirrors game_message_payload_lobby_joined (include/game_common/game_messages.h), packed, 18 bytes:
+// Mirrors game_message_payload_lobby_joined (include/game_common/game_messages.h), packed, 24 bytes:
 // countdown_remaining_ms (ui32 @0), lobby_player_count (ui16 @4), match_slot_index (ui8 @6),
-// match_start_params @7: world_size_regions (2x ui16 @7, @9), player_count (ui16 @11), tick_rate (ui8 @13), random_seed (ui32 @14).
+// match_start_params @7: world_size_regions (2x ui16 @7, @9), player_count (ui16 @11), tick_rate (ui8 @13), random_seed (ui32 @14),
+// procedural_map (ui8 @18), map_gen @19: sea_level_bias (i8 @19), hills_bias (i8 @20), mountains_bias (i8 @21), feature_scale_tiles (ui16 @22).
 // Only call after process_net_message returned LOBBY_JOINED.
 // NOTE: reading game state straight from TS is a stopgap. High-level game state should later be managed by the client backend.
 export function read_lobby_joined_payload(): LobbyState
 {
-    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 18);
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 24);
     return {
         countdown_remaining_ms: view.getUint32(0, true),
         player_count: view.getUint16(4, true),
@@ -202,6 +214,13 @@ export function read_lobby_joined_payload(): LobbyState
             player_count: view.getUint16(11, true),
             tick_rate: view.getUint8(13),
             random_seed: view.getUint32(14, true),
+            procedural_map: view.getUint8(18) !== 0,
+            map_gen: {
+                sea_level_bias: view.getInt8(19),
+                hills_bias: view.getInt8(20),
+                mountains_bias: view.getInt8(21),
+                feature_scale_tiles: view.getUint16(22, true),
+            },
         },
     };
 }

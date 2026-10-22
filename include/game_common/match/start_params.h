@@ -4,6 +4,7 @@
 #define MATCH_START_PARAMS_INCLUDED
 
 #include "core.h"
+#include "map_gen_params.h"
 
 // Pack the start params structure since, as of now, it gets sent over the network as-is.
 #pragma pack(push, 1)
@@ -17,6 +18,9 @@ struct game_match_start_params
 	ui8 tick_rate; // Number of ticks per second.
 
 	ui32 random_seed; // Drives every random element of the match simulation. The same seed and same input commands will lead to the same outcome.
+
+	bool procedural_map; // Whether the terrain is procedurally generated from random_seed and map_gen (else the fixed default map is used).
+	game_map_gen_params map_gen; // Only used if procedural_map is set.
 };
 
 #pragma pack(pop)

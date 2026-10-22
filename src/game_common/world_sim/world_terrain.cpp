@@ -3,6 +3,20 @@
 #include "game_common/match/world/world_terrain.h"
 #include "world_sim.h"
 
+// Initializes the dynamic properties of all tiles: unowned, border count of 4.
+void world_terrain_init_tile_status(world_terrain& terrain)
+{
+    ui32 regionCount = terrain.size_regions.x * terrain.size_regions.y;
+    for (ui32 regionIndex = 0; regionIndex < regionCount; regionIndex++)
+    {
+        for (ui32 tileIndex = 0; tileIndex < world_terrain::REGION_TILE_COUNT; tileIndex++)
+        {
+            terrain.regions[regionIndex].owners[tileIndex] = world_terrain::UNOWNED_TILE;
+            terrain.regions[regionIndex].status[tileIndex].border_count = 4;
+        }
+    }
+}
+
 // Generates terrain: ring of mountains then hills along the world border, plains elsewhere.
 // TODO(Marc): Replace with map generation from data transmitted by the server before match start (e.g. image files).
 void world_terrain_generate(world_terrain& terrain)
@@ -43,10 +57,8 @@ void world_terrain_generate(world_terrain& terrain)
             ui32 regionIndex = (y / world_terrain::REGION_SIZE) * terrain.size_regions.x + (x / world_terrain::REGION_SIZE);
             ui32 tileIndex = (y % world_terrain::REGION_SIZE) * world_terrain::REGION_SIZE + (x % world_terrain::REGION_SIZE);
             terrain.regions[regionIndex].terrain_types[tileIndex] = type;
-
-            // Also initialize tile ownership to UNOWNED and border count to 4.
-            terrain.regions[regionIndex].owners[tileIndex] = world_terrain::UNOWNED_TILE;
-            terrain.regions[regionIndex].status[tileIndex].border_count = 4;
         }
     }
+
+    world_terrain_init_tile_status(terrain);
 }
