@@ -5,7 +5,7 @@
 
 #include "../game_server_clients.h" // For game_server_client::client_handle.
 
-#include "game_common/match/AI_logic.h"
+#include "game_common/match/ai/match_ai.h"
 
 // States a match slot can be in.
 // Lifecycle goes Uninitialized -> Waiting -> In Lobby -> Match Ongoing -> Match Ended -> Awaiting Cleanup -> Waiting -> [...]
@@ -42,7 +42,7 @@ struct match_player
 	union
 	{
 		game_server_client::client_handle client;
-		AI_player_state* AI;
+		ai_player_state* AI;
 	};
 };
 
@@ -77,7 +77,8 @@ struct match_slot
             match_tick_commands_builder next_tick_commands_builder;
 
 			ui16 ai_player_count; 
-			AI_player_state* ai_players;
+			ai_player_state* ai_players;
+			ai_observed_world_state* ai_observed; // Shared by all AI players, rebuilt after each tick. nullptr without AI players.
 
 		} match;					// Valid when the slot state is MATCH_*
 	};

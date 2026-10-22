@@ -16,7 +16,7 @@
 // Unity compile game common components.
 #include "world_sim/world_sim_main.cpp"
 #include "match_commands.cpp"
-#include "match_AI_logic.cpp"
+#include "match_ai/match_ai_main.cpp"
 #include "game_common_tests.cpp"
 
 // Forward declare apply-all function implemented in commands components.

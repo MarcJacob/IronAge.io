@@ -44,6 +44,7 @@ when it finishes.
 - `work_units/public_hosting_2026-10-15.md` [DONE]
 - `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
 - `work_units/map_gen_2026-10-22.md` [WIP]
+- `work_units/match_ai_2026-10-22.md` [WIP]
 
 Finished units are moved to `management/archive/` after a time.
 

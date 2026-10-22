@@ -43,7 +43,6 @@ Beyond just the match system itself, the common code generally exposes its logic
 
 Top-level implementation files, by theme:
 - *game_common_main.cpp* is the Unity entry point: it includes the other implementation files and holds the match-wide logic (memory requirements, start, tick).
-- *match_AI_logic.cpp*: primitive AI, called from host code to output automated behavior commands from a given match state and some internal AI state.
 - *match_commands.cpp*: input command implementations, per command type.
 - *game_common_tests.cpp*: various test functions.
 

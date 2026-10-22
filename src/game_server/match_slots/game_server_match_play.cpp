@@ -127,7 +127,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
     ui16 AIPlayerCount = ia_min(256, slot.match_params->player_count - humanPlayerCount);
     if (AIPlayerCount > 0)
     {
-        mem_arena AIPlayersMem = mem_arena_create_sub(slot.slot_memory, AIPlayerCount * sizeof(AI_player_state));
+        mem_arena AIPlayersMem = mem_arena_create_sub(slot.slot_memory, AIPlayerCount * sizeof(ai_player_state));
         ASSERT(AIPlayersMem.mem_start != nullptr);
         AIPlayersMem.clear();
 
@@ -141,7 +141,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
                 playerSlot.bIsClientPlayer = false;
 
                 // Alloc AI player for this player index.
-                if (AI_player_state* newAI = AIPlayersMem.alloc<AI_player_state>())
+                if (ai_player_state* newAI = AIPlayersMem.alloc<ai_player_state>())
                 {
                     newAI->controlled_player = playerID;
                     slot.match.ai_player_count++;
@@ -151,11 +151,17 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
         }
 
         // Link AI players buffer.
-        slot.match.ai_players = (AI_player_state*)AIPlayersMem.mem_start;
+        slot.match.ai_players = (ai_player_state*)AIPlayersMem.mem_start;
+
+        // Room for the observed world state they share (zero = empty world).
+        slot.match.ai_observed = slot.slot_memory.alloc<ai_observed_world_state>();
+        ASSERT(slot.match.ai_observed != nullptr);
    }
 
     // Allocate input commands memory according to total player count.
-    slot.match.next_tick_commands_memory = mem_arena_create_sub(slot.slot_memory, 64 * slot.match_params->player_count);
+    // Shared by human and AI input; AI skips its decision when the arena is full.
+    constexpr ui32 COMMAND_BYTES_PER_PLAYER = 256;
+    slot.match.next_tick_commands_memory = mem_arena_create_sub(slot.slot_memory, COMMAND_BYTES_PER_PLAYER * slot.match_params->player_count);
     slot.match.next_tick_commands_builder = { &slot.match.next_tick_commands_memory };
     slot.match.next_tick_commands_builder.init();
 
@@ -308,8 +314,8 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 		// Gather AI input.
 		for (ui16 aiPlayerIndex = 0; aiPlayerIndex < slot.match.ai_player_count; aiPlayerIndex++)
 		{
-			AI_player_state& aiState = slot.match.ai_players[aiPlayerIndex];
-			AI_output_commands(*slot.match.match_ptr, aiState, slot.match.next_tick_commands_builder);
+			ai_player_state& aiState = slot.match.ai_players[aiPlayerIndex];
+			ai_output_commands(*slot.match.ai_observed, *slot.match.match_ptr, aiState, slot.match.next_tick_commands_builder);
 		}
 
 		match_tick_commands& tickCommands = *slot.match.next_tick_commands_builder._tick_commands_start;
@@ -338,6 +344,8 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 
 		// Perform server-side match tick.
 		match_tick(*slot.match.match_ptr, tickCommands);
+
+		if (slot.match.ai_observed != nullptr) ai_observe_world(*slot.match.match_ptr->world, *slot.match.ai_observed);
 
 		// Placeholder end condition, checked every few ticks.
 		// Never with a single player: they would trivially hold 100% from the start.
