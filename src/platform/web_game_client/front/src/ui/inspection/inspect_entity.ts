@@ -13,6 +13,7 @@ import { basic_section } from "./section_basic.js"
 import { wealth_section, population_section } from "./section_economy.js"
 import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
 import { construction_section } from "./section_construction.js"
+import { caravan_section, trade_pool_section } from "./section_trade.js"
 
 export interface InspectionContext
 {
@@ -42,7 +43,9 @@ function inspect_settlement(view: EntityData, context: InspectionContext): Prope
 
     // Top left: population then finances. Top right: troops. Bottom: buildings.
     return { title: "Settlement", rows: [
-        ...in_area("left", [...population_section(view), ...wealth_section(view, context.on_tax_rate)]),
+        ...in_area("left", [...population_section(view), ...wealth_section(view, context.on_tax_rate),
+            // Own settlements only: on_tax_rate is given only for those.
+            ...(context.on_tax_rate !== undefined ? trade_pool_section(view) : [])]),
         ...in_area("right", settlement_pool_section(view, context.on_ceiling)),
         ...in_area("bottom", construction_section(view, context.on_build_building, context.can_build_building)),
     ] };
@@ -55,6 +58,11 @@ function inspect_army(view: EntityData, context: InspectionContext): PropertiesP
         return { title: "Army troops", rows: army_raise_section(view, query_entity(view.get_number("home_settlement")), army_raise_targets(view), context.on_raise_targets) };
 
     return { title: "Army troops", rows: army_count_section(view) };
+}
+
+function inspect_caravan(view: EntityData): PropertiesPanelState
+{
+    return { title: "Caravan", rows: caravan_section(view) };
 }
 
 // Entity types without sections of their own (worker, battle...).
@@ -70,6 +78,7 @@ export function inspect_entity(view: EntityData, context: InspectionContext): Pr
     {
     case Backend.ENTITY_TYPE.SETTLEMENT: return inspect_settlement(view, context);
     case Backend.ENTITY_TYPE.ARMY: return inspect_army(view, context);
+    case Backend.ENTITY_TYPE.CARAVAN: return inspect_caravan(view);
     default: return inspect_generic(view);
     }
 }

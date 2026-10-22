@@ -39,7 +39,7 @@ export class ArmySelected extends Core.Mode
         if (!this.is_top) return;
 
         const army = query_entity(this.army_guid);
-        if (!is_own_army(army) || get_selected_entity_guid() !== this.army_guid)
+        if (army === null || !is_own_army(army) || get_selected_entity_guid() !== this.army_guid)
         {
             Core.pop_mode();
             return;

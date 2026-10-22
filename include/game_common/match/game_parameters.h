@@ -7,6 +7,28 @@
 #include "core.h"
 #include "game_common/game_data_object.h"
 
+// Trade / caravan parameters (placeholder values, tunable). All fields are 4 bytes. See world_trade.h for how the profit ones are used.
+struct game_trade_parameters
+{
+    // Spawning
+    ui32 trade_pool_income_percent = 10; // % of the day's income (land output converted to wealth) set aside into the settlement's trade pool.
+    ui32 min_trade_pool_to_spawn = 100; // A settlement whose trade pool is below this spawns no caravan.
+    ui32 investment_percent = 10; // % of the origin's trade pool invested in a caravan.
+    ui32 spawn_chance_min_percent = 25; // Spawn probability (%) with 1 missing caravan slot.
+    ui32 spawn_chance_max_percent = 75; // Spawn probability (%) at spawn_chance_max_missing_slots missing slots or more. Linear in between.
+    ui32 spawn_chance_max_missing_slots = 5;
+
+    // Profit
+    ui32 profit_base_multiplier = 2; // Base of the revenue = caravan value * this. (Clamped to 1000 by trade_revenue.) Profit is the extra on top of it.
+    ui32 profit_flat_percent = 10; // Flat profit always added, in % of caravan value (at least 1 for any caravan with value). Clamped to 10000.
+    ui32 value_bonus_max_percent = 100; // Max value bonus, in % of caravan value (reached when the caravan is tiny next to the destination's wealth). Clamped to 10000.
+    ui32 distance_bonus_max_percent = 100; // Max distance bonus, in % of caravan value (reached at the plateau). Clamped to 10000.
+    // Distances are tiles between origin and destination (trade_tile_distance). A region is 128 tiles wide (world_terrain::REGION_SIZE).
+    ui32 distance_curve_mid = 128; // Distance of the curve's "middle" (one region): the bonus rises fast up to about here, slowly after.
+    ui32 distance_saturation = 384; // Distance from which the distance bonus stops growing (three regions).
+    ui32 distance_curve_steepness = 7; // Higher = faster initial rise. Bonus shape is log2(1 + steepness * distance / curve mid).
+};
+
 // Per mille = thousandths (20 = 2%). Ratios are per mille too (1000 = 100%).
 // All fields are 4 bytes on purpose: no padding, and the GDO below reads them as UI32 / I32.
 struct game_parameters
@@ -51,6 +73,9 @@ struct game_parameters
     // TAXES
     i32 tax_rate_min = 0; // Lowest tax rate (%) a player can set. Negative would be investment (treasury -> settlement), not applied yet.
     i32 tax_rate_max = 10; // Highest tax rate (%) a player can set.
+
+    // TRADE
+    game_trade_parameters trade;
 };
 
 static constexpr game_parameters GAME_PARAMETERS = {};
@@ -83,6 +108,20 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
 
     GAME_DATA_PROPERTY(tax_rate_min, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(tax_rate_max, GAME_DATA_PROP_TYPE::I32)
+
+    GAME_DATA_PROPERTY_PATH(trade_trade_pool_income_percent, trade.trade_pool_income_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_min_trade_pool_to_spawn, trade.min_trade_pool_to_spawn, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_investment_percent, trade.investment_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_spawn_chance_min_percent, trade.spawn_chance_min_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_spawn_chance_max_percent, trade.spawn_chance_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_spawn_chance_max_missing_slots, trade.spawn_chance_max_missing_slots, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_profit_base_multiplier, trade.profit_base_multiplier, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_profit_flat_percent, trade.profit_flat_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_value_bonus_max_percent, trade.value_bonus_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_bonus_max_percent, trade.distance_bonus_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_curve_mid, trade.distance_curve_mid, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_saturation, trade.distance_saturation, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_curve_steepness, trade.distance_curve_steepness, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 #endif // GAME_PARAMETERS_INCLUDED

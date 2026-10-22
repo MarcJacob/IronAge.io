@@ -37,6 +37,9 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 		world.entities->settlements.buildings[freeIndex].building_counts[buildingType] = 0;
 	}
 
+	// Slots are reused: no caravans and no caravan capacity to start with (buildings add to it).
+	world.entities->settlements.trade[freeIndex] = {};
+
 	settlement_population& population = world.entities->settlements.populations[freeIndex];
     population = start_state.population;
 
@@ -108,6 +111,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.buildings = memory.alloc<settlement_buildings>(count);
 	if (settlements.buildings == nullptr) return false;
 
+	settlements.trade = memory.alloc<settlement_trading>(count);
+	if (settlements.trade == nullptr) return false;
+
 	settlements.territories = memory.alloc<world_entity_settlements::territory>(count);
 	if (settlements.territories == nullptr) return false;
 
@@ -135,6 +141,7 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.territory = settlements.territories[i],
 		.base_land_output = settlements.base_land_outputs[i],
         .buildings = settlements.buildings[i],
+        .trade = settlements.trade[i],
 		.troop_ceilings = settlements.troop_ceilings[i],
 		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
 	};

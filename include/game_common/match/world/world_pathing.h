@@ -31,6 +31,7 @@ struct path
 	ui16 count; // Number of waypoints stored. May be less than the path really has if the caller's capacity was smaller, and 0 if start == end or no progress was possible.
 	ui16 length; // Total length in tiles of the whole path found, not only of the stored waypoints.
 	bool partial; // The path doesn't reach the target: it is unreachable or the search ran out of memory, and the path ends at the explored tile closest to it.
+	ui32 cost; // Total cost of the whole path (tile move costs times chamfer weights, see PROXIMITY_WEIGHT_*). 0 if partial or if start == end.
 };
 
 // Computes a path from start to end into out_path, whose points and points_capacity (above 0) must be set by the caller, using the scratch arena for the search.

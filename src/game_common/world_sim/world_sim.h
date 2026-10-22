@@ -36,6 +36,7 @@ struct path_result
     ui16 count; // Number of waypoints. 0 = nothing to do (start == end, invalid end) or no progress possible.
     ui16 length; // Total length in tiles.
     bool partial; // The path ends at the closest reachable tile instead of at the requested target.
+    ui32 cost; // Total path cost (see path::cost). 0 if partial or if start == end.
     ui32 handle; // Identifies the stored path for later re-use. INVALID_PATH_HANDLE = none (the store doesn't keep paths yet).
 };
 
@@ -63,7 +64,22 @@ void world_request_path(match_world_state& world, world_location start, world_lo
 // Destroys an army and returns its men to the settlement: levies become peasants, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
+// Picks a destination settlement for a caravan of the given value travelling from source (any location), excluding origin_exclude (may be INVALID_ENTITY_GUID).
+// Candidates are the other active settlements with a complete path. Weight = trade_profit / path cost, picked with world.rand_gen (not advanced without candidates).
+// Returns false if there is no destination, otherwise the destination and the path cost used. Pathing to every settlement is not cached.
+bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
+    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost);
+
 // SYSTEMS & HELPERS
+
+// Daily: settlements roll for each missing caravan slot, investing local wealth in caravans towards a selected destination.
+void world_system_caravan_spawn(match_world_state& world);
+
+// Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.
+void world_system_caravan_trade(match_world_state& world);
+
+// Despawns a caravan, giving its value back to its origin's local wealth (no profit) if the origin is valid.
+void world_caravan_cancel(match_world_state& world, entity_guid caravan);
 
 // Advances all construction projects (workers) by one tick, destroying the finished ones.
 void world_system_worker_construction(match_world_state& world);

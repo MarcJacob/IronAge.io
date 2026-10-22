@@ -8,6 +8,8 @@ import type { PanelRow } from "./ui_element_properties_panel.js"
 export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: number) => void): PanelRow[]
 {
     const income = settlement.get_number("finance_income");
+    const trade_set_aside = settlement.get_number("finance_trade_set_aside");
+    const construction_wages = settlement.get_number("finance_construction_wages");
     const tax_paid = settlement.get_number("finance_tax_paid");
     const consumption_paid = settlement.get_number("finance_consumption_paid");
 
@@ -15,10 +17,12 @@ export function wealth_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
         { kind: "value", id: "wealth", state: {
             label: "Wealth",
             value: String(settlement.get_number("local_wealth")),
-            delta: income - tax_paid - consumption_paid,
+            delta: income + construction_wages - trade_set_aside - tax_paid - consumption_paid,
             tooltip: [
                 "Last day",
                 `Land Output +${income}`,
+                `Construction wages +${construction_wages}`,
+                `Set aside for trade -${trade_set_aside}`,
                 `Tax -${tax_paid}`,
                 `Consumption -${consumption_paid}`,
             ],

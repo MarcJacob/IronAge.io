@@ -28,6 +28,9 @@ void settlement_building_barracks_on_removed(match_world_state& world, entity_gu
 
 // TRADE POSTS
 
+// Trade pool cap added by each trade post. Placeholder, may become a building parameter later.
+static constexpr ui32 TRADE_POST_POOL_CAPACITY = 200;
+
 void settlement_building_tradepost_on_added(match_world_state& world, entity_guid settlement)
 {
     ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
@@ -35,6 +38,7 @@ void settlement_building_tradepost_on_added(match_world_state& world, entity_gui
     ui16 settlementIndex = settlement.get_index();
 
     world.entities->settlements.trade[settlementIndex].caravan_count_max++;
+    world.entities->settlements.trade[settlementIndex].trade_pool_max += TRADE_POST_POOL_CAPACITY;
 }
 
 void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement)
@@ -44,5 +48,6 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
     ui16 settlementIndex = settlement.get_index();
 
     world.entities->settlements.trade[settlementIndex].caravan_count_max--;
+    world.entities->settlements.trade[settlementIndex].trade_pool_max -= TRADE_POST_POOL_CAPACITY; // The pool itself is kept.
 }
 // ...

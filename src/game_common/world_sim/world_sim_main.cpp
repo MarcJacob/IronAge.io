@@ -25,6 +25,9 @@
 #include "workers/world_system_worker_construction.cpp"
 
 #include "caravans/world_sim_entity_caravan.cpp"
+#include "caravans/world_sim_caravan_destination.cpp"
+#include "caravans/world_system_caravan_spawn.cpp"
+#include "caravans/world_system_caravan_trade.cpp"
 
 #include "world_system_movement.cpp"
 #include "world_pathing.cpp"
@@ -53,6 +56,7 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 		break;
     case ENTITY_TYPE::CARAVAN:
         container = &world.entities->caravans;
+		break;
 	default:
 		return false;
 	}
@@ -182,6 +186,7 @@ void world_state_tick(match_world_state& world)
     world_system_economy_daily_tick(world);
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
+    world_system_caravan_spawn(world); // After the economy filled local wealth and buildings set the caravan max.
     world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
     world_system_armies_upkeep(world); // After the daily economy reset expenses.
 
@@ -191,6 +196,7 @@ void world_state_tick(match_world_state& world)
 
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
+    world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 
     world_system_armies_target_reached(world);
     world_system_armies_raising(world);

@@ -156,6 +156,7 @@ static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world
 	player.treasury -= paid;
 	player.expenses += paid;
 	settlements.local_wealth[settlement_index] += paid;
+	settlements.finances[settlement_index].construction_wages += paid; // Reset by the daily economy tick, which runs before the workers.
 	return paid;
 }
 

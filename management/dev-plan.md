@@ -33,6 +33,8 @@ when it finishes.
 - `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/world_sim_simplification_2026-10-19.md`
 - `work_units/basic_world_economy_2026-10-18.md` [WIP]
+- `work_units/trade_caravans_2026-10-22.md` [WIP]
+- `work_units/economy_revamp_2026-10-22.md` [WIP]
 - `work_units/alpha_troops_recruitment_2026-10-18.md`
 - `work_units/alpha_war_extensions_2026-10-18.md`
 - `work_units/alpha_diplomacy_chat_2026-10-18.md`

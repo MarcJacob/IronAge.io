@@ -26,10 +26,10 @@ void world_system_settlement_territory_update_pressure(match_world_state& world)
 }
 
 // DAILY ECONOMY
-// Per settlement, in this order: output -> wealth, tax, consumption, growth. Every wealth movement is its own function below.
+// Per settlement, in this order: output -> trade pool + local wealth, tax, consumption, growth. Every wealth movement is its own function below.
 
 // Peasants able to work the land at full efficiency (base) count fully, the surplus on top of it gives diminishing returns.
-static ui32 settlement_effective_output(ui32 base_land_output, ui32 peasants)
+static ui32 settlement_raw_output(ui32 base_land_output, ui32 peasants)
 {
     if (peasants <= base_land_output) return peasants;
     if (base_land_output == 0) return 0; // No land to work.
@@ -38,10 +38,10 @@ static ui32 settlement_effective_output(ui32 base_land_output, ui32 peasants)
     return base_land_output + surplus / (1 + surplus / base_land_output);
 }
 
-// Wealth produced by an effective land output.
-static ui32 land_output_to_wealth(ui32 effective_output)
+// Wealth produced by a raw land output.
+static ui32 land_output_to_wealth(ui32 raw_output)
 {
-    return effective_output + effective_output / (100 / GAME_PARAMETERS.peasant_production_percent_base);
+    return raw_output + raw_output / (100 / GAME_PARAMETERS.peasant_production_percent_base);
 }
 
 // Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
@@ -52,13 +52,24 @@ static ui32 settlement_consumption_required(const settlement_population& populat
     return population.at_home() * GAME_PARAMETERS.consumption_per_person; 
 }
 
-// WEALTH MOVEMENT 1: land output -> local wealth.
+// WEALTH MOVEMENT 1: land output -> income, of which a share goes to the trade pool and the rest to local wealth.
 static void settlement_wealth_add_income(world_entity_settlements& settlements, ui32 settlement_index)
 {
     settlement_finances& finances = settlements.finances[settlement_index];
-    finances.effective_output = settlement_effective_output(settlements.base_land_outputs[settlement_index], settlements.populations[settlement_index].peasants);
-    finances.income = land_output_to_wealth(finances.effective_output);
-    settlements.local_wealth[settlement_index] += finances.income;
+    finances.raw_output = settlement_raw_output(settlements.base_land_outputs[settlement_index], settlements.populations[settlement_index].peasants);
+    finances.income = land_output_to_wealth(finances.raw_output);
+
+    // Set-aside is a share of the income, at least 1 when there is income and a share.
+    ui32 percent = GAME_PARAMETERS.trade.trade_pool_income_percent;
+    ui32 setAside = (ui32)((ui64)finances.income * percent / 100);
+    if (setAside == 0 && finances.income > 0 && percent > 0) setAside = 1;
+    // Only what fits under the pool cap is set aside (no Caravanserai: cap 0), the rest stays in local wealth.
+    settlement_trading& tradeState = settlements.trade[settlement_index];
+    ui32 room = tradeState.trade_pool_max > tradeState.trade_pool ? tradeState.trade_pool_max - tradeState.trade_pool : 0;
+    finances.trade_set_aside = ia_min(ia_min(setAside, finances.income), room);
+
+    tradeState.trade_pool += finances.trade_set_aside;
+    settlements.local_wealth[settlement_index] += finances.income - finances.trade_set_aside;
 }
 
 // WEALTH MOVEMENT 2: local wealth -> owner's treasury, by the tax rate.

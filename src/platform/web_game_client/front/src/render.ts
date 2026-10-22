@@ -30,6 +30,7 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.ARMY]: true,
         [Backend.ENTITY_TYPE.WORKER]: true,
         [Backend.ENTITY_TYPE.BATTLE]: true,
+        [Backend.ENTITY_TYPE.CARAVAN]: true,
     } as Record<number, boolean>,
 
     tint_entities: true, // Tint entities by ownership (own / other).
@@ -67,6 +68,7 @@ class RESOURCES_STORE
     ENTITY = {
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
+        CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
     };
 
     // ...
@@ -99,6 +101,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.ARMY]: 2,
     [Backend.ENTITY_TYPE.WORKER]: 1, // Only the workers walking on the map are sent by the backend.
     [Backend.ENTITY_TYPE.BATTLE]: 3,
+    [Backend.ENTITY_TYPE.CARAVAN]: 2,
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world/world_terrain.h.
@@ -272,6 +275,15 @@ function draw_entity_army(viewport_x: number, viewport_y: number, owned_by_local
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
     draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), owned_by_local_player, is_selected);
+}
+
+// Draws a caravan entity icon at the given viewport location.
+function draw_entity_caravan(viewport_x: number, viewport_y: number, owned_by_local_player: boolean = false, is_selected: boolean = false)
+{
+    if (RESOURCES == null) return;
+    if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
+
+    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), owned_by_local_player, is_selected);
 }
 
 // Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -557,6 +569,10 @@ export function draw(render_state: Backend.RenderState | null)
             draw_entity_army(entity.viewport_x, entity.viewport_y,
                 entity.owner == render_state.controlled_player_id, isSelected);
             draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
+        }
+        else if (entity.entity_type === Backend.ENTITY_TYPE.CARAVAN) {
+            draw_entity_caravan(entity.viewport_x, entity.viewport_y,
+                entity.owner === render_state.controlled_player_id, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
             // Simple marker, no sprite yet: green if owned by the local player, red otherwise.

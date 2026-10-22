@@ -83,5 +83,19 @@ static inline Numeric ia_clamped(Numeric val, Numeric min, Numeric max)
     return val < min ? min : (val > max ? max : val);
 }
 
+// Approximate log2(n) in fixed point with 8 fractional bits (256 = 1.0). n = 0 returns 0.
+// Piecewise linear between powers of two: exact at powers of two, monotonic non-decreasing.
+static inline ui32 ia_log2_q8(ui64 val)
+{
+	if (val <= 1) return 0;
+
+	ui32 mostSignificantBit = 0;
+	while (mostSignificantBit < 63 && (val >> (mostSignificantBit + 1)) != 0) mostSignificantBit++;
+
+	ui64 aboveLowerPowerOfTwo = val - ((ui64)1 << mostSignificantBit); // < 2^mostSignificantBit
+	ui32 fractionQ8 = (ui32)(mostSignificantBit >= 8 ? aboveLowerPowerOfTwo >> (mostSignificantBit - 8) : aboveLowerPowerOfTwo << (8 - mostSignificantBit)); // < 256
+	return mostSignificantBit * 256 + fractionQ8;
+}
+
 #endif // NUMERICAL_INCLUDED
 

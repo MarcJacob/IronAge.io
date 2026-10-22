@@ -100,7 +100,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 			world_location battleLoc = world.entities->battles.states[armies.battles[armyIndex].get_index()].location;
 			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
 			armies.movements[armyIndex].destination = battleLoc;
-            break;
+            continue;
 		}
 
         // Otherwise move to action target entity.
@@ -119,28 +119,20 @@ void world_system_entity_movement_decision(match_world_state& world)
 
     world_entity_caravans& caravans = world.entities->caravans;
     
-    // Caravans move towards their destination, or their origin if the destination is gone.
-    // If both are gone, stop movement.
+    // Caravans move towards their destination settlement. If it is gone, they stop (the trade system cancels them).
     for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
     {
-        if (!caravans.guids[caravanIndex].is_valid()) continue; 
+        if (!caravans.guids[caravanIndex].is_valid()) continue;
 
-        world_location dest; 
-        if (caravans.destination_settlements[caravanIndex].is_valid())
+        entity_guid destination = caravans.destination_settlements[caravanIndex];
+        if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
         {
-            dest = world_entity_get_location(world, caravans.destination_settlements[caravanIndex]);
-        }
-        else if (caravans.destination_settlements[caravanIndex].is_valid())
-        {
-            dest = world_entity_get_location(world, caravans.origin_settlements[caravanIndex]);
+            caravans.movements[caravanIndex].destination = world_entity_get_location(world, destination);
         }
         else
         {
             world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
-            break;
         }
-
-        caravans.movements[caravanIndex].destination = dest;
     }
 }
 
@@ -164,6 +156,10 @@ void world_system_entity_movement(match_world_state& world)
     for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
     {
         if (!caravans.guids[caravanIndex].is_valid()) continue;
-        world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+        // No path to follow means the destination is unreachable: the caravan is cancelled instead of staying stuck.
+        if (!world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]))
+        {
+            world_caravan_cancel(world, caravans.guids[caravanIndex]);
+        }
     }
 }

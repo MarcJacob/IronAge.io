@@ -153,20 +153,10 @@ static ui32 path_heuristic(world_location from, world_location to)
     return (PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal);
 }
 
-// Long searches trade exact optimality for a more goal-directed search. Short searches
-// retain ordinary A* behavior, while long searches spend less of the fixed node pool
-// exploring equally plausible terrain around the start.
-static constexpr ui32 PATH_WEIGHTED_HEURISTIC_DISTANCE = 32;
-static constexpr ui32 PATH_WEIGHTED_HEURISTIC_WEIGHT = 3;
-
-static ui32 path_heuristic_weight(world_location from, world_location to)
-{
-    ui32 dx = ia_abs(to.x - from.x);
-    ui32 dy = ia_abs(to.y - from.y);
-    return (dx > dy ? dx : dy) >= PATH_WEIGHTED_HEURISTIC_DISTANCE
-        ? PATH_WEIGHTED_HEURISTIC_WEIGHT
-        : 1;
-}
+// Weighted A*: the heuristic is multiplied by this, for every search distance. Found paths cost at most this times the optimal.
+// Must stay below the plains / road cost ratio (3), or straight plains paths become as good as roads and roads get ignored.
+// 2 keeps roads followed while open plains searches of ~100 tiles still fit the node budget.
+static constexpr ui32 PATH_HEURISTIC_WEIGHT = 2;
 
 void world_path_find(const world_terrain& terrain, world_location start, world_location end, const path_params& params,
     mem_arena& scratch, path& out_path)
@@ -175,12 +165,12 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
 
     ui32 world_width = terrain.size_tiles.x;
     ui32 startTile = start.y * world_width + start.x, endTile = end.y * world_width + end.x;
-    ui32 heuristicWeight = path_heuristic_weight(start, end);
 
     // Default result, kept if the scratch arena is too small to search at all.
     out_path.count = 0;
     out_path.length = 0;
     out_path.partial = true;
+    out_path.cost = 0;
 
     // Scratch layout: a node table of at most half the arena (power of two), then a heap filling the rest.
     path_search search = {};
@@ -197,7 +187,7 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
 
     path_node* startNode = path_node_get(search, startTile);
     startNode->state = PATH_NODE_OPEN;
-    path_heap_push(search, { heuristicWeight * path_heuristic(start, end), 0, startTile });
+    path_heap_push(search, { PATH_HEURISTIC_WEIGHT * path_heuristic(start, end), 0, startTile });
 
     // Closest tile to the end expanded so far. Is the end itself unless it is unreachable or the search ran out of memory.
     ui32 bestTile = startTile, bestRemaining = ~0u;
@@ -247,7 +237,7 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
             // Push new open node / existing open node with lower cost (in which case the older entry will be ignored when read as it
             // will be linked to a CLOSED node).
             if (!path_heap_push(search, path_heap_entry {
-                        .f = g + heuristicWeight * path_heuristic({ (ui16)x, (ui16)y }, end),
+                        .f = g + PATH_HEURISTIC_WEIGHT * path_heuristic({ (ui16)x, (ui16)y }, end),
                         .g = g, 
                         .tile = neighbour->tile 
             })) continue; // Heap full: same.
@@ -264,6 +254,7 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
     // and only the first points_capacity of them are kept, so the first pass counts them and the second one writes them.
     // A tile is a waypoint if it is the last one, or if the step direction changes there. The start itself is not stored.
     out_path.partial = bestTile != endTile;
+    out_path.cost = out_path.partial ? 0 : path_node_get(search, bestTile)->g;
     ui16 total = 0;
     for (ui8 pass = 0; pass < 2; pass++)
     {
@@ -318,5 +309,6 @@ void world_request_path(match_world_state& world, world_location start, world_lo
     out_result.count = store.last.count;
     out_result.length = store.last.length;
     out_result.partial = store.last.partial;
+    out_result.cost = store.last.cost;
     if (store.last.count > 0) out_result.next_point = store.last.points[0];
 }

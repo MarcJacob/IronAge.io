@@ -37,6 +37,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	const world_entity_armies& armies = world.entities->armies;
 	const world_entity_workers& workers = world.entities->workers;
 	const world_entity_battles& battles = world.entities->battles;
+	const world_entity_caravans& caravans = world.entities->caravans;
 
 	render_state.frame.entity_count = 0;
 	render_state.frame.entity_states = nullptr;
@@ -47,7 +48,8 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	ui32 totalEntityCount = settlements.active_count
 		+ armies.active_count
 		+ workers.active_count
-		+ battles.active_count;
+		+ battles.active_count
+		+ caravans.active_count;
 
 	if (totalEntityCount > 0)
 	{
@@ -116,6 +118,24 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
 			outEntity.guid = battles.guids[battleIndex];
 			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
+
+			visibleCount++;
+		}
+
+		// CARAVANS
+		for (ui16 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
+		{
+			vec2<float> caravanLoc = caravans.locations[caravanIndex];
+			if (!caravans.guids[caravanIndex].is_valid() || !is_visible_in_viewport(caravanLoc, render_state.viewport)) continue;
+
+			// Caravans have no owner of their own: they are tinted as their origin settlement, if it still exists.
+			entity_guid origin = caravans.origin_settlements[caravanIndex];
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::CARAVAN;
+			outEntity.owner = world_entity_is_valid(world, origin) ? settlements.owners[origin.get_index()] : INVALID_MATCH_PLAYER_ID;
+			outEntity.guid = caravans.guids[caravanIndex];
+			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
 
 			visibleCount++;
 		}
