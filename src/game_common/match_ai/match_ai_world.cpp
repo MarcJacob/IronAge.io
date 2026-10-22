@@ -27,7 +27,7 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.population = population.population_total;
 	out.peasants = population.peasants;
 	out.workers = population.workers;
-	out.local_wealth = settlements.local_wealth[slot];
+	out.local_wealth = settlements.economies[slot].income;
 	out.growth_per_mille = population.growth_per_mille;
 	out.tax_rate = settlements.tax_rates[slot];
 	out.home_troops = population.home;
@@ -95,6 +95,7 @@ static i32 ai_tile_land_value(const match_world_state& world, i32 x, i32 y)
 	world_get_tile(*world.terrain, { (ui16)x, (ui16)y }, regionIndex, tileIndex);
 	switch (world.terrain->regions[regionIndex].terrain_types[tileIndex])
 	{
+    case TERRAIN_TILE_TYPE::WATER_COAST: return 5;
 	case TERRAIN_TILE_TYPE::LAND_PLAINS: return 3;
 	case TERRAIN_TILE_TYPE::LAND_HILLS: return 2;
 	default: return 0;

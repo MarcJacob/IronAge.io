@@ -94,7 +94,8 @@ static constexpr time_ms LOBBY_COUNTDOWN_MS = 30000; // Time between the first c
 static constexpr time_ms PLACEMENT_COUNTDOWN_MS = 15000; // Time between start of the match and first tick during which players can pick a start location. @TODO(Marc): Server config.
 
 static constexpr ui32 MATCH_END_CHECK_INTERVAL_TICKS = 30; // Placeholder end condition is checked every this many ticks.
-static constexpr ui64 MATCH_END_POPULATION_PERCENT = 80; // Placeholder end condition: one player controls this much of the world population.
+static constexpr ui64 MATCH_END_POPULATION_PERCENT = 100; // Placeholder end condition: one player controls this much of the world population.
+                                                          // @TEMP(Marc): Set it to 100 to disable victory.
 
 // Attaches a client as the controller of a free player index in the slot. Fails if the slot isn't in lobby. Writes the assigned index to out_player_index on success.
 bool game_server_slot_attach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
