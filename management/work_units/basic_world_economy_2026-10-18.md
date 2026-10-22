@@ -134,3 +134,440 @@ Next: user hand-tests the untested items; answers the Buildings design questions
 - Treasury gold count always visible, bottom left (position may change).
 - Settlement inspection panel: local wealth with last day's change beside it; hover shows a floating breakdown window.
 - Population count with growth / shrink next to it.
+
+
+## TEMP: Implementation plan for caravans / trading
+
+## Implementation Plan: Settlement Trading and Caravan Simulation
+
+### Problem Statement
+
+Reintroduce caravans and settlement trade into the deterministic world simulation. Settlements will invest local wealth into caravans, caravans will select reachable destinations, travel using existing pathing, and complete one trade transaction on arrival. Trade value and profit must remain exposed through centralized game parameters so the formula can be tuned and eventually reused for client-side prediction.
+
+### Requirements
+
+- Spawn caravans once per daily tick.
+- Each settlement rolls independently once for every missing caravan slot.
+- Spawn probability:
+  - One missing slot: 25%.
+  - Five or more missing slots: 75%.
+  - Intermediate values scale between those bounds.
+- Do not spawn if:
+  - The settlement has reached its caravan maximum.
+  - The settlement has less than the configurable minimum local wealth.
+  - The settlement has no valid destination.
+  - The settlement cannot fund the caravan.
+- Caravan investment equals 10% of the origin settlement’s accumulated local wealth.
+- The minimum wealth threshold is a game parameter, initially `100`.
+- The investment is removed from origin local wealth when the caravan spawns.
+- Caravans disappear when they reach their destination.
+- No intermediate stops.
+- No ship or sea-trade behavior in this phase.
+- Destination selection considers every valid settlement on the map.
+- A destination must have a valid path from the origin.
+- Destination selection is deterministic weighted random selection.
+- Selection weight is based on potential profit divided by travel distance.
+- Invalid destinations are retargeted:
+  - If the destination is invalid, choose another destination using the same selection logic.
+  - If the origin is still valid, use the origin as the source for the new selection.
+  - If the origin is also invalid, select using the caravan’s current location.
+- If the origin is destroyed after spawning:
+  - The caravan continues normally.
+  - It becomes homeless.
+  - The destination receives the entire profit.
+- When a caravan reaches its destination:
+  - Compute profit.
+  - Split profit equally between origin and destination when the origin remains valid.
+  - Give all profit to the destination when the origin is invalid.
+  - Destroy the caravan.
+  - Maintain settlement caravan counters transactionally.
+- Base profit is `caravan_value * 2`.
+- Additional profit depends on:
+  - Caravan value relative to destination local wealth.
+  - Travel distance.
+- Distance uses total path travel cost, not travel time.
+- The distance bonus follows a logarithmic curve:
+  - It rises quickly up to approximately one region.
+  - It rises more slowly afterward.
+  - It plateaus near three regions for land caravans.
+  - Ship tuning is reserved for later.
+- The profit calculation must be a standalone callable function with all relevant inputs.
+- Trade parameters should be grouped in a dedicated substructure inside `game_parameters`.
+- Trade parameters and the resulting function must be easy to expose to clients later.
+- Trade processing runs in a dedicated system after movement.
+- No external research is required. Existing repository conventions and APIs are the source of truth.
+
+### Repository Findings
+
+- `world_entity_settlements` already contains `settlement_trading` with active and maximum caravan counts.
+- `world_entity_caravans` already stores:
+  - Location
+  - Movement state
+  - Origin settlement
+  - Destination settlement
+  - Caravan value
+  - Ship flags reserved for later
+- `world_spawn_entity_caravan` and `world_destroy_entity_caravan` exist but do not currently maintain settlement counters.
+- Caravan allocation does not currently initialize all container metadata and arrays consistently.
+- `world_state_tick` already separates movement from later systems and can host:
+  1. Daily caravan spawning.
+  2. Movement.
+  3. Trade arrival and retarget processing.
+- `world_request_path` returns both path existence and total path length/cost.
+- The world uses a deterministic `rand_generator_32` stored in `match_world_state`.
+- Global simulation parameters belong in `include/game_common/match/game_parameters.h`.
+- The current daily economy resets settlement financial figures, so caravan investment and trade profit need an explicit accounting decision within the trade flow.
+- Settlement destruction currently only invalidates the settlement slot. Caravan references must therefore be validated every time they are used.
+
+### Proposed Architecture
+
+```mermaid
+flowchart TD
+    A[Daily tick] --> B[Caravan spawn system]
+    B --> C[Check wealth and capacity]
+    C --> D[Find reachable destinations]
+    D --> E[Compute potential profit and weight]
+    E --> F[Weighted deterministic selection]
+    F --> G[Deduct investment]
+    G --> H[Spawn caravan and increment origin counter]
+
+    I[Movement system] --> J[Caravan reaches destination]
+
+    J --> K[Trade system after movement]
+    K --> L{Destination valid?}
+    L -- No --> D
+    L -- Yes --> M{Origin valid?}
+    M -- Yes --> N[Compute and split profit]
+    M -- No --> O[Pay full profit to destination]
+    N --> P[Destroy caravan and decrement origin counter]
+    O --> Q[Destroy homeless caravan]
+```
+
+The implementation should keep the formula pure and separate from world mutation:
+
+```text
+trade_profit(caravan_value,
+             destination_local_wealth,
+             travel_distance,
+             trade_parameters)
+```
+
+The destination-selection code can call the same function to calculate candidate weights. The transaction system can call it again using the stored origin-to-destination travel cost.
+
+### Formula Design Assumption
+
+The exact constants are intentionally tunable. The initial implementation should represent the requested shape with integer-safe arithmetic:
+
+```text
+value_profit =
+    caravan_value
+    * destination_local_wealth
+    / caravan_value
+    * value_profit_per_ten_percent
+
+distance_bonus =
+    logarithmic_bonus(travel_distance,
+                      land_distance_plateau)
+
+profit =
+    caravan_value * 2
+    + value_profit * distance_bonus
+```
+
+Because `caravan_value * destination_local_wealth / caravan_value` simplifies and loses the intended relationship if evaluated directly, the implementation should instead encode the wealth comparison as a bounded ratio. The plan assumes the intended behavior is:
+
+- A caravan receives a stronger value-based bonus when its investment is small relative to destination wealth.
+- The value-based bonus weakens as caravan value approaches or exceeds destination wealth.
+- The distance component increases profit according to a configurable saturating curve.
+- All intermediate arithmetic uses sufficiently wide integer types before converting to the stored `ui16` caravan value or settlement wealth type.
+
+The exact parameter names and integer scaling should be finalized while implementing the first formula task.
+
+## Task Breakdown
+
+### Task 1: Complete caravan storage initialization and pure trade parameter definitions
+
+**Objective:** Make caravan state safe to allocate and add a centralized, client-readable trade parameter structure.
+
+**Implementation guidance:**
+
+- Update `game_parameters` with a dedicated trade substructure containing:
+  - Minimum local wealth required to spawn.
+  - Caravan investment percentage.
+  - Spawn probability at one missing slot.
+  - Spawn probability cap.
+  - Missing-slot count at which the cap applies.
+  - Base profit multiplier.
+  - Value-profit scaling constants.
+  - Distance-curve constants.
+  - Integer scaling factors and overflow-safe limits as needed.
+- Add the corresponding GDO properties.
+- Initialize caravan container metadata and arrays consistently:
+  - `max_count`
+  - `active_count`
+  - GUID storage
+  - Any state arrays that must start zeroed.
+- Keep ship-related parameters out of active behavior, but preserve the existing flag for future work.
+
+**Tests:**
+
+- Verify zero-initialized caravan state has no active caravans.
+- Verify the trade parameter GDO exposes the new values.
+- Verify caravan allocation reports the requested capacity.
+
+**Demo:** A newly initialized world reports zero active caravans, valid caravan capacity, and all trade tuning values through the game-parameter inspection path.
+
+---
+
+### Task 2: Implement the standalone predicted-profit calculation
+
+**Objective:** Create one pure function that calculates trade profit from caravan value, destination wealth, path distance, and trade parameters.
+
+**Implementation guidance:**
+
+- Place the function in the caravan/trade implementation area or a shared caravan header if clients and multiple systems need it.
+- Accept every relevant input explicitly.
+- Use deterministic integer arithmetic compatible with the freestanding common code.
+- Separate internal helpers for:
+  - Value-versus-destination-wealth scaling.
+  - Saturating logarithmic distance bonus.
+  - Overflow-safe multiplication and division.
+- Make the distance plateau configurable rather than embedding the three-region behavior in the function.
+- Return a wide enough type for intermediate and final profit calculations.
+- Define behavior for:
+  - Zero caravan value.
+  - Zero destination wealth.
+  - Zero distance.
+  - Extremely large wealth or path costs.
+
+**Tests:**
+
+- Base profit is present for a caravan with no bonus.
+- A smaller caravan relative to destination wealth receives a larger value-based bonus.
+- Distance bonus rises quickly at short distances and flattens at long distances.
+- Increasing distance never decreases the distance bonus.
+- Zero and maximum input values do not divide by zero or overflow.
+- The function is deterministic and has no world-state side effects.
+
+**Demo:** A diagnostic caller can calculate predicted profit for several caravan values, destination wealth values, and path costs without spawning entities or mutating the world.
+
+---
+
+### Task 3: Add path-aware destination candidate evaluation and weighted selection
+
+**Objective:** Select a valid destination from all active settlements using deterministic weighted random choice.
+
+**Implementation guidance:**
+
+- Enumerate active settlements.
+- Exclude:
+  - The origin settlement itself.
+  - Invalid or empty settlement slots.
+  - Settlements with no valid path.
+- Request a path from the source location to each candidate.
+- Use the returned total path cost as travel distance.
+- Calculate potential profit with the standalone profit function.
+- Calculate candidate weight from potential profit divided by distance, with explicit handling for zero distance and zero profit.
+- Use wide integer accumulators for total weight.
+- Select using `world.rand_gen`.
+- Return both:
+  - Destination settlement GUID.
+  - Path distance/cost used for the calculation.
+- Support a source location that is either:
+  - The origin settlement location.
+  - The caravan’s current location when the origin is invalid.
+- Keep the selection function separate from spawning and retargeting so it can be reused.
+
+**Tests:**
+
+- Invalid and unreachable settlements are excluded.
+- The origin is excluded from its own candidate list.
+- No candidate produces a clean “no destination” result.
+- Selection is deterministic for the same world state and random seed.
+- Candidate weights reflect potential profit divided by path cost.
+- A changed road layout can change path cost and therefore selection weight.
+
+**Demo:** A settlement with multiple reachable candidates selects one deterministically, and changing road construction changes the candidate weights without changing the trade formula.
+
+---
+
+### Task 4: Implement transactional caravan spawning and daily spawn rolls
+
+**Objective:** Spawn caravans daily according to capacity, probability, wealth, and investment rules.
+
+**Implementation guidance:**
+
+- Add a daily caravan spawning system.
+- Run it only on daily ticks.
+- For every active settlement:
+  - Calculate missing caravan slots.
+  - Perform one roll for each missing slot.
+  - Use 25% for one missing slot.
+  - Scale toward 75% when five or more slots are missing.
+  - Skip the roll’s spawn result when local wealth is below the configurable minimum.
+  - Select a destination before modifying wealth.
+  - Deduct 10% of accumulated local wealth as the caravan investment.
+  - Reject or skip if the resulting investment is zero.
+- Store:
+  - Origin settlement GUID.
+  - Destination settlement GUID.
+  - Caravan value.
+  - Initial location.
+  - Movement destination.
+  - Path state.
+- Increment the origin settlement’s caravan count in the same operation as successful spawn.
+- Ensure the count cannot exceed its maximum.
+- Use the existing world RNG so all hosts remain synchronized.
+
+**Tests:**
+
+- No spawn occurs below the minimum wealth parameter.
+- Investment equals the configured percentage of local wealth.
+- Investment is deducted exactly once.
+- Spawn probability scales correctly for one through five missing slots.
+- Multiple missing slots result in independent rolls.
+- Caravan count increments transactionally.
+- A failed destination search does not deduct wealth or increment counters.
+- Spawned caravans begin at the origin location with the selected destination.
+
+**Demo:** On a daily tick, an eligible settlement can produce a caravan, local wealth decreases by the investment, and the settlement inspector shows one additional active caravan.
+
+---
+
+### Task 5: Integrate caravan movement with destination pathing
+
+**Objective:** Make spawned caravans follow existing movement and pathing behavior until they reach their selected destination.
+
+**Implementation guidance:**
+
+- Add caravan movement decisions to the existing movement-decision system or a dedicated caravan decision function.
+- Initialize movement with the caravan’s origin location and selected destination.
+- Use the existing land path parameters.
+- Do not implement ship movement or water routes.
+- Ensure a caravan with no valid path does not become permanently stuck without a retarget opportunity.
+- Preserve the stored destination GUID so arrival processing can validate it.
+- Track or recompute the path cost needed by the profit calculation. Avoid relying on travel time.
+
+**Tests:**
+
+- A caravan follows a valid road/path toward its destination.
+- A caravan reaches the exact destination tile.
+- An unreachable destination does not cause invalid movement state.
+- Road changes can affect newly calculated paths.
+- Caravans remain deterministic under repeated simulation.
+
+**Demo:** A spawned caravan visibly travels from one settlement to another and stops at the destination tile.
+
+---
+
+### Task 6: Implement destination invalidation and retargeting
+
+**Objective:** Retarget caravans when their destination becomes invalid while preserving the origin and investment rules.
+
+**Implementation guidance:**
+
+- Add a trade-system pass over active caravans.
+- Validate the destination before processing arrival.
+- If the destination is invalid:
+  - Use the valid origin settlement location as the new source when available.
+  - Otherwise use the caravan’s current location.
+  - Select a new destination using the same weighted candidate logic.
+  - Update destination and movement state.
+  - Preserve caravan value.
+- If no valid destination exists, define a non-destructive fallback that keeps the caravan active and retries later rather than losing investment.
+- Do not decrement the origin caravan count during retargeting.
+
+**Tests:**
+
+- Destroying a destination causes deterministic retargeting.
+- Retargeting does not change caravan value.
+- A valid origin is preferred as the selection source.
+- A destroyed origin causes selection from the caravan’s current location.
+- No candidate leaves the caravan safely waiting for a later retry.
+- Counters remain unchanged during retargeting.
+
+**Demo:** Destroying a caravan’s destination causes it to select and travel toward another settlement without losing its investment.
+
+---
+
+### Task 7: Implement arrival transactions and homeless-caravan handling
+
+**Objective:** Complete trade when a caravan reaches its destination and maintain all wealth and entity counters transactionally.
+
+**Implementation guidance:**
+
+- Run the trade system after movement in `world_state_tick`.
+- Iterate over caravans and process only those whose current location has reached the destination settlement location.
+- Revalidate both destination and origin.
+- Recompute or use the stored origin-to-destination path cost for the profit function.
+- Compute total profit through the standalone function.
+- If origin is valid:
+  - Add half the profit to origin local wealth.
+  - Add the remainder to destination local wealth.
+  - Decrement origin caravan count.
+- If origin is invalid:
+  - Add all profit to destination local wealth.
+  - Do not attempt to decrement a destroyed settlement.
+- Destroy the caravan after the transaction.
+- Make sure settlement wealth arithmetic cannot wrap.
+- Decide whether trade income should appear in `settlement_finances` immediately or whether a separate trade result field is needed. The initial plan should use a dedicated trade-result field if clients need the transaction breakdown without overwriting the daily land-economy figures.
+
+**Tests:**
+
+- Arrival destroys the caravan.
+- Origin and destination each receive half of the profit.
+- A homeless caravan gives all profit to the destination.
+- Origin caravan count decrements exactly once.
+- Invalid origin does not cause a stale-memory access.
+- Invalid destination is retargeted instead of transacted.
+- Profit calculation receives the correct caravan value, destination wealth, and distance.
+- Wealth changes are deterministic and overflow-safe.
+
+**Demo:** A caravan reaches a settlement, disappears, and the expected wealth appears in the origin and destination settlement state.
+
+---
+
+### Task 8: Wire systems into the world tick and expose trade state
+
+**Objective:** Integrate spawning, movement, retargeting, arrival, and client-readable state into the complete simulation.
+
+**Implementation guidance:**
+
+- Add declarations to `world_sim.h`.
+- Add the appropriate caravan/trade source files to `world_sim_main.cpp`.
+- Place systems in this order:
+  1. Daily caravan spawning with the daily economy systems.
+  2. Existing movement decision and movement systems.
+  3. Caravan trade processing after movement.
+- Preserve existing system ordering unless a specific dependency requires otherwise.
+- Expose any last-trade fields needed by clients, such as:
+  - Last trade profit.
+  - Last trade income.
+  - Last caravan investment.
+  - Last trade distance.
+- Keep the formula callable independently for future client prediction.
+- Update the relevant management work-unit documentation only if documentation changes are included in the eventual implementation scope. Imprint files remain untouched.
+
+**Tests:**
+
+- A complete daily cycle can spawn, move, and eventually complete a caravan trade.
+- Daily spawning does not run on non-daily ticks.
+- Arrival processing runs after movement.
+- Settlement and caravan queries expose consistent counters and values.
+- Replaying the same seed and commands produces the same caravan and wealth results.
+- Existing economy, building, movement, and settlement tests remain unaffected.
+
+**Demo:** A complete simulation shows a settlement funding a caravan, the caravan traveling along a path, destination arrival, profit distribution, caravan removal, and correct active-caravan counters.
+
+### Open Implementation Assumptions
+
+- The 25% to 75% spawn chance is scaled linearly by missing slots and capped at five missing slots.
+- A caravan with zero computed value is not spawned.
+- A caravan’s value remains fixed throughout its journey.
+- Profit is computed from the origin-to-destination path cost, not the caravan’s actual elapsed travel route.
+- If a destination becomes invalid after the caravan reaches its former destination tile, the caravan retargets rather than transacting.
+- If no destination is currently reachable, the caravan remains active and retries later.
+- Trade wealth is added to settlement local wealth immediately when the arrival transaction runs.
+- Ship support remains deferred, but the parameter structure should allow separate land and ship distance plateau values later.
+
+Does this plan look good, or would you like me to adjust anything?
