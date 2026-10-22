@@ -14,6 +14,7 @@ static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_income
     return profit * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
 }
 
+// @NOTE(Marc): This needs a rewrite... AI kind of went for the most naive solution to this.
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
     WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost)
 {
@@ -27,10 +28,10 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 
     // Path cost of each settlement slot, 0 = not a candidate (a valid candidate always has a cost above 0).
     // Macro entity indices are 12 bits, so this covers every settlement slot.
-    ui32 pathCosts[4096] = {};
+    ui32 weights[4096] = {};
     ASSERT(settlements.max_count <= 4096);
 
-    // Pass 1: paths. Candidates are the other active settlements with a complete path (start == end gives none).
+    // Pass 1: gather candidates.
     ui32 candidateCount = 0;
     ui64 totalWeight = 0;
     for (ui16 index = 0; index < settlements.max_count; index++)
@@ -38,22 +39,23 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         entity_guid guid = settlements.guids[index];
         if (!guid.is_valid() || guid == origin_exclude) continue;
 
-        // Recalculated for every candidate: pathing to every settlement is costly on large maps. To be replaced by the path cache.
-        path_result result;
-        world_request_path(world, source, settlements.locations[index], params, result);
-        if (result.count == 0 || result.partial) continue;
 
-        pathCosts[index] = result.cost;
-        candidateCount++;
-        totalWeight += caravan_candidate_weight(caravan_value, settlements.economies[index].income, trade_tile_distance(source, settlements.locations[index]), result.cost);
+        ui32 tradeDist = trade_tile_distance(source, settlements.locations[index]);
+
+        if (caravan_value > tradeDist)
+        {
+            weights[index] = caravan_candidate_weight(caravan_value, settlements.economies[index].income, tradeDist, (tradeDist * tradeDist));
+            totalWeight += weights[index];
+
+            candidateCount++;
+        }
     }
 
-    if (candidateCount == 0) return false; // No random number drawn.
+    if (candidateCount == 0 || totalWeight == 0) return false; // No random number drawn.
 
-    // Pick: a random point in [0, totalWeight), or a random candidate if every weight is 0.
+    // Pick: a random point in [0, totalWeight).
     // 32 random bits are enough for most totals, a second draw extends it to 64 bits (modulo bias is negligible).
-    bool uniform = totalWeight == 0;
-    ui64 range = uniform ? candidateCount : totalWeight;
+    ui64 range = totalWeight;
     ui64 roll = world.rand_gen.next<ui32>();
     if (range > 0xFFFFFFFFull) roll = (roll << 32) | world.rand_gen.next<ui32>();
     roll %= range;
@@ -61,13 +63,13 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
     // Pass 2: find the candidate holding the rolled point. Weights are recomputed from the stored costs (no pathing).
     for (ui16 index = 0; index < settlements.max_count; index++)
     {
-        if (pathCosts[index] == 0) continue;
+        if (weights[index] == 0) continue;
 
-        ui64 weight = uniform ? 1 : caravan_candidate_weight(caravan_value, settlements.economies[index].income, trade_tile_distance(source, settlements.locations[index]), pathCosts[index]);
+        ui64 weight = weights[index];
         if (roll < weight)
         {
             out_destination = settlements.guids[index];
-            out_path_cost = pathCosts[index];
+            out_path_cost = weight; 
             return true;
         }
         roll -= weight;

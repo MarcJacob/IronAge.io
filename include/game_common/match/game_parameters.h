@@ -12,12 +12,12 @@ struct game_trade_parameters
 {
     // Spawning
     ui32 trade_pool_income_percent = 10; // % of the day's income (production + wages + trade) set aside into the settlement's export pool.
-    ui32 import_release_percent = 10; // % of the import pool's contents released into the day's income (at least 1 when the pool is not empty).
+    ui32 import_release_percent = 25; // % of the import pool's contents released into the day's income (at least 1 when the pool is not empty).
     ui32 min_export_pool_to_spawn = 1; // A settlement whose export pool is below this spawns no caravan.
     ui32 investment_percent = 25; // % of the origin's export pool invested in a caravan (at least investment_min).
     ui32 investment_min = 100; // Minimum caravan investment, or the whole pool if it holds less.
-    ui32 spawn_chance_min_percent = 25; // Spawn probability (%) with 1 missing caravan slot.
-    ui32 spawn_chance_max_percent = 75; // Spawn probability (%) at spawn_chance_max_missing_slots missing slots or more. Linear in between.
+    ui32 spawn_chance_min_percent = 10; // Spawn probability (%) with 1 missing caravan slot.
+    ui32 spawn_chance_max_percent = 50; // Spawn probability (%) at spawn_chance_max_missing_slots missing slots or more. Linear in between.
     ui32 spawn_chance_max_missing_slots = 5;
 
     // Profit
@@ -25,6 +25,7 @@ struct game_trade_parameters
     ui32 profit_flat_percent = 10; // Flat profit always added, in % of caravan value (at least 1 for any caravan with value). Clamped to 10000.
     ui32 value_bonus_max_percent = 100; // Max value bonus, in % of caravan value (reached when the caravan is tiny next to the destination's daily income). Clamped to 10000.
     ui32 distance_bonus_max_percent = 100; // Max distance bonus, in % of caravan value (reached at the plateau). Clamped to 10000.
+                                           //
     // Distances are tiles between origin and destination (trade_tile_distance). A region is 128 tiles wide (world_terrain::REGION_SIZE).
     ui32 distance_curve_mid = 128; // Distance of the curve's "middle" (one region): the bonus rises fast up to about here, slowly after.
     ui32 distance_saturation = 384; // Distance from which the distance bonus stops growing (three regions).
