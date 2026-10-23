@@ -15,6 +15,7 @@ export interface GaugeState
     slider_name?: string; // What the slider means, shown in the text ("ceiling", "target").
     on_change?: (value: number) => void; // Makes the slider interactive. Called with the released value (not while dragging).
     warn_below_current?: boolean; // Warn (red) while the slider is below current + raised: releasing there discards only current (never raised) down to the slider.
+    losses?: number; // Men lost since the max was set, shown next to the max when above 0 (red). Without it nothing is shown.
     compact?: boolean; // Text reduced to the label and the slider value (the current value if there is no slider), with the max alone at the right end of the line above the bar.
 }
 
@@ -118,11 +119,12 @@ export class GaugeElement
         this.marker.style.left = `${100 * (shown ?? 0) / scale}%`;
         this.marker.classList.toggle("warn", warn);
 
+        const lost = state.losses !== undefined && state.losses > 0 ? ` (-${state.losses})` : "";
         const text = state.compact === true
             ? `${state.label} ${shown ?? state.current}`
-            : `${state.label} ${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}` : "")
+            : `${state.label} ${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}${lost}` : "")
                 + (warn ? `  (discards ${discards})` : "");
-        const max_text = state.compact === true && state.max !== undefined ? String(state.max) : "";
+        const max_text = state.compact === true && state.max !== undefined ? `${state.max}${lost}` : "";
         if (this.text.textContent !== text) this.text.textContent = text;
         if (this.max_text.textContent !== max_text) this.max_text.textContent = max_text;
         this.text.classList.toggle("warn", warn);

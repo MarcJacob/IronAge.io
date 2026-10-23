@@ -26,7 +26,7 @@ void world_system_settlement_territory_update_pressure(match_world_state& world)
 }
 
 // DAILY ECONOMY
-// Per settlement, in this order: income (production + pending wages / trade + import release), tax, export set-aside, consumption budget, growth.
+// Per settlement, in this order: income (production + pending pay / trade + import release), tax, export set-aside, consumption budget, growth.
 // Nothing is stored between days: the budget is what the population at home lives on, any excess only adds growth. Every wealth movement is its own function below.
 
 // Peasants able to work the land at full efficiency (base) count fully, the surplus on top of it gives diminishing returns.
@@ -53,7 +53,7 @@ static ui32 settlement_consumption_required(const settlement_population& populat
     return population.at_home() * GAME_PARAMETERS.consumption_per_person; 
 }
 
-// INCOME: land production, plus the external income received since the last daily tick (wages, trade overflow), which is consumed (zeroed) here,
+// INCOME: land production, plus the external income received since the last daily tick (worker and soldier pay, trade overflow), which is consumed (zeroed) here,
 // plus today's release from the import pool.
 static void settlement_compute_income(world_entity_settlements& settlements, ui32 settlement_index)
 {
@@ -63,7 +63,8 @@ static void settlement_compute_income(world_entity_settlements& settlements, ui3
 
     economy.raw_output = settlement_raw_output(settlements.base_land_outputs[settlement_index], settlements.populations[settlement_index].peasants);
     economy.production = land_output_to_wealth(economy.raw_output);
-    economy.wages = pending.wages;
+    economy.worker_pay = pending.worker_pay;
+    economy.soldier_pay = pending.soldier_pay;
     economy.trade_overflow = pending.trade;
     pending = {};
 
@@ -74,7 +75,7 @@ static void settlement_compute_income(world_entity_settlements& settlements, ui3
     tradeState.import_pool -= economy.trade_release;
 
     economy.trade_income = (ui32)ia_min((ui64)economy.trade_overflow + economy.trade_release, (ui64)0xFFFFFFFF);
-    economy.income = (ui32)ia_min((ui64)economy.production + economy.wages + economy.trade_income, (ui64)0xFFFFFFFF);
+    economy.income = (ui32)ia_min((ui64)economy.production + economy.worker_pay + economy.soldier_pay + economy.trade_income, (ui64)0xFFFFFFFF);
 }
 
 // WEALTH MOVEMENT 1: income -> owner's treasury, by the tax rate.

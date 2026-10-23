@@ -11,7 +11,7 @@
 struct game_trade_parameters
 {
     // Spawning
-    ui32 trade_pool_income_percent = 10; // % of the day's income (production + wages + trade) set aside into the settlement's export pool.
+    ui32 trade_pool_income_percent = 10; // % of the day's income (production + pay + trade) set aside into the settlement's export pool.
     ui32 import_release_percent = 25; // % of the import pool's contents released into the day's income (at least 1 when the pool is not empty).
     ui32 min_export_pool_to_spawn = 1; // A settlement whose export pool is below this spawns no caravan.
     ui32 investment_percent = 25; // % of the origin's export pool invested in a caravan (at least investment_min).
@@ -51,9 +51,10 @@ struct game_parameters
     ui32 upkeep_horseman = 10;
     ui32 upkeep_knight = 30;
     ui32 army_supply_capacity_days = 10; // An army refills its supplies (from the treasury, inside its owner's territory) up to this many days of its own consumption.
+    ui32 army_supply_refill_days = 2; // Days of its own consumption an army refills per day inside its owner's territory (it consumes 1, so the net gain is refill - 1 days per day).
 
     // CONSTRUCTION
-    ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's pending wages) while a road worker is building.
+    ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's pending worker pay) while a road worker is building.
     ui16 road_build_ticks_per_cost = 30; // Ticks to build a road tile, per point of its travel cost without a road.
     ui8 road_build_foreign_multiplier = 5; // Build time multiplier for road tiles not owned by the building settlement's player (including unowned tiles).
 
@@ -95,6 +96,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_supply_capacity_days, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_supply_refill_days, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)

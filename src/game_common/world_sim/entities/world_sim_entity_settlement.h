@@ -148,10 +148,11 @@ static inline void settlement_pending_income_add(ui32& pending, ui64 amount)
 	pending = (ui32)ia_min((ui64)pending + amount, (ui64)0xFFFFFFFF);
 }
 
-// TREASURY -> PENDING WAGES
-// Moves up to amount from the settlement's owner treasury to the settlement's pending wages (income on the next daily economy tick) and records it as the owner's expenses.
+// TREASURY -> PENDING PAY
+// Moves up to amount from the settlement's owner treasury to one of the settlement's pending pay counters (&settlement_pending_income::worker_pay or ::soldier_pay,
+// income on the next daily economy tick) and records it as the owner's expenses.
 // The treasury never goes below 0 (and an owner outside the player range pays nothing). Returns how much was actually paid.
-static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world, ui16 settlement_index, ui32 amount)
+static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world, ui16 settlement_index, ui32 amount, ui32 settlement_pending_income::* pay)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
 	match_player_id owner = settlements.owners[settlement_index];
@@ -161,7 +162,7 @@ static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world
 	ui32 paid = ia_min(amount, player.treasury);
 	player.treasury -= paid;
 	player.expenses += paid;
-	settlement_pending_income_add(settlements.pending_incomes[settlement_index].wages, paid);
+	settlement_pending_income_add(settlements.pending_incomes[settlement_index].*pay, paid);
 	return paid;
 }
 

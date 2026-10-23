@@ -82,12 +82,17 @@ static inline ui32 army_daily_consumption(const army_troop_count& troops)
 	return (ui32)ia_min(consumption, (ui64)0xFFFFFFFF);
 }
 
-// Supplies the army refills up to: army_supply_capacity_days of the consumption of its raise targets while raising, of its composition after that.
-static inline ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
+// The troops supplies are sized for: the raise targets while the army is raising, its composition after that.
+static inline const army_troop_count& army_supply_basis(const match_world_state& world, ui16 army_index)
 {
 	const world_entity_armies& armies = world.entities->armies;
-	const army_troop_count& troops = armies.raising[army_index] ? armies.raised_troops[army_index] : armies.compositions[army_index];
-	return (ui32)ia_min((ui64)army_daily_consumption(troops) * GAME_PARAMETERS.army_supply_capacity_days, (ui64)0xFFFFFFFF);
+	return armies.raising[army_index] ? armies.raised_troops[army_index] : armies.compositions[army_index];
+}
+
+// Supplies the army refills up to: army_supply_capacity_days of the consumption of its supply basis.
+static inline ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
+{
+	return (ui32)ia_min((ui64)army_daily_consumption(army_supply_basis(world, army_index)) * GAME_PARAMETERS.army_supply_capacity_days, (ui64)0xFFFFFFFF);
 }
 
 // Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as peasants, the others in the local pool),

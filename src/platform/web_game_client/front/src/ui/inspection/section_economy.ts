@@ -4,7 +4,7 @@
 import { get_game_parameters, type EntityData } from "../../gdo.js"
 import type { PanelRow } from "./ui_element_properties_panel.js"
 
-// Last day's income (production + trade + wages) with the breakdown of where it goes in the tooltip, and the tax rate taken on it
+// Last day's income (production + trade + pay) with the breakdown of where it goes in the tooltip, and the tax rate taken on it
 // (a slider within the game parameters' limits with on_tax_rate, else read-only text).
 export function income_section(settlement: EntityData, on_tax_rate?: (tax_rate: number) => void): PanelRow[]
 {
@@ -23,7 +23,8 @@ export function income_section(settlement: EntityData, on_tax_rate?: (tax_rate: 
                 `Trade (import release) +${trade_release}`,
                 `Trade (arrivals) +${trade_overflow}`,
                 ...(trade_other > 0 ? [`Trade (other) +${trade_other}`] : []),
-                `Wages +${settlement.get_number("economy_wages")}`,
+                `Worker pay +${settlement.get_number("economy_worker_pay")}`,
+                `Soldiers income +${settlement.get_number("economy_soldier_pay")}`,
                 `Tax -${settlement.get_number("economy_tax")}`,
                 `Trade pool set-aside -${settlement.get_number("economy_trade_set_aside")}`,
                 `Available for consumption ${consumption_budget}`,

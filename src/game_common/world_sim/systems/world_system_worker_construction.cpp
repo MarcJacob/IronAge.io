@@ -19,7 +19,7 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 
 // Road crew: starts at the first non-road tile of the path (road tiles are skipped for free), walks to the tile and builds it there, one tile at a time.
 // Building a tile takes GAME_PARAMETERS.road_build_ticks_per_cost ticks per point of its travel cost without a road. The crew is paid for a day (GAME_PARAMETERS.road_crew_cost_per_day, treasury -> settlement's
-// pending wages) at its first tick and then on each daily tick; it only works while the current day is paid. Returns true when the project is finished:
+// pending worker pay) at its first tick and then on each daily tick; it only works while the current day is paid. Returns true when the project is finished:
 // the destination is reached, or no further progress is possible (unreachable).
 static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_index)
 {
@@ -31,7 +31,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
         ui16 originIndex = workers.origin_entity[worker_index].get_index();
         match_player_id owner = world.entities->settlements.owners[originIndex];
         data.funded = owner < world.player_count && world.player_states[owner].treasury >= GAME_PARAMETERS.road_crew_cost_per_day;
-        if (data.funded) settlement_wealth_fund_from_treasury(world, originIndex, GAME_PARAMETERS.road_crew_cost_per_day);
+        if (data.funded) settlement_wealth_fund_from_treasury(world, originIndex, GAME_PARAMETERS.road_crew_cost_per_day, &settlement_pending_income::worker_pay);
     }
     if (!data.funded) return false; // Stalled until a day can be paid.
 
@@ -125,7 +125,7 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
 }
 
 // Daily financing of a settlement building project. A day is financed when the project holds its workers (taken from the free peasants) AND the owner's
-// treasury can pay the row's cost_per_day (moved to the settlement's pending wages); then progress +1. Otherwise the day stalls: held workers return to the
+// treasury can pay the row's cost_per_day (moved to the settlement's pending worker pay); then progress +1. Otherwise the day stalls: held workers return to the
 // peasants and nothing is paid. When the build time is reached the workers are released and the building is added. Returns true when the project is finished.
 static bool worker_logic_build_settlement_building_tick(match_world_state& world, ui16 worker_index)
 {
@@ -152,7 +152,7 @@ static bool worker_logic_build_settlement_building_tick(match_world_state& world
         return false;
     }
 
-    settlement_wealth_fund_from_treasury(world, settlementIndex, def.cost_per_day);
+    settlement_wealth_fund_from_treasury(world, settlementIndex, def.cost_per_day, &settlement_pending_income::worker_pay);
     data.progress_days++;
     if (data.progress_days < def.build_days) return false;
 

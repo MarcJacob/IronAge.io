@@ -76,17 +76,27 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 	ai_settlement_view target;
 	ui32 wanted = ia_max(AI_MIN_ARMY_STRENGTH, ai_target_is_valid(ctx, target) ? ai_attack_need(target) : 0);
 	ui32 raised = 0, raises = 0;
+	ui32 treasury = ctx.treasury; // What the raises of this turn leave in the treasury.
 	for (ui32 index = 0; index < ai_window_size(ctx) && raises < 2 && ctx.army_strength + raised < wanted; index++)
 	{
 		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
 		if (settlement.peasants < AI_MIN_RAISE_PEASANTS || ai_settlement_is_raising(ctx, settlement.guid)) continue;
 
+		army_troop_count targets = {};
+		targets.levies = (ui16)ia_min(settlement.peasants * AI_RAISE_PERCENT_OF_PEASANTS / 100, 400u);
+		targets.men_at_arms = settlement.home_troops.men_at_arms;
+
+		// Raising costs one day of the army's consumption, taken from the treasury.
+		ui32 cost = ai_world_troops_daily_consumption(targets);
+		if (treasury < cost) break;
+
 		auto* raise = ai_push<command_data_raise_army>(ctx, MATCH_COMMAND_TYPE::RAISE_ARMY);
 		if (raise == nullptr) return;
 		raise->settlement = settlement.guid;
 		raise->raise_location = settlement.location;
-		raise->target_levies = (ui16)ia_min(settlement.peasants * AI_RAISE_PERCENT_OF_PEASANTS / 100, 400u);
-		raise->target_men_at_arms = settlement.home_troops.men_at_arms;
+		raise->target_levies = targets.levies;
+		raise->target_men_at_arms = targets.men_at_arms;
+		treasury -= cost;
 		raised += raise->target_levies + raise->target_men_at_arms;
 		raises++;
 	}

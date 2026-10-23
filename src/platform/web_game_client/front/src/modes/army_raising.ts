@@ -58,8 +58,7 @@ export class ArmyRaising extends Core.Mode
 
         submit_properties_panel(inspect_entity(view, {
             raise_targets: this.targets,
-            on_raise_targets: targets => { this.targets = targets; },
-        }));
+            on_raise_targets: targets => { this.targets = targets; },        }));
 
         const hovered = Render.get_hovered_tile();
         if (hovered === null)

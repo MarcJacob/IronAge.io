@@ -81,6 +81,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
 	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 10, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits).
 	COMMAND_ERROR_NOT_IN_HOME_TERRITORY = 1 << 11, // The army is not inside its home settlement's territory.
+	COMMAND_ERROR_NOT_ENOUGH_TREASURY = 1 << 12, // The command costs more than the treasury holds (e.g. the supplies of a new army).
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -184,7 +185,6 @@ struct command_data_raise_army
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
-	ui32 reserve; // Wealth taken from the treasury into the new army's supplies. 0 is valid.
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
@@ -194,7 +194,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY(reserve, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,

@@ -1,9 +1,9 @@
 // Army economy systems: soldiers consume wealth every day, and the owner's treasury pays for it.
 // Armies carry their own supplies. Their soldiers consume them daily (per-type upkeep rates), so consumption is a sink of the economy.
-// Inside territory its owner owns, an army refills its supplies from the treasury, up to a number of days of its own consumption.
-// Consumption that supplies cannot cover makes troops desert, in which case they go back home.
+// Inside territory its owner owns, an army refills its supplies from the treasury (a couple of days' worth per day), up to a number of days of its own consumption.
+// Consumption that supplies cannot cover makes troops desert, in which case they go back home. A raising army stops raising instead.
 // Outside of the owner's territory armies are not supplied: they must be back regularly, or find *alternative* means of financing themselves (later).
-// Soldiers waiting in a settlement (local pool) are paid wages from the treasury instead, which become the settlement's income.
+// Soldiers waiting in a settlement (local pool) are paid from the treasury instead, which becomes the settlement's income.
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world.h"
@@ -41,25 +41,37 @@ void world_system_armies_upkeep(match_world_state& world)
 
 		world_player_state& player = world.player_states[owner];
 		ui32& supplies = armies.supplies[armyIndex];
+		armies.desertions[armyIndex] = 0; // Counts the last day only.
 
-		// Refill. Supplies above the capacity are kept, just not refilled.
+		// Refill, before consuming so the day's consumption is covered. It adds army_supply_refill_days of the supply basis's consumption at most,
+		// and leaves room for the day's consumption above the capacity, so the army ends the day at the capacity (not below it) if it can.
+		// Supplies above the capacity are kept, just not refilled.
+		ui32 consumption = army_daily_consumption(armies.compositions[armyIndex]);
 		ui32 capacity = army_supply_capacity(world, (ui16)armyIndex);
-		if (supplies < capacity && army_in_owned_territory(world, (ui16)armyIndex))
+		ui32 headroom = (ui32)ia_min((ui64)capacity + consumption, (ui64)0xFFFFFFFF);
+		if (supplies < headroom && army_in_owned_territory(world, (ui16)armyIndex))
 		{
-			ui32 refill = ia_min(capacity - supplies, player.treasury);
+			ui64 refillRate = (ui64)army_daily_consumption(army_supply_basis(world, (ui16)armyIndex)) * GAME_PARAMETERS.army_supply_refill_days;
+			ui32 refill = (ui32)ia_min(ia_min((ui64)headroom - supplies, refillRate), (ui64)player.treasury);
 			player.treasury -= refill;
 			player.expenses += refill;
 			supplies += refill;
 		}
 
 		// Consumption.
-		ui32 consumption = army_daily_consumption(armies.compositions[armyIndex]);
 		ui32 consumed = ia_min(consumption, supplies);
 		supplies -= consumed;
 
-		// Desertion: each troop type loses the unfunded fraction of the day's consumption (rounded down).
+		// Not enough supplies: a raising army stops raising (keeping its men, no desertion today), any other army loses men.
 		ui32 unfunded = consumption - consumed;
 		if (unfunded == 0) continue;
+		if (armies.raising[armyIndex])
+		{
+			armies.raising[armyIndex] = 0;
+			continue;
+		}
+
+		// Desertion: each troop type loses the unfunded fraction of the day's consumption (rounded down).
 
 		// The army is destroyed when its last man leaves: stop at once, its slot is free.
 		entity_guid army = armies.guids[armyIndex];
@@ -67,13 +79,14 @@ void world_system_armies_upkeep(match_world_state& world)
 		for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
 		{
 			ui16 deserters = (ui16)((ui64)troop_count_field(troops, troopType) * unfunded / consumption);
-			world_army_desertion(world, army, troopType, deserters);
-			if (!world_entity_is_valid(world, army)) break;
+			ui16 left = world_army_desertion(world, army, troopType, deserters);
+			if (!world_entity_is_valid(world, army)) break; // Destroyed: its stats are gone with it.
+			armies.desertions[armyIndex] += left;
 		}
 	}
 }
 
-// Runs daily. Soldiers of the local pools get their wages from the owner's treasury (down to 0, no debt) into the settlement's pending wages.
+// Runs daily. Soldiers of the local pools get their pay from the owner's treasury (down to 0, no debt) into the settlement's pending soldier pay.
 void world_system_local_troops_upkeep(match_world_state& world)
 {
 	if (!world_is_daily_tick(world)) return;
@@ -84,6 +97,7 @@ void world_system_local_troops_upkeep(match_world_state& world)
 	{
 		if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-		settlement_wealth_fund_from_treasury(world, settlementIndex, army_daily_consumption(settlements.populations[settlementIndex].home));
+		settlement_wealth_fund_from_treasury(world, settlementIndex, army_daily_consumption(settlements.populations[settlementIndex].home),
+			&settlement_pending_income::soldier_pay);
 	}
 }

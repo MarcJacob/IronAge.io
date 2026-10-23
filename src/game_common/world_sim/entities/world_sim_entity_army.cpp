@@ -29,6 +29,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities->armies.home_settlements[freeIndex] = start_state.home_settlement;
 	world.entities->armies.raising[freeIndex] = start_state.raising;
 	world.entities->armies.supplies[freeIndex] = start_state.supplies;
+	world.entities->armies.desertions[freeIndex] = 0;
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities->armies.movements[freeIndex].travel_speed, 4);
@@ -135,6 +136,8 @@ bool world_entity_query_army(const match_world_state& world, entity_guid entity,
 		.battle_side = armies.battle_sides[i],
 		.supplies = armies.supplies[i],
 		.supplies_consumption = army_daily_consumption(armies.compositions[i]),
+		.supplies_capacity = army_supply_capacity(world, i),
+		.desertions = armies.desertions[i],
 	};
 	return true;
 }
@@ -180,6 +183,9 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 	armies.supplies = memory.alloc<ui32>(count);
 	if (armies.supplies == nullptr) return false;
+
+	armies.desertions = memory.alloc<ui16>(count);
+	if (armies.desertions == nullptr) return false;
 
 	return true;
 }

@@ -23,7 +23,7 @@ void world_system_caravan_trade(match_world_state& world);
 // then consume them per troop. Unfunded consumption makes troops desert back home.
 void world_system_armies_upkeep(match_world_state& world);
 
-// Daily: soldiers of the settlements' local pools get wages from the owner's treasury into the settlement's pending wages (adds to the player's expenses).
+// Daily: soldiers of the settlements' local pools get pay from the owner's treasury into the settlement's pending soldier pay (adds to the player's expenses).
 void world_system_local_troops_upkeep(match_world_state& world);
 
 #endif // WORLD_SYSTEMS_ECONOMY_INCLUDED

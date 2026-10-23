@@ -14,6 +14,7 @@ static bool ai_world_has_room_to_found(const match_world_state& world)
 	return world.entities->settlements.active_count < world.entities->settlements.max_count && world.entities->workers.active_count < world.entities->workers.max_count;
 }
 static world_dimensions ai_world_size(const match_world_state& world) { return world.terrain->size_tiles; }
+static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops) { return army_daily_consumption(troops); }
 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out)
 {

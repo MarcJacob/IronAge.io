@@ -219,6 +219,10 @@ body {
     margin-bottom: 4px;
 }
 
+.text_row span.warn {
+    color: #ff6b6b;
+}
+
 .text_row_label {
     margin-right: 0.5rem;
     color: #9aa0a6;

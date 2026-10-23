@@ -37,8 +37,7 @@ constexpr ui32 AI_THREAT_RADIUS = 24; // Foreign armies this close to one of our
 constexpr ui32 AI_RALLY_RADIUS = 12;
 constexpr ui32 AI_MIN_ARMY_STRENGTH = 150; // Army strength the build up aims for at least.
 constexpr ui32 AI_MIN_RAISE_PEASANTS = 80;
-constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 40;
-constexpr ui32 AI_MIN_BUILDING_TREASURY = 150;
+constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 40;constexpr ui32 AI_MIN_BUILDING_TREASURY = 150;
 constexpr ui32 AI_MIN_ROAD_TREASURY = 250;
 constexpr ui32 AI_MAX_BUILD_PROJECTS = 2; // Plus one per AI_TREASURY_PER_EXTRA_PROJECT in the treasury.
 constexpr ui32 AI_TREASURY_PER_EXTRA_PROJECT = 1500;
@@ -124,6 +123,7 @@ static i32 ai_site_land_score(const match_world_state& world, world_location loc
 static bool ai_site_is_owned(const match_world_state& world, world_location loc);
 static bool ai_has_road_next_to(const match_world_state& world, world_location loc);
 static world_dimensions ai_world_size(const match_world_state& world);
+static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops); // What these soldiers consume per day (same rule as army supplies).
 static void ai_gather_own(ai_context& ctx);
 
 // SMALL HELPERS

@@ -12,6 +12,7 @@ import { in_area, type PropertiesPanelState } from "./ui_element_properties_pane
 import { basic_section } from "./section_basic.js"
 import { income_section, consumption_section, population_section } from "./section_economy.js"
 import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
+import { army_supplies_section, army_raise_cost_section } from "./section_supplies.js"
 import { construction_section } from "./section_construction.js"
 import { caravan_section, trade_pool_section } from "./section_trade.js"
 
@@ -39,7 +40,10 @@ export interface InspectionContext
 function inspect_settlement(view: EntityData, context: InspectionContext): PropertiesPanelState
 {
     if (context.raise_targets !== undefined)
-        return { title: "Raise army", rows: army_raise_section(null, view, context.raise_targets, context.on_raise_targets) };
+        return { title: "Raise army", rows: [
+            ...army_raise_section(null, view, context.raise_targets, context.on_raise_targets),
+            ...army_raise_cost_section(context.raise_targets),
+        ] };
 
     // Top left: population then economy. Top right: troops. Bottom: buildings.
     return { title: "Settlement", rows: [
@@ -55,9 +59,12 @@ function inspect_army(view: EntityData, context: InspectionContext): PropertiesP
 {
     // While raising: current / target slider / max. Otherwise just the current counts (no max, no target).
     if (view.get_number("raising") === 1)
-        return { title: "Army troops", rows: army_raise_section(view, query_entity(view.get_number("home_settlement")), army_raise_targets(view), context.on_raise_targets) };
+        return { title: "Army troops", rows: [
+            ...army_raise_section(view, query_entity(view.get_number("home_settlement")), army_raise_targets(view), context.on_raise_targets),
+            ...army_supplies_section(view),
+        ] };
 
-    return { title: "Army troops", rows: army_count_section(view) };
+    return { title: "Army troops", rows: [...army_count_section(view), ...army_supplies_section(view)] };
 }
 
 function inspect_caravan(view: EntityData): PropertiesPanelState

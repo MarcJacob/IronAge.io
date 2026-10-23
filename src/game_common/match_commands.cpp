@@ -182,20 +182,31 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 // RAISE ARMY
 
-// Cost hooks: raising itself is free, only the army's initial reserve is paid (by the settlement's owner, from the treasury).
+// Cost: raising itself is free, but the army starts with one day of its troops' consumption as supplies, paid by the settlement's owner from the treasury.
+// The troops are the raise targets.
+static ui32 raise_army_cost(const command_data_raise_army& command)
+{
+	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	return army_daily_consumption(targets);
+}
+
 static bool raise_army_can_afford(const match_world_state& world, const command_data_raise_army& command, match_command_validity_feedback* feedback)
 {
 	match_player_id owner = world.entities->settlements.owners[command.settlement.get_index()];
-	return owner < world.player_count && command.reserve <= world.player_states[owner].treasury;
+	if (owner >= world.player_count) return false;
+
+	if (raise_army_cost(command) > world.player_states[owner].treasury && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_TREASURY)) return false;
+	return true;
 }
 
-// Takes the reserve out of the treasury. The new army's supplies are set from the command in apply.
+// Takes the cost out of the treasury. The new army's supplies are set to it in apply.
 static void raise_army_charge(match_world_state& world, const command_data_raise_army& command)
 {
 	match_player_id owner = world.entities->settlements.owners[command.settlement.get_index()];
 	world_player_state& player = world.player_states[owner];
-	player.treasury -= command.reserve;
-	player.expenses += command.reserve;
+	ui32 cost = raise_army_cost(command);
+	player.treasury -= cost;
+	player.expenses += cost;
 }
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
@@ -263,7 +274,7 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
-	newArmy.supplies = command.reserve;
+	newArmy.supplies = raise_army_cost(command);
 
 	world_spawn_army(world, newArmy);
 	raise_army_charge(world, command);

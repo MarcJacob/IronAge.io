@@ -25,4 +25,4 @@ Started: 2026-10-23. Branch `feature/entity_player_colors`. Experimental, client
 
 ## Next step
 
-User builds TS, hard-reloads, checks visuals (own green, distinct others, outline weight at low zoom, contestation blend, hover highlight).
+Done. Visuals checked by user.

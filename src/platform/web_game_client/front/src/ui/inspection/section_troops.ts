@@ -94,6 +94,6 @@ export function army_count_section(army: EntityData): PanelRow[]
     return TROOPS.map((troop): PanelRow => {
         const current = army.get_number(`composition_${troop.name}`);
         const original = army.get_number(`raised_${troop.name}`);
-        return { kind: "gauge", id: `army_${troop.name}`, state: { label: troop.label, color: troop.color, current, max: Math.max(original, current) } };
+        return { kind: "gauge", id: `army_${troop.name}`, state: { label: troop.label, color: troop.color, current, max: Math.max(original, current), losses: Math.max(original - current, 0) } };
     });
 }

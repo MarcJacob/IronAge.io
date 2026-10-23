@@ -191,11 +191,12 @@ struct settlement_economy
 {
 	ui32 raw_output; // Land output actually worked by the peasants (work units, before conversion to wealth).
 	ui32 production; // Wealth produced from the raw output.
-	ui32 wages; // Wealth received from the owner's treasury for construction workers (roads, buildings) since the previous daily tick.
+	ui32 worker_pay; // Wealth received from the owner's treasury for construction workers (roads, buildings) since the previous daily tick.
+	ui32 soldier_pay; // Wealth received from the owner's treasury for the soldiers of the local pool since the previous daily tick.
 	ui32 trade_release; // Taken from the import pool today (import_release_percent of its contents).
 	ui32 trade_overflow; // Pending trade income since the previous daily tick: arrived revenue that did not fit the import pool, export refunds that did not fit the export pool.
 	ui32 trade_income; // trade_release + trade_overflow.
-	ui32 income; // production + wages + trade_income.
+	ui32 income; // production + worker_pay + soldier_pay + trade_income.
 	ui32 tax; // Part of the income moved to the owner's treasury.
 	ui32 trade_set_aside; // Part of the income moved to the export pool.
 	ui32 consumption_budget; // What the population at home lives on: income - tax - trade_set_aside.
@@ -205,7 +206,8 @@ struct settlement_economy
 // External income received by a settlement between two daily ticks (adds saturate). The daily economy tick turns it into that day's income and zeroes it.
 struct settlement_pending_income
 {
-	ui32 wages; // From the owner's treasury, for construction workers.
+	ui32 worker_pay; // From the owner's treasury, for construction workers.
+	ui32 soldier_pay; // From the owner's treasury, for the soldiers of the local pool.
 	ui32 trade; // Caravan revenue that did not fit the import pool, and export refunds that did not fit the export pool.
 };
 
@@ -302,7 +304,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 
 	GAME_DATA_PROPERTY_PATH(economy_raw_output, economy.raw_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_production, economy.production, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_wages, economy.wages, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_worker_pay, economy.worker_pay, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_soldier_pay, economy.soldier_pay, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_trade_release, economy.trade_release, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_trade_overflow, economy.trade_overflow, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_trade_income, economy.trade_income, GAME_DATA_PROP_TYPE::UI32)
@@ -369,6 +372,7 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* action_targets; // What entity this army is currently engaging or following, if any.
 
 	ui32* supplies; // Wealth the army carries. Consumed daily by its soldiers, refilled from the owner's treasury inside the owner's territory. See world_system_armies_upkeep.
+	ui16* desertions; // Men who deserted at the last daily tick (reset by every daily tick).
 
 	// Consolidated representation of a single army for viewing purposes.
 	struct single
@@ -388,6 +392,8 @@ struct world_entity_armies : public world_entity_container
 
 		ui32 supplies;
 		ui32 supplies_consumption; // Computed by the query: what the army's soldiers consume per day. Not stored.
+		ui32 supplies_capacity; // Computed by the query: what the army refills its supplies up to (army_supply_capacity). Not stored.
+		ui16 desertions;
 	};
 };
 
@@ -421,6 +427,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 
 	GAME_DATA_PROPERTY(supplies,                                                GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(supplies_consumption,                                    GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(supplies_capacity,                                       GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(desertions,                                              GAME_DATA_PROP_TYPE::UI16)
 GAME_DATA_OBJECT_DEF_END()
 
 // Small byte buffer for the data a work type keeps about its project. Its layout is entirely defined by the work type's logic.

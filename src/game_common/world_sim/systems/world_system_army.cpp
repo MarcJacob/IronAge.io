@@ -94,8 +94,11 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 	}
 }
 
-// Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick. Levies draw 1 per tick from population.
+// Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick.
 constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
+
+// Levies a raising army draws from its home settlement's peasants per tick.
+constexpr ui16 RAISE_LEVIES_PER_TICK = 2;
 
 // Moves men of a type from a settlement pool (home) to an army (and the settlement's raised count), up to the target, the pool content and the per-tick limit.
 static void raise_draw_from_pool(match_world_state& world, ui16 army_index, ui16 settlement_index, ui8 troop_type, ui16 army_count, ui16 target)
@@ -135,10 +138,13 @@ void world_system_armies_raising(match_world_state& world)
 		settlement_population& population = settlements.populations[homeIndex];
 
 
-		// Levies come out of the peasants, one per tick, never leaving less than the minimum. They become raised soldiers of the settlement.
+		// Levies come out of the peasants, RAISE_LEVIES_PER_TICK per tick, never leaving less than the minimum or going past the target.
+		// They become raised soldiers of the settlement.
 		if (composition.levies < target.levies && population.peasants > GAME_PARAMETERS.raise_min_population_left)
 		{
-			army_add_troops(world, armyIndex, TROOP_TYPE_LEVIES, settlement_raise_levies(world, homeIndex, 1));
+			ui32 wanted = ia_min((ui32)RAISE_LEVIES_PER_TICK, (ui32)(target.levies - composition.levies));
+			wanted = ia_min(wanted, population.peasants - GAME_PARAMETERS.raise_min_population_left);
+			army_add_troops(world, armyIndex, TROOP_TYPE_LEVIES, settlement_raise_levies(world, homeIndex, wanted));
 		}
 
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);

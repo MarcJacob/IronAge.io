@@ -6,6 +6,7 @@ export interface TextRowState
 {
     label: string;
     text: string;
+    warn?: boolean; // Shows the text as a warning (red).
 }
 
 export class TextRowElement
@@ -25,5 +26,6 @@ export class TextRowElement
     {
         if (this.label.textContent !== state.label) this.label.textContent = state.label;
         if (this.text.textContent !== state.text) this.text.textContent = state.text;
+        this.text.classList.toggle("warn", state.warn === true);
     }
 }
