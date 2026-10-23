@@ -195,6 +195,7 @@ void world_state_tick(match_world_state& world)
     world_system_caravan_spawn(world); // After the economy filled the export pools and buildings set the caravan max.
     world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
     world_system_armies_upkeep(world); // After the daily economy reset expenses.
+    world_system_local_troops_upkeep(world); // Wages become income on the next daily economy tick.
 
     world_system_settlement_territory(world);
     world_system_settlement_territory_proximity_recalc(world);

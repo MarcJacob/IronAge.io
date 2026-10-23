@@ -182,14 +182,20 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 // RAISE ARMY
 
-// Cost / upkeep hooks: raising is free for now.
+// Cost hooks: raising itself is free, only the army's initial reserve is paid (by the settlement's owner, from the treasury).
 static bool raise_army_can_afford(const match_world_state& world, const command_data_raise_army& command, match_command_validity_feedback* feedback)
 {
-	return true;
+	match_player_id owner = world.entities->settlements.owners[command.settlement.get_index()];
+	return owner < world.player_count && command.reserve <= world.player_states[owner].treasury;
 }
 
+// Takes the reserve out of the treasury. The new army's supplies are set from the command in apply.
 static void raise_army_charge(match_world_state& world, const command_data_raise_army& command)
 {
+	match_player_id owner = world.entities->settlements.owners[command.settlement.get_index()];
+	world_player_state& player = world.player_states[owner];
+	player.treasury -= command.reserve;
+	player.expenses += command.reserve;
 }
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
@@ -257,6 +263,7 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
+	newArmy.supplies = command.reserve;
 
 	world_spawn_army(world, newArmy);
 	raise_army_charge(world, command);
@@ -573,6 +580,9 @@ void command_stop_raising_army_apply(match_world_state& world, match_player_id p
 
 	// Raise targets are left untouched: the army remembers what it was raised to.
 	armies.raising[armyIndex] = 0;
+
+	// Stopped before any man joined: there is no army.
+	if (army_total_manpower(armies.compositions[armyIndex]) == 0) world_destroy_army(world, command.army);
 }
 
 // DISBAND ARMY

@@ -184,6 +184,7 @@ struct command_data_raise_army
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
+	ui32 reserve; // Wealth taken from the treasury into the new army's supplies. 0 is valid.
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
@@ -193,6 +194,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(reserve, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,

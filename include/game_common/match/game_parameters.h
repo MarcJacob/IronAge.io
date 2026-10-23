@@ -50,6 +50,7 @@ struct game_parameters
     ui32 upkeep_men_at_arms = 2;
     ui32 upkeep_horseman = 10;
     ui32 upkeep_knight = 30;
+    ui32 army_supply_capacity_days = 10; // An army refills its supplies (from the treasury, inside its owner's territory) up to this many days of its own consumption.
 
     // CONSTRUCTION
     ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's pending wages) while a road worker is building.
@@ -93,6 +94,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_supply_capacity_days, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)

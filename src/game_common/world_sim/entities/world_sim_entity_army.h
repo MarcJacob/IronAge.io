@@ -3,6 +3,7 @@
 #ifndef WORLD_SIM_ARMY_INCLUDED
 #define WORLD_SIM_ARMY_INCLUDED
 
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_entities.h"
 
 // An army reaches its attack target when within this many tiles of it.
@@ -68,6 +69,31 @@ static inline void army_unit_counts(const army_troop_count& composition, ui32 ou
 	out_counts[2] = composition.horsemen;
 	out_counts[3] = composition.knights;
 }
+
+// SUPPLIES
+
+// What the given soldiers consume per day: sum of count x per-type upkeep rate. Levies are per mille on the levy total, rounded down.
+static inline ui32 army_daily_consumption(const army_troop_count& troops)
+{
+	ui64 consumption = ((ui64)troops.levies * GAME_PARAMETERS.upkeep_levy_per_mille) / 1000
+		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.upkeep_men_at_arms
+		+ (ui64)troops.horsemen * GAME_PARAMETERS.upkeep_horseman
+		+ (ui64)troops.knights * GAME_PARAMETERS.upkeep_knight;
+	return (ui32)ia_min(consumption, (ui64)0xFFFFFFFF);
+}
+
+// Supplies the army refills up to: army_supply_capacity_days of the consumption of its raise targets while raising, of its composition after that.
+static inline ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
+{
+	const world_entity_armies& armies = world.entities->armies;
+	const army_troop_count& troops = armies.raising[army_index] ? armies.raised_troops[army_index] : armies.compositions[army_index];
+	return (ui32)ia_min((ui64)army_daily_consumption(troops) * GAME_PARAMETERS.army_supply_capacity_days, (ui64)0xFFFFFFFF);
+}
+
+// Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as peasants, the others in the local pool),
+// or vanish if the home is invalid, changed hands, or has no room in its pool. Returns how many left the army.
+// @TODO(Marc): The further from home the army is, the less likely deserters should be to make it back.
+ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_type, ui16 count);
 
 // Kills up to amount men of an army (cheapest first), returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid or changed hands).
 void world_army_take_casualties(match_world_state& world, entity_guid army, ui64 amount, ui32 out_dead[world_entity_battles::UNIT_TYPES]);

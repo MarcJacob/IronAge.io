@@ -368,6 +368,8 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* home_settlements; // Settlement this army was raised from.
 	entity_guid* action_targets; // What entity this army is currently engaging or following, if any.
 
+	ui32* supplies; // Wealth the army carries. Consumed daily by its soldiers, refilled from the owner's treasury inside the owner's territory. See world_system_armies_upkeep.
+
 	// Consolidated representation of a single army for viewing purposes.
 	struct single
 	{
@@ -383,6 +385,9 @@ struct world_entity_armies : public world_entity_container
 		entity_guid action_target;
 		entity_guid battle;
         ui8 battle_side;
+
+		ui32 supplies;
+		ui32 supplies_consumption; // Computed by the query: what the army's soldiers consume per day. Not stored.
 	};
 };
 
@@ -413,6 +418,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 
 	GAME_DATA_PROPERTY(battle,                                                  GAME_DATA_PROP_TYPE::ENTITY_GUID)
     GAME_DATA_PROPERTY(battle_side,                                             GAME_DATA_PROP_TYPE::UI8)
+
+	GAME_DATA_PROPERTY(supplies,                                                GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(supplies_consumption,                                    GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 // Small byte buffer for the data a work type keeps about its project. Its layout is entirely defined by the work type's logic.

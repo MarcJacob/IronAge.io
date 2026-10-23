@@ -28,6 +28,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities->armies.raised_troops[freeIndex] = start_state.raised_troops;
 	world.entities->armies.home_settlements[freeIndex] = start_state.home_settlement;
 	world.entities->armies.raising[freeIndex] = start_state.raising;
+	world.entities->armies.supplies[freeIndex] = start_state.supplies;
 
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(world.entities->armies.movements[freeIndex].travel_speed, 4);
@@ -85,6 +86,35 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, ui64
 	}
 }
 
+ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_type, ui16 count)
+{
+	world_entity_armies& armies = world.entities->armies;
+	ui16 deserters = army_remove_troops(world, army.get_index(), troop_type, count);
+	if (deserters == 0) return 0;
+
+	// An army in a battle no longer counts them among its side's men.
+	entity_guid battle = armies.battles[army.get_index()];
+	if (battle.is_valid())
+	{
+		ui32& sideMen = world.entities->battles.states[battle.get_index()].men[armies.battle_sides[army.get_index()]][troop_type];
+		sideMen -= ia_min(sideMen, (ui32)deserters);
+	}
+
+	// They only count at home if the home settlement still is the owner's. Otherwise they are gone (like casualties).
+	entity_guid home = armies.home_settlements[army.get_index()];
+	if (home.is_valid() && home.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, home)
+		&& world.entities->settlements.owners[home.get_index()] == armies.owners[army.get_index()])
+	{
+		// Those the settlement cannot take back (full pool) are lost.
+		ui16 returned = settlement_release_raised(world, home.get_index(), troop_type, deserters);
+		settlement_remove_soldiers_raised(world, home.get_index(), troop_type, deserters - returned);
+	}
+
+	// The last man leaving ends the army. The army is invalid after this.
+	if (army_total_manpower(armies.compositions[army.get_index()]) == 0) world_destroy_army(world, army);
+	return deserters;
+}
+
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state)
 {
 	if (entity.get_type() != ENTITY_TYPE::ARMY || !world_entity_is_valid(world, entity)) return false;
@@ -103,6 +133,8 @@ bool world_entity_query_army(const match_world_state& world, entity_guid entity,
 		.action_target = armies.action_targets[i],
 		.battle = armies.battles[i],
 		.battle_side = armies.battle_sides[i],
+		.supplies = armies.supplies[i],
+		.supplies_consumption = army_daily_consumption(armies.compositions[i]),
 	};
 	return true;
 }
@@ -145,6 +177,9 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 	armies.action_targets = memory.alloc<entity_guid>(count);
 	if (armies.action_targets == nullptr) return false;
+
+	armies.supplies = memory.alloc<ui32>(count);
+	if (armies.supplies == nullptr) return false;
 
 	return true;
 }

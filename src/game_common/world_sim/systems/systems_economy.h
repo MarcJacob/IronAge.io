@@ -19,7 +19,11 @@ void world_system_caravan_spawn(match_world_state& world);
 // Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.
 void world_system_caravan_trade(match_world_state& world);
 
-// Daily: every army costs upkeep per troop, paid by its owner's treasury (down to 0, no debt). Adds to the player's expenses.
+// Daily: armies inside their owner's territory refill their supplies from the treasury (down to 0, no debt, adds to the player's expenses),
+// then consume them per troop. Unfunded consumption makes troops desert back home.
 void world_system_armies_upkeep(match_world_state& world);
+
+// Daily: soldiers of the settlements' local pools get wages from the owner's treasury into the settlement's pending wages (adds to the player's expenses).
+void world_system_local_troops_upkeep(match_world_state& world);
 
 #endif // WORLD_SYSTEMS_ECONOMY_INCLUDED

@@ -122,6 +122,7 @@ void world_system_armies_raising(match_world_state& world)
 		if (!world_entity_is_valid(world, home) || homeOwner != armies.owners[armyIndex])
 		{
 			armies.raising[armyIndex] = 0;
+			if (army_total_manpower(armies.compositions[armyIndex]) == 0) world_destroy_army(world, armies.guids[armyIndex]); // Nothing was raised.
 			continue;
 		}
 
