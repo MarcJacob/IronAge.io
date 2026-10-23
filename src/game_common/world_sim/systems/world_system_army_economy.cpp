@@ -1,8 +1,12 @@
-// Army upkeep system: armies cost the treasury of their owner every day.
+// Army economy systems: armies cost the treasury of their owner every day.
+// The money paid from the treasury either goes to the settlement where the troops are located, or into the army in the army's reserve.
+// Armies consume their reserve wealth at the same rate as their upkeep takes, meaning higher quality troops consume more, broadly.
+// When armies run out of reserves, troops start deserting, in which case they go home.
+// Armies can only be paid when inside friendly territory, meaning they must be in friendly territory regularly, or find *alternative* means of financing themselves...
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world.h"
-#include "world_sim_entity_army.h"
+#include "../entities/world_sim_entity_army.h"
 
 #include "../world_sim.h"
 
@@ -31,4 +35,9 @@ void world_system_armies_upkeep(match_world_state& world)
 		player.treasury -= paid;
 		player.expenses += paid;
 	}
+}
+
+void world_system_local_troops_upkeep(match_world_state& world)
+{
+    if (!world_is_daily_tick(world)) return;
 }

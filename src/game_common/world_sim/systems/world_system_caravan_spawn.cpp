@@ -1,7 +1,7 @@
 // Daily caravan spawn system.
 
 #include "game_common/match/world/world_trade.h"
-#include "world_sim_entity_caravan.h"
+#include "../entities/world_sim_entity_caravan.h"
 
 // Spawn probability (%) for a settlement with the given number of missing caravan slots (>= 1): linear from min at 1 to max at max_missing_slots or more.
 static ui32 caravan_spawn_chance_percent(ui32 missing_slots)

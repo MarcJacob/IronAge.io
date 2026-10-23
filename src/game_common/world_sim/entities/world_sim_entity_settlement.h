@@ -7,7 +7,7 @@
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_entities.h"
 
-#include "../armies/world_sim_entity_army.h"
+#include "world_sim_entity_army.h"
 
 // How much population "Fills" one tile of terrain.
 // If population is higher than this, the settlement gets pressure to expand.

@@ -5,7 +5,7 @@
 #include "game_common/match/world/world_entities.h"
 
 #include "../world_sim.h"
-#include "world_sim_entity_settlement.h"
+#include "../entities/world_sim_entity_settlement.h"
 
 // Updates settlement pressure based on population and land output.
 // Pressure = population - land_output * 3. Positive pressure means surplus population wanting to expand.

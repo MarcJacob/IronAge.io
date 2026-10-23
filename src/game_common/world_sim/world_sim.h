@@ -10,6 +10,11 @@
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_pathing.h"
 
+#include "systems/systems_economy.h"
+#include "systems/systems_war.h"
+#include "systems/systems_workers.h"
+#include "systems/systems_world.h"
+
 // WORLD SIM PARAMETERS & HELPERS
 
 // True on the first tick of each day (GAME_PARAMETERS.ticks_per_day ticks).
@@ -70,20 +75,11 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
     WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost);
 
-// SYSTEMS & HELPERS
-
-// Daily: settlements roll for each missing caravan slot, investing part of their export pool in caravans towards a selected destination.
-void world_system_caravan_spawn(match_world_state& world);
-
-// Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.
-void world_system_caravan_trade(match_world_state& world);
-
 // Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
 // With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
 void world_caravan_retarget(match_world_state& world, entity_guid caravan);
 
-// Advances all construction projects (workers) by one tick, destroying the finished ones.
-void world_system_worker_construction(match_world_state& world);
+// SHARED SYSTEM HELPERS
 
 // Makes an entity stop where it is, dropping its path and the step it was making.
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)
@@ -93,39 +89,10 @@ static inline void world_movement_stop(world_entity_movement& movement, world_lo
     movement.path_handle = INVALID_PATH_HANDLE;
 }
 
-void world_system_settlement_territory_proximity_recalc(match_world_state& world);
-void world_system_settlement_territory(match_world_state& world);
-
-void world_system_settlement_territory_update_pressure(match_world_state& world);
-
-// Daily, per settlement: output -> wealth, tax, consumption, population growth. See world_system_population.cpp.
-void world_system_economy_daily_tick(match_world_state& world);
-
-void world_system_economy_troop_growth(match_world_state& world);
-
-// Daily: runs the on_daily_tick event of every building type a settlement has at least one unit of.
-void world_system_settlement_buildings_daily_tick(match_world_state& world);
-
 // Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
 // Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
 // out_partial (optional) is set to true when the path found only gets partway to the destination (the entity still follows it).
 bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, bool* out_partial = nullptr);
-
-// Movement decision AI for entities. @TODO: Too centralized. Have an equivalent decision function for each entity type.
-void world_system_entity_movement_decision(match_world_state& world);
-
-// Movement application for entities that can move.
-void world_system_entity_movement(match_world_state& world);
-
-void world_system_armies_target_reached(match_world_state& world);
-
-// Daily: every army costs upkeep per troop, paid by its owner's treasury (down to 0, no debt). Adds to the player's expenses.
-void world_system_armies_upkeep(match_world_state& world);
-
-// Raising armies standing on their destination (and not in a battle) draw men from their home settlement.
-void world_system_armies_raising(match_world_state& world);
-
-void world_system_battles(match_world_state& world);
 
 // LIFECYCLE
 

@@ -1,10 +1,10 @@
 // Main implementation file for entity movement tick systems.
 
 #include "game_common/match/world/world.h"
-#include "world_sim.h"
+#include "../world_sim.h"
 
-#include "battles/world_sim_entity_battle.h"
-#include "caravans/world_sim_entity_caravan.h"
+#include "../entities/world_sim_entity_battle.h"
+#include "../entities/world_sim_entity_caravan.h"
 
 // What entities can cross for now: land only.
 static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.

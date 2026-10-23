@@ -1,6 +1,6 @@
 #include "world_sim_entity_army.h"
 #include "../world_sim.h"
-#include "../settlements/world_sim_entity_settlement.h"
+#include "world_sim_entity_settlement.h"
 #include "game_common/match/world/world.h"
 
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state)

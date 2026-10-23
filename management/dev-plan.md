@@ -43,14 +43,10 @@ when it finishes.
 - `work_units/placement_pick_validity_2026-10-13.md` [DONE]
 - `work_units/public_hosting_2026-10-15.md` [DONE]
 - `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
-<<<<<<< Updated upstream
-- `work_units/map_gen_2026-10-22.md` [WIP]
-- `work_units/match_ai_2026-10-22.md` [WIP]
-- `work_units/entity_player_colors_2026-10-23.md` [WIP]
-=======
 - `work_units/map_gen_2026-10-22.md` [DONE]
 - `work_units/match_ai_2026-10-22.md` [DONE]
->>>>>>> Stashed changes
+- `work_units/entity_player_colors_2026-10-23.md` [WIP]
+- `work_units/army_supplies_2026-10-23.md`
 
 Finished units are moved to `management/archive/` after a time.
 

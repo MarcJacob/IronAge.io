@@ -6,8 +6,8 @@
 
 #include "world_sim/world_sim.h"
 
-#include "world_sim/workers/world_sim_entity_worker.h"
-#include "world_sim/settlements/world_sim_entity_settlement.h"
+#include "world_sim/entities/world_sim_entity_worker.h"
+#include "world_sim/entities/world_sim_entity_settlement.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 

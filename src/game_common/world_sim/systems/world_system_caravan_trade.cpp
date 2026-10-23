@@ -1,8 +1,8 @@
 // Caravan trade system: arrival transactions and the cancel fallback.
 
 #include "game_common/match/world/world_trade.h"
-#include "world_sim_entity_caravan.h"
-#include "../settlements/world_sim_entity_settlement.h"
+#include "../entities/world_sim_entity_caravan.h"
+#include "../entities/world_sim_entity_settlement.h"
 
 // True if the guid is a settlement that still exists (references can be stale: destroy only invalidates the slot).
 static bool caravan_settlement_is_valid(const match_world_state& world, entity_guid settlement)

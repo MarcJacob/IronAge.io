@@ -79,7 +79,7 @@ static inline bool operator==(const entity_guid& guid_a, const entity_guid& guid
 struct match_world_state;
 
 
-// Optional (nullptr = nothing happens) type-specific behavior. Implemented in world_sim_settlement_buildings.cpp.
+// Optional (nullptr = nothing happens) type-specific behavior. Implemented in world_sim_entity_settlement.cpp.
 struct settlement_building_events
 {
 	void (*on_added)(match_world_state& world, entity_guid settlement) = nullptr; // After a unit of the type was added to the settlement.

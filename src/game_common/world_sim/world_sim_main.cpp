@@ -10,27 +10,24 @@
 #include "../map_gen/map_gen_main.cpp"
 #include "world_terrain.cpp"
 
-#include "settlements/world_sim_entity_settlement.cpp"
-#include "settlements/world_system_settlement_territory.cpp"
-#include "settlements/world_system_settlement_economy.cpp"
-#include "settlements/world_sim_settlement_buildings.cpp"
+// Entities.
+#include "entities/world_sim_entity_settlement.cpp"
+#include "entities/world_sim_entity_army.cpp"
+#include "entities/world_sim_entity_battle.cpp"
+#include "entities/world_sim_entity_worker.cpp"
+#include "entities/world_sim_entity_caravan.cpp"
 
-#include "armies/world_sim_entity_army.cpp"
-#include "armies/world_system_army.cpp"
-#include "armies/world_system_army_upkeep.cpp"
-#include "armies/world_system_battle.cpp"
+// Systems.
+#include "systems/world_system_settlement_territory.cpp"
+#include "systems/world_system_settlement_economy.cpp"
+#include "systems/world_system_army.cpp"
+#include "systems/world_system_army_economy.cpp"
+#include "systems/world_system_battle.cpp"
+#include "systems/world_system_worker_construction.cpp"
+#include "systems/world_system_caravan_spawn.cpp"
+#include "systems/world_system_caravan_trade.cpp"
+#include "systems/world_system_movement.cpp"
 
-#include "battles/world_sim_entity_battle.cpp"
-
-#include "workers/world_sim_entity_worker.cpp"
-#include "workers/world_system_worker_construction.cpp"
-
-#include "caravans/world_sim_entity_caravan.cpp"
-#include "caravans/world_sim_caravan_destination.cpp"
-#include "caravans/world_system_caravan_spawn.cpp"
-#include "caravans/world_system_caravan_trade.cpp"
-
-#include "world_system_movement.cpp"
 #include "world_pathing.cpp"
 
 // GENERAL HELPERS

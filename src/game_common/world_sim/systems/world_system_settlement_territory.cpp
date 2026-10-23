@@ -6,7 +6,7 @@
 #include "../world_sim.h"
 #include "../world_movement.h"
 
-#include "world_sim_entity_settlement.h"
+#include "../entities/world_sim_entity_settlement.h"
 
 // Base land output of each terrain type: peasants that can work the tile at full efficiency.
 static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
