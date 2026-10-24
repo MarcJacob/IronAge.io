@@ -215,7 +215,7 @@ void settlement_building_barracks_on_removed(match_world_state& world, entity_gu
 
 // TRADE POSTS
 
-// Export / import pool caps added by each trade post. Placeholders, may become building parameters later.
+// Export / import pool caps added by each trade post.
 static constexpr ui32 TRADE_POST_EXPORT_POOL_CAPACITY = 100;
 static constexpr ui32 TRADE_POST_IMPORT_POOL_CAPACITY = 200;
 
@@ -233,10 +233,35 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
 {
     ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 
-    // The pools themselves are kept: a cap below the contents only stops further adds.
     settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
-    trade.caravan_count_max--;
     trade.export_pool_max -= TRADE_POST_EXPORT_POOL_CAPACITY;
     trade.import_pool_max -= TRADE_POST_IMPORT_POOL_CAPACITY;
 }
-// ...
+
+// TRADE DEPOT
+
+// Export / import pool caps added by each trade depot. 
+static constexpr ui32 TRADE_DEPOT_EXPORT_POOL_CAPACITY = 400;
+static constexpr ui32 TRADE_DEPOT_IMPORT_POOL_CAPACITY = 1000;
+
+void settlement_building_tradedepot_on_added(match_world_state& world, entity_guid settlement)
+{
+    // @NOTE(Marc): This function makes it evident that a data-oriented system for buildings to increase / decrease various settlement properties
+    // would work far better. For now let's keep it simple, and if it gets really bad I'll look into it. It could somehow hook into settlement GDOs,
+    // but I'm worried about overhead of heaving to access the settlement values through that GDO...
+
+    ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+
+    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
+    trade.export_pool_max += TRADE_DEPOT_EXPORT_POOL_CAPACITY;
+    trade.import_pool_max += TRADE_DEPOT_IMPORT_POOL_CAPACITY;
+}
+
+void settlement_building_tradedepot_on_removed(match_world_state& world, entity_guid settlement)
+{
+    ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+
+    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
+    trade.export_pool_max -= TRADE_DEPOT_EXPORT_POOL_CAPACITY;
+    trade.import_pool_max -= TRADE_DEPOT_IMPORT_POOL_CAPACITY;
+}

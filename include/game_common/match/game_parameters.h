@@ -13,12 +13,14 @@ struct game_trade_parameters
     // Spawning
     ui32 trade_pool_income_percent = 10; // % of the day's income (production + pay + trade) set aside into the settlement's export pool.
     ui32 import_release_percent = 25; // % of the import pool's contents released into the day's income (at least 1 when the pool is not empty).
-    ui32 min_export_pool_to_spawn = 1; // A settlement whose export pool is below this spawns no caravan.
+
+    ui32 min_export_pool_to_spawn = 100; // A settlement whose export pool is below this spawns no caravan.
+
     ui32 investment_percent = 25; // % of the origin's export pool invested in a caravan (at least investment_min).
     ui32 investment_min = 100; // Minimum caravan investment, or the whole pool if it holds less.
-    ui32 spawn_chance_min_percent = 10; // Spawn probability (%) with 1 missing caravan slot.
-    ui32 spawn_chance_max_percent = 50; // Spawn probability (%) at spawn_chance_max_missing_slots missing slots or more. Linear in between.
-    ui32 spawn_chance_max_missing_slots = 5;
+
+    ui32 spawn_chance_min_percent = 10; // Spawn probability (%) at min export pool.
+    ui32 spawn_chance_max_percent = 100; // Spawn probability (%) when export pool is full. Linear in between.
 
     // Profit
     ui32 profit_base_multiplier = 2; // Base of the revenue = caravan value * this. (Clamped to 1000 by trade_revenue.) Profit is the extra on top of it.
@@ -123,7 +125,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY_PATH(trade_investment_min, trade.investment_min, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_spawn_chance_min_percent, trade.spawn_chance_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_spawn_chance_max_percent, trade.spawn_chance_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_spawn_chance_max_missing_slots, trade.spawn_chance_max_missing_slots, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_profit_base_multiplier, trade.profit_base_multiplier, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_profit_flat_percent, trade.profit_flat_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_value_bonus_max_percent, trade.value_bonus_max_percent, GAME_DATA_PROP_TYPE::UI32)

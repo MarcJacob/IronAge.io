@@ -87,6 +87,18 @@ struct settlement_building_events
 	void (*on_daily_tick)(match_world_state& world, entity_guid settlement) = nullptr; // Once per day, for settlements having at least one unit of the type.
 };
 
+
+// Building type events.
+
+void settlement_building_barracks_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement);
+
+void settlement_building_tradepost_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement);
+
+void settlement_building_tradedepot_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_tradedepot_on_removed(match_world_state& world, entity_guid settlement);
+
 struct settlement_building_def
 {
 	static constexpr ui8 NAME_MAX = 32;
@@ -100,20 +112,16 @@ struct settlement_building_def
 	settlement_building_events events;
 };
 
-// Building type events.
-
-void settlement_building_barracks_on_added(match_world_state& world, entity_guid settlement);
-void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement);
-
-void settlement_building_tradepost_on_added(match_world_state& world, entity_guid settlement);
-void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement);
-
 // SETTLEMENT BUILDING TYPES TABLE
 // Settlements keep a count per row of this table.
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
-	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.", 5, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
-    { "Caravanserai", "Increases maximum amount of active caravans. Increases trade export and import pool sizes.", 10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
+	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.",
+        10, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
+    { "Caravanserai", "Increases maximum amount of active caravans. Small increase to trade export and import pool sizes.", 
+        10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
+    { "Trade Depot", "Large increase to trade export and import pools.",
+        20, 150, 50, { .on_added = settlement_building_tradedepot_on_added, .on_removed = settlement_building_tradedepot_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);

@@ -103,7 +103,8 @@ static void settlement_wealth_set_aside_for_trade(world_entity_settlements& sett
     ui32 percent = GAME_PARAMETERS.trade.trade_pool_income_percent;
     ui32 setAside = (ui32)ia_min((ui64)economy.income * percent / 100, (ui64)0xFFFFFFFF);
     if (setAside == 0 && economy.income > 0 && percent > 0) setAside = 1;
-    // Only what fits under the pool cap is set aside (no Caravanserai: cap 0), the rest stays in the budget.
+    
+    // Only what fits under the pool cap is set aside.
     settlement_trading& tradeState = settlements.trade[settlement_index];
     ui32 room = tradeState.export_pool_max > tradeState.export_pool ? tradeState.export_pool_max - tradeState.export_pool : 0;
     economy.trade_set_aside = ia_min(ia_min(setAside, economy.income - economy.tax), room);
