@@ -10,28 +10,36 @@
 // Trade / caravan parameters (placeholder values, tunable). All fields are 4 bytes. See world_trade.h for how the profit ones are used.
 struct game_trade_parameters
 {
+    // Market goods sales (daily). Shares are % of the sellable goods; peasants get the rest. Unused shares go to the next stratum (soldiers -> workers -> peasants).
+    ui32 sellable_percent = 50; // % of the market goods that can be consumed per day (100 = the pool can be emptied).
+    ui32 soldier_share_percent = 20; // Share of the soldiers at home, served first.
+    ui32 worker_share_percent = 20; // Share of the workers, served second.
+    ui32 start_goods_percent = 100; // Default market goods a settlement starts with, in % of its starting population (when its start state gives none).
+    ui32 overflow_waste_percent = 25; // % of the goods above the market capacity that is wasted (removed) each day, after sales and growth.
+
     // Spawning
-    ui32 trade_pool_income_percent = 10; // % of the day's income (production + pay + trade) set aside into the settlement's export pool.
-    ui32 import_release_percent = 25; // % of the import pool's contents released into the day's income (at least 1 when the pool is not empty).
+    ui32 min_pool_to_spawn = 100; // A settlement holding fewer market goods than this (absolute amount) spawns no caravan.
 
-    ui32 min_export_pool_to_spawn = 100; // A settlement whose export pool is below this spawns no caravan.
-
-    ui32 investment_percent = 25; // % of the origin's export pool invested in a caravan (at least investment_min).
+    ui32 investment_percent_min = 10; // % of the origin's market goods invested in a caravan at 0% fill (at least investment_min).
+    ui32 investment_percent_max = 40; // Same at 100% fill. Linear in between.
     ui32 investment_min = 100; // Minimum caravan investment, or the whole pool if it holds less.
 
-    ui32 spawn_chance_min_percent = 10; // Spawn probability (%) at min export pool.
-    ui32 spawn_chance_max_percent = 100; // Spawn probability (%) when export pool is full. Linear in between.
+    ui32 spawn_chance_min_percent = 10; // Spawn probability (%) at 0% fill (when the pool is at least min_pool_to_spawn).
+    ui32 spawn_chance_max_percent = 100; // Spawn probability (%) at 100% fill. Linear in between.
 
     // Profit
-    ui32 profit_base_multiplier = 2; // Base of the revenue = caravan value * this. (Clamped to 1000 by trade_revenue.) Profit is the extra on top of it.
-    ui32 profit_flat_percent = 10; // Flat profit always added, in % of caravan value (at least 1 for any caravan with value). Clamped to 10000.
-    ui32 value_bonus_max_percent = 100; // Max value bonus, in % of caravan value (reached when the caravan is tiny next to the destination's daily income). Clamped to 10000.
-    ui32 distance_bonus_max_percent = 100; // Max distance bonus, in % of caravan value (reached at the plateau). Clamped to 10000.
-                                           //
-    // Distances are tiles between origin and destination (trade_tile_distance). A region is 128 tiles wide (world_terrain::REGION_SIZE).
-    ui32 distance_curve_mid = 128; // Distance of the curve's "middle" (one region): the bonus rises fast up to about here, slowly after.
-    ui32 distance_saturation = 384; // Distance from which the distance bonus stops growing (three regions).
-    ui32 distance_curve_steepness = 7; // Higher = faster initial rise. Bonus shape is log2(1 + steepness * distance / curve mid).
+    ui32 flat_profit_percent_of_min = 10; // Flat profit always added = investment_min * this / 100 (at least 1). Independent of the caravan's value. Clamped to 10000.
+    // Barter exchange: the destination values each caravan good at r% of its own goods, r linear in its fill (pool / capacity): max at 0% fill, min at 100%. Clamped to 10000.
+    ui32 scarcity_value_min_percent = 50;
+    ui32 scarcity_value_max_percent = 200;
+
+    // Margin earned per exchanged good, by distance. Distances are tiles between origin and destination (trade_tile_distance). A region is 128 tiles wide (world_terrain::REGION_SIZE).
+    ui32 distance_margin_min_tiles = 8; // No margin at or below this distance.
+    ui32 distance_margin_max_percent = 50; // Margin (% of the exchanged goods) at the saturation distance and beyond. Clamped to 10000.
+    // Curve shape log2(mid + steepness * (distance - min tiles)), only the ratio steepness / mid matters (with the 8 bit log precision).
+    ui32 distance_curve_mid = 1024; // Scale of the curve.
+    ui32 distance_saturation = 256; // Distance from which the margin stops growing (two regions).
+    ui32 distance_curve_steepness = 20; // Higher = faster initial rise.
 };
 
 // Per mille = thousandths (20 = 2%). Ratios are per mille too (1000 = 100%).
@@ -64,10 +72,11 @@ struct game_parameters
     ui8 peasant_production_percent_base = 6; // Percent surplus output per peasant (each peasant will produce at most 1 wealth + surplus%)
 
     // CONSUMPTION & POPULATION GROWTH
-    // r = consumption budget / wealth required for consumption. Growth is in per mille of the population at home per day, linear between these points:
+    // Per stratum (soldiers at home, workers, peasants): r = its share of the goods sold / goods it required. Growth is in per mille of the stratum per day,
+    // linear between these points (excess = share above the requirement):
     //   r >= 1000: growth_enough, plus up to (growth_max - growth_enough) as the excess goes from 0 to the requirement.
     //   r == growth_zero_ratio: 0. r <= growth_floor_ratio: growth_floor.
-    ui32 consumption_per_person = 1; // Wealth consumed per day by each person at home.
+    ui32 consumption_per_person = 1; // Market goods consumed per day by each person at home (every stratum).
     i32 growth_enough_per_mille = 40; // Growth when consumption is exactly met.
     i32 growth_max_per_mille = 100; // Growth when the excess is at least the requirement.
     ui32 growth_zero_ratio_per_mille = 900; // r at which growth is 0.
@@ -118,17 +127,22 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(tax_rate_min, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(tax_rate_max, GAME_DATA_PROP_TYPE::I32)
 
-    GAME_DATA_PROPERTY_PATH(trade_trade_pool_income_percent, trade.trade_pool_income_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_import_release_percent, trade.import_release_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_min_export_pool_to_spawn, trade.min_export_pool_to_spawn, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_investment_percent, trade.investment_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_sellable_percent, trade.sellable_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_soldier_share_percent, trade.soldier_share_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_worker_share_percent, trade.worker_share_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_start_goods_percent, trade.start_goods_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_overflow_waste_percent, trade.overflow_waste_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_min_pool_to_spawn, trade.min_pool_to_spawn, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_investment_percent_min, trade.investment_percent_min, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_investment_percent_max, trade.investment_percent_max, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_investment_min, trade.investment_min, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_spawn_chance_min_percent, trade.spawn_chance_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_spawn_chance_max_percent, trade.spawn_chance_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_profit_base_multiplier, trade.profit_base_multiplier, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_profit_flat_percent, trade.profit_flat_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_value_bonus_max_percent, trade.value_bonus_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_bonus_max_percent, trade.distance_bonus_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_flat_profit_percent_of_min, trade.flat_profit_percent_of_min, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_margin_min_tiles, trade.distance_margin_min_tiles, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_distance_margin_max_percent, trade.distance_margin_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_distance_curve_mid, trade.distance_curve_mid, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_distance_saturation, trade.distance_saturation, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_distance_curve_steepness, trade.distance_curve_steepness, GAME_DATA_PROP_TYPE::UI32)

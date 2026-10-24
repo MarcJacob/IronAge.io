@@ -3,7 +3,7 @@
 // Inside territory its owner owns, an army refills its supplies from the treasury (a couple of days' worth per day), up to a number of days of its own consumption.
 // Consumption that supplies cannot cover makes troops desert, in which case they go back home. A raising army stops raising instead.
 // Outside of the owner's territory armies are not supplied: they must be back regularly, or find *alternative* means of financing themselves (later).
-// Soldiers waiting in a settlement (local pool) are paid from the treasury instead, which becomes the settlement's income.
+// Soldiers waiting in a settlement (local pool) are paid from the treasury instead.
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world.h"
@@ -86,8 +86,8 @@ void world_system_armies_upkeep(match_world_state& world)
 	}
 }
 
-// Runs daily. Soldiers of the local pools get their pay from the owner's treasury (down to 0, no debt) into the settlement's pending soldier pay.
-void world_system_local_troops_upkeep(match_world_state& world)
+// Runs daily. Soldiers of the local pools are paid from the owner's treasury, as much as it holds (down to 0, no debt). An unpaid day has no consequence.
+void world_system_local_troops_pay(match_world_state& world)
 {
 	if (!world_is_daily_tick(world)) return;
 
@@ -97,7 +97,12 @@ void world_system_local_troops_upkeep(match_world_state& world)
 	{
 		if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-		settlement_wealth_fund_from_treasury(world, settlementIndex, army_daily_consumption(settlements.populations[settlementIndex].home),
-			&settlement_pending_income::soldier_pay);
+		match_player_id owner = settlements.owners[settlementIndex];
+		if (owner >= world.player_count) continue;
+
+		world_player_state& player = world.player_states[owner];
+		ui32 paid = ia_min(army_daily_consumption(settlements.populations[settlementIndex].home), player.treasury);
+		player.treasury -= paid;
+		player.expenses += paid;
 	}
 }

@@ -118,9 +118,9 @@ static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
 	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.",
         10, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
-    { "Caravanserai", "Increases maximum amount of active caravans. Small increase to trade export and import pool sizes.", 
+    { "Caravanserai", "Increases maximum amount of active caravans. Small increase to market goods capacity.",
         10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
-    { "Trade Depot", "Large increase to trade export and import pools.",
+    { "Trade Depot", "Large increase to market goods capacity.",
         20, 150, 50, { .on_added = settlement_building_tradedepot_on_added, .on_removed = settlement_building_tradedepot_on_removed } },
 };
 
@@ -193,30 +193,25 @@ struct settlement_population
 	inline ui32 at_home() const { return peasants + workers + soldiers_home(); }
 };
 
+// One stratum's (soldiers at home, workers, peasants) consumption of the market goods sold on a day.
+struct settlement_stratum_consumption
+{
+	ui32 required; // Goods the stratum needed (consumption_per_person each).
+	ui32 share; // Goods it could take: its share of the sellable goods, plus what the strata before it left. share above required is its excess (not taken).
+	ui32 consumed; // Goods it took: min(required, share). Removed from the market goods.
+	i32 growth_per_mille; // Growth of the stratum from how well its need was met (0 when nobody is in it).
+};
+
 // Last day's economy figures of a settlement, written by the daily economy tick every day. Zero is a valid (empty) value.
-// Nothing is carried over to the next day: the consumption budget is used up by the population at home.
 struct settlement_economy
 {
 	ui32 raw_output; // Land output actually worked by the peasants (work units, before conversion to wealth).
-	ui32 production; // Wealth produced from the raw output.
-	ui32 worker_pay; // Wealth received from the owner's treasury for construction workers (roads, buildings) since the previous daily tick.
-	ui32 soldier_pay; // Wealth received from the owner's treasury for the soldiers of the local pool since the previous daily tick.
-	ui32 trade_release; // Taken from the import pool today (import_release_percent of its contents).
-	ui32 trade_overflow; // Pending trade income since the previous daily tick: arrived revenue that did not fit the import pool, export refunds that did not fit the export pool.
-	ui32 trade_income; // trade_release + trade_overflow.
-	ui32 income; // production + worker_pay + soldier_pay + trade_income.
-	ui32 tax; // Part of the income moved to the owner's treasury.
-	ui32 trade_set_aside; // Part of the income moved to the export pool.
-	ui32 consumption_budget; // What the population at home lives on: income - tax - trade_set_aside.
-	ui32 consumption_required; // Wealth the people at home needed.
-};
-
-// External income received by a settlement between two daily ticks (adds saturate). The daily economy tick turns it into that day's income and zeroes it.
-struct settlement_pending_income
-{
-	ui32 worker_pay; // From the owner's treasury, for construction workers.
-	ui32 soldier_pay; // From the owner's treasury, for the soldiers of the local pool.
-	ui32 trade; // Caravan revenue that did not fit the import pool, and export refunds that did not fit the export pool.
+	ui32 production; // Goods produced from the raw output.
+	ui32 tax; // Part of the production moved to the owner's treasury. The rest goes to the market goods.
+	ui32 sellable; // Most goods that could be consumed today: sellable_percent of the market goods.
+	settlement_stratum_consumption soldiers; // Served first, then workers, then peasants.
+	settlement_stratum_consumption workers;
+	settlement_stratum_consumption peasants;
 };
 
 // Buildings-related data for a settlement.
@@ -230,11 +225,10 @@ struct settlement_trading
 {
     ui8 caravan_count; // Current number of active caravans originating from this settlement.
     ui8 caravan_count_max; // Maximum number of active caravans a settlement can have.
-    // Caps are kept by the Caravanserai's added / removed events (constants there). Adds stop at a cap, a pool above it is kept.
-    ui32 export_pool; // Wealth set aside from the daily income for trade. Caravans are funded from it. Zero by default.
-    ui32 export_pool_max;
-    ui32 import_pool; // Revenue of arrived caravans, released into the daily income a share at a time. Zero by default.
-    ui32 import_pool_max;
+    // Market goods: post-tax production and caravan revenue go in, consumption (sales) and caravan investments come out. Zero by default.
+    // Nothing is ever refused: the pool may exceed its capacity, which is only the reference for its fill (settlement_market_capacity).
+    ui32 market_goods;
+    ui32 market_capacity_buildings; // Buildings' part of the capacity, kept by their added / removed events (constants there).
 };
 
 // Property arrays for a world's settlements.
@@ -248,8 +242,7 @@ struct world_entity_settlements : public world_entity_container
 	settlement_population* populations;
     ui32*               base_land_outputs; // Peasants that can work the land at full efficiency.
 
-	settlement_pending_income* pending_incomes; // External income received since the last daily tick.
-	i8*                 tax_rates; // -100..100, % of the daily income moved to the owner's treasury. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
+	i8*                 tax_rates; // -100..100, % of the daily production moved to the owner's treasury. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
 	settlement_economy* economies; // Last day's figures.
 
     settlement_buildings* buildings;
@@ -276,8 +269,7 @@ struct world_entity_settlements : public world_entity_container
         ui64 founding_tick;
 
 		settlement_population population;
-        
-        settlement_pending_income pending_income;
+
         i8 tax_rate;
         settlement_economy economy;
 
@@ -287,6 +279,7 @@ struct world_entity_settlements : public world_entity_container
         settlement_buildings buildings;
 
         settlement_trading trade;
+        ui32 market_capacity; // Computed (settlement_market_capacity).
 
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
@@ -312,22 +305,24 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 
 	GAME_DATA_PROPERTY_PATH(economy_raw_output, economy.raw_output, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_production, economy.production, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_worker_pay, economy.worker_pay, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_soldier_pay, economy.soldier_pay, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_trade_release, economy.trade_release, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_trade_overflow, economy.trade_overflow, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_trade_income, economy.trade_income, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_income, economy.income, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_tax, economy.tax, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_trade_set_aside, economy.trade_set_aside, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_consumption_budget, economy.consumption_budget, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(economy_consumption_required, economy.consumption_required, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_sellable, economy.sellable, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_soldiers_required, economy.soldiers.required, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_soldiers_share, economy.soldiers.share, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_soldiers_consumed, economy.soldiers.consumed, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_soldiers_growth_rate, economy.soldiers.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
+	GAME_DATA_PROPERTY_PATH(economy_workers_required, economy.workers.required, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_workers_share, economy.workers.share, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_workers_consumed, economy.workers.consumed, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_workers_growth_rate, economy.workers.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
+	GAME_DATA_PROPERTY_PATH(economy_peasants_required, economy.peasants.required, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_peasants_share, economy.peasants.share, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_peasants_consumed, economy.peasants.consumed, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_peasants_growth_rate, economy.peasants.growth_per_mille, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
-    GAME_DATA_PROPERTY_PATH(trading_export_pool, trade.export_pool, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trading_export_pool_max, trade.export_pool_max, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trading_import_pool, trade.import_pool, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trading_import_pool_max, trade.import_pool_max, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(market_capacity, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
@@ -495,6 +490,8 @@ struct world_entity_workers : public world_entity_container
 
     ui8* work_progress_ratios; // Progress indicator in range [0, 255] freely settable by worker logic.
 
+	ui32* daily_costs; // Paid from the origin owner's treasury (spent) for every day the project advances. 0 = free.
+
 	world_worker_action_data* action_data;
 	world_location* locations; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
 	world_entity_movement* movements; // Movement state, used by work types that travel (like armies').
@@ -507,6 +504,8 @@ struct world_entity_workers : public world_entity_container
 		ui32 work_time;
 
         ui8 work_progress_ratio;
+
+		ui32 daily_cost;
 
 		world_worker_action_data action_data;
 		world_location position;

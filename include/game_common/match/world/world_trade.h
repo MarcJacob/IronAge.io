@@ -16,55 +16,53 @@ static inline ui32 trade_tile_distance(world_location from, world_location to)
     return ia_max(dx, dy) + ia_min(dx, dy) * 2 / 5;
 }
 
-// Profit = the extra value ON TOP of the base, of delivering a caravan worth caravan_value to a settlement whose last daily income is destination_income,
-// over travel_distance (tile distance between origin and destination, see trade_tile_distance; not the path cost). Revenue (trade_revenue below) = base + profit is what is paid out on arrival.
-//   profit = value_bonus + distance_bonus + flat_bonus, with flat_bonus = max(value * profit_flat_percent%, 1): always applies, so profit is never 0 for value > 0.
-//   value_bonus   = value * value_bonus_max_percent% * r, with r = income / (income + value) in [0, 1]:
-//                    near 1 for a small caravan next to a rich destination, 0.5 when equal, towards 0 as the caravan outgrows it.
-//   distance_bonus = value * distance_bonus_max_percent% * f, with f = log2(1 + steepness * d / mid) / log2(1 + steepness * saturation / mid),
-//                    d = min(travel_distance, saturation). f is in [0, 1], rises fast then slowly, and is flat from the saturation on.
-// Edge cases: value 0 -> 0, any other value -> at least 1. income 0 -> no value bonus. distance 0 -> no distance bonus. curve_mid or saturation 0 -> no distance bonus.
-// Huge inputs: the percents are clamped (10000), distance is clamped to the saturation, intermediates are ui64 and cannot overflow.
-static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_income, ui32 travel_distance, const game_trade_parameters& trade_parameters)
+// Profit of a barter-style exchange: a caravan worth caravan_value offers its goods to a destination, which can only give back what it has.
+// destination_pool / destination_capacity = its market goods and capacity, destination_production = its last daily production (settlement_economy::production),
+// travel_distance = tile distance between origin and destination (trade_tile_distance; not the path cost).
+// The profit is the only value created by a trip: on arrival the origin gets its capital back plus half the profit, the destination the other half.
+//   fill = pool / capacity, clamped to [0, 1] (capacity 0: 1 if any goods, else 0).
+//   r = lerp(scarcity_value_max_percent, scarcity_value_min_percent, fill): the destination values each caravan good at r% of its own goods (at least 1%).
+//   available = pool + production (the whole pool, sellable_percent is not used here).
+//   E (caravan goods exchanged) = min(value, available * 100 / r).
+//   margin = distance_margin_max_percent% * f, with x = min(d, saturation) - min_tiles (0 at or below distance_margin_min_tiles),
+//            f = log2(mid + steepness * x) - log2(mid), divided by the same at x = saturation - min_tiles. f in [0, 1]: rises fast then slowly, flat from the saturation on.
+//   profit = E * margin + flat, flat = min(max(investment_min * flat_profit_percent_of_min%, 1), E). E == 0 -> 0.
+// Huge inputs: the percents are clamped (10000); intermediates are ui64 and cannot overflow (E < 2^32, percent * progress < 2^24).
+static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_pool, ui32 destination_production, ui32 destination_capacity, ui32 travel_distance,
+    const game_trade_parameters& trade_parameters)
 {
-    ui64 value = caravan_value;
-    if (value == 0) return 0;
+    // Destination fill, fixed point (IA_FIXED_ONE = 1).
+    ui64 capacity = destination_capacity;
+    ui64 fill = capacity == 0 ? (destination_pool > 0 ? IA_FIXED_ONE : 0) : ia_min((ui64)destination_pool * IA_FIXED_ONE / capacity, (ui64)IA_FIXED_ONE);
 
-    ui64 profit = 0;
+    // Value rate and exchanged volume.
+    i32 rateMax = (i32)ia_min(trade_parameters.scarcity_value_max_percent, (ui32)10000);
+    i32 rateMin = (i32)ia_min(trade_parameters.scarcity_value_min_percent, (ui32)10000);
+    ui64 ratePercent = ia_max(ia_lerp_fixed(rateMax, rateMin, (ui32)fill), (i32)1);
+    ui64 available = (ui64)destination_pool + destination_production;
+    ui64 exchanged = ia_min((ui64)caravan_value, available * 100 / ratePercent);
+    if (exchanged == 0) return 0;
 
-    // Value bonus. income + value > 0 here.
-    ui64 income = destination_income;
-    ui64 wealthShare = income * 1000 / (income + value); // Per mille.
-    profit += value * ia_min(trade_parameters.value_bonus_max_percent, (ui32)10000) * wealthShare / (100 * 1000);
-
-    // Distance bonus.
+    // Distance margin, as a per mille progress along the curve (0 at the minimum distance), then scaled by its max percent.
+    ui64 curveProgress = 0;
     ui64 curveMid = trade_parameters.distance_curve_mid;
+    ui64 minDistance = trade_parameters.distance_margin_min_tiles;
     ui64 saturation = trade_parameters.distance_saturation;
     ui64 steepness = trade_parameters.distance_curve_steepness;
-    if (curveMid > 0 && saturation > 0 && travel_distance > 0)
+    if (curveMid > 0 && saturation > minDistance && travel_distance > minDistance)
     {
-        ui64 cappedDistance = ia_min((ui64)travel_distance, saturation);
+        ui64 curveDistance = ia_min((ui64)travel_distance, saturation) - minDistance;
         ui32 logCurveMid = ia_log2_q8(curveMid);
-        ui64 logAtDistance = ia_log2_q8(curveMid + steepness * cappedDistance) - logCurveMid;
-        ui64 logAtSaturation = ia_log2_q8(curveMid + steepness * saturation) - logCurveMid;
-        if (logAtSaturation > 0)
-        {
-            ui64 curveProgress = logAtDistance * 1000 / logAtSaturation; // Per mille, <= 1000 since the distance is capped.
-            profit += value * ia_min(trade_parameters.distance_bonus_max_percent, (ui32)10000) * curveProgress / (100 * 1000);
-        }
+        ui64 logAtDistance = ia_log2_q8(curveMid + steepness * curveDistance) - logCurveMid;
+        ui64 logAtSaturation = ia_log2_q8(curveMid + steepness * (saturation - minDistance)) - logCurveMid;
+        if (logAtSaturation > 0) curveProgress = logAtDistance * 1000 / logAtSaturation; // <= 1000 since the distance is capped.
     }
+    ui64 distanceProfit = exchanged * ia_min(trade_parameters.distance_margin_max_percent, (ui32)10000) * curveProgress / (100 * 1000);
 
-    // Flat bonus, always added. At least 1 for any caravan with value.
-    ui64 flatBonus = value * ia_min(trade_parameters.profit_flat_percent, (ui32)10000) / 100;
-    return profit + ia_max(flatBonus, (ui64)1);
-}
-
-// Full amount paid out on arrival: value * profit_base_multiplier (clamped to 1000) + trade_profit. Same arguments as trade_profit. 0 for value 0.
-// ui64: at most 2^32 * 1000 + profit (profit <= 2^32 * 10000 * 3 / 100), no overflow.
-static inline ui64 trade_revenue(ui32 caravan_value, ui32 destination_income, ui32 travel_distance, const game_trade_parameters& trade_parameters)
-{
-    ui64 base = (ui64)caravan_value * ia_min(trade_parameters.profit_base_multiplier, (ui32)1000);
-    return base + trade_profit(caravan_value, destination_income, travel_distance, trade_parameters);
+    // Flat profit: a constant from the minimum caravan value, at least 1, never more than the exchanged volume.
+    ui64 flatProfit = (ui64)trade_parameters.investment_min * ia_min(trade_parameters.flat_profit_percent_of_min, (ui32)10000) / 100;
+    flatProfit = ia_min(ia_max(flatProfit, (ui64)1), exchanged);
+    return distanceProfit + flatProfit;
 }
 
 #endif // WORLD_TRADE_INCLUDED

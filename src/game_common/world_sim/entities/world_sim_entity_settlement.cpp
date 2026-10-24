@@ -26,7 +26,6 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     world.entities->settlements.founding_ticks[freeIndex] = world.age;
 
     world.entities->settlements.base_land_outputs[freeIndex] = start_state.base_land_output;
-	world.entities->settlements.pending_incomes[freeIndex] = start_state.pending_income;
 	world.entities->settlements.tax_rates[freeIndex] = start_state.tax_rate;
 	world.entities->settlements.economies[freeIndex] = start_state.economy;
     world.entities->settlements.territories[freeIndex] = start_state.territory;
@@ -38,8 +37,7 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 		world.entities->settlements.buildings[freeIndex].building_counts[buildingType] = 0;
 	}
 
-	// Slots are reused: no caravans and no caravan capacity to start with (buildings add to it).
-	world.entities->settlements.trade[freeIndex] = {};
+	world.entities->settlements.trade[freeIndex] = start_state.trade;
 
 	settlement_population& population = world.entities->settlements.populations[freeIndex];
     population = start_state.population;
@@ -47,6 +45,8 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     // Init default values if they weren't specified by start state.
     SET_DEFAULT_VAL(population.peasants, 100);
 	population.population_total = population.at_home() + population.raised.levies + population.raised.men_at_arms + population.raised.horsemen + population.raised.knights;
+
+	SET_DEFAULT_VAL(world.entities->settlements.trade[freeIndex].market_goods, (ui64)population.population_total * GAME_PARAMETERS.trade.start_goods_percent / 100);
     SET_DEFAULT_VAL_STRUCT(world.entities->settlements.territories[freeIndex], (world_entity_settlements::territory
             {
                 .bounds_min = world.entities->settlements.locations[freeIndex],
@@ -100,9 +100,6 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.base_land_outputs = memory.alloc<ui32>(count);
 	if (settlements.base_land_outputs == nullptr) return false;
 
-	settlements.pending_incomes = memory.alloc<settlement_pending_income>(count);
-	if (settlements.pending_incomes == nullptr) return false;
-
 	settlements.tax_rates = memory.alloc<i8>(count);
 	if (settlements.tax_rates == nullptr) return false;
 
@@ -136,13 +133,13 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.location = settlements.locations[i],
         .founding_tick = settlements.founding_ticks[i],
 		.population = settlements.populations[i],
-		.pending_income = settlements.pending_incomes[i],
 		.tax_rate = settlements.tax_rates[i],
 		.economy = settlements.economies[i],
 		.territory = settlements.territories[i],
 		.base_land_output = settlements.base_land_outputs[i],
         .buildings = settlements.buildings[i],
         .trade = settlements.trade[i],
+        .market_capacity = settlement_market_capacity(settlements, i),
 		.troop_ceilings = settlements.troop_ceilings[i],
 		.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.populations[i], settlements.troop_ceilings[i]),
 	};
@@ -215,9 +212,8 @@ void settlement_building_barracks_on_removed(match_world_state& world, entity_gu
 
 // TRADE POSTS
 
-// Export / import pool caps added by each trade post.
-static constexpr ui32 TRADE_POST_EXPORT_POOL_CAPACITY = 100;
-static constexpr ui32 TRADE_POST_IMPORT_POOL_CAPACITY = 200;
+// Market goods capacity added by each trade post.
+static constexpr ui32 TRADE_POST_MARKET_CAPACITY = 300;
 
 void settlement_building_tradepost_on_added(match_world_state& world, entity_guid settlement)
 {
@@ -225,8 +221,7 @@ void settlement_building_tradepost_on_added(match_world_state& world, entity_gui
 
     settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
     trade.caravan_count_max++;
-    trade.export_pool_max += TRADE_POST_EXPORT_POOL_CAPACITY;
-    trade.import_pool_max += TRADE_POST_IMPORT_POOL_CAPACITY;
+    trade.market_capacity_buildings += TRADE_POST_MARKET_CAPACITY;
 }
 
 void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement)
@@ -234,15 +229,14 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
     ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 
     settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
-    trade.export_pool_max -= TRADE_POST_EXPORT_POOL_CAPACITY;
-    trade.import_pool_max -= TRADE_POST_IMPORT_POOL_CAPACITY;
+    trade.caravan_count_max--;
+    trade.market_capacity_buildings -= TRADE_POST_MARKET_CAPACITY;
 }
 
 // TRADE DEPOT
 
-// Export / import pool caps added by each trade depot. 
-static constexpr ui32 TRADE_DEPOT_EXPORT_POOL_CAPACITY = 400;
-static constexpr ui32 TRADE_DEPOT_IMPORT_POOL_CAPACITY = 1000;
+// Market goods capacity added by each trade depot.
+static constexpr ui32 TRADE_DEPOT_MARKET_CAPACITY = 1400;
 
 void settlement_building_tradedepot_on_added(match_world_state& world, entity_guid settlement)
 {
@@ -252,16 +246,12 @@ void settlement_building_tradedepot_on_added(match_world_state& world, entity_gu
 
     ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 
-    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
-    trade.export_pool_max += TRADE_DEPOT_EXPORT_POOL_CAPACITY;
-    trade.import_pool_max += TRADE_DEPOT_IMPORT_POOL_CAPACITY;
+    world.entities->settlements.trade[settlement.get_index()].market_capacity_buildings += TRADE_DEPOT_MARKET_CAPACITY;
 }
 
 void settlement_building_tradedepot_on_removed(match_world_state& world, entity_guid settlement)
 {
     ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 
-    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
-    trade.export_pool_max -= TRADE_DEPOT_EXPORT_POOL_CAPACITY;
-    trade.import_pool_max -= TRADE_DEPOT_IMPORT_POOL_CAPACITY;
+    world.entities->settlements.trade[settlement.get_index()].market_capacity_buildings -= TRADE_DEPOT_MARKET_CAPACITY;
 }

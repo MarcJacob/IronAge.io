@@ -2,23 +2,10 @@
 
 #include "game_common/match/world/world_trade.h"
 #include "../entities/world_sim_entity_caravan.h"
+#include "../entities/world_sim_entity_settlement.h"
 
-// Spawn probability (%) for a settlement with the given number of missing caravan slots (>= 1): linear from min at 1 to max at max_missing_slots or more.
-static ui32 caravan_spawn_chance_percent(match_world_state& world, const entity_guid& settlement)
-{
-    const game_trade_parameters& tradeParams = GAME_PARAMETERS.trade;
-    const world_entity_settlements& settlements = world.entities->settlements;
-
-    ui16 settlementIndex = settlement.get_index();
-    ui32 exportPool = settlements.trade[settlementIndex].export_pool;
-    if (exportPool < tradeParams.min_export_pool_to_spawn) return 0;
-
-    ui16 exportPoolFillRatio = exportPool * 1000 / settlements.trade[settlementIndex].export_pool_max;
-
-    return tradeParams.spawn_chance_min_percent + (exportPoolFillRatio * (tradeParams.spawn_chance_max_percent - tradeParams.spawn_chance_min_percent) / 1000);
-}
-
-// Daily: every settlement rolls once per missing caravan slot. A success invests part of its export pool in a caravan towards a selected destination.
+// Daily: every settlement rolls once per missing caravan slot. A success invests part of its market goods in a caravan towards a selected destination.
+// Spawn chance and investment share grow with the market goods' fill.
 void world_system_caravan_spawn(match_world_state& world)
 {
     if (!world_is_daily_tick(world)) return;
@@ -36,17 +23,21 @@ void world_system_caravan_spawn(match_world_state& world)
 
         // One independent roll per slot missing at the start of the day.
         ui32 missingSlots = settlementTrade.caravan_count_max - settlementTrade.caravan_count;
-        ui32 chance = caravan_spawn_chance_percent(world, origin);
 
         for (ui32 roll = 0; roll < missingSlots; roll++)
         {
             // Re-checked every time: earlier spawns changed the count and the pool.
             if (settlementTrade.caravan_count >= settlementTrade.caravan_count_max) break;
-            if (settlementTrade.export_pool < trade.min_export_pool_to_spawn) break;
+            if (settlementTrade.market_goods < trade.min_pool_to_spawn) break;
 
-            // Investment = a share of the pool, at least investment_min (or the whole pool if it holds less). Capped by what a caravan can hold (ui16 value).
-            ui64 pool = settlementTrade.export_pool;
-            ui64 share = pool * trade.investment_percent / 100;
+            // Chance and investment share go from their min at an empty pool to their max at a full one.
+            ui32 fill = settlement_market_fill(settlements, (ui16)settlementIndex);
+            ui32 chance = (ui32)ia_lerp_fixed((i32)trade.spawn_chance_min_percent, (i32)trade.spawn_chance_max_percent, fill);
+            ui32 investmentPercent = (ui32)ia_lerp_fixed((i32)trade.investment_percent_min, (i32)trade.investment_percent_max, fill);
+
+            // Investment = that share of the pool, at least investment_min (or the whole pool if it holds less). Capped by what a caravan can hold (ui16 value).
+            ui64 pool = settlementTrade.market_goods;
+            ui64 share = pool * investmentPercent / 100;
             ui64 minimum = ia_min((ui64)trade.investment_min, pool);
             ui32 investment = (ui32)ia_min(ia_min(ia_max(share, minimum), pool), (ui64)0xFFFF); // Never more than the pool, even above 100%.
             if (investment == 0) break;
@@ -62,7 +53,7 @@ void world_system_caravan_spawn(match_world_state& world)
                 break; // Nothing changes, and another roll would find nothing either.
             }
 
-            settlementTrade.export_pool -= investment;
+            settlementTrade.market_goods -= investment;
 
             caravan.origin_settlement = origin;
             caravan.value = (ui16)investment;

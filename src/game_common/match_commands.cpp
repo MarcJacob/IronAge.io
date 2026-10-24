@@ -371,6 +371,7 @@ void command_build_road_apply(match_world_state& world, match_player_id player, 
 	world_entity_workers::single worker = {};
 	worker.origin_entity = command.settlement;
 	worker.work_type = WORK_TYPE::BUILD_ROAD;
+	worker.daily_cost = GAME_PARAMETERS.road_crew_cost_per_day;
     
     // Init payload. @TODO: Could probably just init head on tick 0 of the build logic...
 	*(build_road_data*)worker.action_data.bytes = {
@@ -497,6 +498,7 @@ void command_build_settlement_building_apply(match_world_state& world, match_pla
 	world_entity_workers::single worker = {};
 	worker.origin_entity = command.settlement;
 	worker.work_type = WORK_TYPE::BUILD_SETTLEMENT_BUILDING;
+	worker.daily_cost = SETTLEMENT_BUILDING_TABLE[command.building_type].cost_per_day; // Type checked by the validity check.
 	*(build_settlement_building_data*)worker.action_data.bytes = { .building_type = command.building_type };
 
 	world_spawn_worker(world, worker);

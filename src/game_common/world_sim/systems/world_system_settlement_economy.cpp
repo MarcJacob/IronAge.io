@@ -26,8 +26,7 @@ void world_system_settlement_territory_update_pressure(match_world_state& world)
 }
 
 // DAILY ECONOMY
-// Per settlement, in this order: income (production + pending pay / trade + import release), tax, export set-aside, consumption budget, growth.
-// Nothing is stored between days: the budget is what the population at home lives on, any excess only adds growth. Every wealth movement is its own function below.
+// Per settlement, in this order: production, tax on it, the rest into the market goods, sales of the sellable goods to the strata, growth of each stratum.
 
 // Peasants able to work the land at full efficiency (base) count fully, the surplus on top of it gives diminishing returns.
 static ui32 settlement_raw_output(ui32 base_land_output, ui32 peasants)
@@ -45,75 +44,63 @@ static ui32 land_output_to_wealth(ui32 raw_output)
     return raw_output + raw_output / (100 / GAME_PARAMETERS.peasant_production_percent_base);
 }
 
-// Wealth needed per day by the population at home (peasants + home soldiers, not raised ones).
-static ui32 settlement_consumption_required(const settlement_population& population)
+// PRODUCTION: the owner's treasury takes the tax rate of the production, the rest goes into the market goods.
+static void settlement_goods_production(match_world_state& world, ui32 settlement_index)
 {
-    //@TEST(Marc): Need to figure out economy rules that make sense. For now raised population / soldiers does not consume at all from their home settlement,
-    // they are paid from the treasury.
-    return population.at_home() * GAME_PARAMETERS.consumption_per_person; 
-}
-
-// INCOME: land production, plus the external income received since the last daily tick (worker and soldier pay, trade overflow), which is consumed (zeroed) here,
-// plus today's release from the import pool.
-static void settlement_compute_income(world_entity_settlements& settlements, ui32 settlement_index)
-{
+    world_entity_settlements& settlements = world.entities->settlements;
     settlement_economy& economy = settlements.economies[settlement_index];
-    settlement_pending_income& pending = settlements.pending_incomes[settlement_index];
-    settlement_trading& tradeState = settlements.trade[settlement_index];
 
     economy.raw_output = settlement_raw_output(settlements.base_land_outputs[settlement_index], settlements.populations[settlement_index].peasants);
     economy.production = land_output_to_wealth(economy.raw_output);
-    economy.worker_pay = pending.worker_pay;
-    economy.soldier_pay = pending.soldier_pay;
-    economy.trade_overflow = pending.trade;
-    pending = {};
-
-    // Import release: a share of the import pool's contents, at least 1 when the pool is not empty and there is a share. Never more than the pool.
-    ui32 percent = GAME_PARAMETERS.trade.import_release_percent;
-    economy.trade_release = (ui32)ia_min((ui64)tradeState.import_pool * percent / 100, (ui64)tradeState.import_pool);
-    if (economy.trade_release == 0 && tradeState.import_pool > 0 && percent > 0) economy.trade_release = 1;
-    tradeState.import_pool -= economy.trade_release;
-
-    economy.trade_income = (ui32)ia_min((ui64)economy.trade_overflow + economy.trade_release, (ui64)0xFFFFFFFF);
-    economy.income = (ui32)ia_min((ui64)economy.production + economy.worker_pay + economy.soldier_pay + economy.trade_income, (ui64)0xFFFFFFFF);
-}
-
-// WEALTH MOVEMENT 1: income -> owner's treasury, by the tax rate.
-static void settlement_wealth_pay_tax(match_world_state& world, ui32 settlement_index)
-{
-    world_entity_settlements& settlements = world.entities->settlements;
-    i8 taxRate = settlements.tax_rates[settlement_index];
-    match_player_id owner = settlements.owners[settlement_index];
 
     // Negative rates are future investment (treasury -> settlement): not applied yet.
-    if (taxRate <= 0 || owner >= world.player_count) return;
+    i8 taxRate = settlements.tax_rates[settlement_index];
+    match_player_id owner = settlements.owners[settlement_index];
+    if (taxRate > 0 && owner < world.player_count)
+    {
+        economy.tax = (ui32)((ui64)economy.production * (ui64)taxRate / 100); // Rate <= 100: never above the production.
+        world.player_states[owner].treasury += economy.tax;
+        world.player_states[owner].income += economy.tax;
+    }
 
-    settlement_economy& economy = settlements.economies[settlement_index];
-    economy.tax = (ui32)((ui64)economy.income * (ui64)taxRate / 100); // Rate <= 100: never above the income.
-    world.player_states[owner].treasury += economy.tax;
-    world.player_states[owner].income += economy.tax;
+    settlement_market_add(settlements, settlement_index, economy.production - economy.tax);
 }
 
-// WEALTH MOVEMENT 2: a share of the income -> export pool, taken from what is left after tax.
-static void settlement_wealth_set_aside_for_trade(world_entity_settlements& settlements, ui32 settlement_index)
+// A stratum of people is offered a share of the sellable goods and takes what it needs from it.
+static void stratum_consume(settlement_stratum_consumption& stratum, ui32 people, ui32 share)
 {
-    settlement_economy& economy = settlements.economies[settlement_index];
-
-    // Set-aside is a share of the income, at least 1 when there is income and a share.
-    ui32 percent = GAME_PARAMETERS.trade.trade_pool_income_percent;
-    ui32 setAside = (ui32)ia_min((ui64)economy.income * percent / 100, (ui64)0xFFFFFFFF);
-    if (setAside == 0 && economy.income > 0 && percent > 0) setAside = 1;
-    
-    // Only what fits under the pool cap is set aside.
-    settlement_trading& tradeState = settlements.trade[settlement_index];
-    ui32 room = tradeState.export_pool_max > tradeState.export_pool ? tradeState.export_pool_max - tradeState.export_pool : 0;
-    economy.trade_set_aside = ia_min(ia_min(setAside, economy.income - economy.tax), room);
-
-    tradeState.export_pool += economy.trade_set_aside;
+    stratum.required = people * GAME_PARAMETERS.consumption_per_person;
+    stratum.share = share;
+    stratum.consumed = ia_min(stratum.required, share);
 }
 
-// Population growth in per mille of the population at home, from how well the consumption was met. required must not be 0.
-// available is the consumption budget, excess what it holds beyond the requirement (not stored).
+// SALES: sellable_percent of the market goods can be consumed today. Soldiers at home, then workers, are offered their share of it; what a stratum leaves
+// of its share goes to the next one. Peasants are offered everything left. Only what the strata take leaves the market goods.
+static void settlement_goods_sales(world_entity_settlements& settlements, ui32 settlement_index)
+{
+    const game_trade_parameters& params = GAME_PARAMETERS.trade;
+    settlement_economy& economy = settlements.economies[settlement_index];
+    const settlement_population& population = settlements.populations[settlement_index];
+    ui32& goods = settlements.trade[settlement_index].market_goods;
+
+    economy.sellable = (ui32)((ui64)goods * ia_min(params.sellable_percent, (ui32)100) / 100);
+
+    // Shares are capped by what is left, in case the percents add up to more than 100.
+    ui32 soldiersShare = (ui32)ia_min((ui64)economy.sellable * params.soldier_share_percent / 100, (ui64)economy.sellable);
+    stratum_consume(economy.soldiers, population.soldiers_home(), soldiersShare);
+    ui32 left = economy.sellable - economy.soldiers.consumed;
+
+    ui32 workersShare = (ui32)ia_min((ui64)economy.sellable * params.worker_share_percent / 100 + (soldiersShare - economy.soldiers.consumed), (ui64)left);
+    stratum_consume(economy.workers, population.workers, workersShare);
+    left -= economy.workers.consumed;
+
+    stratum_consume(economy.peasants, population.peasants, left);
+
+    goods -= economy.soldiers.consumed + economy.workers.consumed + economy.peasants.consumed;
+}
+
+// Population growth in per mille, from how well the consumption was met. required must not be 0.
+// available is what was offered, excess what it holds beyond the requirement (not consumed).
 // Curve points are in GAME_PARAMETERS (now: r >= 1: +2% to +4%, more with excess up to excess == required; 0.9 <= r < 1: +2% down to 0%;
 // 0.5 <= r < 0.9: 0% down to -20%; r < 0.5: -20%).
 static i32 settlement_growth_per_mille(ui32 available, ui32 required, ui32 excess)
@@ -130,39 +117,83 @@ static i32 settlement_growth_per_mille(ui32 available, ui32 required, ui32 exces
     return params.growth_floor_per_mille;
 }
 
-// GROWTH: creates new peasants, or kills peasants only. Never kills more than the peasants or the last one at home.
+// Growth rate of a stratum from its share against its need (the share above the need is the excess). 0 for an empty stratum.
+static i32 stratum_growth_per_mille(const settlement_stratum_consumption& stratum)
+{
+    if (stratum.required == 0) return 0;
+    ui32 excess = stratum.share > stratum.required ? stratum.share - stratum.required : 0;
+    return settlement_growth_per_mille(stratum.share, stratum.required, excess);
+}
+
+// People gained (> 0) or lost (< 0) by a stratum in a day: people x rate, at least 1 either way when the rate is not 0.
+static i32 stratum_change(ui32 people, i32 growth_per_mille)
+{
+    i32 change = (i32)((i64)people * growth_per_mille / 1000);
+    if (change == 0) change = growth_per_mille > 0 ? 1 : (growth_per_mille < 0 ? -1 : 0);
+    return change;
+}
+
+// Deaths of home soldiers: each type loses its share of the count (rounded down), the rounding rest is taken in type order. Returns how many died.
+static ui32 settlement_soldiers_home_die(match_world_state& world, ui16 settlement_index, ui32 count)
+{
+    army_troop_count& home = world.entities->settlements.populations[settlement_index].home;
+    ui32 total = world.entities->settlements.populations[settlement_index].soldiers_home();
+    count = ia_min(count, total);
+    if (count == 0) return 0;
+
+    ui32 removed = 0;
+    for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+    {
+        removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)((ui64)troop_count_field(home, troopType) * count / total));
+    }
+    for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT && removed < count; troopType++)
+    {
+        removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(count - removed, (ui32)0xFFFF));
+    }
+    return removed;
+}
+
+// GROWTH, per stratum (soldiers at home, workers, peasants), from how well its need was met.
+// Every stratum's growth is born as peasants. A starving stratum loses its own people. Never kills the last one at home.
 static void settlement_apply_growth(match_world_state& world, ui32 settlement_index)
 {
     world_entity_settlements& settlements = world.entities->settlements;
-
     settlement_economy& economy = settlements.economies[settlement_index];
     settlement_population& population = settlements.populations[settlement_index];
+
     ui32 atHome = population.at_home();
+    if (atHome == 0) return; // Nobody at home: nothing to grow or shrink.
 
-    // The budget is what is left of the income: income - tax - set-aside (each was capped by what was left before it).
-    economy.consumption_budget = economy.income - economy.tax - economy.trade_set_aside;
-    economy.consumption_required = settlement_consumption_required(population);
-    if (economy.consumption_required == 0) return; // Nobody at home: nothing to grow or shrink.
+    economy.soldiers.growth_per_mille = stratum_growth_per_mille(economy.soldiers);
+    economy.workers.growth_per_mille = stratum_growth_per_mille(economy.workers);
+    economy.peasants.growth_per_mille = stratum_growth_per_mille(economy.peasants);
 
-    ui32 excess = economy.consumption_budget > economy.consumption_required ? economy.consumption_budget - economy.consumption_required : 0;
-    population.growth_per_mille = settlement_growth_per_mille(economy.consumption_budget, economy.consumption_required, excess);
+    i32 soldiersChange = stratum_change(population.soldiers_home(), economy.soldiers.growth_per_mille);
+    i32 workersChange = stratum_change(population.workers, economy.workers.growth_per_mille);
+    i32 peasantsChange = stratum_change(population.peasants, economy.peasants.growth_per_mille);
 
-    i32 change = (i32)((i64)atHome * population.growth_per_mille / 1000);
-    if (change == 0) change = population.growth_per_mille > 0 ? 1 : (population.growth_per_mille < 0 ? -1 : 0); // Minimum of 1 either way.
+    // Deaths first, each capped so at least one person stays at home.
+    ui32 deaths = 0;
+    if (soldiersChange < 0) deaths += settlement_soldiers_home_die(world, settlement_index, ia_min((ui32)-soldiersChange, population.at_home() - 1));
+    if (workersChange < 0) deaths += settlement_remove_workers(world, settlement_index, ia_min((ui32)-workersChange, population.at_home() - 1));
+    if (peasantsChange < 0) deaths += settlement_remove_peasants(world, settlement_index, ia_min((ui32)-peasantsChange, population.at_home() - 1));
 
-    if (change > 0)
-    {
-        settlement_add_peasants(world, settlement_index, change);
-    }
-    else if (change < 0)
-    {
-        ui32 deaths = (ui32)-change;
-        if (deaths > atHome - 1) deaths = atHome - 1;
-        if (deaths > population.peasants) deaths = population.peasants;
-        settlement_remove_peasants(world, settlement_index, deaths);
-        change = -(i32)deaths;
-    }
-    population.population_change = change;
+    ui32 births = (ui32)ia_max(soldiersChange, 0) + (ui32)ia_max(workersChange, 0) + (ui32)ia_max(peasantsChange, 0);
+    settlement_add_peasants(world, settlement_index, births);
+
+    // Totals of the day: net change, and as a rate of the people at home before it.
+    population.population_change = (i32)births - (i32)deaths;
+    population.growth_per_mille = (i32)((i64)population.population_change * 1000 / atHome);
+}
+
+// WASTE: overflow_waste_percent of the goods above the market capacity (rounded down) disappears. Run after growth, so the capacity is the settled one.
+static void settlement_goods_waste(world_entity_settlements& settlements, ui32 settlement_index)
+{
+    ui32& goods = settlements.trade[settlement_index].market_goods;
+    ui32 capacity = settlement_market_capacity(settlements, (ui16)settlement_index);
+    if (goods <= capacity) return;
+
+    goods -= (ui32)((ui64)(goods - capacity) * ia_min(GAME_PARAMETERS.trade.overflow_waste_percent, (ui32)100) / 100);
 }
 
 // Runs daily, all settlements on the same tick. Writes the settlement's economy figures (last day's).
@@ -188,10 +219,10 @@ void world_system_economy_daily_tick(match_world_state& world)
         // Settlements run no economy logic on their first 10 ticks so they can claim their initial territory.
         if (world.age < settlements.founding_ticks[settlementIndex] + 10) continue; 
 
-        settlement_compute_income(settlements, settlementIndex);
-        settlement_wealth_pay_tax(world, settlementIndex);
-        settlement_wealth_set_aside_for_trade(settlements, settlementIndex);
+        settlement_goods_production(world, settlementIndex);
+        settlement_goods_sales(settlements, settlementIndex);
         settlement_apply_growth(world, settlementIndex);
+        settlement_goods_waste(settlements, settlementIndex);
     }
 }
 

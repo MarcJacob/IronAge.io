@@ -21,7 +21,7 @@ void world_destroy_settlement(match_world_state& world, entity_guid settlement);
 // Allocates the settlements' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 count);
 
-// Gives the settlement to a new owner. Its tax rate resets to 0 (trade pools and pending income stay with the settlement).
+// Gives the settlement to a new owner. Its tax rate resets to 0.
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner);
 
 // SETTLEMENT POPULATION PRIMITIVES
@@ -142,28 +142,52 @@ static inline ui32 settlement_release_workers(match_world_state& world, ui16 set
 	return moved;
 }
 
-// Adds to one of a settlement's pending income counters (settlement_pending_income) without wrapping around.
-static inline void settlement_pending_income_add(ui32& pending, ui64 amount)
+// Deaths of workers. Removes up to count workers, returns how many were removed. Projects holding them are not told (they re-check their crew).
+static inline ui32 settlement_remove_workers(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	pending = (ui32)ia_min((ui64)pending + amount, (ui64)0xFFFFFFFF);
+	settlement_population& population = world.entities->settlements.populations[settlement_index];
+	ui32 removed = ia_min(count, population.workers);
+	population.workers -= removed;
+	population.population_total -= ia_min(removed, population.population_total);
+	return removed;
 }
 
-// TREASURY -> PENDING PAY
-// Moves up to amount from the settlement's owner treasury to one of the settlement's pending pay counters (&settlement_pending_income::worker_pay or ::soldier_pay,
-// income on the next daily economy tick) and records it as the owner's expenses.
-// The treasury never goes below 0 (and an owner outside the player range pays nothing). Returns how much was actually paid.
-static inline ui32 settlement_wealth_fund_from_treasury(match_world_state& world, ui16 settlement_index, ui32 amount, ui32 settlement_pending_income::* pay)
+// Deaths of home soldiers (local pool). Removes up to count home soldiers of a type, returns how many were removed.
+static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	world_entity_settlements& settlements = world.entities->settlements;
-	match_player_id owner = settlements.owners[settlement_index];
-	if (owner >= world.player_count) return 0;
+	settlement_population& population = world.entities->settlements.populations[settlement_index];
+	ui16& home = troop_count_field(population.home, troop_type);
+	ui16 removed = ia_min(count, home);
+	home -= removed;
+	population.population_total -= ia_min((ui32)removed, population.population_total);
+	return removed;
+}
 
-	world_player_state& player = world.player_states[owner];
-	ui32 paid = ia_min(amount, player.treasury);
-	player.treasury -= paid;
-	player.expenses += paid;
-	settlement_pending_income_add(settlements.pending_incomes[settlement_index].*pay, paid);
-	return paid;
+// MARKET GOODS
+// The pool is never capped: capacity is only the reference for its fill.
+
+// Capacity = people at home + buildings' part.
+static inline ui32 settlement_market_capacity(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	return settlements.populations[settlement_index].at_home() + settlements.trade[settlement_index].market_capacity_buildings;
+}
+
+// Fill of the market goods: goods / capacity as a fixed-point fraction (0 = empty, IA_FIXED_ONE = full), clamped to full.
+// A 0 capacity counts as full if there are any goods.
+static inline ui32 settlement_market_fill(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	ui64 goods = settlements.trade[settlement_index].market_goods;
+	ui64 capacity = settlement_market_capacity(settlements, settlement_index);
+	if (capacity == 0) return goods > 0 ? IA_FIXED_ONE : 0;
+	return (ui32)ia_min(goods * IA_FIXED_ONE / capacity, (ui64)IA_FIXED_ONE);
+}
+
+// Adds goods to the pool.
+static inline void settlement_market_add(world_entity_settlements& settlements, ui16 settlement_index, ui64 amount)
+{
+	ui32& goods = settlements.trade[settlement_index].market_goods;
+	ASSERT((ui64)goods + amount <= 0xFFFFFFFF);
+	goods += (ui32)amount;
 }
 
 // Claims a tile in the world for the given settlement using the origin proximity value as proximity base.

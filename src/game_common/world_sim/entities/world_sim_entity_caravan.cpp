@@ -1,6 +1,7 @@
 // Main implementation file for symbols related to caravan entities.
 
 #include "world_sim_entity_caravan.h"
+#include "world_sim_entity_settlement.h"
 #include "game_common/match/world/world_entities.h"
 #include "game_common/match/world/world_trade.h"
 
@@ -128,14 +129,14 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 // CARAVAN DESTINATION SELECTION
 
 
-// Weight of a candidate: potential profit (the extra on top of the base, flat bonus included, not the revenue) per unit of path cost.
-// destination_income is the candidate's last daily income.
-// The profit uses the tile distance between source and candidate, the path cost is only the divisor.
+// Weight of a candidate: potential profit (flat bonus included) per unit of cost.
+// destination_pool / destination_production / destination_capacity are the candidate's market goods, last daily production and capacity (settlement_market_capacity).
+// The profit uses the tile distance between source and candidate, the cost is only the divisor (callers pass the tile distance, see below).
 // Fixed point with 3 decimals (profit * 1000 / cost), so far candidates do not round down to 0. Zero profit = 0, zero cost counts as 1.
-static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_income, ui32 tile_distance, ui32 path_cost)
+static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_production, ui32 destination_capacity, ui32 tile_distance, ui32 path_cost)
 {
     static constexpr ui64 WEIGHT_SCALE = 1000;
-    ui64 profit = trade_profit(caravan_value, destination_income, tile_distance, GAME_PARAMETERS.trade);
+    ui64 profit = trade_profit(caravan_value, destination_pool, destination_production, destination_capacity, tile_distance, GAME_PARAMETERS.trade);
     if (profit == 0) return 0;
     return profit * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
 }
@@ -152,7 +153,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
     else
         params.passable_terrain = PATH_TERRAIN_WATER; // Ships are not implemented: a ship-specific selection function comes later.
 
-    // Path cost of each settlement slot, 0 = not a candidate (a valid candidate always has a cost above 0).
+    // Weight of each settlement slot, 0 = not a candidate.
     // Macro entity indices are 12 bits, so this covers every settlement slot.
     ui32 weights[4096] = {};
     ASSERT(settlements.max_count <= 4096);
@@ -168,13 +169,11 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 
         ui32 tradeDist = trade_tile_distance(source, settlements.locations[index]);
 
-        if (caravan_value > tradeDist)
-        {
-            weights[index] = caravan_candidate_weight(caravan_value, settlements.economies[index].income, tradeDist, (tradeDist * tradeDist));
-            totalWeight += weights[index];
+        // Cost is linear in the tile distance: placeholder until the real path cost is usable again.
+        weights[index] = caravan_candidate_weight(caravan_value, settlements.trade[index].market_goods, settlements.economies[index].production, settlement_market_capacity(settlements, index), tradeDist, tradeDist);
+        totalWeight += weights[index];
 
-            candidateCount++;
-        }
+        candidateCount++;
     }
 
     if (candidateCount == 0 || totalWeight == 0) return false; // No random number drawn.
@@ -186,7 +185,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
     if (range > 0xFFFFFFFFull) roll = (roll << 32) | world.rand_gen.next<ui32>();
     roll %= range;
 
-    // Pass 2: find the candidate holding the rolled point. Weights are recomputed from the stored costs (no pathing).
+    // Pass 2: find the candidate holding the rolled point, using the weights stored in pass 1.
     for (ui16 index = 0; index < settlements.max_count; index++)
     {
         if (weights[index] == 0) continue;

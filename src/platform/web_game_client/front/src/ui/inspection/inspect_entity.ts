@@ -10,7 +10,7 @@ import * as Backend from "../../backend.js"
 import { query_entity, type EntityData } from "../../gdo.js"
 import { in_area, type PropertiesPanelState } from "./ui_element_properties_panel.js"
 import { basic_section } from "./section_basic.js"
-import { income_section, consumption_section, population_section } from "./section_economy.js"
+import { production_section,consumption_section, population_section } from "./section_economy.js"
 import { settlement_pool_section, army_raise_section, army_count_section, army_raise_targets } from "./section_troops.js"
 import { army_supplies_section, army_raise_cost_section } from "./section_supplies.js"
 import { construction_section } from "./section_construction.js"
@@ -47,7 +47,7 @@ function inspect_settlement(view: EntityData, context: InspectionContext): Prope
 
     // Top left: population then economy. Top right: troops. Bottom: buildings.
     return { title: "Settlement", rows: [
-        ...in_area("left", [...population_section(view), ...income_section(view, context.on_tax_rate),
+        ...in_area("left", [...population_section(view), ...production_section(view, context.on_tax_rate),
             // Own settlements only: on_tax_rate is given only for those.
             ...(context.on_tax_rate !== undefined ? [...consumption_section(view), ...trade_pool_section(view)] : [])]),
         ...in_area("right", settlement_pool_section(view, context.on_ceiling)),

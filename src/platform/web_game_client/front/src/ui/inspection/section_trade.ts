@@ -14,23 +14,20 @@ function settlement_text(guid: number, fallback: string): string
     return `Settlement (${location.x}, ${location.y})`;
 }
 
-// Settlement export pool (funds its caravans) and import pool (receives caravan revenue), each against its maximum, as read-only gauges (no on_change, so no slider).
+// Settlement Market Goods against its capacity (the pool may exceed it: the bar then stays full and the percentage shows it), as a read-only gauge (no on_change, so no slider).
 // Gauges have no tooltip support. Own settlements only: the caller decides.
 export function trade_pool_section(settlement: EntityData): PanelRow[]
 {
+    const goods = settlement.get_number("trading_market_goods");
+    const capacity = settlement.get_number("market_capacity");
+    const fill_percent = capacity > 0 ? Math.round(100 * goods / capacity) : 0;
+
     return [
-        { kind: "gauge", id: "export_pool", state: {
-            label: "Export pool",
+        { kind: "gauge", id: "market_goods", state: {
+            label: `Market Goods (${fill_percent}%)`,
             color: "#d4a93c",
-            current: settlement.get_number("trading_export_pool"),
-            max: settlement.get_number("trading_export_pool_max"),
-            compact: true,
-        } },
-        { kind: "gauge", id: "import_pool", state: {
-            label: "Import pool",
-            color: "#4fa3a8",
-            current: settlement.get_number("trading_import_pool"),
-            max: settlement.get_number("trading_import_pool_max"),
+            current: goods,
+            max: capacity,
             compact: true,
         } },
     ];
