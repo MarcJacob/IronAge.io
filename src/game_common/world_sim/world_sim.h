@@ -92,8 +92,9 @@ static inline void world_movement_stop(world_entity_movement& movement, world_lo
 
 // Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
 // Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
+// params: what the entity can cross (see world_system_movement.cpp).
 // out_partial (optional) is set to true when the path found only gets partway to the destination (the entity still follows it).
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, bool* out_partial = nullptr);
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params, bool* out_partial = nullptr);
 
 // LIFECYCLE
 

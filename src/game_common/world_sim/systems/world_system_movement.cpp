@@ -6,8 +6,10 @@
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_caravan.h"
 
-// What entities can cross for now: land only.
-static const path_params ENTITY_PATH_PARAMS = { PATH_TERRAIN_LAND }; // Other members zero-initialized.
+// What entities can cross. Caravans: land only. Other members zero-initialized.
+static const path_params CARAVAN_PATH_PARAMS = { PATH_TERRAIN_LAND };
+// TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
+static const path_params ARMY_WORKER_PATH_PARAMS = { (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)) };
 
 // Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
 static void process_entity_movement (world_entity_movement& movement, world_location& location)
@@ -63,7 +65,7 @@ static void process_entity_movement (world_entity_movement& movement, world_loca
 
 }
 
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, bool* out_partial)
+bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params, bool* out_partial)
 {
     if (location == movement.move_target)
     {
@@ -71,7 +73,7 @@ bool world_entity_follow_path(match_world_state& world, world_entity_movement& m
 
         // The path handle is always invalid for now, so the path is recalculated from the current tile every time.
         path_result result;
-        world_request_path(world, location, movement.destination, ENTITY_PATH_PARAMS, result);
+        world_request_path(world, location, movement.destination, params, result);
         movement.path_handle = result.handle;
         if (out_partial != nullptr) *out_partial = result.partial;
 
@@ -161,14 +163,14 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex]);
+		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
 	}
 
     world_entity_workers& workers = world.entities->workers;
     for (ui32 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
     {
         if (!workers.guids[workerIndex].is_valid()) continue;
-        world_entity_follow_path(world, workers.movements[workerIndex], workers.locations[workerIndex]);
+        world_entity_follow_path(world, workers.movements[workerIndex], workers.locations[workerIndex], ARMY_WORKER_PATH_PARAMS);
     }
 
     world_entity_caravans& caravans = world.entities->caravans;
@@ -177,7 +179,7 @@ void world_system_entity_movement(match_world_state& world)
         if (!caravans.guids[caravanIndex].is_valid()) continue;
 
         bool partial = false;
-        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], &partial);
+        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], CARAVAN_PATH_PARAMS, &partial);
 
         // No (or only a partial) path means the destination is unreachable: pick another one.
         // Returning caravans are left alone: they keep asking for a path home.

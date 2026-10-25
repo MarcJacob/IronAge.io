@@ -35,6 +35,14 @@ static inline bool command_is_valid(const match_command_validity_feedback* feedb
 	return feedback == nullptr || feedback->error_flags == 0;
 }
 
+// True if the tile (in the world) is land. Entities may path across water but only stand and stop on land.
+static bool command_tile_is_land(const world_terrain& terrain, world_location loc)
+{
+	ui16 regionIndex, tileIndex;
+	world_get_tile(terrain, loc, regionIndex, tileIndex);
+	return (PATH_TERRAIN_LAND & (1 << (ui8)terrain.regions[regionIndex].terrain_types[tileIndex])) != 0;
+}
+
 // SERVER SPAWN PLAYER
 
 bool command_server_spawn_player_validity_check(const match_world_state& world, match_player_id player,
@@ -79,6 +87,7 @@ bool command_set_entity_move_target_validity_check(const match_world_state& worl
 
 	// Check that target coordinates are inside the world.
 	if (command.move_target.x >= world.terrain->size_tiles.x || command.move_target.y >= world.terrain->size_tiles.y) return false;
+	if (!command_tile_is_land(*world.terrain, command.move_target)) { command_add_path_error(feedback, COMMAND_INVALID_PATH_DESTINATION_INVALID); return false; }
 
 	ENTITY_TYPE entityType = command.entity.get_type();
 	switch (entityType)
@@ -249,6 +258,7 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 		ui16 regionIndex, tileIndex;
 		world_get_tile(*world.terrain, command.raise_location, regionIndex, tileIndex);
 		if (world.terrain->regions[regionIndex].owners[tileIndex] != settlementIndex && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_TERRITORY)) return false;
+		if (!command_tile_is_land(*world.terrain, command.raise_location) && command_add_path_error(feedback, COMMAND_INVALID_PATH_DESTINATION_INVALID)) return false;
 	}
 
 	const world_entity_armies& armies = world.entities->armies;

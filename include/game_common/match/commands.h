@@ -90,7 +90,7 @@ enum COMMAND_INVALID_PATH_REASON : ui8
 	COMMAND_INVALID_PATH_NONE,
 	COMMAND_INVALID_PATH_ORIGIN_IS_DESTINATION, // Origin and destination are the same tile.
 	COMMAND_INVALID_PATH_ORIGIN_INVALID, // The origin is not usable: neither the settlement nor a road tile in its territory.
-	COMMAND_INVALID_PATH_DESTINATION_INVALID, // The destination is not usable (found settlement: not a valid settlement location). Road commands only check bounds.
+	COMMAND_INVALID_PATH_DESTINATION_INVALID, // The destination is not usable (found settlement: not a valid settlement location; move / raise army: a water tile). Road commands only check bounds.
 };
 
 struct match_command_validity_feedback
