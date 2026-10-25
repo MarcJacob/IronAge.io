@@ -48,6 +48,9 @@ when it finishes.
 - `work_units/entity_player_colors_2026-10-23.md` [DONE]
 - `work_units/army_supplies_2026-10-23.md`
 - `work_units/web_ui_static_modules_2026-10-23.md`
+- `work_units/trade_market_goods_2026-10-24.md`
+- `work_units/server_test_mode_2026-10-25.md`
+- `work_units/path_commitment_rewrite_2026-10-22.md`
 
 Finished units are moved to `management/archive/` after a time.
 

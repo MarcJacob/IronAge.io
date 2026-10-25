@@ -19,6 +19,8 @@ Movement that is not limited to the 8 grid directions and that actually uses tra
 - Origin: `work_units/road_construction_2026-10-03.md`.
 - Path store / cache stays in backlog: `backlog/path_store_cache_2026-10-15.md`.
 
+- 2026-10-25: prerequisite of the army rework (`alpha_war_extensions`). Merged with `path_commitment_rewrite_2026-10-22.md` (stored per-entity paths, recompute on change / block; caravan destination selection cost).
+
 ## Next step
 
 Design (not started): how straight-line paths are represented and how cost-based speed interacts with the deterministic tick.

@@ -6,6 +6,15 @@ Started: 2026-10-18. Design: `management/design_doc.md`, Alpha > War & conquest.
 
 Troop-type counters and defense rolls, sieges (starve or attack, building defense bonuses), settlement conquest, caravan plunder, accompany orders, water crossing penalties, direct movement, military buildings, bonus system for armies / battles.
 
+## Army rework (started 2026-10-25)
+
+Rebuild army mechanics closer to the user's vision: encourage correct behaviors, slow the military pace of the game.
+
+- Prerequisite: proper movement, straighter lines + travel cost (`straight_line_movement_2026-10-15.md`, `path_commitment_rewrite_2026-10-22.md`).
+- Design: user is writing it into `management/design_doc.md`; then break into tasks here, then break into tasks here.
+- May absorb / reorder: `army_supplies` tasks 3-4, `trade_market_goods` phases 2-3, backlog army items (stance / retreat, standing orders, combining, detection index).
+- Multi-file architecture change.
+
 ## Tasks
 
 Not broken down yet.

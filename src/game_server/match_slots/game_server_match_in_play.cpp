@@ -1,13 +1,13 @@
 // Implementation file for match slots in ONGOING state / slots in play.
 
 #include "core.h"
-#include "core/math/random.h"
-#include "core/memory.h"
+
 #include "game_common/game_messages.h"
 #include "game_common/match/commands.h"
 #include "game_common/match/world/world_terrain.h"
 
 #include "match_slots.h"
+#include "match_slot_in_play.h"
 #include "../game_server.h"
 
 // Returns whether the location is a valid settlement location for the player, and at least SETTLEMENT_MIN_DISTANCE tiles from the current pick of every other player.
@@ -51,7 +51,7 @@ void match_pick_start_location(game_server& server, ui8 slot_index, match_player
     game_server_slot_broadcast(server, slot, *serverPlacementPickMsg);
 }
 
-bool game_server_start_match_slot(game_server& server, ui8 slot_index)
+bool game_server_match_slot_start_play(game_server& server, ui8 slot_index)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
@@ -82,7 +82,7 @@ bool game_server_start_match_slot(game_server& server, ui8 slot_index)
 		return false;
 	}
 
-	slot.state = MATCH_SLOT_STATE::MATCH_ONGOING;
+	slot.state = MATCH_SLOT_STATE::IN_PLAY;
 
 	// Send MATCH STARTED message to all connected clients.
     i16 humanPlayerCount = 0;
@@ -194,7 +194,7 @@ void match_slot_handle_message_client_placement_pick(game_server& server, match_
 {
     match_slot& slot = server.match_slots[slot_index];
 
-    if (slot.state != MATCH_SLOT_STATE::MATCH_ONGOING || !slot.match.in_placement) return;
+    if (slot.state != MATCH_SLOT_STATE::IN_PLAY || !slot.match.in_placement) return;
 
     world_location pickedLoc;
 
@@ -285,7 +285,7 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 	if (slot.connection_count == 0)
 	{
 		server.logf("MATCH", LOG_WARNING, "All players have left match on slot %d. Ending match early.", slot_index);
-		game_server_end_match_slot(server, slot_index, INVALID_MATCH_PLAYER_ID);
+		game_server_match_slot_end_play(server, slot_index, INVALID_MATCH_PLAYER_ID);
 		return;
 	}
 
@@ -349,7 +349,7 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 			if (winner != INVALID_MATCH_PLAYER_ID)
 			{
 				server.logf("MATCH", LOG_NORMAL, "Player %hu controls %llupct or more of the world population. Ending match on slot %d.", winner, MATCH_END_POPULATION_PERCENT, slot_index);
-				game_server_end_match_slot(server, slot_index, winner);
+				game_server_match_slot_end_play(server, slot_index, winner);
 				return;
 			}
 		}
@@ -364,13 +364,13 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 	}
 }
 
-bool game_server_end_match_slot(game_server& server, ui8 slot_index, match_player_id winner_id)
+bool game_server_match_slot_end_play(game_server& server, ui8 slot_index, match_player_id winner_id)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
 	match_slot& slot = server.match_slots[slot_index];
 	
-	if (slot.state != MATCH_SLOT_STATE::MATCH_ONGOING)
+	if (slot.state != MATCH_SLOT_STATE::IN_PLAY)
 	{
 		server.logf("MATCH", LOG_ERROR, "Attempted to end match in slot %d which wasn't ongoing.", slot_index);
 		return false;
@@ -378,7 +378,7 @@ bool game_server_end_match_slot(game_server& server, ui8 slot_index, match_playe
 
 	server.logf("MATCH", LOG_NORMAL, "Ending match in match slot %d.", slot_index);
 
-	slot.state = MATCH_SLOT_STATE::MATCH_ENDED;
+	slot.state = MATCH_SLOT_STATE::PLAY_ENDED;
 
 	// Notify attached clients.
 	ui8 msgBuff[64];

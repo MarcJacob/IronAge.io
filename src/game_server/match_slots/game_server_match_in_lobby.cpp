@@ -2,9 +2,11 @@
 
 #include "core.h"
 #include "match_slots.h"
+#include "match_slot_lobby.h"
+
 #include "../game_server.h"
 
-bool game_server_open_lobby(game_server& server, ui8 slot_index)
+bool game_server_match_slot_open_lobby(game_server& server, ui8 slot_index)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
@@ -88,7 +90,7 @@ void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index)
     }
 
 	// On failure the slot goes to AWAITING_CLEANUP and gets reset.
-	if (!game_server_start_match_slot(server, slot_index))
+	if (!game_server_match_slot_start_play(server, slot_index))
     {
         server.logf("MATCH", LOG_ERROR, "Failed to start match on slot %d !", slot_index);
     }

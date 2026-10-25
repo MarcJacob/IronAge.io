@@ -2,12 +2,8 @@
 // Must be linked or compiled into whatever platform layer is used.
 
 // Main "chaining" of game server platform and game server internals.
-#include "core/assert.h"
-#include "core/math/random.h"
-#include "core/math/noise.h"
-#include "core/memory.h"
-#include "core/string.h"
-#include "game_common/game_data_object.h"
+
+#include "core.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -19,12 +15,13 @@
 
 // Game Messages protocol
 #include "game_common/game_messages.h"
-#include "game_common/game_data_object.h"
 
 // Unity-compile sub-components.
 #include "game_server_clients.cpp"
+#include "match_slots/game_server_match_slots_main.cpp"
+
+// Unity-compile Connector sub-components.
 #include "web_server/web_server.cpp"
-#include "match_slots/game_server_match_slots.cpp"
 
 // Unity-compile the Game Common code into the server.
 #include "../game_common/game_common_main.cpp"
@@ -217,7 +214,7 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	for (ui8 matchSlotIndex = 0; matchSlotIndex < init_params.match_slot_count; matchSlotIndex++)
 	{
 		mem_arena slot_mem = mem_arena_create_sub(newServer->main_memory, MATCH_SLOT_MEMORY);	
-		game_server_init_match_slot(*newServer, slot_mem, matchSlotIndex);
+		game_server_match_slot_init(*newServer, slot_mem, matchSlotIndex);
 	}
 
 	// In debug, run checks over commands & game messages.
@@ -327,7 +324,7 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
             ui32 seed = ia_hash_ui32((ui32)entropy ^ ia_hash_ui32((ui32)(entropy >> 32)) ^ ia_hash_ui32(slotIndex));
             slot.match_params = match_test_scenario_get_params(slot.slot_memory, seed, PLAYERS_PER_MATCH);
             server.logf("MATCH SLOTS", LOG_NORMAL, "Slot %u: match seed %u", (ui32)slotIndex, seed);
-            game_server_open_lobby(server, slotIndex);
+            game_server_match_slot_open_lobby(server, slotIndex);
         }
     }
 

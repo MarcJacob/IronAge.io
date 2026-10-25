@@ -15,8 +15,8 @@ enum class MATCH_SLOT_STATE : ui8
 	UNINITIALIZED,		// Slot was just created and requires initialization.
 	WAITING,			// Slot is ready to accept a new match.
 	IN_LOBBY,			// Match has not started yet and is accepting new player connections.
-	MATCH_ONGOING,		// Match is actively being played / ticked.
-	MATCH_ENDED,		// Match has ended and is exposing its analytics data for other systems before cleanup.
+	IN_PLAY,		    // Match is actively being played / ticked.
+	PLAY_ENDED,		    // Match has ended and is exposing its analytics data for other systems before cleanup.
 	AWAITING_CLEANUP,	// Match has ended, and the slot can be re-used after cleanup.
 };
 
@@ -97,6 +97,8 @@ static constexpr ui32 MATCH_END_CHECK_INTERVAL_TICKS = 30; // Placeholder end co
 static constexpr ui64 MATCH_END_POPULATION_PERCENT = 100; // Placeholder end condition: one player controls this much of the world population.
                                                           // @TEMP(Marc): Set it to 100 to disable victory.
 
+// HELPER FUNCTIONS (usable on all slot states)
+
 // Attaches a client as the controller of a free player index in the slot. Fails if the slot isn't in lobby. Writes the assigned index to out_player_index on success.
 bool game_server_slot_attach_client(game_server& server, match_slot_index slot_index, game_server_client::client_handle client_handle, ui16& out_player_index);
 
@@ -110,12 +112,7 @@ bool game_server_match_slot_handle_message(game_server& server, game_server_clie
 // Sends a message to all game clients currently attached to the slot.
 void game_server_slot_broadcast(game_server& server, match_slot& slot, const game_message_header& msg);
 
-// LOBBY STATE FUNCTIONS
-
-// Tick logic for a slot in LOBBY state.
-void game_server_tick_match_slot_lobby(game_server& server, ui8 slot_index);
-
-// ONGOING STATE FUNCTIONS
+// IN PLAY STATE FUNCTIONS
 
 // Handler for CLIENT_PLACEMENT_PICK message.
 void match_slot_handle_message_client_placement_pick(game_server& server, match_slot_index slot_index, game_server_client* player_client, const game_message_header& msg);
@@ -126,26 +123,25 @@ void match_slot_handle_message_client_tick(game_server& server, match_slot_index
 // Tick logic for a slot in ONGOING state.
 void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index);
 
-// SLOT LIFECYCLE FUNCTIONS
+// SLOT LIFECYCLE & CONTROL FUNCTIONS
 
 // Initializes a new match slot in the server from a piece of memory to use and the slot index to initialize.
 // The slot must currently be uninitialized.
 // If successful, the passed memory arena is now owned by the slot itself. The one passed as param should be discarded.
-// MUST ONLY BE CALLED ONCE PER SLOT ! From there RESET the slot for re-use.
-bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, match_slot_index slot_index);
+bool game_server_match_slot_init(game_server& server, mem_arena& slot_mem, match_slot_index slot_index);
 
 // Opens a slot's lobby in order to start accepting prospective players.
-bool game_server_open_lobby(game_server& server, match_slot_index slot_index);
+bool game_server_match_slot_open_lobby(game_server& server, match_slot_index slot_index);
 
 // Begins the match associated to the slot with the slot's current parameters.
-bool game_server_start_match_slot(game_server& server, match_slot_index slot_index);
+bool game_server_match_slot_start_play(game_server& server, match_slot_index slot_index);
 
 // Sets a match slot as having ended and notifies attached clients with MATCH_ENDED. During that time the match is no longer ticking
 // but its state is still available for score-keeping and reporting.
 // winner_id is INVALID_MATCH_PLAYER_ID if there is none.
-bool game_server_end_match_slot(game_server& server, match_slot_index slot_index, match_player_id winner_id);
+bool game_server_match_slot_end_play(game_server& server, match_slot_index slot_index, match_player_id winner_id);
 
 // Resets a match slot (ended, or awaiting cleanup after a failed start) to its cleaned state for re-use. Detaches any remaining clients.
-bool game_server_reset_match_slot(game_server& server, match_slot_index slot_index);
+bool game_server_match_slot_reset(game_server& server, match_slot_index slot_index);
 
 #endif // MATCH_SLOTS_INCLUDED

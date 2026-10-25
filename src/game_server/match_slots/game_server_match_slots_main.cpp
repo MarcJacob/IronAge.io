@@ -10,9 +10,9 @@
 #include "match_slots.h"
 #include "../game_server.h"
 
-// Unity include implementation files.
-#include "game_server_match_lobby.cpp"
-#include "game_server_match_play.cpp"
+// Unity include slot state implementation files.
+#include "game_server_match_in_lobby.cpp"
+#include "game_server_match_in_play.cpp"
 
 // Sends a message to every live game client attached to the slot.
 void game_server_slot_broadcast(game_server& server, match_slot& slot, const game_message_header& msg)
@@ -141,7 +141,7 @@ SUCCESS:
 
 // BEGIN SLOT LIFECYCLE FUNCTIONS
 
-bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 slot_index)
+bool game_server_match_slot_init(game_server& server, mem_arena& slot_mem, ui8 slot_index)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
@@ -161,12 +161,12 @@ bool game_server_init_match_slot(game_server& server, mem_arena& slot_mem, ui8 s
 	return true;
 }
 
-bool game_server_reset_match_slot(game_server& server, ui8 slot_index)
+bool game_server_match_slot_reset(game_server& server, ui8 slot_index)
 {
 	ASSERT(slot_index < server.init_params.match_slot_count);
 
 	match_slot& slot = server.match_slots[slot_index];
-	if (slot.state != MATCH_SLOT_STATE::MATCH_ENDED && slot.state != MATCH_SLOT_STATE::AWAITING_CLEANUP)
+	if (slot.state != MATCH_SLOT_STATE::PLAY_ENDED && slot.state != MATCH_SLOT_STATE::AWAITING_CLEANUP)
 	{
 		server.logf("MATCH", LOG_ERROR, "Attempted to reset match slot %d which wasn't ended or awaiting cleanup.", slot_index);
 		return false;
@@ -237,16 +237,16 @@ void game_server_tick_match_slots(game_server& server)
 		case MATCH_SLOT_STATE::IN_LOBBY:
 			game_server_tick_match_slot_lobby(server, slotIndex);
 			break;
-		case MATCH_SLOT_STATE::MATCH_ONGOING:
+		case MATCH_SLOT_STATE::IN_PLAY:
 			game_server_tick_match_slot_ongoing(server, slotIndex);
 			break;
-        case MATCH_SLOT_STATE::MATCH_ENDED:
+        case MATCH_SLOT_STATE::PLAY_ENDED:
             // ... TODO: Wait until match results have been transmitted to all player & master server.
 
             // FALLTHROUGH
         case MATCH_SLOT_STATE::AWAITING_CLEANUP:
             // Reset slot.
-            game_server_reset_match_slot(server, slotIndex);
+            game_server_match_slot_reset(server, slotIndex);
             break;
 		default:
 			// Do nothing.

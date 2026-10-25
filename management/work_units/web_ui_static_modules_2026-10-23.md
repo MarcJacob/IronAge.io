@@ -30,4 +30,4 @@ Created: 2026-10-23. To start right after `army_supplies_2026-10-23.md`. Multi-f
 
 ## Next step
 
-After army_supplies: propose the survey builder (task 1).
+Task 1 survey builder running (2026-10-25), output to `web_game_client/.ai_imprint/ui_module_system_survey.md`. Then user decides target module shape (task 2). Lobby admin controls (`server_test_mode`) build on it.

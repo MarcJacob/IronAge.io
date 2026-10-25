@@ -10,16 +10,16 @@
 
 // Base land output of each terrain type: peasants that can work the tile at full efficiency.
 static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
-    50, // LAND_PLAINS
-    40, // LAND_HILLS
-    15, // LAND_MOUNTAINS
+    20, // LAND_PLAINS
+    14, // LAND_HILLS
+    6, // LAND_MOUNTAINS
 
-    60, // WATER_COAST
+    30, // WATER_COAST
     10, // WATER_SEA
 };
 
-// Proximity at which land output is reduced to 90%, stacking.
-static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 3;
+// Proximity at which land output is reduced by 5%, stacking.
+static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 10;
 
 // Returns the land output of a tile based on its terrain base output and proximity to settlement root.
 static ui32 world_get_tile_land_output(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 proximity)
@@ -32,7 +32,7 @@ static ui32 world_get_tile_land_output(const match_world_state& world, ui16 regi
 
     for (ui16 decreaseStep = 0; decreaseStep < decreaseStepCount; decreaseStep++)
     {
-        output = output - (output / 10);
+        output = output - (output / 5);
     }
 
     return output;
