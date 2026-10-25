@@ -32,6 +32,7 @@ export function in_area(area: PanelArea, rows: PanelRow[]): PanelRow[]
 export interface PropertiesPanelState
 {
     title: string;
+    subtitle?: string; // Smaller, greyer line under the title (e.g. the owner's name). Absent = no line.
     rows: PanelRow[];
 }
 
@@ -40,6 +41,7 @@ type RowElement = { kind: "gauge", element: GaugeElement } | { kind: "text", ele
 
 let panelElement: HTMLElement | null = null;
 let titleElement: HTMLElement | null = null;
+let subtitleElement: HTMLElement | null = null;
 let rowsElement: HTMLElement | null = null;
 
 let built = new Map<string, RowElement>(); // By row key.
@@ -63,6 +65,7 @@ export function init_ui_element_properties_panel(): void
 {
     panelElement = document.getElementById("game_hud_properties_panel") as HTMLElement;
     titleElement = document.getElementById("game_hud_properties_title") as HTMLElement;
+    subtitleElement = document.getElementById("game_hud_properties_subtitle") as HTMLElement;
     rowsElement = document.getElementById("game_hud_properties_rows") as HTMLElement;
 }
 
@@ -96,7 +99,7 @@ function dispose_rows(rows: Iterable<RowElement>): void
 // Makes the panel show the given state. Null clears it (hidden).
 export function submit_properties_panel(state: PropertiesPanelState | null): void
 {
-    if (panelElement === null || titleElement === null || rowsElement === null) return;
+    if (panelElement === null || titleElement === null || subtitleElement === null || rowsElement === null) return;
 
     if (state === null)
     {
@@ -113,6 +116,9 @@ export function submit_properties_panel(state: PropertiesPanelState | null): voi
 
     panelElement.hidden = false;
     if (titleElement.textContent !== state.title) titleElement.textContent = state.title;
+    const subtitle = state.subtitle ?? "";
+    if (subtitleElement.textContent !== subtitle) subtitleElement.textContent = subtitle;
+    if (subtitleElement.hidden !== (subtitle === "")) subtitleElement.hidden = subtitle === "";
 
     // Rows no longer present go away.
     const keys = new Set(state.rows.map(row => row.kind + ":" + row.id));

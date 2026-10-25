@@ -50,6 +50,8 @@ struct game_server_client
 		TYPE_COUNT,
 	} type;
 
+	player_name name; // Set on authentication (game clients). Outside of the union below: static strings have a constructor.
+
 	void* connection_context;	// Extra contextual data related to the specific server component in charge of this connection (Web Server, Native Server...).
 								// Allows server components to recognize this client's connection as being managed by them, and find their associated, specific data.
 
@@ -76,6 +78,8 @@ struct game_server_client
             // @TODO(Marc): Turn those into special Queue arenas that can be made thread-safe when connector components (IE Web Server) are made to run on a different thread.
             mem_arena* in_messages_buffer; // Buffer inside which incoming game messages are put. Contains Game Messages back to back in reception order.
             mem_arena* out_messages_buffer; // Buffer inside which outgoing game messages are put. Contains Game Messages back to back in emission order.
+
+            bool authenticated; // Set once REQUEST_AUTHENTICATION was accepted (name is then valid). Required for any lobby action.
 
 		    ui16 match_slot; // The match slot this client has joined, if any (INVALID_MATCH_SLOT if none).
             match_player_id player_index; // If in an ongoing match, index of the player controlled by this client.

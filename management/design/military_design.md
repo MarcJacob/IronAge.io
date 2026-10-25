@@ -47,6 +47,8 @@ When the garrison lacks troops, it uses the settlement's facilities to train mor
 
 Levies remain part of the working population unless the settlement is under siege or *On Campaign*.
 
+The maximum size of the garrison over each troop type (including levies) is a settlement value affected primarily by buildings.
+
 # Campaigns
 
 A player can call a campaign at any time, involving at least one army or settlement.
@@ -72,4 +74,20 @@ Campaigns are beneficial in multiple ways:
 - Campaigns are valid trading targets, allowing caravans to resupply a common supply pool every army joined with the campaign can draw from.
 
 The intention behind the campaign mechanic is to reward multi-player collaboration (since players are limited to one campaign at a time, and each settlement can also only join one at a time), streamline the war process for large players so micro isn't too intensive, and pace wars so that they alternate between moments of quiet and major battles / sieges as campaigns start / stop.
+
+When an army joins a campaign, it is set to JOIN CAMPAIGN standing order, which has it travel as fast as possible to the campaign / leader army. Once within a radius made of a constant + extra with more armies having joined, it is considered to have joined the campaign. For simplicity, from there an army is never considered out of the campaign if it gets too far away. The campaign is aware of armies that are joining: they are already part of the campaign, but in the "joining" state, so the Campaign AI may elect to wait for armies to arrive.
+
+## Campaign AI
+
+Campaigns are created with a specific objective which cannot be changed.
+
+Possible objectives:
+- Conquer Regions, with up to 16 regions selected.
+    - The Campaign AI will move to the area, choosing a start point in friendly territory, gathering enough supplies, and move onto the closest target, sieging them down one by own. It may dispatch armies to conquer other targets in parallel if it believes it is possible.
+- Defend regions, with up to 16 regions selected.
+    - The Campaign AI will move to the area, choosing a base of operation to start with that is as close as possible to all defense targets, then dispatch armies as needed (or the entire campaign) to counter attackers.
+- Defense Campaign, selecting an opposing offensive campaign (or multiple) ?
+    - Similar to defend regions, except the focus is specifically to stop one or more enemy campaigns from making progress by opposing them in the field and breaking sieges.
+
+It does so by assigning standing orders to armies participating in the campaign.
 

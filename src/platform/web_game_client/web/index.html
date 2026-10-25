@@ -20,6 +20,7 @@
                 <div id="game_hud_player_state" hidden></div>
                 <div id="game_hud_properties_panel" hidden>
                     <div id="game_hud_properties_title"></div>
+                    <div id="game_hud_properties_subtitle" hidden></div>
                     <div id="game_hud_properties_rows"></div>
                 </div>
 
@@ -40,10 +41,74 @@
             <div id="placement_ui_bar"><div id="placement_ui_bar_fill"></div></div>
         </div>
 
-        <div id="lobby_ui" hidden>
-            <div id="lobby_ui_notice" hidden></div>
-            <div id="lobby_ui_countdown"></div>
-            <div id="lobby_ui_players"></div>
+        <!-- Menu screens, shown before and between matches (new-style modules: ui/ui_element_login.ts, ui_element_lobby_list.ts, ui_element_lobby.ts). -->
+
+        <div id="login" class="menu_screen" hidden>
+            <div class="menu_title">IronAge.io</div>
+            <form id="login_form" class="menu_panel">
+                <label for="login_name">Name</label>
+                <input id="login_name" type="text" maxlength="32" placeholder="empty = random name" autocomplete="off">
+                <button id="login_button" type="submit">Log in</button>
+            </form>
+            <div id="login_status"></div>
+            <div id="login_error" class="menu_error" hidden></div>
+        </div>
+
+        <div id="lobby_list" class="menu_screen" hidden>
+            <div id="lobby_list_own_name"></div>
+            <div id="lobby_list_notice" class="menu_notice" hidden></div>
+            <div class="menu_panel">
+                <div class="menu_panel_title">Lobbies</div>
+                <div id="lobby_list_entry_0" class="lobby_list_entry" hidden>
+                    <span class="lobby_list_entry_name">Lobby 1</span>
+                    <span class="lobby_list_entry_players"></span>
+                    <span class="lobby_list_entry_map"></span>
+                    <span class="lobby_list_entry_test">TEST</span>
+                    <button class="lobby_list_entry_join">Join</button>
+                </div>
+                <div id="lobby_list_entry_1" class="lobby_list_entry" hidden>
+                    <span class="lobby_list_entry_name">Lobby 2</span>
+                    <span class="lobby_list_entry_players"></span>
+                    <span class="lobby_list_entry_map"></span>
+                    <span class="lobby_list_entry_test">TEST</span>
+                    <button class="lobby_list_entry_join">Join</button>
+                </div>
+                <div id="lobby_list_entry_2" class="lobby_list_entry" hidden>
+                    <span class="lobby_list_entry_name">Lobby 3</span>
+                    <span class="lobby_list_entry_players"></span>
+                    <span class="lobby_list_entry_map"></span>
+                    <span class="lobby_list_entry_test">TEST</span>
+                    <button class="lobby_list_entry_join">Join</button>
+                </div>
+                <div id="lobby_list_entry_3" class="lobby_list_entry" hidden>
+                    <span class="lobby_list_entry_name">Lobby 4</span>
+                    <span class="lobby_list_entry_players"></span>
+                    <span class="lobby_list_entry_map"></span>
+                    <span class="lobby_list_entry_test">TEST</span>
+                    <button class="lobby_list_entry_join">Join</button>
+                </div>
+                <div id="lobby_list_empty" hidden>No lobby available right now.</div>
+            </div>
+            <div id="lobby_list_error" class="menu_error" hidden></div>
+        </div>
+
+        <div id="lobby" class="menu_screen" hidden>
+            <div id="lobby_title" class="menu_title"></div>
+            <div id="lobby_status"></div>
+            <div id="lobby_players"></div>
+            <div id="lobby_admin" class="menu_panel" hidden>
+                <div class="menu_panel_title">Test lobby settings</div>
+                <label for="lobby_admin_player_count">Players: <span id="lobby_admin_player_count_value"></span></label>
+                <input id="lobby_admin_player_count" type="range" min="1" step="1">
+                <label for="lobby_admin_map_width">Map width (regions): <span id="lobby_admin_map_width_value"></span></label>
+                <input id="lobby_admin_map_width" type="range" min="1" step="1">
+                <label for="lobby_admin_map_height">Map height (regions): <span id="lobby_admin_map_height_value"></span></label>
+                <input id="lobby_admin_map_height" type="range" min="1" step="1">
+                <label for="lobby_admin_seed">Seed</label>
+                <input id="lobby_admin_seed" type="number" min="0" max="4294967295" step="1">
+                <button id="lobby_admin_start">Start match</button>
+            </div>
+            <button id="lobby_leave">Leave lobby</button>
         </div>
     </div>
 

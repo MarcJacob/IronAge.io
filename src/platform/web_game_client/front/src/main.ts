@@ -11,7 +11,9 @@ import { init_render } from './render.js';
 import { init_input } from './input.js';
 import { init_camera_system } from './camera.js';
 import { init_game_ui } from './ui/game_ui.js';
-import { init_lobby_ui } from './ui/lobby_ui.js';
+import * as LoginUI from './ui/ui_element_login.js';
+import * as LobbyListUI from './ui/ui_element_lobby_list.js';
+import * as LobbyUI from './ui/ui_element_lobby.js';
 import { init_placement_ui } from './ui/placement_ui.js';
 import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
 import { init_ui_element_properties_panel } from './ui/inspection/ui_element_properties_panel.js';
@@ -44,6 +46,13 @@ export function is_own_army(entity: EntityData | null): boolean
     return entity !== null && entity.entity_type === Backend.ENTITY_TYPE.ARMY && entity.get_number("owner") === LOCAL_PLAYER_ID;
 }
 // ...
+
+// State of the websocket, for the connection flow (the login screen enables logging in once it is open).
+let SOCKET_STATUS: 'connecting' | 'open' | 'closed' = 'connecting';
+export function get_socket_status(): 'connecting' | 'open' | 'closed'
+{
+    return SOCKET_STATUS;
+}
 
 function websocket_url() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -144,7 +153,9 @@ async function start()
 
     // Initialize in-match HUD.
     init_game_ui();
-    init_lobby_ui();
+    LoginUI.init();
+    LobbyListUI.init();
+    LobbyUI.init();
     init_placement_ui();
     init_ui_element_action_bar();
     init_ui_element_properties_panel();
@@ -152,7 +163,7 @@ async function start()
     init_ui_element_calendar();
     init_ui_element_player_state();
 
-    // Nothing but the lobby until the server says otherwise.
+    // Connection flow (login, lobby list, lobby) until the server starts a match.
     Core.start_mode_stack(new LobbyBase());
 
     // Initialize websocket conneciton.
@@ -160,8 +171,10 @@ async function start()
     socket.binaryType = 'arraybuffer';
     Core.set_message_sender((bytes) => socket.send(bytes));
 
+    // LobbyBase follows the socket status (login enabled once open). Authentication is sent from the login screen.
     socket.addEventListener("open", () => {
-        console.log("WebSocket connection accepted by server. Waiting to join a match...");
+        console.log("WebSocket connection accepted by server.");
+        SOCKET_STATUS = 'open';
     });
 
     socket.addEventListener("message", (event:MessageEvent<Core.ByteBuffer>) => on_socket_message(event, canvas, socket));
@@ -172,6 +185,7 @@ async function start()
 
     socket.addEventListener("close", () => {
         console.log("WebSocket connection closed.");
+        SOCKET_STATUS = 'closed';
     });
 }
 

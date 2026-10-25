@@ -39,6 +39,7 @@ struct game_server
 	game_server_clients_table* client_table;
 
 	match_slot* match_slots; // Match slots management structures.
+	time_ms lobby_list_next_send_ms; // Server uptime at which the lobby list is next sent to authenticated clients outside of any lobby.
 
 	web_server* web; // Serves the web client bundle over http, and manages websocket connections.
 

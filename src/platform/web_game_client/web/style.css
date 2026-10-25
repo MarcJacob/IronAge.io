@@ -138,6 +138,14 @@ body {
     text-align: center;
 }
 
+/* Owner's name under the title (pulled up into the title's bottom margin). */
+#game_hud_properties_subtitle {
+    margin: -6px 0 10px;
+    font-size: 0.9rem;
+    color: #9aa0a8;
+    text-align: center;
+}
+
 /* Parts of the panel: the main one (rows without an area) full width, then left and right as halves of one line, then the bottom one full width. */
 #game_hud_properties_rows {
     display: grid;
@@ -490,27 +498,6 @@ body {
     background: #c7cbd1;
 }
 
-/* Lobby screen, centered in the container. Shown instead of the canvas while waiting for a match. */
-#lobby_ui {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    font-family: monospace;
-}
-
-#lobby_ui[hidden],
-#lobby_ui [hidden] {
-    display: none;
-}
-
-#lobby_ui_countdown {
-    font-size: 4rem;
-}
-
 /* Floats over the bottom-left corner of the canvas. */
 #debug_panel {
     position: fixed;
@@ -526,4 +513,108 @@ body {
     color: #1d2128;
     font-family: monospace;
     white-space: pre-wrap;
+}
+
+/* ============================================================================================
+   MENU SCREENS (new-style modules): login, lobby list, lobby. Shown instead of the canvas
+   before and between matches, centered in the container.
+   ============================================================================================ */
+
+.menu_screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-family: monospace;
+}
+
+/* display rules above beat the hidden attribute. */
+.menu_screen[hidden],
+.menu_screen [hidden] {
+    display: none;
+}
+
+.menu_title {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.menu_panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    width: min(32rem, calc(100% - 24px));
+    padding: 12px 16px;
+    background: rgba(36, 39, 45, 0.9);
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+}
+
+.menu_panel_title {
+    font-weight: bold;
+    text-align: center;
+}
+
+.menu_screen input,
+.menu_screen button {
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.menu_screen button {
+    padding: 6px 18px;
+}
+
+.menu_error {
+    color: #ff6b6b;
+}
+
+.menu_notice {
+    color: #f0b040;
+}
+
+/* Lobby list: one line per lobby slot. */
+.lobby_list_entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lobby_list_entry_name {
+    font-weight: bold;
+}
+
+.lobby_list_entry_players.full {
+    color: #ff6b6b;
+}
+
+.lobby_list_entry_map {
+    color: #9aa0a6;
+}
+
+.lobby_list_entry_test {
+    padding: 0 4px;
+    color: #24272d;
+    background: #f0b040;
+    border-radius: 3px;
+}
+
+.lobby_list_entry_join {
+    margin-left: auto;
+}
+
+#lobby_list_own_name {
+    color: #9aa0a6;
+}
+
+#lobby_status {
+    font-size: 2.5rem;
+}
+
+#lobby_admin input[type=range] {
+    width: 100%;
 }

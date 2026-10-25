@@ -724,6 +724,17 @@ void win32_parse_startup_args(int argc, char** argv, win32_startup_args& out_arg
 
             out_args.SERVER_LISTEN_PORT = outPort;
         }
+        else if (argNameView == "-test_mode")
+        {
+            ui8 testMode;
+            if (!ia_string_to_integer(argValueView, testMode))
+            {
+                win32_log("CLA", LOG_ERROR, "Failed to parse value of argument -test_mode: not a number.");
+                continue;
+            }
+
+            out_args.TEST_MODE = testMode != 0;
+        }
         // ... Add more standard arguments.
     }
 }
@@ -777,6 +788,7 @@ int main(int argc, char** argv)
 	game_server_init_params server_init_params = {
 
         .dev_mode = DEV_MODE,
+        .test_mode = startupArgs.TEST_MODE,
 
 		.match_slot_count = 4,
 		.max_client_count = 1024,

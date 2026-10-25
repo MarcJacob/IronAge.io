@@ -217,6 +217,15 @@ bool game_server_match_slot_handle_message(game_server& server, game_server_clie
     case GAME_MESSAGE_TYPE::CLIENT_TICK:
         match_slot_handle_message_client_tick(server, slotIndex, playerClient, msg);
         return true;
+    case GAME_MESSAGE_TYPE::SIGNAL_LEAVE_LOBBY:
+        match_slot_handle_message_leave_lobby(server, slotIndex, playerClient);
+        return true;
+    case GAME_MESSAGE_TYPE::LOBBY_ADMIN_START_MATCH:
+    case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_PLAYER_COUNT:
+    case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_MAP_SIZE:
+    case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_SEED:
+        match_slot_handle_message_lobby_admin(server, slotIndex, playerClient, msg);
+        return true;
     default:
         return false;
     }

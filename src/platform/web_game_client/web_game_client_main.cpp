@@ -17,6 +17,7 @@
 #include "web_game_client_input.cpp"
 #include "web_game_client_input_commands.cpp"
 #include "web_game_client_query.cpp"
+#include "web_game_client_state.cpp"
 
 web_client_state WEB_CLIENT;
 _ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;

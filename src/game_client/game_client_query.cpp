@@ -50,6 +50,12 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
 }
 
+ia_string_view game_client_get_player_name(game_client& backend, match_player_id player_id)
+{
+	if (player_id >= backend.state.match_player_name_count) return ia_string_view();
+	return (ia_string_view)backend.state.match_player_names[player_id];
+}
+
 ui64 game_client_query_world_age(game_client& backend)
 {
 	if (backend.local_match == nullptr) return 0;

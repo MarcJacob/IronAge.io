@@ -243,6 +243,9 @@ export function init_input(canvas_element: HTMLCanvasElement)
     // Keyboard
     const movementKeyCodes = new Set(['KeyA', 'KeyD', 'KeyS', 'KeyW', 'ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'NumpadAdd', 'NumpadSubtract']);
     window.addEventListener('keydown', (keyEvent) => {
+        // Keys typed into a form control (text field, slider...) belong to it: not camera keys, not mode hotkeys.
+        if (keyEvent.target instanceof HTMLInputElement || keyEvent.target instanceof HTMLSelectElement || keyEvent.target instanceof HTMLTextAreaElement) return;
+
         if (movementKeyCodes.has(keyEvent.code)) {
             KB_HELD_KEYS.add(keyEvent.code);
             keyEvent.preventDefault();

@@ -96,6 +96,26 @@ struct game_client
 	static constexpr ui32 NET_OUTPUT_BUFFER_SIZE = KiB(1);
 	ui8 net_output_buffer[NET_OUTPUT_BUFFER_SIZE]; // Holds at most one outgoing CLIENT_TICK message.
 	ui32 net_output_msg_size; // 0 = nothing pending. Reset at the start of every game_client_process_game_message call.
+
+	static constexpr ui32 NET_REQUEST_BUFFER_SIZE = 64;
+	ui8 net_request_buffer[NET_REQUEST_BUFFER_SIZE]; // Holds the last client state request built (see game_client_request_*), for the host to send right away.
+
+	// Client state (see CLIENT_STATE) and the data that comes with it. Zero is "connecting, nothing received yet".
+	struct
+	{
+		CLIENT_STATE current;
+		player_name own_name; // Name kept by the server, from AUTHENTICATED.
+
+		game_message_payload_server_lobby_list lobby_list; // Last lobby list received.
+		game_message_payload_join_lobby_response join_response; // Last join response received.
+		game_lobby_state lobby_state; // Last state received of the lobby the client is in.
+
+		player_name match_player_names[LOBBY_MAX_PLAYER_COUNT]; // Names of the current match's players by player ID, from MATCH_STARTED.
+		ui16 match_player_name_count; // Valid entries in match_player_names (0 until a match starts).
+
+		bool kicked; // Set by LOBBY_CLIENT_KICKED, cleared by the next join request.
+		LOBBY_KICK_REASON kick_reason; // Valid when kicked.
+	} state;
 };
 
 #endif // game_client_INCLUDED

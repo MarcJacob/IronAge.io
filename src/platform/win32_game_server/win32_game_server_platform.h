@@ -35,6 +35,9 @@ struct win32_startup_args
     ui16 SERVER_LISTEN_PORT; // -port=<INTEGER>
                              // Port the server's listen socket should bind to.
 
+    bool TEST_MODE; // -test_mode=<INTEGER>
+                    // Non-zero opens every lobby as a test lobby (game_server_init_params::test_mode).
+
     // ...
 };
 

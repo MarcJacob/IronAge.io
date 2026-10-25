@@ -8,6 +8,7 @@
 struct game_server_init_params
 {
     bool dev_mode; // Whether server should be ready to handle special development commands / behavior like load / unload.
+    bool test_mode; // Lobbies open as test lobbies: no automatic start, lobby admin commands accepted from their clients.
 
 	ui8 match_slot_count;
 	ui16 max_client_count;

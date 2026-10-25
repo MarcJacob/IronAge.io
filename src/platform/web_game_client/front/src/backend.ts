@@ -16,9 +16,54 @@ export enum MESSAGE_TYPE
     SERVER_TICK_BUNDLE = 6,
     CLIENT_TICK = 7,
 
+    REQUEST_AUTHENTICATION = 8,
+    AUTHENTICATED = 9,
+    SERVER_LOBBY_LIST = 10,
+    REQUEST_JOIN_LOBBY = 11,
+    JOIN_LOBBY_RESPONSE = 12,
+    SIGNAL_LEAVE_LOBBY = 13,
+    LOBBY_CLIENT_KICKED = 14,
+
+    LOBBY_ADMIN_START_MATCH = 15,
+    LOBBY_ADMIN_SET_PLAYER_COUNT = 16,
+    LOBBY_ADMIN_SET_MAP_SIZE = 17,
+    LOBBY_ADMIN_SET_SEED = 18,
+
     TYPE_COUNT,
     INVALID,
 };
+
+// Mirrors CLIENT_STATE (include/game_client/game_client_backend.h). Update here if the enum changes.
+export enum CLIENT_STATE
+{
+    CONNECTING = 0,
+    AUTHENTICATING = 1,
+    LOBBY_LIST = 2,
+    JOINING_LOBBY = 3,
+    IN_LOBBY = 4,
+    IN_MATCH = 5,
+};
+
+// Mirrors JOIN_LOBBY_RESULT (include/game_common/game_messages.h). Update here if the enum changes.
+export enum JOIN_LOBBY_RESULT
+{
+    SUCCESS = 0,
+    NOT_AUTHENTICATED = 1,
+    INVALID_LOBBY = 2,
+    LOBBY_FULL = 3,
+    ALREADY_IN_LOBBY = 4,
+};
+
+// Mirrors LOBBY_KICK_REASON (include/game_common/game_messages.h). Update here if the enum changes.
+export enum LOBBY_KICK_REASON
+{
+    PLAYER_CAP_LOWERED = 0,
+};
+
+// Mirror constants of include/game_common/game_messages.h. Update here if they change.
+export const PLAYER_NAME_MAX_LENGTH = 32;
+export const LOBBY_MAX_PLAYER_COUNT = 32;
+export const LOBBY_MAX_MAP_SIZE_REGIONS = 8;
 
 // Mirrors INPUT_EVENT_TYPE (include/game_client/game_client_backend.h). Update here if the enum changes.
 export enum INPUT_EVENT_TYPE
@@ -56,6 +101,28 @@ interface ClientExports extends WebAssembly.Exports
 
     client_get_net_output_message_size(): number;
     client_get_net_output_message_buffer_offset(): number;
+
+    // Client state (web_game_client_state.cpp)
+
+    client_get_state(): CLIENT_STATE;
+    client_get_own_name_offset(): number; // Pointer to a player_name.
+    client_get_player_name_offset(player_index: number): number; // Pointer to the characters of a match player's name (0 if none).
+    client_get_player_name_length(player_index: number): number; // 0 for an out of range index.
+    client_get_lobby_list_offset(): number; // Pointer to game_message_payload_server_lobby_list.
+    client_get_lobby_state_offset(): number; // Pointer to game_lobby_state.
+    client_get_join_response_offset(): number; // Pointer to game_message_payload_join_lobby_response.
+    client_was_kicked(): number; // wasm bool: 0 or 1.
+    client_get_kick_reason(): LOBBY_KICK_REASON;
+
+    // Requests: each returns the size of the message built in the request buffer, 0 if not allowed in the current state.
+    client_get_net_request_buffer_offset(): number;
+    client_request_authentication(name_length: number): number; // Name bytes read from the input event buffer.
+    client_request_join_lobby(lobby_id: number): number;
+    client_signal_leave_lobby(): number;
+    client_lobby_admin_start_match(): number;
+    client_lobby_admin_set_player_count(player_count: number): number;
+    client_lobby_admin_set_map_size(width_regions: number, height_regions: number): number;
+    client_lobby_admin_set_seed(random_seed: number): number;
 
     // Render state
     client_render_state_get_viewport(): number; // Pointer to client_render_state::viewport_state.
@@ -189,21 +256,22 @@ export interface MapGenParams
 
 export interface LobbyState
 {
-    countdown_remaining_ms: number;
-    player_count: number; // Clients currently in the lobby.
-    match_slot_index: number;
-    match_start_params: MatchStartParams;
+    countdown_remaining_ms: number; // 0 when no countdown runs (always in a test lobby).
+    player_count: number; // Humans currently in the lobby. AI players fill the rest of match_start_params.player_count (the player cap).
+    match_slot_index: number; // Lobby id: what client_request_join_lobby takes.
+    match_start_params: MatchStartParams; // Player cap, world size, seed...
+    test_mode: boolean; // Test lobby: no automatic start, admin requests accepted.
 }
 
-// Mirrors game_message_payload_lobby_joined (include/game_common/game_messages.h), packed, 24 bytes:
-// countdown_remaining_ms (ui32 @0), lobby_player_count (ui16 @4), match_slot_index (ui8 @6),
+// Mirrors game_lobby_state (include/game_common/game_messages.h), packed, 25 bytes:
+// countdown_remaining_ms (ui32 @0), human_count (ui16 @4), lobby_id (ui8 @6),
 // match_start_params @7: world_size_regions (2x ui16 @7, @9), player_count (ui16 @11), tick_rate (ui8 @13), random_seed (ui32 @14),
-// procedural_map (ui8 @18), map_gen @19: sea_level_bias (i8 @19), hills_bias (i8 @20), mountains_bias (i8 @21), feature_scale_tiles (ui16 @22).
-// Only call after process_net_message returned LOBBY_JOINED.
-// NOTE: reading game state straight from TS is a stopgap. High-level game state should later be managed by the client backend.
-export function read_lobby_joined_payload(): LobbyState
+// procedural_map (ui8 @18), map_gen @19: sea_level_bias (i8 @19), hills_bias (i8 @20), mountains_bias (i8 @21), feature_scale_tiles (ui16 @22),
+// test_mode (ui8 @24).
+const LOBBY_STATE_SIZE: number = 25;
+function read_lobby_state_at(offset: number): LobbyState
 {
-    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_message_buffer_offset() + GAME_MESSAGE_PAYLOAD_OFFSET, 24);
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, offset, LOBBY_STATE_SIZE);
     return {
         countdown_remaining_ms: view.getUint32(0, true),
         player_count: view.getUint16(4, true),
@@ -222,8 +290,90 @@ export function read_lobby_joined_payload(): LobbyState
                 feature_scale_tiles: view.getUint16(22, true),
             },
         },
+        test_mode: view.getUint8(24) !== 0,
     };
 }
+
+// State of the lobby the client is in, kept by the backend from the last LOBBY_JOINED message (zeroed outside of a lobby).
+export function read_lobby_joined_payload(): LobbyState
+{
+    return read_lobby_state_at(CLIENT_BACKEND.client_get_lobby_state_offset());
+}
+
+// CLIENT STATE
+
+export function get_client_state(): CLIENT_STATE { return CLIENT_BACKEND.client_get_state(); }
+
+// Name kept by the server (empty before authentication).
+// Mirrors player_name (ia_static_string<PLAYER_NAME_MAX_LENGTH>, game_messages.h), 36 bytes: chars (not zero-terminated) @0, length (ui32 @32).
+export function read_own_name(): string
+{
+    const offset = CLIENT_BACKEND.client_get_own_name_offset();
+    const length = Math.min(new DataView(CLIENT_BACKEND.memory.buffer, offset + PLAYER_NAME_MAX_LENGTH, 4).getUint32(0, true), PLAYER_NAME_MAX_LENGTH);
+    return new TextDecoder().decode(new Uint8Array(CLIENT_BACKEND.memory.buffer, offset, length));
+}
+
+// Name of a player of the current match, received at match start. "" for an out of range, neutral or unowned (0xFFFF) index.
+export function get_player_name(player_index: number): string
+{
+    const length = CLIENT_BACKEND.client_get_player_name_length(player_index);
+    if (length === 0) return "";
+    return new TextDecoder().decode(new Uint8Array(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_player_name_offset(player_index), length));
+}
+
+// Last lobby list received. Mirrors game_message_payload_server_lobby_list, packed: lobby_count (ui8 @0), then game_lobby_state entries from @1.
+export function read_lobby_list(): LobbyState[]
+{
+    const offset = CLIENT_BACKEND.client_get_lobby_list_offset();
+    const count = new DataView(CLIENT_BACKEND.memory.buffer, offset, 1).getUint8(0);
+
+    const lobbies: LobbyState[] = [];
+    for (let i = 0; i < count; i++) lobbies.push(read_lobby_state_at(offset + 1 + i * LOBBY_STATE_SIZE));
+    return lobbies;
+}
+
+// Whether the lobby is full of humans (joining it would fail).
+export function is_lobby_full(lobby: LobbyState): boolean { return lobby.player_count >= lobby.match_start_params.player_count; }
+
+// Last join response received. Mirrors game_message_payload_join_lobby_response, packed: lobby_id (ui8 @0), result (ui8 @1).
+export function read_join_response(): { lobby_id: number, result: JOIN_LOBBY_RESULT }
+{
+    const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_join_response_offset(), 2);
+    return { lobby_id: view.getUint8(0), result: view.getUint8(1) };
+}
+
+// Reason of the last kick from a lobby, null if not kicked since the last join request.
+export function read_kick_notice(): LOBBY_KICK_REASON | null
+{
+    return CLIENT_BACKEND.client_was_kicked() !== 0 ? CLIENT_BACKEND.client_get_kick_reason() : null;
+}
+
+// Copies out the request the backend just built (size from the export that built it). Null if it refused (state does not allow it).
+function take_request(size: number): ByteBuffer | null
+{
+    if (size === 0) return null;
+    return new ByteBuffer(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_net_request_buffer_offset(), size).slice() as ByteBuffer;
+}
+
+// Request builders: each returns the message to send right away (Core.send_message), or null if the current state does not allow it.
+
+// Empty name: the server picks one. Cut to PLAYER_NAME_MAX_LENGTH bytes (UTF-8).
+export function build_request_authentication(name: string): ByteBuffer | null
+{
+    // Name bytes go through the input event buffer (at least 64 bytes, see ClientInput).
+    const nameBytes = new TextEncoder().encode(name).subarray(0, PLAYER_NAME_MAX_LENGTH);
+    new Uint8Array(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_input_event_buffer_offset(), nameBytes.length).set(nameBytes);
+    return take_request(CLIENT_BACKEND.client_request_authentication(nameBytes.length));
+}
+
+export function build_request_join_lobby(lobby_id: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_request_join_lobby(lobby_id)); }
+export function build_signal_leave_lobby(): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_signal_leave_lobby()); }
+
+// Test lobbies only. Values are clamped by the server (see the LOBBY_MAX_* constants).
+export function build_lobby_admin_start_match(): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_start_match()); }
+export function build_lobby_admin_set_player_count(player_count: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_player_count(player_count)); }
+export function build_lobby_admin_set_map_size(width_regions: number, height_regions: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_map_size(width_regions, height_regions)); }
+export function build_lobby_admin_set_seed(random_seed: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_seed(random_seed)); }
 
 // Mirrors game_message_payload_match_ended: winner_id (ui16). Returns null if there is no winner (0xFFFF).
 // Only call after process_net_message returned MATCH_ENDED.

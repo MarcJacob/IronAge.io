@@ -59,12 +59,12 @@ function inspect_army(view: EntityData, context: InspectionContext): PropertiesP
 {
     // While raising: current / target slider / max. Otherwise just the current counts (no max, no target).
     if (view.get_number("raising") === 1)
-        return { title: "Army troops", rows: [
+        return { title: "Army", rows: [
             ...army_raise_section(view, query_entity(view.get_number("home_settlement")), army_raise_targets(view), context.on_raise_targets),
             ...army_supplies_section(view),
         ] };
 
-    return { title: "Army troops", rows: [...army_count_section(view), ...army_supplies_section(view)] };
+    return { title: "Army", rows: [...army_count_section(view), ...army_supplies_section(view)] };
 }
 
 function inspect_caravan(view: EntityData): PropertiesPanelState
@@ -79,7 +79,7 @@ function inspect_generic(view: EntityData): PropertiesPanelState
     return { title: name.charAt(0) + name.slice(1).toLowerCase(), rows: basic_section(view) };
 }
 
-export function inspect_entity(view: EntityData, context: InspectionContext): PropertiesPanelState
+function inspect_by_type(view: EntityData, context: InspectionContext): PropertiesPanelState
 {
     switch (view.entity_type)
     {
@@ -88,4 +88,16 @@ export function inspect_entity(view: EntityData, context: InspectionContext): Pr
     case Backend.ENTITY_TYPE.CARAVAN: return inspect_caravan(view);
     default: return inspect_generic(view);
     }
+}
+
+// Adds the owner's name under the title, for entities that have an owner (no sub-line if unowned or the name is unknown).
+export function inspect_entity(view: EntityData, context: InspectionContext): PropertiesPanelState
+{
+    const state = inspect_by_type(view, context);
+    if (view.properties.some(property => property.name === "owner"))
+    {
+        const owner_name = Backend.get_player_name(view.get_number("owner"));
+        if (owner_name !== "") state.subtitle = owner_name;
+    }
+    return state;
 }

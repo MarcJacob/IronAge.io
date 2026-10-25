@@ -90,9 +90,11 @@ bool game_server_match_slot_start_play(game_server& server, ui8 slot_index)
         ui8 msg_scratch_buff[2048];
         mem_arena msg_scratch_mem = mem_arena_create(msg_scratch_buff, sizeof(msg_scratch_buff));
 
-        // Allocate message, adding extra data size of the match parameters as extra bytes.
+        // Allocate message, adding the player names list as extra bytes.
+        ASSERT(slot.match_params->player_count <= LOBBY_MAX_PLAYER_COUNT);
+        ui16 namesCount = slot.match_params->player_count;
 
-        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_STARTED, msg_scratch_mem, 0);
+        game_message_header* joinMsgHeader = build_game_message(GAME_MESSAGE_TYPE::MATCH_STARTED, msg_scratch_mem, namesCount * sizeof(player_name));
         ASSERT(joinMsgHeader);
 
         auto& joinMsgPayload = joinMsgHeader->get_payload_ref<game_message_payload_match_started>();
@@ -101,6 +103,25 @@ bool game_server_match_slot_start_play(game_server& server, ui8 slot_index)
 
         // Copy start params.
         ia_memcpy(&joinMsgPayload.match_start_params, slot.match_params, sizeof(game_match_start_params));
+
+        // Names list right after the payload structure: the client's authenticated name for humans, "CPU <index>" for AI.
+        // Built once here, so a client disconnecting later does not change anything.
+        player_name* names = (player_name*)((ui8*)&joinMsgPayload + sizeof(game_message_payload_match_started));
+        for (match_player_id playerID = 0; playerID < namesCount; playerID++)
+        {
+            game_server_client* nameClient = game_server_get_client_data(server, slot.players[playerID].client);
+            if (nameClient != nullptr && nameClient->type == game_server_client::TYPE::GAME_CLIENT)
+            {
+                names[playerID] = (ia_string_view)nameClient->name;
+            }
+            else
+            {
+                static_mem_arena<32> aiNameMem;
+                ia_string_builder aiNameBuilder(&aiNameMem);
+                aiNameBuilder.push_back_format("CPU %u", (ui32)playerID);
+                names[playerID] = (ia_string_view)aiNameBuilder.string;
+            }
+        }
 
         for (match_player_id playerID = 0; playerID < slot.match_params->player_count; playerID++)
         {
@@ -208,6 +229,7 @@ void match_slot_handle_message_client_tick(game_server& server, match_slot_index
 {
     match_slot& slot = server.match_slots[slot_index];
 
+    if (slot.state != MATCH_SLOT_STATE::IN_PLAY) return; // The match union member is only valid in play.
     if (slot.match.in_placement) return; // Ignore all client tick messages until placement phase is over.
 
     const auto& payload = msg.get_payload_ref<game_message_payload_client_tick>();

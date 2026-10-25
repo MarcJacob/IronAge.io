@@ -28,12 +28,21 @@ Created: 2026-10-23. To start right after `army_supplies_2026-10-23.md`. Multi-f
 - Old and new styles coexist during migration.
 - Migration order: small modules first (calendar, placement, lobby, player state, tooltip, action bar; lobby early for admin controls), properties panel last.
 - Properties panel: probably one panel per entity type, sharing a parent framing element.
+- Menu / lobby DOM stays in the same `index.html` (single websocket for the whole flow; separate pages only after a master / match server split, not before end of Alpha).
+- Pilot (2026-10-25): login, lobby list, lobby (+ test-mode admin controls) built as the first new-style modules; match end returns the client to the lobby list. Calendar and the rest migrate later.
 - Main menu screen is part of this overhaul (kicked players return to it).
 - Input: keydown handler must ignore events targeting `<input>` / `<select>`.
 
+## Pilot result (built, hand-tested)
+
+- Template (copy `ui_element_login.ts`): `IDS` const at top, `XState` interface, `init()` caching elements once, `submit(state | null)` (null hides; writes only on change), `on(event, cb)` via `ui_events.ts` (`UiEvents`), namespace imports. Notes: `web_game_client/.ai_imprint/adding_ui_things_howto.md`.
+- Driver mode owns module subscriptions (`lobby_base.ts`).
+- Edit guard for inputs: focused or recently changed control keeps the user's value.
+- `front_src.imprint.md` still describes the old style (user to update).
+
 ## Open questions
 
-- Exact subscribable-event / `submit` API shape per module (to be fixed with the first migrated module).
+- Next migration batch (calendar, placement, player state, tooltip, action bar) once the pilot is hand-tested.
 
 ## Next step
 

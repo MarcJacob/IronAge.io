@@ -47,7 +47,7 @@ local game_server_build_hotreload = function()
     vim.cmd("silent !" .. GAME_SERVER_BUILD_HOTRELOAD_CMD, true, false)
 end
 
-local TEST_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_launch_server_instance.cmd"
+local TEST_CMD = vim.fn.getenv("PROJECT_ROOT") .. "scripts/win32_launch_server_instance.cmd -test_mode=1"
 local test = function ()
     run_command_term(TEST_CMD, false, true)
 end

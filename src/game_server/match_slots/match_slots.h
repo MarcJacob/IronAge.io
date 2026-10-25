@@ -29,6 +29,8 @@ struct match_slot_lobby
 
     time_ms lobby_state_refresh_time;
 
+    bool test_mode; // Test lobby: never starts on its own, accepts LOBBY_ADMIN_* messages from its clients. Follows the server's test_mode for now.
+
 	// Lobby countdown, started by the first client attaching. Kept outside the union below, which is zeroed at match start.
 	bool countdown_active;
 	time_ms countdown_end_ms; // Server uptime at which the match starts. Valid when countdown_active.
@@ -56,7 +58,7 @@ struct match_slot
 
 	game_match_start_params* match_params; // Parameters for the current or next match (valid when in lobby or in a match).
 
-	match_player* players; // Array of match_params->player_count entries, indexed by player index. Allocated once match_params is known.
+	match_player* players; // Array of LOBBY_MAX_PLAYER_COUNT entries, indexed by player index. The first match_params->player_count are in use. Allocated on lobby opening.
     ui16 connection_count; // Counts the number of clients connected to the match.
 
 	union

@@ -9,6 +9,7 @@
 
 // Match slots system.
 #include "match_slots/match_slots.h"
+#include "match_slots/match_slot_lobby.h"
 
 // Clients table system
 #include "game_server_clients.h"
@@ -61,22 +62,85 @@ void game_server_process_unknown_client(game_server& server, game_server_client&
 
 // GAME_CLIENT type client handling. Top-level Game Client management.
 
+static constexpr time_ms LOBBY_LIST_SEND_INTERVAL_MS = 1000; // Authenticated clients outside of any lobby get the lobby list this often.
+
+// Sends the current lobby list to the client.
+static void game_server_send_lobby_list(game_server& server, game_server_client& client)
+{
+    static_mem_arena<sizeof(game_message_header) + sizeof(game_message_payload_server_lobby_list)> msgMem;
+    game_message_header* listMsg = build_game_message(GAME_MESSAGE_TYPE::SERVER_LOBBY_LIST, msgMem);
+    ASSERT(listMsg != nullptr);
+
+    game_server_fill_lobby_list(server, listMsg->get_payload_ref<game_message_payload_server_lobby_list>());
+    client.game_client_send_message(*listMsg);
+}
+
+// Handler for REQUEST_AUTHENTICATION. Keeps the client's name (or picks "Anon_XXXXX" if empty), answers AUTHENTICATED, then sends the lobby list.
+// Ignored if the client is already authenticated or the name length is invalid.
+static void game_server_handle_request_authentication(game_server& server, game_server_client& client, const game_message_header& msg)
+{
+    if (client.game_client.authenticated) return;
+
+    const player_name& requestName = msg.get_payload_ref<game_message_payload_request_authentication>().name;
+    if (requestName.length > PLAYER_NAME_MAX_LENGTH)
+    {
+        server.logf("CLIENTS", LOG_WARNING, "Client %d sent a name of invalid length %u. Authentication refused.", client.handle.value, requestName.length);
+        return;
+    }
+
+    static_mem_arena<64> nameMem;
+    ia_string_builder nameBuilder(&nameMem);
+    if (requestName.length > 0)
+    {
+        // Control characters are replaced, the rest is kept as is.
+        ia_string_view requestView = requestName;
+        for (ui32 charIndex = 0; charIndex < requestView.length; charIndex++)
+        {
+            char c = requestView[charIndex];
+            nameBuilder.push_back(((ui8)c < 32 || c == 127) ? '?' : c);
+        }
+    }
+    else
+    {
+        // "Anon_" followed by 5 random digits.
+        ui64 entropy = server.platform->get_entropy();
+        ui32 number = 10000 + ia_hash_ui32((ui32)entropy ^ ia_hash_ui32((ui32)(entropy >> 32))) % 90000;
+        nameBuilder.push_back_format("Anon_%u", number);
+    }
+    client.name = (ia_string_view)nameBuilder.string;
+
+    client.game_client.authenticated = true;
+    server.logf("CLIENTS", LOG_SUCCESS, "Client %d authenticated as \"%s\".", client.handle.value, (ia_string_view)client.name);
+
+    static_mem_arena<sizeof(game_message_header) + sizeof(game_message_payload_authenticated)> msgMem;
+    game_message_header* authMsg = build_game_message(GAME_MESSAGE_TYPE::AUTHENTICATED, msgMem);
+    ASSERT(authMsg != nullptr);
+    auto& authPayload = authMsg->get_payload_ref<game_message_payload_authenticated>();
+    authPayload = {}; // auth_key stays zero: no quick reconnection yet.
+    authPayload.name = client.name;
+    client.game_client_send_message(*authMsg);
+
+    game_server_send_lobby_list(server, client);
+}
+
+// Handles a message no sub-component handled. Lobby actions require authentication.
+static void game_server_handle_game_client_message(game_server& server, game_server_client& client, const game_message_header& msg)
+{
+    switch (msg.message_type)
+    {
+    case GAME_MESSAGE_TYPE::REQUEST_AUTHENTICATION:
+        game_server_handle_request_authentication(server, client, msg);
+        break;
+    case GAME_MESSAGE_TYPE::REQUEST_JOIN_LOBBY:
+        game_server_lobby_handle_join_request(server, client, msg);
+        break;
+    default:
+        break; // Unexpected here (e.g. a lobby message from outside a lobby): ignored.
+    }
+}
+
 void game_server_tick_game_client(game_server& server, game_server_client& client)
 {
-    // @TEST(Marc): Any Game Client not attached to a match gets attached to one.
-	if (client.game_client.match_slot == INVALID_MATCH_SLOT_INDEX)
-	{
-        for (match_slot_index slotIndex = 0; slotIndex < server.init_params.match_slot_count; slotIndex++)
-        {
-		    ui16 playerIndex = 0;
-            if (game_server_slot_attach_client(server, slotIndex, client.handle, playerIndex))
-            {
-                server.logf("MATCH", LOG_SUCCESS, "Attached client %d to match slot %d as player %d.", client.handle.value, slotIndex, playerIndex);
-                break;
-            }
-        }
-	}
-
     // Handle message reception.
     ui64 receivedBytes;
     const void* receptionBuffer = client.game_client_get_messages_reception_buffer(receivedBytes);
@@ -92,6 +156,36 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
             server.logf("CLIENTS", LOG_ERROR, "Received corrupted Game Message on client handle %d. Dropping the rest of the buffer...", client.handle);
             break;
         }
+        readIndex += totalSize;
+
+        // Unknown types and payloads smaller than their structure are dropped before any handler reads them.
+        if (msgPtr->message_type >= GAME_MESSAGE_TYPE::TYPE_COUNT
+            || msgPtr->payload_size < get_message_type_payload_size(msgPtr->message_type))
+        {
+            server.logf("CLIENTS", LOG_WARNING, "Dropped malformed Game Message (type %d, payload %d bytes) from client handle %d.",
+                (i32)msgPtr->message_type, (i32)msgPtr->payload_size, client.handle.value);
+            continue;
+        }
+
+        // Nothing but authentication is accepted before it.
+        if (!client.game_client.authenticated)
+        {
+            if (msgPtr->message_type == GAME_MESSAGE_TYPE::REQUEST_AUTHENTICATION)
+            {
+                game_server_handle_request_authentication(server, client, *msgPtr);
+            }
+            else if (msgPtr->message_type == GAME_MESSAGE_TYPE::REQUEST_JOIN_LOBBY)
+            {
+                static_mem_arena<32> msgMem;
+                game_message_header* responseMsg = build_game_message(GAME_MESSAGE_TYPE::JOIN_LOBBY_RESPONSE, msgMem);
+                ASSERT(responseMsg != nullptr);
+                auto& response = responseMsg->get_payload_ref<game_message_payload_join_lobby_response>();
+                response.lobby_id = msgPtr->get_payload_ref<game_message_payload_request_join_lobby>().lobby_id;
+                response.result = JOIN_LOBBY_RESULT::NOT_AUTHENTICATED;
+                client.game_client_send_message(*responseMsg);
+            }
+            continue;
+        }
 
         // Just go through a list of known message handlers until one of them says they've handled it, then try our own handlers.
         bool handled = game_server_match_slot_handle_message(server, client.handle, *msgPtr);
@@ -99,14 +193,18 @@ void game_server_tick_game_client(game_server& server, game_server_client& clien
 
         if (!handled)
         {
-            // Top-level handling
-            // ...
+            game_server_handle_game_client_message(server, client, *msgPtr);
         }
-
-        readIndex += totalSize;
     }
 
     client.game_client_clear_reception_buffer();
+
+    // Authenticated clients outside of any lobby regularly get the lobby list.
+    if (client.game_client.authenticated && client.game_client.match_slot == INVALID_MATCH_SLOT_INDEX
+        && server.uptime_ms >= server.lobby_list_next_send_ms)
+    {
+        game_server_send_lobby_list(server, client);
+    }
 }
 
 // BEGIN GAME SERVER PROGRAM FUNCTIONS
@@ -228,6 +326,8 @@ GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& p
 	newServer->web = web_server_init(*newServer);
 	web_server_reload_files(*newServer);
 
+	if (init_params.test_mode) newServer->log(LOG_WARNING, "Test mode ON: lobbies open as test lobbies (no automatic start, admin commands accepted).");
+
 	newServer->log(LOG_SUCCESS, "Game Server initialization successful.\n");
 	return newServer;
 }
@@ -331,6 +431,7 @@ GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms pl
 	// Process GAME_CLIENT type client connections.
     // Will handle game message reception & dispatch.
 	game_server_client_for_each_of_type(server, game_server_client::TYPE::GAME_CLIENT, game_server_tick_game_client);
+	if (server.uptime_ms >= server.lobby_list_next_send_ms) server.lobby_list_next_send_ms = server.uptime_ms + LOBBY_LIST_SEND_INTERVAL_MS; // The lobby list went out this tick.
 
 	// Update / tick match slots.
 	game_server_tick_match_slots(server);

@@ -105,6 +105,20 @@ INPUT_EVENT_PAYLOAD_SIZE_GUARD(input_event_payload_viewport_control);
 
 #undef INPUT_EVENT_PAYLOAD_SIZE_GUARD
 
+// CLIENT STATE
+
+// Where the client stands. Mostly follows the server connection flow: connect -> authenticate -> lobby list -> join -> lobby -> match.
+// The host reports nothing but the connection itself: the backend moves through the rest on sent requests and received messages.
+enum class CLIENT_STATE : ui8
+{
+	CONNECTING,		// Not authenticated yet: waiting for the host to open the connection and send REQUEST_AUTHENTICATION.
+	AUTHENTICATING,	// REQUEST_AUTHENTICATION sent, waiting for AUTHENTICATED.
+	LOBBY_LIST,		// Authenticated, in no lobby. The lobby list is refreshed by the server.
+	JOINING_LOBBY,	// REQUEST_JOIN_LOBBY sent, waiting for JOIN_LOBBY_RESPONSE.
+	IN_LOBBY,		// In a lobby, receiving its state.
+	IN_MATCH,		// The lobby's match started.
+};
+
 // BACKEND INTERFACE DEFINITION.
 
 struct game_client;
@@ -161,6 +175,10 @@ bool game_client_query_command_valid(game_client& backend, ui8 command_type, con
 // If the backend has an ongoing local match, retrieves its start parameters.
 game_match_start_params* game_client_get_local_match_params(game_client& backend);
 
+// Name of a player of the current match, as received at match start. Empty if the ID is out of range (INVALID_MATCH_PLAYER_ID included) or no names were received.
+// The view points into the backend: valid until the next match starts.
+ia_string_view game_client_get_player_name(game_client& backend, match_player_id player_id);
+
 // MESSAGING
 
 // Processes the game message bytes present in the backend reception buffer and returns the processed message type (or INVALID if none).
@@ -180,6 +198,25 @@ ui8* game_client_get_net_msg_output(game_client& backend);
 
 // Returns size of the backend game message output buffer.
 ui32 game_client_get_net_msg_output_size(game_client& backend);
+
+// CLIENT STATE REQUESTS
+// Each builds one message in the request buffer (game_client_get_net_request_buffer) for the host to send right away,
+// moves the client state accordingly and returns the message size. Returns 0 (nothing to send) when the current state does not allow it.
+
+// From CONNECTING. Names longer than PLAYER_NAME_MAX_LENGTH are cut. Empty: the server picks one.
+ui32 game_client_request_authentication(game_client& backend, const ia_string_view& name);
+// From LOBBY_LIST. Clears the last kick notice.
+ui32 game_client_request_join_lobby(game_client& backend, ui8 lobby_id);
+// From IN_LOBBY, back to LOBBY_LIST.
+ui32 game_client_signal_leave_lobby(game_client& backend);
+// From IN_LOBBY, in a test lobby only. Values are clamped by the server.
+ui32 game_client_lobby_admin_start_match(game_client& backend);
+ui32 game_client_lobby_admin_set_player_count(game_client& backend, ui16 player_count);
+ui32 game_client_lobby_admin_set_map_size(game_client& backend, ui16 width_regions, ui16 height_regions);
+ui32 game_client_lobby_admin_set_seed(game_client& backend, ui32 random_seed);
+
+// Returns pointer to the request buffer filled by the functions above.
+ui8* game_client_get_net_request_buffer(game_client& backend);
 
 // MAIN LIFECYCLE FUNCTIONS.
 
