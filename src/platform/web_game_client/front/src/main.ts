@@ -10,16 +10,6 @@ import type { EntityData } from "./gdo.js"
 import { init_render } from './render.js';
 import { init_input } from './input.js';
 import { init_camera_system } from './camera.js';
-import { init_game_ui } from './ui/game_ui.js';
-import * as LoginUI from './ui/ui_element_login.js';
-import * as LobbyListUI from './ui/ui_element_lobby_list.js';
-import * as LobbyUI from './ui/ui_element_lobby.js';
-import { init_placement_ui } from './ui/placement_ui.js';
-import { init_ui_element_action_bar } from './ui/ui_element_action_bar.js';
-import { init_ui_element_properties_panel } from './ui/inspection/ui_element_properties_panel.js';
-import { init_ui_element_tooltip } from './ui/inspection/ui_element_tooltip.js';
-import { init_ui_element_calendar } from './ui/ui_element_calendar.js';
-import { init_ui_element_player_state } from './ui/ui_element_player_state.js';
 import { LobbyBase } from './modes/lobby_base.js';
 
 // Game / Client state
@@ -28,7 +18,7 @@ let IN_A_MATCH: boolean = false;
 
 // ID of the player this client controls. Null until a match is joined.
 let LOCAL_PLAYER_ID: number | null = null;
-// Note: game_ui.ts imports this file (circular). Only call this inside per-frame functions, never at module load.
+// Note: the modes import this file and main.ts imports the modes (circular). Only call this inside per-frame functions, never at module load.
 export function get_local_player_id(): number | null
 {
     return LOCAL_PLAYER_ID;
@@ -151,17 +141,7 @@ async function start()
     init_input(canvas);
     init_camera_system();
 
-    // Initialize in-match HUD.
-    init_game_ui();
-    LoginUI.init();
-    LobbyListUI.init();
-    LobbyUI.init();
-    init_placement_ui();
-    init_ui_element_action_bar();
-    init_ui_element_properties_panel();
-    init_ui_element_tooltip();
-    init_ui_element_calendar();
-    init_ui_element_player_state();
+    // UI modules initialize themselves when imported (via the modes): no init call here.
 
     // Connection flow (login, lobby list, lobby) until the server starts a match.
     Core.start_mode_stack(new LobbyBase());

@@ -1,57 +1,66 @@
-// In-match UI (HUD overlay on top of the canvas). An extension of input.ts: it works from input.ts's state (selection).
-// The debug entity inspection panel (no actions), and the per-frame feed of the calendar and player state elements (world state, not selection).
-// DOM is only touched when the text / visibility actually changed.
+// UI module (new style): the in-match HUD overlay root (#game_hud) and its debug entity panel (name = value rows of the selected entity).
+// Static markup in index.html (ids below), extracted once by init. submit(state) shows the HUD, submit(null) hides the whole HUD (and so every element in it).
+// Emits "toggle_debug" when the debug panel header is clicked; the driver mode (main_play.ts) owns the collapsed flag, since the hotkey toggles it too.
+// submit can be called every frame (the DOM is only touched when something changes).
 
 import * as Backend from "../backend.js"
-import { get_selected_entity_view } from "../input.js"
-import { GAME_DATA_PROP_TYPE, get_game_parameters, get_local_player_state, type EntityData } from "../gdo.js"
-import { submit_calendar } from "./ui_element_calendar.js"
-import { submit_player_state } from "./ui_element_player_state.js"
+import { GAME_DATA_PROP_TYPE, type EntityData } from "../gdo.js"
+import { UiEvents } from "./ui_events.js"
 
-let selectedPanelElement: HTMLElement | null = null;
-let selectedTextElement: HTMLElement | null = null;
-let selectedHeaderElement: HTMLElement | null = null;
-let debugPanelCollapsed = true;
+// Every DOM id this module uses (index.html).
+const IDS = {
+    root: "game_hud",
+    debug_panel: "game_hud_selected_panel",
+    debug_header: "game_hud_selected_header",
+    debug_text: "game_hud_selected_text",
+};
 
-export function init_game_ui(): void
+export interface GameUiState
 {
-    selectedPanelElement = document.getElementById("game_hud_selected_panel") as HTMLElement,
-    selectedTextElement = document.getElementById("game_hud_selected_text") as HTMLElement;
-    selectedHeaderElement = document.getElementById("game_hud_selected_header") as HTMLElement;
-    selectedHeaderElement.addEventListener("click", toggle_debug_panel);
-    refresh_debug_panel_collapse();
+    debug_text: string | null; // Text of the debug panel. Null hides the panel.
+    debug_collapsed: boolean; // Collapsed = only the header shows.
 }
 
-function refresh_debug_panel_collapse(): void
-{
-    if (selectedTextElement === null || selectedHeaderElement === null) return;
+const events = new UiEvents<{
+    toggle_debug: () => void;
+}>();
+export const on = events.on.bind(events);
 
-    selectedTextElement.hidden = debugPanelCollapsed;
-    selectedHeaderElement.textContent = (debugPanelCollapsed ? "[+] " : "[-] ") + "Debug";
+let el: {
+    root: HTMLElement;
+    debug_panel: HTMLElement;
+    debug_header: HTMLElement;
+    debug_text: HTMLElement;
+} | null = null;
+
+function init(): void
+{
+    el = {
+        root: document.getElementById(IDS.root) as HTMLElement,
+        debug_panel: document.getElementById(IDS.debug_panel) as HTMLElement,
+        debug_header: document.getElementById(IDS.debug_header) as HTMLElement,
+        debug_text: document.getElementById(IDS.debug_text) as HTMLElement,
+    };
+    el.debug_header.addEventListener("click", () => events.emit("toggle_debug"));
 }
 
-// Collapses / expands the debug entity text (the header stays). Called by the header click and by the hotkey in the play mode.
-export function toggle_debug_panel(): void
+export function submit(state: GameUiState | null): void
 {
-    debugPanelCollapsed = !debugPanelCollapsed;
-    refresh_debug_panel_collapse();
-}
+    if (el === null) return;
 
-// Shows / hides the whole HUD overlay.
-export function set_game_ui_visible(visible: boolean): void
-{
-    const hud = document.getElementById("game_hud") as HTMLElement;
-    hud.hidden = !visible;
-}
+    el.root.hidden = state === null;
+    if (state === null) return;
 
-// Sets an element's hidden state, only if it differs.
-function set_hidden(element: HTMLElement, hidden: boolean): void
-{
-    if (element.hidden !== hidden) element.hidden = hidden;
+    el.debug_panel.hidden = state.debug_text === null;
+    if (state.debug_text === null) return;
+
+    el.debug_text.hidden = state.debug_collapsed;
+    set_text(el.debug_header, (state.debug_collapsed ? "[+] " : "[-] ") + "Debug");
+    set_text(el.debug_text, state.debug_text);
 }
 
 // Builds the 'name = value' rows of an entity: every property of its Game Data Object, raw values, C++ property names.
-function entity_text(entity: EntityData): string
+export function entity_text(entity: EntityData): string
 {
     const rows: [string, string | number][] = [
         ["entity_type", Backend.ENTITY_TYPE[entity.entity_type]],
@@ -70,33 +79,9 @@ function entity_text(entity: EntityData): string
     return rows.map(([name, value]) => `${name} = ${value}`).join('\n');
 }
 
-// Calendar: the day is the world age in ticks over ticks_per_day, shown from day 1.
-function update_calendar(): void
+function set_text(element: HTMLElement, text: string): void
 {
-    const ticks_per_day = get_game_parameters().get_number("ticks_per_day");
-    if (ticks_per_day === 0) { submit_calendar(null); return; }
-
-    const age = Backend.get_world_age();
-    submit_calendar({
-        day: Math.floor(age / ticks_per_day) + 1,
-        progress: (age % ticks_per_day) / ticks_per_day,
-    });
+    if (element.textContent !== text) element.textContent = text;
 }
 
-// Per-frame refresh. Call once the match is running.
-export function update_game_ui(): void
-{
-    update_calendar();
-    submit_player_state(get_local_player_state());
-
-    if (selectedPanelElement === null || selectedTextElement === null) return;
-
-    // Re-query the selected entity every frame so its values stay live. Nothing to show if there is none or it has no Game Data Object.
-    const selected = get_selected_entity_view();
-    const text = selected !== null ? entity_text(selected) : null;
-
-    set_hidden(selectedPanelElement, text === null);
-    if (text === null) return;
-
-    if (selectedTextElement.textContent !== text) selectedTextElement.textContent = text;
-}
+init();

@@ -100,7 +100,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::WORKER;
-			outEntity.owner = world.entities->settlements.owners[workers.origin_entity[workerIndex].get_index()]; // Owner of the origin (a destroyed origin leaves a stale owner for one frame).
+			outEntity.owner = world_entity_get_owner(world, workers.guids[workerIndex]);
 			outEntity.guid = workers.guids[workerIndex];
 			outEntity.viewport_location = workerLoc - render_state.viewport.bottom_left;
 
@@ -129,11 +129,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			if (!caravans.guids[caravanIndex].is_valid() || !is_visible_in_viewport(caravanLoc, render_state.viewport)) continue;
 
 			// Caravans have no owner of their own: they are tinted as their origin settlement, if it still exists.
-			entity_guid origin = caravans.origin_settlements[caravanIndex];
-
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::CARAVAN;
-			outEntity.owner = world_entity_is_valid(world, origin) ? settlements.owners[origin.get_index()] : INVALID_MATCH_PLAYER_ID;
+			outEntity.owner = world_entity_get_owner(world, caravans.guids[caravanIndex]);
 			outEntity.guid = caravans.guids[caravanIndex];
 			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
 

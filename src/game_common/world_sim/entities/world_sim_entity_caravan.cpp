@@ -70,6 +70,7 @@ bool world_entity_query_caravan(const match_world_state& world, entity_guid enti
         .origin_settlement = caravans.origin_settlements[i],
         .destination_settlement = caravans.destination_settlements[i],
         .value = caravans.values[i],
+        .owner = world_entity_get_owner(world, caravans.origin_settlements[i]),
     };
     return true;
 }

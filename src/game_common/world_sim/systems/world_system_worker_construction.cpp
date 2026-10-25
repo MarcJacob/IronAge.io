@@ -17,15 +17,6 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
     if (region.owners[tileIndex] != world_terrain::UNOWNED_TILE) region.status[tileIndex].proximity_recalc = true;
 }
 
-// Player paying for a worker: the owner of its origin settlement. world.player_count if none.
-// Every work type has a settlement origin for now. Where the money comes from depending on the origin's type: later.
-static match_player_id worker_payer(const match_world_state& world, ui16 worker_index)
-{
-    entity_guid origin = world.entities->workers.origin_entity[worker_index];
-    if (origin.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, origin)) return world.player_count;
-    return world.entities->settlements.owners[origin.get_index()];
-}
-
 // Pays a worker's day (its daily cost) from its payer's treasury, all or nothing (spent). Returns false if the treasury cannot afford it.
 // Projects call it once everything else they need for the day is there, so a day is only paid when it advances. A free worker (cost 0) always succeeds.
 static bool worker_pay_day(match_world_state& world, ui16 worker_index)
@@ -33,7 +24,8 @@ static bool worker_pay_day(match_world_state& world, ui16 worker_index)
     ui32 cost = world.entities->workers.daily_costs[worker_index];
     if (cost == 0) return true;
 
-    match_player_id payer = worker_payer(world, worker_index);
+    // The owner of the worker's origin pays. Every work type has a settlement origin for now. Where the money comes from depending on the origin's type: later.
+    match_player_id payer = world_entity_get_owner(world, world.entities->workers.guids[worker_index]);
     if (payer >= world.player_count) return false;
 
     world_player_state& player = world.player_states[payer];
@@ -91,7 +83,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     {
         data.ticks_left = (ui16)(ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)) * GAME_PARAMETERS.road_build_ticks_per_cost);
         ui16 tileOwner = world.terrain->regions[regionIndex].owners[tileIndex];
-        match_player_id crewOwner = world.entities->settlements.owners[workers.origin_entity[worker_index].get_index()];
+        match_player_id crewOwner = world_entity_get_owner(world, workers.guids[worker_index]);
         if (tileOwner == world_terrain::UNOWNED_TILE || world.entities->settlements.owners[tileOwner] != crewOwner)
             data.ticks_left *= GAME_PARAMETERS.road_build_foreign_multiplier;
     }

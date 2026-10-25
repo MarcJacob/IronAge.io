@@ -4,42 +4,69 @@
 
 import * as Core from "../core.js"
 import { get_selected_entity_guid, get_selected_entity_view, clear_selected_entity, send_command, is_command_valid } from "../input.js"
-import { submit_action_bar, type ActionBarItem, type ActionBarState } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
-import { inspect_entity } from "../ui/inspection/inspect_entity.js"
+import * as ActionBarUI from "../ui/ui_element_action_bar.js"
+import * as SettlementPanelUI from "../ui/inspection/ui_element_settlement_panel.js"
+import { show_entity } from "../ui/inspection/inspect_entity.js"
 import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
 import { SettlementFounding } from "./settlement_founding.js"
 
+// A bar item that starts a child mode. hotkey: shown on the button, also the key the child mode is left with.
+interface SettlementAction extends ActionBarUI.ActionBarItem
+{
+    hotkey: string;
+    make_mode: (settlement_guid: number, exit_key: string) => Core.Mode;
+}
+
 export class SettlementSelected extends Core.Mode
 {
-    private raise_item = this.make_item("Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
+    private raise_item = this.make_item("raise_army", "Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
 
-    private found_item = this.make_item("Found Settlement", 'Digit3', (guid, key) => new SettlementFounding(guid, key));
+    private found_item = this.make_item("found_settlement", "Found Settlement", 'Digit3', (guid, key) => new SettlementFounding(guid, key));
 
-    private bar: ActionBarState = { items: [
-        this.make_item("Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
+    private bar: { items: SettlementAction[] } = { items: [
+        this.make_item("build_road", "Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
         this.raise_item,
         this.found_item,
     ] };
 
+    private unsubscribe: (() => void)[] = [];
+
     on_entry(): void
     {
-        submit_action_bar(this.bar);
+        // The panel's settings and build buttons apply to the selected settlement (the panel only shows it while it is selected).
+        const send_to_selected = (name: string, props: { [name: string]: number }) => {
+            const settlement = get_selected_entity_guid();
+            if (settlement !== null) send_command(name, { settlement, ...props });
+        };
+
+        this.unsubscribe = [
+            ActionBarUI.on("action", id => {
+                const item = this.bar.items.find(candidate => candidate.id === id);
+                if (item !== undefined) this.activate(item);
+            }),
+            SettlementPanelUI.on("tax_rate", tax_rate => send_to_selected("SET_SETTLEMENT_TAX_RATE", { tax_rate })),
+            // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
+            SettlementPanelUI.on("ceiling", (troop_type, ceiling) => send_to_selected("SET_SETTLEMENT_TROOP_CEILING", { troop_type, ceiling })),
+            SettlementPanelUI.on("build", building_type => send_to_selected("BUILD_SETTLEMENT_BUILDING", { building_type })),
+        ];
+        ActionBarUI.submit(this.bar);
     }
 
     on_exit(): void
     {
-        submit_action_bar(null);
-        submit_properties_panel(null);
+        for (const unsubscribe of this.unsubscribe) unsubscribe();
+        this.unsubscribe = [];
+        ActionBarUI.submit(null);
+        show_entity(null);
     }
 
     // The mode of the active action was left: nothing is selected anymore.
     on_resumed(): void
     {
         for (const item of this.bar.items) item.state = 'selectable';
-        submit_action_bar(this.bar);
+        ActionBarUI.submit(this.bar);
     }
 
     on_frame_update(delta_time_s: number): void
@@ -54,13 +81,11 @@ export class SettlementSelected extends Core.Mode
         // The panel belongs to the raise army and found settlement modes while they are active.
         if (this.raise_item.state === 'selected' || this.found_item.state === 'selected') return;
 
-        // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
-        submit_properties_panel(inspect_entity(view, {
-            on_build_building: (building_type) => send_command("BUILD_SETTLEMENT_BUILDING", { settlement: view.guid, building_type }),
-            can_build_building: (building_type) => is_command_valid("BUILD_SETTLEMENT_BUILDING", { settlement: view.guid, building_type }),
-            on_ceiling: (troop_type, ceiling) => send_command("SET_SETTLEMENT_TROOP_CEILING", { settlement: view.guid, troop_type, ceiling }),
-            on_tax_rate: (tax_rate) => send_command("SET_SETTLEMENT_TAX_RATE", { settlement: view.guid, tax_rate }),
-        }));
+        // Own settlement: editable panel (events subscribed in on_entry), build buttons enabled when the project would be accepted.
+        show_entity(view, {
+            edit_settlement: true,
+            buildable: view.get_array("building_counts").map((_, building_type) => is_command_valid("BUILD_SETTLEMENT_BUILDING", { settlement: view.guid, building_type })),
+        });
     }
 
     on_escape(): boolean
@@ -78,18 +103,16 @@ export class SettlementSelected extends Core.Mode
         const item = this.bar.items.find(candidate => candidate.hotkey === event.code);
         if (item === undefined) return false;
 
-        if (!event.repeat) item.on_activate();
+        if (!event.repeat) this.activate(item);
         return true;
     }
 
-    // An item that starts a child mode. hotkey: shown on the button, also the key the child mode is left with.
-    private make_item(name: string, hotkey: string, make_mode: (settlement_guid: number, exit_key: string) => Core.Mode): ActionBarItem
+    private make_item(id: string, name: string, hotkey: string, make_mode: SettlementAction["make_mode"]): SettlementAction
     {
-        const item: ActionBarItem = { name, hotkey, state: 'selectable', on_activate: () => this.activate(item, hotkey, make_mode) };
-        return item;
+        return { id, name, hotkey, state: 'selectable', make_mode };
     }
 
-    private activate(item: ActionBarItem, hotkey: string, make_mode: (settlement_guid: number, exit_key: string) => Core.Mode): void
+    private activate(item: SettlementAction): void
     {
         if (item.state === 'unselectable') return;
 
@@ -104,12 +127,12 @@ export class SettlementSelected extends Core.Mode
         if (guid === null) return;
 
         // Pops the mode of another action first if there is one (which resets the bar), then pushes the new one.
-        Core.push_mode(make_mode(guid, hotkey), this);
+        Core.push_mode(item.make_mode(guid, item.hotkey), this);
 
         // The new mode may have left right away (then this mode resumed and reset the bar).
         if (this.is_top) return;
 
         for (const other of this.bar.items) other.state = other === item ? 'selected' : 'selectable';
-        submit_action_bar(this.bar);
+        ActionBarUI.submit(this.bar);
     }
 }

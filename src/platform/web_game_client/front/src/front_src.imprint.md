@@ -13,14 +13,16 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
 - *core.ts* holds the shared basics: frame loop, match joined / ended callbacks, message sending, and the Mode system (below).
 - *modes/* decides what the player sees and can do at any moment. See below.
 - *render.ts* draws the match from the backend's render state and a configuration object. It never decides what to show.
-- *ui/* holds the DOM elements of the interface, one module per major element (*ui_element_<name>.ts*; static markup lives in *web/index.html*).
-  Each owns its DOM and exports a state type and a *submit_** function that makes the element show a state (null clears it).
-  Elements only emit signals back (callbacks, e.g. a button's *on_activate*): they never send input commands or switch modes.
-  A mode that drives an element keeps its own full state for it (and may keep mutating it while it is not visible), submits it on entry and on resume,
-  and clears the element on exit. A child mode may override an element by submitting its own state; the parent submits its own again on resume.
-  Hotkeys are handled by the modes in their own *on_key_down*, not by the elements.
-  The bottom of the screen is the bottom section, a three part grid: player state (left), inspection panel (center), action panel (right).
-  Rows of the inspection panel can be put in areas (*in_area*): a main part on top, left and right halves of one line, and a bottom part. See *ui/inspection/*.
+- *ui/* holds the interface, one module per major element (*ui_element_<name>.ts*). Static markup lives in *web/index.html* (one page for the whole flow: login, lobby list, lobby, match).
+  A module is the bridge between its own static DOM elements, found once when it initializes, and the logic of the modes. Nothing is generic or data-driven:
+  every field is a static element the module shows, hides and fills. Only genuine lists are built in code, from a template element.
+  A module initializes itself when imported, so it exists only if something imports it (normally its owning mode). It exports a state type (plain facts: the module writes the texts and colors),
+  *submit(state | null)* (null hides the whole module; hiding a single element is part of the state), and typed events (*on(event, callback)*, *ui_events.ts*) for the user's actions.
+  Modules never send input commands or switch modes: the mode that owns a module subscribes to its events on entry, unsubscribes on exit, builds the state from the backend and submits it,
+  and hides the module on exit. A child mode may take over a module by submitting its own state; the parent submits its own again on resume.
+  Hotkeys are handled by the modes in their own *on_key_down*, not by the modules. Keys typed in an input field never reach the modes.
+  The bottom of the match screen is the bottom section, a three part grid: player state (left), the entity frame (center), action bar (right).
+  The entity frame (title and owner) holds one panel module per entity type, and the panel to show is chosen in one place, in *ui/inspection/inspect_entity.ts*. See *ui/inspection/*.
   Entity data reaches the interface only through *query_entity* (*gdo.ts*): the entity's properties, plus *extra* for data the web layer builds for the UI.
 
 - *input.ts* is a library plus the DOM listener registration. It forwards clicks, keys and Escape to the modes

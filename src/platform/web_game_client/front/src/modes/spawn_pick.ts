@@ -5,7 +5,7 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { show_placement_ui, hide_placement_ui, update_placement_ui } from "../ui/placement_ui.js"
+import * as PlacementUI from "../ui/placement_ui.js"
 import { MainPlay } from "./main_play.js"
 
 // Mirrors world_terrain::REGION_SIZE (include/game_common/match/world/world_terrain.h).
@@ -23,23 +23,32 @@ export class SpawnPick extends Core.Mode
 {
     private picks = new Map<number, { x: number, y: number }>(); // Per player id.
 
+    private countdown_end_ms = 0; // performance.now() timestamp at which the countdown reaches 0.
+
     constructor(private local_player_id: number, private countdown_ms: number) { super(); }
 
     on_entry(): void
     {
-        show_placement_ui(this.countdown_ms);
+        this.countdown_end_ms = performance.now() + this.countdown_ms;
+        this.submit_placement_ui();
         Render.RENDER_CONFIG.overlay_dots = [];
     }
 
     on_exit(): void
     {
-        hide_placement_ui();
+        PlacementUI.submit(null);
         Render.RENDER_CONFIG.overlay_dots = [];
     }
 
     on_frame_update(delta_time_s: number): void
     {
-        update_placement_ui();
+        this.submit_placement_ui();
+    }
+
+    private submit_placement_ui(): void
+    {
+        const remaining = (this.countdown_end_ms - performance.now()) / Math.max(1, this.countdown_ms);
+        PlacementUI.submit({ remaining: Math.min(1, Math.max(0, remaining)) });
     }
 
     // Placement can't be escaped out of.

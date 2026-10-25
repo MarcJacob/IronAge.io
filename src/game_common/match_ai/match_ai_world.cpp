@@ -75,7 +75,7 @@ static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, ma
 
 		entity_guid origin = workers.origin_entity[slot];
 		if (!world_entity_is_valid(world, origin)) continue;
-		if (settlement.is_valid() ? origin == settlement : world.entities->settlements.owners[origin.get_index()] == player) count++;
+		if (settlement.is_valid() ? origin == settlement : world_entity_get_owner(world, origin) == player) count++;
 	}
 	return count;
 }

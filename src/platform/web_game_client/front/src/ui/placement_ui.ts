@@ -1,41 +1,40 @@
-// Placement phase UI: message + emptying countdown bar (static DOM in index.html, refreshed from here).
-// The countdown is indicative only: leaving the placement phase is up to the server's first tick.
+// UI module (new style): the placement phase overlay. A message and an emptying countdown bar.
+// Static markup in index.html (ids below, the message text is in the markup), extracted once by init. submit(state) shows it, submit(null) hides it.
+// Pure display, emits nothing. The countdown itself is kept by the driver mode (spawn_pick.ts), which submits the remaining fraction every frame.
 
-let uiElement: HTMLElement | null = null;
-let barFillElement: HTMLElement | null = null;
+// Every DOM id this module uses (index.html).
+const IDS = {
+    root: "placement_ui",
+    bar_fill: "placement_ui_bar_fill",
+};
 
-// performance.now() timestamp at which the countdown reaches 0, and its total duration.
-let countdownEndMs = 0;
-let countdownTotalMs = 1;
-let shown = false;
-
-export function init_placement_ui(): void
+export interface PlacementState
 {
-    uiElement = document.getElementById("placement_ui") as HTMLElement;
-    barFillElement = document.getElementById("placement_ui_bar_fill") as HTMLElement;
+    remaining: number; // 0..1, fraction of the countdown left (the bar empties).
 }
 
-// Shows the placement UI with a countdown starting now.
-export function show_placement_ui(countdown_ms: number): void
+let el: {
+    root: HTMLElement;
+    bar_fill: HTMLElement;
+} | null = null;
+
+function init(): void
 {
-    shown = true;
-    countdownTotalMs = Math.max(1, countdown_ms);
-    countdownEndMs = performance.now() + countdown_ms;
-    if (uiElement !== null) uiElement.hidden = false;
+    el = {
+        root: document.getElementById(IDS.root) as HTMLElement,
+        bar_fill: document.getElementById(IDS.bar_fill) as HTMLElement,
+    };
 }
 
-// Safe to call when not shown.
-export function hide_placement_ui(): void
+export function submit(state: PlacementState | null): void
 {
-    shown = false;
-    if (uiElement !== null) uiElement.hidden = true;
+    if (el === null) return;
+
+    el.root.hidden = state === null;
+    if (state === null) return;
+
+    const width = `${Math.round(state.remaining * 1000) / 10}%`;
+    if (el.bar_fill.style.width !== width) el.bar_fill.style.width = width;
 }
 
-// Per-frame refresh of the countdown bar.
-export function update_placement_ui(): void
-{
-    if (!shown || barFillElement === null) return;
-
-    const fraction = Math.min(1, Math.max(0, (countdownEndMs - performance.now()) / countdownTotalMs));
-    barFillElement.style.width = `${fraction * 100}%`;
-}
+init();

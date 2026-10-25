@@ -510,6 +510,8 @@ struct world_entity_workers : public world_entity_container
 		world_worker_action_data action_data;
 		world_location position;
 		world_entity_movement movement;
+
+		match_player_id owner; // Derived: owner of the origin entity (world_entity_get_owner). Not stored per worker.
 	};
 };
 
@@ -520,6 +522,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_worker)
 	GAME_DATA_PROPERTY(origin_entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(work_type, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(work_time, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY_PATH(location, position, GAME_DATA_PROP_TYPE::WORLD_LOCATION) // Named like the other entities' so generic inspection shows it.
 GAME_DATA_OBJECT_DEF_END()
 
@@ -594,6 +597,8 @@ struct world_entity_caravans : public world_entity_container
         entity_guid destination_settlement;
 
         ui16 value;
+
+        match_player_id owner; // Derived: owner of the origin settlement (world_entity_get_owner). Not stored per caravan.
     };
 };
 
@@ -611,6 +616,7 @@ GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_
 GAME_DATA_PROPERTY(origin_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_PROPERTY(destination_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_PROPERTY(value, GAME_DATA_PROP_TYPE::UI16)
+GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 GAME_DATA_OBJECT_DEF_END();
 
 // Holds all entity data for a world state.
@@ -631,6 +637,10 @@ struct world_entities
 bool world_entity_is_valid(const match_world_state& world, entity_guid entity);
 
 world_location world_entity_get_location(const match_world_state& world, entity_guid entity);
+
+// Owner of the entity: a settlement's or army's own, the origin settlement's for a caravan, the origin entity's for a worker.
+// INVALID_MATCH_PLAYER_ID if the entity has none (battles), is not valid, or its origin is gone.
+match_player_id world_entity_get_owner(const match_world_state& world, entity_guid entity);
 
 bool world_entity_query_settlement(const match_world_state& world, entity_guid entity, world_entity_settlement& out_state);
 

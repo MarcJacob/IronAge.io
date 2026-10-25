@@ -6,8 +6,8 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR, type CommandFeedback } from "../input.js"
-import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
-import { inspect_entity } from "../ui/inspection/inspect_entity.js"
+import * as RaiseArmyPanelUI from "../ui/inspection/ui_element_raise_army_panel.js"
+import { show_entity, show_raise_army_panel } from "../ui/inspection/inspect_entity.js"
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
@@ -40,9 +40,20 @@ export class ArmyRaising extends Core.Mode
     // exit_key: code of the key that entered the mode, pressing it again leaves the mode.
     constructor(private settlement_guid: number, private exit_key: string) { super(); }
 
+    private unsubscribe: (() => void)[] = [];
+
+    on_entry(): void
+    {
+        this.unsubscribe = [
+            RaiseArmyPanelUI.on("raise_targets", targets => { this.targets = targets; }),
+        ];
+    }
+
     on_exit(): void
     {
-        submit_properties_panel(null);
+        for (const unsubscribe of this.unsubscribe) unsubscribe();
+        this.unsubscribe = [];
+        show_entity(null);
         Render.RENDER_CONFIG.path_preview = null;
     }
 
@@ -56,9 +67,8 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
-        submit_properties_panel(inspect_entity(view, {
-            raise_targets: this.targets,
-            on_raise_targets: targets => { this.targets = targets; },        }));
+        // The target sliders send their values through "raise_targets" (subscribed in on_entry).
+        show_raise_army_panel(view, this.targets);
 
         const hovered = Render.get_hovered_tile();
         if (hovered === null)

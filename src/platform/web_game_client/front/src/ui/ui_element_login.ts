@@ -34,7 +34,7 @@ let el: {
     error: HTMLElement;
 } | null = null;
 
-export function init(): void
+function init(): void
 {
     const form = document.getElementById(IDS.form) as HTMLFormElement;
     el = {
@@ -71,3 +71,5 @@ function set_text(element: HTMLElement, text: string): void
 {
     if (element.textContent !== text) element.textContent = text;
 }
+
+init();

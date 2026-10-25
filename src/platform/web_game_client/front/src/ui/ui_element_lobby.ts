@@ -70,7 +70,7 @@ let el: {
 // performance.now() until which a control keeps the user's value, per control.
 const editHoldUntilMs = new Map<HTMLInputElement, number>();
 
-export function init(): void
+function init(): void
 {
     const get = (id: string) => document.getElementById(id) as HTMLElement;
     el = {
@@ -176,3 +176,5 @@ function set_text(element: HTMLElement, text: string): void
 {
     if (element.textContent !== text) element.textContent = text;
 }
+
+init();

@@ -17,14 +17,182 @@
             </div>
 
             <div id="game_hud_section_bottom">
-                <div id="game_hud_player_state" hidden></div>
-                <div id="game_hud_properties_panel" hidden>
-                    <div id="game_hud_properties_title"></div>
-                    <div id="game_hud_properties_subtitle" hidden></div>
-                    <div id="game_hud_properties_rows"></div>
+                <div id="game_hud_player_state" hidden>
+                    <div class="player_state_row big">
+                        <span class="player_state_label">Gold</span>
+                        <div class="player_state_line">
+                            <span id="player_state_gold" class="player_state_value"></span>
+                            <span id="player_state_gold_delta" class="player_state_delta"></span>
+                        </div>
+                    </div>
+                    <div class="player_state_row">
+                        <span class="player_state_label">Settlements</span>
+                        <div class="player_state_line"><span id="player_state_settlements" class="player_state_value"></span></div>
+                    </div>
+                    <div class="player_state_row">
+                        <span class="player_state_label">Pop</span>
+                        <div class="player_state_line"><span id="player_state_population" class="player_state_value"></span></div>
+                    </div>
+                    <div class="player_state_row">
+                        <span class="player_state_label">Soldiers</span>
+                        <div class="player_state_line"><span id="player_state_soldiers" class="player_state_value"></span></div>
+                    </div>
                 </div>
 
-                <div id="game_hud_action_bar" hidden></div>
+                <!-- Entity frame and the panels inside it (ui/inspection/ui_element_entity_frame.ts, ui_element_*_panel.ts).
+                     At most one panel shows at a time (routing in ui/inspection/inspect_entity.ts). -->
+                <div id="game_hud_entity_frame" hidden>
+                    <div id="game_hud_entity_frame_title"></div>
+                    <div id="game_hud_entity_frame_subtitle" hidden></div>
+
+                    <div id="game_hud_caravan_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Value</span><span id="caravan_panel_value"></span></div>
+                        <div class="text_row"><span class="text_row_label">Origin</span><span id="caravan_panel_origin"></span></div>
+                        <div class="text_row"><span class="text_row_label">Destination</span><span id="caravan_panel_destination"></span></div>
+                    </div>
+
+                    <div id="game_hud_army_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Origin</span><span id="army_panel_origin"></span></div>
+                        <div id="army_panel_levies" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Levies <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="army_panel_men_at_arms" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Men-at-arms <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="army_panel_horsemen" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Horsemen <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="army_panel_knights" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Knights <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="army_panel_supplies" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Supplies <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                        </div>
+                        <div id="army_panel_consumption" class="text_row value_row has_tooltip">
+                            <span class="text_row_label">Consumption</span><span id="army_panel_consumption_value"></span><span class="value_row_delta"></span><span id="army_panel_consumption_note" class="value_row_note"></span>
+                        </div>
+                        <div id="army_panel_warning" class="text_row" hidden>
+                            <span id="army_panel_warning_label" class="text_row_label"></span><span id="army_panel_warning_text" class="warn"></span>
+                        </div>
+                    </div>
+
+                    <div id="game_hud_worker_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Origin</span><span id="worker_panel_origin"></span></div>
+                        <div class="text_row"><span class="text_row_label">Location</span><span id="worker_panel_location"></span></div>
+                    </div>
+
+                    <div id="game_hud_battle_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Location</span><span id="battle_panel_location"></span></div>
+                    </div>
+
+                    <!-- Settlement "Raise army" panel (ui/inspection/ui_element_raise_army_panel.ts), shown by the Raise army mode. -->
+                    <div id="game_hud_raise_army_panel" hidden>
+                        <div id="raise_army_panel_levies" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Levies <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="raise_army_panel_men_at_arms" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Men-at-arms <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="raise_army_panel_horsemen" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Horsemen <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div id="raise_army_panel_knights" class="gauge">
+                            <div class="gauge_header"><div class="gauge_text">Knights <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                            <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                            <input type="range" min="0" step="1" hidden>
+                        </div>
+                        <div class="text_row"><span class="text_row_label">Cost:</span><span id="raise_army_panel_cost"></span></div>
+                    </div>
+
+                    <!-- Settlement "Found settlement" panel (ui/inspection/ui_element_found_settlement_panel.ts), shown by the Found settlement mode. -->
+                    <div id="game_hud_found_settlement_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Colonists</span><span id="found_settlement_panel_colonists"></span></div>
+                        <div class="text_row"><span class="text_row_label">Target</span><span id="found_settlement_panel_target"></span></div>
+                    </div>
+
+                    <!-- Settlement panel (ui/inspection/ui_element_settlement_panel.ts): economy top left, garrison top right, buildings at the bottom. -->
+                    <div id="game_hud_settlement_panel" hidden>
+                        <div class="settlement_panel_top">
+                            <div class="settlement_panel_column">
+                                <div id="settlement_panel_population" class="text_row value_row has_tooltip">
+                                    <span class="text_row_label">Population</span><span id="settlement_panel_population_value"></span><span id="settlement_panel_population_growth" class="value_row_delta"></span><span id="settlement_panel_population_note" class="value_row_note"></span>
+                                </div>
+                                <div class="settlement_panel_line">
+                                    <div id="settlement_panel_production" class="text_row value_row has_tooltip">
+                                        <span class="text_row_label">Production</span><span id="settlement_panel_production_value"></span>
+                                    </div>
+                                    <div id="settlement_panel_tax" class="slider_row">
+                                        <span class="text_row_label">Tax</span><span id="settlement_panel_tax_value" class="slider_row_value"></span>
+                                        <input id="settlement_panel_tax_slider" type="range" step="1" hidden>
+                                    </div>
+                                </div>
+                                <div id="settlement_panel_consumption" class="text_row value_row has_tooltip">
+                                    <span class="text_row_label">Consumption</span><span id="settlement_panel_consumption_value"></span><span id="settlement_panel_consumption_delta" class="value_row_delta"></span>
+                                </div>
+                                <div id="settlement_panel_market_goods" class="gauge">
+                                    <div class="gauge_header"><div class="gauge_text">Market Goods <span id="settlement_panel_market_goods_percent"></span> <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                                </div>
+                            </div>
+
+                            <div class="settlement_panel_column">
+                                <div class="settlement_panel_header">Garrison</div>
+                                <div id="settlement_panel_men_at_arms" class="gauge">
+                                    <div class="gauge_header"><div class="gauge_text">Men-at-arms <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_raised"></div><div class="gauge_marker"></div></div>
+                                    <input type="range" min="0" step="1" hidden>
+                                </div>
+                                <div id="settlement_panel_horsemen" class="gauge">
+                                    <div class="gauge_header"><div class="gauge_text">Horsemen <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_raised"></div><div class="gauge_marker"></div></div>
+                                    <input type="range" min="0" step="1" hidden>
+                                </div>
+                                <div id="settlement_panel_knights" class="gauge">
+                                    <div class="gauge_header"><div class="gauge_text">Knights <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
+                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_raised"></div><div class="gauge_marker"></div></div>
+                                    <input type="range" min="0" step="1" hidden>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- One box per building type, in the order of SETTLEMENT_BUILDING_TABLE (world_entities.h). Name static here; one bar per ongoing project, cloned from the template. -->
+                        <div class="settlement_panel_buildings">
+                            <div id="settlement_panel_building_bar_template" class="building_row_bar" hidden><div></div></div>
+                            <div id="settlement_panel_building_barracks" class="building_row">
+                                <span class="building_row_name">Barracks</span><span class="building_row_count"></span>
+                                <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
+                            </div>
+                            <div id="settlement_panel_building_caravanserai" class="building_row">
+                                <span class="building_row_name">Caravanserai</span><span class="building_row_count"></span>
+                                <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
+                            </div>
+                            <div id="settlement_panel_building_trade_depot" class="building_row">
+                                <span class="building_row_name">Trade Depot</span><span class="building_row_count"></span>
+                                <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="game_hud_action_bar" hidden>
+                    <!-- Template of the action buttons: cloned by ui_element_action_bar.ts, never shown itself. -->
+                    <button id="game_hud_action_bar_template" hidden></button>
+                </div>
             </div>
 
             <div id="game_hud_calendar" hidden>

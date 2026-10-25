@@ -7,9 +7,9 @@ import * as Render from "../render.js"
 import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army } from "../main.js"
-import { submit_action_bar, type ActionBarItem } from "../ui/ui_element_action_bar.js"
-import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
-import { inspect_entity } from "../ui/inspection/inspect_entity.js"
+import * as ActionBarUI from "../ui/ui_element_action_bar.js"
+import * as ArmyPanelUI from "../ui/inspection/ui_element_army_panel.js"
+import { show_entity } from "../ui/inspection/inspect_entity.js"
 import { raise_target_props } from "./army_raising.js"
 
 const ARMY_PATH_COLOR_MOVE = 'rgba(40, 220, 60, 0.9)';
@@ -23,15 +23,30 @@ export class ArmySelected extends Core.Mode
     private raising: boolean | null = null; // Whether the bar currently offers to stop raising (null: no bar submitted yet).
     private can_disband: boolean | null = null; // Whether the bar currently shows Disband as selectable.
 
-    private stop_item: ActionBarItem = { name: "Stop raising", state: 'selectable', on_activate: () => send_command("STOP_RAISING_ARMY", { army: this.army_guid }) };
+    private stop_item: ActionBarUI.ActionBarItem = { id: "stop_raising", name: "Stop raising", state: 'selectable' };
 
     // Disband is refused (greyed out) unless the army is in its home settlement's territory.
-    private disband_item: ActionBarItem = { name: "Disband", state: 'unselectable', on_activate: () => send_command("DISBAND_ARMY", { army: this.army_guid }) };
+    private disband_item: ActionBarUI.ActionBarItem = { id: "disband", name: "Disband", state: 'unselectable' };
+
+    private unsubscribe: (() => void)[] = [];
+
+    on_entry(): void
+    {
+        this.unsubscribe = [
+            ActionBarUI.on("action", id => {
+                if (id === this.stop_item.id) send_command("STOP_RAISING_ARMY", { army: this.army_guid });
+                else if (id === this.disband_item.id) send_command("DISBAND_ARMY", { army: this.army_guid });
+            }),
+            ArmyPanelUI.on("raise_targets", targets => send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) })),
+        ];
+    }
 
     on_exit(): void
     {
-        submit_action_bar(null);
-        submit_properties_panel(null);
+        for (const unsubscribe of this.unsubscribe) unsubscribe();
+        this.unsubscribe = [];
+        ActionBarUI.submit(null);
+        show_entity(null);
     }
 
     on_frame_update(delta_time_s: number): void
@@ -59,12 +74,10 @@ export class ArmySelected extends Core.Mode
             this.raising = raising;
             this.can_disband = canDisband;
             this.disband_item.state = canDisband ? 'selectable' : 'unselectable';
-            submit_action_bar({ items: raising ? [this.stop_item, this.disband_item] : [this.disband_item] });
+            ActionBarUI.submit({ items: raising ? [this.stop_item, this.disband_item] : [this.disband_item] });
         }
 
-        submit_properties_panel(inspect_entity(army, {
-            on_raise_targets: targets => send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) }),
-        }));
+        show_entity(army, { edit_raise_targets: true });
     }
 
     on_escape(): boolean

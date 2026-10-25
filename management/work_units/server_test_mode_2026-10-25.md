@@ -43,7 +43,7 @@ Server + platform-independent client state (`src/game_client`, wasm) + client ba
 - Lobby id = slot index (4 slots = 4 lobbies). Limits in `game_messages.h`: players 1-32, map size 1-8 regions per side.
 - Lowering the cap first moves a human above it to a free seat below, kicks only if none.
 - Leaving after match start behaves like a disconnect. Names: control chars become `?`; second auth request ignored.
-- Confirmed by user: max map size stays 8x8 (memory to be tested); cap lowering moves before kicking.
+- Confirmed by user: max map size 8x8 (tested 2026-10-26, memory is enough on client 64 MiB and server 128 MiB slot); cap lowering moves before kicking.
 - Rename "client connection" to "client state" (broader concerns than the connection flow). Strings: core string library (views / static strings), NOT zero-terminated on the wire; limited lengths (name max 32). Follow-up pass delegated 2026-10-25.
 - Follow-up pass done (unbuilt): `CLIENT_STATE` rename (`web_game_client_state.cpp`, `get_client_state`); names use core `ia_static_string` as `player_name` (36 bytes: 32 chars + u32 length at +32, not zero-terminated); `AUTHENTICATED` 52 bytes. Alternative on the table: u8 length + 32 bytes.
 - Player names in match [DONE, unbuilt]: `MATCH_STARTED` (the actual message name in code) has `player_count` x `player_name` appended after its fixed payload; humans by login name, others "CPU N"; client stores them, lookup `Backend.get_player_name(idx)`. Properties panel shows owner as grey subtitle (settlements / armies; workers and caravans none); army title "Army".
@@ -51,7 +51,6 @@ Server + platform-independent client state (`src/game_client`, wasm) + client ba
 
 ## Open questions
 
-- Does an 8x8 map fit client 64 MiB / server 128 MiB slot memory? (user to test; builder suggests max 6 if not)
 - Client has no path back to "connecting" after connection loss.
 - Kicked client auto-rejoins via the temporary path (goes away with UI).
 
@@ -60,4 +59,4 @@ Server + platform-independent client state (`src/game_client`, wasm) + client ba
 
 ## Next step
 
-All tasks built and hand-tested by user (2026-10-25). Unit complete. Remaining open items: 8x8 map memory test, reconnect after connection loss, delete dead `ui/lobby_ui.ts`.
+All tasks built and hand-tested by user (2026-10-25). Unit complete. Remaining open item: reconnect after connection loss (backlog `client_reconnect_after_connection_loss`).

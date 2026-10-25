@@ -6,7 +6,7 @@ import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
 import { get_selected_entity_guid, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR, COMMAND_INVALID_PATH } from "../input.js"
-import { submit_properties_panel, type PanelRow } from "../ui/inspection/ui_element_properties_panel.js"
+import { show_entity, show_found_settlement_panel } from "../ui/inspection/inspect_entity.js"
 import { query_entity, get_game_parameters } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
@@ -17,7 +17,7 @@ export class SettlementFounding extends Core.Mode
 
     on_exit(): void
     {
-        submit_properties_panel(null);
+        show_entity(null);
         Render.RENDER_CONFIG.path_preview = null;
     }
 
@@ -33,15 +33,11 @@ export class SettlementFounding extends Core.Mode
 
         const colonists = get_game_parameters().get_number("found_settlement_colonists");
         const peasants = view.get_number("peasants");
-        const rows: PanelRow[] = [
-            { kind: "text", id: "colonists", state: { label: "Colonists", text: `${colonists} (peasants ${peasants})` } },
-        ];
 
         const hovered = Render.get_hovered_tile();
         if (hovered === null)
         {
-            rows.push({ kind: "text", id: "target", state: { label: "Target", text: "Pick a location" } });
-            submit_properties_panel({ title: "Found settlement", rows });
+            show_found_settlement_panel({ colonists, peasants, target: null });
             Render.RENDER_CONFIG.path_preview = null;
             return;
         }
@@ -52,8 +48,7 @@ export class SettlementFounding extends Core.Mode
         const points = Backend.query_path(start, hovered);
         const feedback = get_command_feedback("FOUND_SETTLEMENT", { settlement: this.settlement_guid, target: hovered });
 
-        rows.push({ kind: "text", id: "target", state: { label: "Target", text: this.target_text(feedback.valid, feedback.values, points.length > 0) } });
-        submit_properties_panel({ title: "Found settlement", rows });
+        show_found_settlement_panel({ colonists, peasants, target: this.target_text(feedback.valid, feedback.values, points.length > 0) });
         Render.RENDER_CONFIG.path_preview = { start, points, valid: feedback.valid && points.length > 0 };
     }
 

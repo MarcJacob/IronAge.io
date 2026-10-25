@@ -1,6 +1,13 @@
-// UI element: the calendar at the top of the screen (container in index.html, content built here).
-// Shows the current day as text and how far it has gone as a bar. Pure display, emits nothing.
-// submit_calendar can be called every frame (the DOM is only touched when something changes); null clears it.
+// UI module (new style): the calendar at the top of the screen. Shows the current day as text and how far it has gone as a bar.
+// Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it. Pure display, emits nothing.
+// submit can be called every frame (the DOM is only touched when something changes).
+
+// Every DOM id this module uses (index.html).
+const IDS = {
+    root: "game_hud_calendar",
+    text: "game_hud_calendar_text",
+    fill: "game_hud_calendar_fill",
+};
 
 export interface CalendarState
 {
@@ -8,31 +15,36 @@ export interface CalendarState
     progress: number; // 0..1, how far the day has gone.
 }
 
-let calendarElement: HTMLElement | null = null;
-let textElement: HTMLElement | null = null;
-let fillElement: HTMLElement | null = null;
+let el: {
+    root: HTMLElement;
+    text: HTMLElement;
+    fill: HTMLElement;
+} | null = null;
 
-export function init_ui_element_calendar(): void
+function init(): void
 {
-    calendarElement = document.getElementById("game_hud_calendar") as HTMLElement;
-    textElement = document.getElementById("game_hud_calendar_text") as HTMLElement;
-    fillElement = document.getElementById("game_hud_calendar_fill") as HTMLElement;
+    el = {
+        root: document.getElementById(IDS.root) as HTMLElement,
+        text: document.getElementById(IDS.text) as HTMLElement,
+        fill: document.getElementById(IDS.fill) as HTMLElement,
+    };
 }
 
-// Makes the calendar show the given state. Null clears it (hidden).
-export function submit_calendar(state: CalendarState | null): void
+export function submit(state: CalendarState | null): void
 {
-    if (calendarElement === null || textElement === null || fillElement === null) return;
+    if (el === null) return;
 
-    if (state === null)
-    {
-        if (!calendarElement.hidden) calendarElement.hidden = true;
-        return;
-    }
+    el.root.hidden = state === null;
+    if (state === null) return;
 
-    calendarElement.hidden = false;
-    const text = `Day ${state.day}`;
-    if (textElement.textContent !== text) textElement.textContent = text;
+    set_text(el.text, `Day ${state.day}`);
     const width = `${Math.round(100 * state.progress)}%`;
-    if (fillElement.style.width !== width) fillElement.style.width = width;
+    if (el.fill.style.width !== width) el.fill.style.width = width;
 }
+
+function set_text(element: HTMLElement, text: string): void
+{
+    if (element.textContent !== text) element.textContent = text;
+}
+
+init();

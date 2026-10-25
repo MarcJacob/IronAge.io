@@ -3,12 +3,13 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { type EntityData } from "../gdo.js"
+import { get_game_parameters, get_local_player_state, type EntityData } from "../gdo.js"
 import { get_selected_entity_guid, get_selected_entity_view, set_selected_entity_guid } from "../input.js"
 import { is_own_army, is_own_settlement } from "../main.js"
-import { set_game_ui_visible, update_game_ui, toggle_debug_panel } from "../ui/game_ui.js"
-import { submit_properties_panel } from "../ui/inspection/ui_element_properties_panel.js"
-import { inspect_entity } from "../ui/inspection/inspect_entity.js"
+import * as GameUI from "../ui/game_ui.js"
+import * as CalendarUI from "../ui/ui_element_calendar.js"
+import * as PlayerStateUI from "../ui/ui_element_player_state.js"
+import { show_entity } from "../ui/inspection/inspect_entity.js"
 import { SettlementSelected } from "./settlement_selected.js"
 import { ArmySelected } from "./army_selected.js"
 
@@ -18,22 +19,59 @@ const DEBUG_PANEL_HOTKEY = "Backquote"; // Shows / hides the debug entity text (
 
 export class MainPlay extends Core.Mode
 {
+    private debug_collapsed = true;
+    private unsubscribe: (() => void)[] = [];
+
     on_entry(): void
     {
-        set_game_ui_visible(true);
+        this.unsubscribe = [GameUI.on("toggle_debug", () => this.toggle_debug_panel())];
     }
 
     on_exit(): void
     {
-        set_game_ui_visible(false);
-        submit_properties_panel(null);
+        for (const unsubscribe of this.unsubscribe) unsubscribe();
+        this.unsubscribe = [];
+        GameUI.submit(null);
+        CalendarUI.submit(null);
+        PlayerStateUI.submit(null);
+        show_entity(null);
         Render.RENDER_CONFIG.outlined_entity = null;
         Render.RENDER_CONFIG.path_preview = null;
     }
 
+    private toggle_debug_panel(): void
+    {
+        this.debug_collapsed = !this.debug_collapsed;
+    }
+
+    // Per-frame feed of the HUD: debug panel (re-queries the selected entity so its values stay live), calendar and player state (world state, not selection).
+    private submit_hud(): void
+    {
+        const selected = get_selected_entity_view();
+        GameUI.submit({ debug_text: selected !== null ? GameUI.entity_text(selected) : null, debug_collapsed: this.debug_collapsed });
+
+        // The day is the world age in ticks over ticks_per_day, shown from day 1.
+        const ticks_per_day = get_game_parameters().get_number("ticks_per_day");
+        if (ticks_per_day === 0) CalendarUI.submit(null);
+        else
+        {
+            const age = Backend.get_world_age();
+            CalendarUI.submit({ day: Math.floor(age / ticks_per_day) + 1, progress: (age % ticks_per_day) / ticks_per_day });
+        }
+
+        const player = get_local_player_state();
+        PlayerStateUI.submit({
+            gold: player.get_number("treasury"),
+            gold_per_day: player.get_number("income") - player.get_number("expenses"),
+            settlements: player.get_number("settlement_count"),
+            population: player.get_number("total_population"),
+            soldiers: player.get_number("total_troops"),
+        });
+    }
+
     on_frame_update(delta_time_s: number): void
     {
-        update_game_ui();
+        this.submit_hud();
         Render.RENDER_CONFIG.outlined_entity = get_selected_entity_guid();
 
         // Modes above this one set their own preview after this update (modes update bottom first).
@@ -42,13 +80,13 @@ export class MainPlay extends Core.Mode
 
         const selected = get_selected_entity_view();
 
-        if (selected === null) submit_properties_panel(null);
+        if (selected === null) show_entity(null);
         else if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
         else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
         // Anything else (enemy or other entity types): read-only properties, no callbacks.
         else
         {
-            submit_properties_panel(inspect_entity(selected, {}));
+            show_entity(selected, {});
             if (selected.entity_type === Backend.ENTITY_TYPE.CARAVAN) this.update_caravan_path_preview(selected);
         }
     }
@@ -68,7 +106,7 @@ export class MainPlay extends Core.Mode
     {
         if (event.code !== DEBUG_PANEL_HOTKEY) return false;
 
-        if (!event.repeat) toggle_debug_panel();
+        if (!event.repeat) this.toggle_debug_panel();
         return true;
     }
 

@@ -82,6 +82,14 @@ export enum ENTITY_TYPE
     CARAVAN = 5,
 };
 
+// Mirrors WORK_TYPE (include/game_common/match/world/world_entities.h), the worker GDO's work_type. Update here if the enum changes.
+export enum WORK_TYPE
+{
+    FOUND_SETTLEMENT = 0,
+    BUILD_ROAD = 1,
+    BUILD_SETTLEMENT_BUILDING = 2,
+};
+
 interface ClientExports extends WebAssembly.Exports
 {
     memory: WebAssembly.Memory;

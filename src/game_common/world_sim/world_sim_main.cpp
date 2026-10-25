@@ -86,6 +86,26 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 	}
 }
 
+match_player_id world_entity_get_owner(const match_world_state& world, entity_guid entity)
+{
+	if (!world_entity_is_valid(world, entity)) return INVALID_MATCH_PLAYER_ID;
+
+	switch (entity.get_type())
+	{
+	case ENTITY_TYPE::SETTLEMENT:
+		return world.entities->settlements.owners[entity.get_index()];
+	case ENTITY_TYPE::ARMY:
+		return world.entities->armies.owners[entity.get_index()];
+	case ENTITY_TYPE::WORKER:
+		// Owner of the origin entity, whatever its type.
+		return world_entity_get_owner(world, world.entities->workers.origin_entity[entity.get_index()]);
+	case ENTITY_TYPE::CARAVAN:
+		return world_entity_get_owner(world, world.entities->caravans.origin_settlements[entity.get_index()]);
+	default:
+		return INVALID_MATCH_PLAYER_ID;
+	}
+}
+
 // MAIN LIFECYCLE FUNCTIONS
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)

@@ -115,59 +115,7 @@ body {
     margin-top: auto;
 }
 
-/* Entity properties panel: general info about the selection, floating just left of the action bar (same bottom, bar edge = 50% - half its width). */
-#game_hud_properties_panel {
-    grid-column: 2;
-
-    box-sizing: border-box;
-    min-width: 0;
-
-    overflow: auto;
-    padding: 10px 12px;
-    background: rgba(36, 39, 45, 0.9);
-    border: 1px solid #c7cbd1;
-    border-radius: 6px;
-    font-family: monospace;
-    pointer-events: auto;
-}
-
-#game_hud_properties_title {
-    margin-bottom: 10px;
-    font-size: 1.5rem;
-    font-weight: bold;
-    text-align: center;
-}
-
-/* Owner's name under the title (pulled up into the title's bottom margin). */
-#game_hud_properties_subtitle {
-    margin: -6px 0 10px;
-    font-size: 0.9rem;
-    color: #9aa0a8;
-    text-align: center;
-}
-
-/* Parts of the panel: the main one (rows without an area) full width, then left and right as halves of one line, then the bottom one full width. */
-#game_hud_properties_rows {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 16px;
-    align-items: start;
-}
-
-.panel_area {
-    min-width: 0;
-}
-
-.panel_area_main,
-.panel_area_bottom {
-    grid-column: 1 / -1;
-}
-
-.panel_area_main { order: 0; }
-.panel_area_left { order: 1; grid-column: 1; }
-.panel_area_right { order: 2; grid-column: 2; }
-.panel_area_bottom { order: 3; margin-top: 6px; }
-
+/* Row classes of the entity panels (markup in index.html, bound by ui/inspection/static_rows.ts and the panel modules). */
 .gauge {
     margin-bottom: 8px;
 }
@@ -342,6 +290,10 @@ body {
     color: #ff6b6b;
 }
 
+.value_row_delta.warning {
+    color: #f0c040;
+}
+
 .value_row_delta.neutral {
     color: #9aa0a6;
 }
@@ -498,23 +450,6 @@ body {
     background: #c7cbd1;
 }
 
-/* Floats over the bottom-left corner of the canvas. */
-#debug_panel {
-    position: fixed;
-    left: 8px;
-    bottom: 8px;
-    box-sizing: border-box;
-    max-width: 45vw;
-    max-height: 40vh;
-    overflow: auto;
-    padding: 8px;
-    border: 1px solid #c7cbd1;
-    background: #fff;
-    color: #1d2128;
-    font-family: monospace;
-    white-space: pre-wrap;
-}
-
 /* ============================================================================================
    MENU SCREENS (new-style modules): login, lobby list, lobby. Shown instead of the canvas
    before and between matches, centered in the container.
@@ -617,4 +552,97 @@ body {
 
 #lobby_admin input[type=range] {
     width: 100%;
+}
+
+/* ============================================================================================
+   ENTITY FRAME (new-style modules): bottom center. The panels inside it use the row classes
+   above (.gauge, .text_row, .value_row).
+   ============================================================================================ */
+
+#game_hud_entity_frame {
+    grid-column: 2;
+
+    box-sizing: border-box;
+    min-width: 0;
+
+    overflow: auto;
+    padding: 10px 12px;
+    background: rgba(36, 39, 45, 0.9);
+    border: 1px solid #c7cbd1;
+    border-radius: 6px;
+    font-family: monospace;
+    pointer-events: auto;
+}
+
+#game_hud_entity_frame_title {
+    margin-bottom: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Owner's name under the title (pulled up into the title's bottom margin). */
+#game_hud_entity_frame_subtitle {
+    margin: -6px 0 10px;
+    font-size: 0.9rem;
+    color: #9aa0a8;
+    text-align: center;
+}
+
+/* ============================================================================================
+   SETTLEMENT PANEL (inside the entity frame): two columns on top (economy left, garrison right),
+   the building boxes centered below. Rows reuse the classes above (.text_row, .value_row, .gauge,
+   .slider_row, .building_row).
+   ============================================================================================ */
+
+.settlement_panel_top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: start;
+}
+
+.settlement_panel_column {
+    min-width: 0;
+}
+
+/* Production and the small tax slider on one line. */
+.settlement_panel_line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 1rem;
+}
+
+#settlement_panel_tax {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+#settlement_panel_tax input[type=range] {
+    width: 5rem;
+    margin: 0 0 0 0.5rem;
+}
+
+.settlement_panel_header {
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.settlement_panel_buildings {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.settlement_panel_buildings .building_row {
+    margin: 0;
+}
+
+/* The display rules above beat the hidden attribute. */
+#game_hud_settlement_panel [hidden] {
+    display: none;
 }

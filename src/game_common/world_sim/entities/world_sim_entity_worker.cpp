@@ -68,6 +68,7 @@ bool world_entity_query_worker(const match_world_state& world, entity_guid entit
 		.action_data = workers.action_data[i],
 		.position = workers.locations[i],
 		.movement = workers.movements[i],
+		.owner = world_entity_get_owner(world, workers.origin_entity[i]),
 	};
 	return true;
 }
