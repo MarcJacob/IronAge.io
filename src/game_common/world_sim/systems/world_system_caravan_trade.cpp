@@ -23,7 +23,9 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
 
     entity_guid newDestination;
     ui32 pathCost; // Unused: the trade system measures the tile distance on arrival.
-    if (world_caravan_select_destination(world, source, origin, caravans.values[index], caravans.flags[index], newDestination, pathCost))
+    // The previous destination is excluded: it was invalid or unreachable, picking it again would loop.
+    if (world_caravan_select_destination(world, source, origin, caravans.values[index], caravans.flags[index], newDestination, pathCost,
+        caravans.destination_settlements[index]))
     {
         caravans.destination_settlements[index] = newDestination;
         world_movement_stop(caravans.movements[index], caravans.locations[index]);

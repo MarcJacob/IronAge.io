@@ -34,8 +34,9 @@ static ui32 settlement_raw_output(ui32 base_land_output, ui32 peasants)
     if (peasants <= base_land_output) return peasants;
     if (base_land_output == 0) return 0; // No land to work.
 
-    ui32 surplus = peasants - base_land_output;
-    return base_land_output + surplus / (1 + surplus / base_land_output);
+    // Surplus gives B * s / (B + s): smooth, monotonic, tends to B (so the total tends to 2B). 64 bits since B * s can pass 32.
+    ui64 surplus = peasants - base_land_output;
+    return base_land_output + (ui32)(surplus * base_land_output / (base_land_output + surplus));
 }
 
 // Wealth produced by a raw land output.

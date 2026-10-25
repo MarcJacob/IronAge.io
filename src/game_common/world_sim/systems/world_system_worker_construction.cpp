@@ -95,7 +95,9 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
         if (tileOwner == world_terrain::UNOWNED_TILE || world.entities->settlements.owners[tileOwner] != crewOwner)
             data.ticks_left *= GAME_PARAMETERS.road_build_foreign_multiplier;
     }
+
     data.ticks_left--;
+
     if (data.ticks_left == 0)
     {
         world_tile_set_road(world, next);

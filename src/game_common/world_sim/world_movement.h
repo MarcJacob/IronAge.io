@@ -12,12 +12,12 @@
 
 // Travel difficulty over each terrain type. Used for tile proximity and pathfinding.
 static constexpr ui8 TILE_TERRAIN_TRAVEL_COST[] = {
-    3, // LAND_PLAINS
-    5, // LAND_HILLS
-    10, // LAND_MOUNTAINS
+    5, // LAND_PLAINS
+    7, // LAND_HILLS
+    12, // LAND_MOUNTAINS
 
-    1, // WATER_COAST
-    4, // WATER_SEA
+    3, // WATER_COAST
+    7, // WATER_SEA
 };
 
 // Travel difficulty of a road tile, whatever its terrain.

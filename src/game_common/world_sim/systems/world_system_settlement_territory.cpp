@@ -10,12 +10,12 @@
 
 // Base land output of each terrain type: peasants that can work the tile at full efficiency.
 static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
-    40, // LAND_PLAINS
-    28, // LAND_HILLS
+    50, // LAND_PLAINS
+    40, // LAND_HILLS
     15, // LAND_MOUNTAINS
 
-    100, // WATER_COAST
-    20, // WATER_SEA
+    60, // WATER_COAST
+    10, // WATER_SEA
 };
 
 // Proximity at which land output is reduced to 90%, stacking.
@@ -26,10 +26,11 @@ static ui32 world_get_tile_land_output(const match_world_state& world, ui16 regi
 {
     ui8 output = TILE_TERRAIN_BASE_OUTPUT[(ui8)world.terrain->regions[region_index].terrain_types[tile_index]];
 
-    ui8 decreaseStepCount = proximity / LAND_OUTPUT_DECREASE_STEP_DIST;
+    // Full width on purpose: narrowing before the check wraps far tiles back to full output.
+    ui16 decreaseStepCount = proximity / LAND_OUTPUT_DECREASE_STEP_DIST;
     if (decreaseStepCount >= 10) return 0;
 
-    for (ui8 decreaseStep = 0; decreaseStep < decreaseStepCount; decreaseStep++)
+    for (ui16 decreaseStep = 0; decreaseStep < decreaseStepCount; decreaseStep++)
     {
         output = output - (output / 10);
     }

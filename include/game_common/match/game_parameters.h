@@ -33,13 +33,8 @@ struct game_trade_parameters
     ui32 scarcity_value_min_percent = 50;
     ui32 scarcity_value_max_percent = 200;
 
-    // Margin earned per exchanged good, by distance. Distances are tiles between origin and destination (trade_tile_distance). A region is 128 tiles wide (world_terrain::REGION_SIZE).
-    ui32 distance_margin_min_tiles = 8; // No margin at or below this distance.
-    ui32 distance_margin_max_percent = 50; // Margin (% of the exchanged goods) at the saturation distance and beyond. Clamped to 10000.
-    // Curve shape log2(mid + steepness * (distance - min tiles)), only the ratio steepness / mid matters (with the 8 bit log precision).
-    ui32 distance_curve_mid = 1024; // Scale of the curve.
-    ui32 distance_saturation = 256; // Distance from which the margin stops growing (two regions).
-    ui32 distance_curve_steepness = 20; // Higher = faster initial rise.
+    // Extra margin earned per exchanged good, per specified distance between origin and destination (in number of times, "as the crow flies").
+    ui16 good_val_markup_increase_dist = 256;
 };
 
 // Per mille = thousandths (20 = 2%). Ratios are per mille too (1000 = 100%).
@@ -47,7 +42,7 @@ struct game_trade_parameters
 struct game_parameters
 {
     // TIME
-    ui32 ticks_per_day = 100; // A calendar day is this many world ticks. Slow systems (growth...) run once per day.
+    ui32 ticks_per_day = 120; // A calendar day is this many world ticks. Slow systems (growth...) run once per day.
 
     // MILITARY
     ui32 raise_min_population_left = 10; // Raising levies / training troops never takes a settlement's peasants below this.
@@ -77,14 +72,14 @@ struct game_parameters
     //   r >= 1000: growth_enough, plus up to (growth_max - growth_enough) as the excess goes from 0 to the requirement.
     //   r == growth_zero_ratio: 0. r <= growth_floor_ratio: growth_floor.
     ui32 consumption_per_person = 1; // Market goods consumed per day by each person at home (every stratum).
-    i32 growth_enough_per_mille = 40; // Growth when consumption is exactly met.
-    i32 growth_max_per_mille = 100; // Growth when the excess is at least the requirement.
-    ui32 growth_zero_ratio_per_mille = 900; // r at which growth is 0.
+    i32 growth_enough_per_mille = 75; // Growth when consumption is exactly met.
+    i32 growth_max_per_mille = 120; // Growth when the excess is at least the requirement.
+    ui32 growth_zero_ratio_per_mille = 750; // r at which growth is 0.
     ui32 growth_floor_ratio_per_mille = 500; // r at and below which growth is growth_floor.
     i32 growth_floor_per_mille = -200; // Lowest growth (shrinking).
 
     // COLONIZATION
-    ui32 found_settlement_colonists = 150; // Peasants a founding worker takes from its origin settlement. They become the new settlement's population.
+    ui32 found_settlement_colonists = 100; // Peasants a founding worker takes from its origin settlement. They become the new settlement's population.
 
     // TAXES
     i32 tax_rate_min = 0; // Lowest tax rate (%) a player can set. Negative would be investment (treasury -> settlement), not applied yet.
@@ -141,11 +136,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY_PATH(trade_flat_profit_percent_of_min, trade.flat_profit_percent_of_min, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_margin_min_tiles, trade.distance_margin_min_tiles, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_margin_max_percent, trade.distance_margin_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_curve_mid, trade.distance_curve_mid, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_saturation, trade.distance_saturation, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_distance_curve_steepness, trade.distance_curve_steepness, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 #endif // GAME_PARAMETERS_INCLUDED

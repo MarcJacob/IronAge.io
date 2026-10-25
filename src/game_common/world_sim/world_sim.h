@@ -70,10 +70,11 @@ void world_request_path(match_world_state& world, world_location start, world_lo
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 // Picks a destination settlement for a caravan of the given value travelling from source (any location), excluding origin_exclude (may be INVALID_ENTITY_GUID).
-// Candidates are the other active settlements with a complete path. Weight = trade_profit / path cost, picked with world.rand_gen (not advanced without candidates).
-// Returns false if there is no destination, otherwise the destination and the path cost used. Pathing to every settlement is not cached.
+// Candidates are the other active settlements (no reachability check) except destination_exclude (optional, e.g. the destination that just failed).
+// Weight = (trade_profit x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen (not advanced without candidates).
+// Returns false if there is no destination, otherwise the destination and its tile distance from source.
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
-    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost);
+    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost, entity_guid destination_exclude = INVALID_ENTITY_GUID);
 
 // Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
 // With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
