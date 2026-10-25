@@ -21,12 +21,19 @@ Created: 2026-10-23. To start right after `army_supplies_2026-10-23.md`. Multi-f
 
 ## Decisions
 
-- None yet beyond the direction above.
+- Module = bridge between its specific DOM elements (extracted once at init) and modal logic. Static fields filled throughout the interface; nothing is generic / data-driven (`PanelRow` union goes away).
+- Even buildings are static elements (one per building type); no known element needs to be dynamic (no leaderboard, few item lists). Build dynamically only for genuine lists, from templates; generation of static markup may be automated later.
+- Show / hide at both levels: a whole module and individual elements inside it, per module.
+- Single `index.html` for now; multiple HTML pages likely later.
+- Old and new styles coexist during migration.
+- Migration order: small modules first (calendar, placement, lobby, player state, tooltip, action bar; lobby early for admin controls), properties panel last.
+- Properties panel: probably one panel per entity type, sharing a parent framing element.
+- Main menu screen is part of this overhaul (kicked players return to it).
+- Input: keydown handler must ignore events targeting `<input>` / `<select>`.
 
 ## Open questions
 
-- Per-module migration order; whether old and new styles coexist during migration (assumed yes).
-- Where static markup lives (single HTML vs per-module fragments).
+- Exact subscribable-event / `submit` API shape per module (to be fixed with the first migrated module).
 
 ## Next step
 
