@@ -70,4 +70,4 @@ Started: 2026-10-24. Supersedes the income / export-import pool model of `econom
 
 ## Next step
 
-User builds and play-tests the barter profit model, then tunes. Then phase 2 (armies as trade targets). Complete economy UI waits for `web_ui_static_modules`.
+Phase 1 committed (587a901, 8ed0e9e): pool, barter profit model, selector, land output fixes, parameters adjusted. Ongoing: tuning only. Then phase 2 (armies as trade targets). Complete economy UI waits for `web_ui_static_modules`.

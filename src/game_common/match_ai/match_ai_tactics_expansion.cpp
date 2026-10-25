@@ -1,4 +1,4 @@
-// Expansion tactics: founding settlements on good land, and roads linking our settlements.
+// Expansion tactics: founding settlements on good land, and road spokes raising the land output of our settlements.
 
 #include "match_ai_internal.h"
 
@@ -16,14 +16,14 @@ static ui32 ai_nearest_foreign_dist_sq(const ai_context& ctx, world_location loc
 	return nearest;
 }
 
-// Random own settlement with enough peasants to send colonists, or nullptr.
+// Random own settlement big enough to send colonists, or nullptr.
 static const ai_settlement_view* ai_pick_colonist_origin(ai_context& ctx)
 {
 	ui32 start = ai_random(ctx, ctx.settlement_count);
 	for (ui32 offset = 0; offset < ctx.settlement_count; offset++)
 	{
 		const ai_settlement_view& settlement = ctx.settlements[(start + offset) % ctx.settlement_count];
-		if (settlement.peasants >= GAME_PARAMETERS.found_settlement_colonists + AI_COLONIST_RESERVE) return &settlement;
+		if (settlement.population >= AI_COLONIST_MIN_POPULATION && settlement.peasants >= GAME_PARAMETERS.found_settlement_colonists + AI_COLONIST_RESERVE) return &settlement;
 	}
 	return nullptr;
 }
@@ -43,7 +43,7 @@ static bool ai_find_site(ai_context& ctx, const ai_settlement_view& origin, worl
 		if (!ai_site_is_valid(ctx.world, site, ctx.player)) continue;
 
 		i32 landScore = ai_site_land_score(ctx.world, site);
-		if (landScore < 12) continue;
+		if (landScore < AI_SITE_MIN_LAND_SCORE) continue;
 		if (ai_nearest_foreign_dist_sq(ctx, site) < AI_MIN_SITE_DISTANCE_ENEMY * AI_MIN_SITE_DISTANCE_ENEMY) continue;
 
 		i32 score = landScore * 2 - (ia_abs(dx) + ia_abs(dy)) / 2 + (ai_site_is_owned(ctx.world, site) ? 0 : 6);
@@ -52,15 +52,15 @@ static bool ai_find_site(ai_context& ctx, const ai_settlement_view& origin, worl
 	return bestScore > 0;
 }
 
-// While below the settlement goal, sends colonists to a new site. One expedition at a time. Counts failed searches for the state machine.
+// In EXPAND, while below the settlement goal, sends colonists to a new site. One expedition at a time. Counts failed searches for the state machine.
 static void ai_tactics_found_settlement(ai_context& ctx)
 {
-	if (ctx.state.mode == AI_MODE_ATTACK || ctx.settlement_count >= ai_expand_goal(ctx) || ctx.state.expand_failures >= 3) return;
+	if (ctx.state.mode != AI_MODE_EXPAND || ctx.settlement_count >= ai_expand_goal(ctx) || ctx.state.expand_failures >= 3) return;
 	if (!ai_world_has_room_to_found(ctx.world)) return;
 	if (ai_count_projects(ctx.world, WORK_TYPE::FOUND_SETTLEMENT, ctx.player, INVALID_ENTITY_GUID) > 0) return;
 
 	const ai_settlement_view* origin = ai_pick_colonist_origin(ctx);
-	if (origin == nullptr) return; // Not enough peasants anywhere yet: not a failure.
+	if (origin == nullptr) return; // No settlement big enough yet: not a failure.
 
 	world_location site;
 	if (!ai_find_site(ctx, *origin, site)) { ctx.state.expand_failures++; return; }
@@ -72,31 +72,38 @@ static void ai_tactics_found_settlement(ai_context& ctx)
 	ctx.state.expand_failures = 0;
 }
 
-// Links a settlement that has no road next to it to its closest own settlement (one road project at a time, when the treasury can pay the crew).
+// Road spokes: road tiles lower the proximity of the land they cross, so it produces (the only way to raise a settlement's land output;
+// output falls to 0 past about 5 road tiles). A settlement whose peasants work most of its land output gets a straight road to its first
+// missing spoke tip: 8 directions, tip on buildable land in its own territory. One crew per settlement, 1 + income / AI_INCOME_PER_EXTRA_ROAD overall.
 static void ai_tactics_roads(ai_context& ctx)
 {
-	if (ctx.treasury < AI_MIN_ROAD_TREASURY || ctx.settlement_count < 2) return;
-	if (ai_count_projects(ctx.world, WORK_TYPE::BUILD_ROAD, ctx.player, INVALID_ENTITY_GUID) > 0) return;
+	static constexpr i32 DIRECTIONS[8][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }; // Straight ones first.
+	if (ctx.treasury < AI_MIN_ROAD_TREASURY) return;
 
-	for (ui32 index = 0; index < ai_window_size(ctx); index++)
+	ui32 crews = ai_count_projects(ctx.world, WORK_TYPE::BUILD_ROAD, ctx.player, INVALID_ENTITY_GUID);
+	ui32 maxCrews = 1 + ctx.income / AI_INCOME_PER_EXTRA_ROAD;
+	for (ui32 index = 0; index < ai_window_size(ctx) && crews < maxCrews; index++)
 	{
 		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
-		if (ai_has_road_next_to(ctx.world, settlement.location)) continue;
+		if (settlement.peasants * 100 < settlement.land_output * AI_ROAD_LAND_USE_PERCENT) continue;
+		if (ai_count_projects(ctx.world, WORK_TYPE::BUILD_ROAD, ctx.player, settlement.guid) > 0) continue;
 
-		const ai_settlement_view* nearest = nullptr;
-		ui32 nearestDist = AI_MAX_ROAD_LENGTH * AI_MAX_ROAD_LENGTH;
-		for (ui16 other = 0; other < ctx.settlement_count; other++)
+		for (ui32 direction = 0; direction < 8; direction++)
 		{
-			ui32 distance = ai_dist_sq(settlement.location, ctx.settlements[other].location);
-			if (!(ctx.settlements[other].guid == settlement.guid) && distance < nearestDist) { nearestDist = distance; nearest = &ctx.settlements[other]; }
-		}
-		if (nearest == nullptr) continue;
+			i32 length = direction < 4 ? AI_SPOKE_TILES_STRAIGHT : AI_SPOKE_TILES_DIAGONAL;
+			i32 x = settlement.location.x + DIRECTIONS[direction][0] * length, y = settlement.location.y + DIRECTIONS[direction][1] * length;
+			if (x < 0 || y < 0) continue;
 
-		auto* road = ai_push<command_data_build_road>(ctx, MATCH_COMMAND_TYPE::BUILD_ROAD);
-		if (road == nullptr) return;
-		road->settlement = settlement.guid;
-		road->origin = settlement.location;
-		road->destination = nearest->location;
-		return;
+			world_location tip = { (ui16)x, (ui16)y };
+			if (ai_tile_is_road(ctx.world, tip) || !ai_tile_is_buildable(ctx.world, tip) || !ai_tile_owned_by(ctx.world, tip, settlement.guid)) continue;
+
+			auto* road = ai_push<command_data_build_road>(ctx, MATCH_COMMAND_TYPE::BUILD_ROAD);
+			if (road == nullptr) return;
+			road->settlement = settlement.guid;
+			road->origin = settlement.location;
+			road->destination = tip;
+			crews++;
+			break;
+		}
 	}
 }

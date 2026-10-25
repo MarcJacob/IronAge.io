@@ -29,11 +29,13 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.peasants = population.peasants;
 	out.workers = population.workers;
 	out.local_wealth = settlements.trade[slot].market_goods;
+	out.land_output = settlements.base_land_outputs[slot];
 	out.growth_per_mille = population.growth_per_mille;
 	out.tax_rate = settlements.tax_rates[slot];
 	out.home_troops = population.home;
-	out.barracks = settlements.buildings[slot].building_counts[0];
-	out.caravanserai = settlements.buildings[slot].building_counts[1];
+	out.barracks = settlements.buildings[slot].building_counts[AI_BUILDING_BARRACKS];
+	out.caravanserai = settlements.buildings[slot].building_counts[AI_BUILDING_CARAVANSERAI];
+	out.trade_depots = settlements.buildings[slot].building_counts[AI_BUILDING_TRADE_DEPOT];
 	out.maa_ceiling = settlements.troop_ceilings[slot].men_at_arms;
 	return true;
 }
@@ -56,6 +58,7 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	out.troops = ai_troops_sum(armies.compositions[slot]);
 	out.raising = armies.raising[slot];
 	out.troops_target = out.raising ? ia_max(out.troops, ai_troops_sum(armies.raised_troops[slot])) : out.troops;
+	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.compositions[slot]), (ui32)1);
 	out.idle = !out.raising && !armies.battles[slot].is_valid() && !armies.action_targets[slot].is_valid()
 		&& armies.locations[slot] == armies.movements[slot].destination;
 	return true;
@@ -96,14 +99,15 @@ static i32 ai_tile_land_value(const match_world_state& world, i32 x, i32 y)
 	world_get_tile(*world.terrain, { (ui16)x, (ui16)y }, regionIndex, tileIndex);
 	switch (world.terrain->regions[regionIndex].terrain_types[tileIndex])
 	{
-    case TERRAIN_TILE_TYPE::WATER_COAST: return 5;
-	case TERRAIN_TILE_TYPE::LAND_PLAINS: return 3;
-	case TERRAIN_TILE_TYPE::LAND_HILLS: return 2;
-	default: return 0;
+	case TERRAIN_TILE_TYPE::WATER_COAST: return 6;
+	case TERRAIN_TILE_TYPE::LAND_PLAINS: return 5;
+	case TERRAIN_TILE_TYPE::LAND_HILLS: return 4;
+	default: return 1;
 	}
 }
 
-// How good the land around a tile is: the tile counts double, plus 8 probes around it.
+// How good the land of a site is. Only the tile and its neighbours produce (land output falls to 0 two tiles out), unless road spokes
+// are built (ai_tactics_roads): so the tile counts double, plus its 8 neighbours, plus 5 per buildable tile where its 8 spokes would go.
 static i32 ai_site_land_score(const match_world_state& world, world_location loc)
 {
 	i32 score = 2 * ai_tile_land_value(world, loc.x, loc.y);
@@ -111,7 +115,11 @@ static i32 ai_site_land_score(const match_world_state& world, world_location loc
 	{
 		for (i32 dx = -1; dx <= 1; dx++)
 		{
-			if (dx != 0 || dy != 0) score += ai_tile_land_value(world, loc.x + dx * 7, loc.y + dy * 7);
+			if (dx == 0 && dy == 0) continue;
+
+			score += ai_tile_land_value(world, loc.x + dx, loc.y + dy);
+			i32 x = loc.x + dx * AI_SITE_SPOKE_PROBE, y = loc.y + dy * AI_SITE_SPOKE_PROBE;
+			if (x >= 0 && y >= 0 && ai_tile_is_buildable(world, { (ui16)x, (ui16)y })) score += 5;
 		}
 	}
 	return score;
@@ -124,33 +132,49 @@ static bool ai_site_is_owned(const match_world_state& world, world_location loc)
 	return world.terrain->regions[regionIndex].owners[tileIndex] != world_terrain::UNOWNED_TILE;
 }
 
-static bool ai_has_road_next_to(const match_world_state& world, world_location loc)
+static bool ai_tile_is_road(const match_world_state& world, world_location loc)
 {
-	for (i32 dy = -1; dy <= 1; dy++)
-	{
-		for (i32 dx = -1; dx <= 1; dx++)
-		{
-			if ((dx == 0 && dy == 0) || !ai_in_world(world, loc.x + dx, loc.y + dy)) continue;
+	if (!ai_in_world(world, loc.x, loc.y)) return false;
 
-			ui16 regionIndex, tileIndex;
-			world_get_tile(*world.terrain, { (ui16)(loc.x + dx), (ui16)(loc.y + dy) }, regionIndex, tileIndex);
-			if (world.terrain->regions[regionIndex].status[tileIndex].is_road) return true;
-		}
-	}
-	return false;
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, loc, regionIndex, tileIndex);
+	return world.terrain->regions[regionIndex].status[tileIndex].is_road;
 }
 
-// Fills the context's owned settlements and armies (up to the caps), treasury and army strength.
+static bool ai_tile_is_buildable(const match_world_state& world, world_location loc)
+{
+	if (!ai_in_world(world, loc.x, loc.y)) return false;
+
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, loc, regionIndex, tileIndex);
+	TERRAIN_TILE_TYPE type = world.terrain->regions[regionIndex].terrain_types[tileIndex];
+	return type == TERRAIN_TILE_TYPE::LAND_PLAINS || type == TERRAIN_TILE_TYPE::LAND_HILLS;
+}
+
+static bool ai_tile_owned_by(const match_world_state& world, world_location loc, entity_guid settlement)
+{
+	if (!ai_in_world(world, loc.x, loc.y)) return false;
+
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, loc, regionIndex, tileIndex);
+	return world.terrain->regions[regionIndex].owners[tileIndex] == settlement.get_index();
+}
+
+// Fills the context's owned settlements and armies (up to the caps), treasury, income, population and army strengths.
 static void ai_gather_own(ai_context& ctx)
 {
 	const match_world_state& world = ctx.world;
 	ctx.day = ai_world_day(world);
 	ctx.treasury = ctx.player < world.player_count ? world.player_states[ctx.player].treasury : 0;
+	ctx.income = ctx.player < world.player_count ? world.player_states[ctx.player].income : 0;
 
 	ai_settlement_view settlement;
 	for (ui16 slot = 0; slot < ai_world_settlement_slots(world) && ctx.settlement_count < AI_MAX_OWNED_SETTLEMENTS; slot++)
 	{
-		if (ai_view_settlement(world, slot, settlement) && settlement.owner == ctx.player) ctx.settlements[ctx.settlement_count++] = settlement;
+		if (!ai_view_settlement(world, slot, settlement) || settlement.owner != ctx.player) continue;
+
+		ctx.settlements[ctx.settlement_count++] = settlement;
+		ctx.population += settlement.population;
 	}
 
 	ai_army_view army;
@@ -160,5 +184,6 @@ static void ai_gather_own(ai_context& ctx)
 
 		ctx.armies[ctx.army_count++] = army;
 		ctx.army_strength += army.troops_target;
+		if (!army.raising && army.supply_days >= AI_ATTACK_MIN_SUPPLY_DAYS) ctx.army_ready_strength += army.troops;
 	}
 }

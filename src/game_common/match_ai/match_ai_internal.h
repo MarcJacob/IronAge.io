@@ -23,8 +23,12 @@ constexpr ui16 AI_MAX_OWNED_SETTLEMENTS = 48;
 constexpr ui16 AI_MAX_OWNED_ARMIES = 96;
 
 // STRATEGY
-constexpr ui32 AI_GOAL_SETTLEMENTS_MAX = 24; // Settlement count the expansion goal grows to.
-constexpr ui32 AI_GOAL_DAYS_PER_SETTLEMENT = 4; // Goal = 3 + day / this.
+constexpr ui32 AI_GOAL_SETTLEMENTS_START = 3; // Settlement goal on day 0.
+constexpr ui32 AI_GOAL_SETTLEMENTS_MAX = 8; // Settlement count the expansion goal grows to.
+constexpr ui32 AI_GOAL_DAYS_PER_SETTLEMENT = 8; // Goal = AI_GOAL_SETTLEMENTS_START + day / this.
+constexpr ui32 AI_EXPAND_RETRY_DAYS = 20; // Failed site searches are forgotten every this many days.
+constexpr ui32 AI_BUILD_UP_MIN_POPULATION = 1500; // Own total population before armies are built (unless threatened).
+constexpr ui32 AI_ATTACK_MIN_SUPPLY_DAYS = 5; // Only armies carrying this many days of supplies count towards starting a campaign.
 constexpr ui32 AI_CAMPAIGN_MAX_DISTANCE = 250; // Tiles: players further than this from all our settlements are not targets.
 constexpr ui32 AI_ATTACK_MAX_DAYS = 80; // Days after which a campaign is abandoned.
 constexpr ui32 AI_BUILD_UP_MIN_DAYS = 15; // Rest between two campaigns.
@@ -32,19 +36,38 @@ constexpr i32 AI_OPINION_LIMIT = 300;
 
 // TACTICS
 constexpr ui32 AI_COLONIST_RESERVE = 50; // Peasants a settlement keeps after sending colonists.
+constexpr ui32 AI_COLONIST_MIN_POPULATION = 250; // Only settlements this big send colonists (grow first, then colonize).
+constexpr i32 AI_SITE_MIN_LAND_SCORE = 60; // See ai_site_land_score: about 90 on open plains.
+constexpr i32 AI_SITE_SPOKE_PROBE = 3; // Tiles from a site where its road spokes are probed for buildable land.
 constexpr ui32 AI_MIN_SITE_DISTANCE_ENEMY = 26; // Tiles between a new site and any foreign settlement.
 constexpr ui32 AI_THREAT_RADIUS = 24; // Foreign armies this close to one of our settlements are a threat.
 constexpr ui32 AI_RALLY_RADIUS = 12;
 constexpr ui32 AI_MIN_ARMY_STRENGTH = 150; // Army strength the build up aims for at least.
-constexpr ui32 AI_MIN_RAISE_PEASANTS = 80;
-constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 40;constexpr ui32 AI_MIN_BUILDING_TREASURY = 150;
-constexpr ui32 AI_MIN_ROAD_TREASURY = 250;
+constexpr ui32 AI_MIN_RAISE_PEASANTS = 150;
+constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 25;
+constexpr ui32 AI_BUILD_RESERVE_DAYS = 3; // A building starts when the treasury holds this many days of its cost.
 constexpr ui32 AI_MAX_BUILD_PROJECTS = 2; // Plus one per AI_TREASURY_PER_EXTRA_PROJECT in the treasury.
 constexpr ui32 AI_TREASURY_PER_EXTRA_PROJECT = 1500;
-constexpr ui32 AI_RICH_TREASURY = 2000; // Above this, taxes drop to 1 (the money is not being spent anyway).
+constexpr ui32 AI_POPULATION_PER_CARAVANSERAI = 300; // A settlement wants population / this caravanserais...
+constexpr ui32 AI_MAX_CARAVANSERAI = 3; // ...up to this many.
+constexpr ui32 AI_TRADE_DEPOT_MIN_POPULATION = 800; // One trade depot in settlements this big that already trade.
+constexpr ui32 AI_POPULATION_PER_BARRACKS = 600; // Outside of EXPAND, a settlement wants population / this barracks.
+constexpr ui32 AI_MIN_ROAD_TREASURY = 100;
+constexpr ui32 AI_INCOME_PER_EXTRA_ROAD = 100; // Parallel road crews: 1, plus one per this much daily income.
+constexpr ui32 AI_ROAD_LAND_USE_PERCENT = 80; // Spokes are built once the peasants work this % of the land output.
+constexpr i32 AI_SPOKE_TILES_STRAIGHT = 5; // Road spoke lengths: further tiles are past the land output falloff.
+constexpr i32 AI_SPOKE_TILES_DIAGONAL = 4;
+constexpr i32 AI_TAX_HIGH = 9; // While the treasury is under AI_TREASURY_COMFORT.
+constexpr i32 AI_TAX_NORMAL = 5;
+constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
+constexpr ui32 AI_TREASURY_COMFORT = 1500;
+constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
 constexpr ui32 AI_TINY_ARMY = 10; // Idle armies under this are disbanded.
-constexpr ui32 AI_MAX_ROAD_LENGTH = 60; // Tiles.
-constexpr i8 AI_TAX_BY_MODE[] = { 3, 6, 8 }; // Indexed by AI_MODE.
+
+// Rows of SETTLEMENT_BUILDING_TABLE the AI knows.
+constexpr ui8 AI_BUILDING_BARRACKS = 0;
+constexpr ui8 AI_BUILDING_CARAVANSERAI = 1;
+constexpr ui8 AI_BUILDING_TRADE_DEPOT = 2;
 
 // VIEWS: copies of the few properties of an entity the AI reads. Filled only by the accessors of match_ai_world.cpp.
 
@@ -54,10 +77,11 @@ struct ai_settlement_view
 	match_player_id owner;
 	world_location location;
 	ui32 population, peasants, workers, local_wealth;
+	ui32 land_output; // Peasants the land employs at full efficiency.
 	i32 growth_per_mille;
 	i8 tax_rate;
 	army_troop_count home_troops;
-	ui16 barracks, caravanserai;
+	ui16 barracks, caravanserai, trade_depots;
 	ui16 maa_ceiling; // Raw men at arms ceiling.
 };
 
@@ -69,6 +93,7 @@ struct ai_army_view
 	world_location location;
 	ui32 troops;
 	ui32 troops_target; // Raise targets while raising, else troops.
+	ui32 supply_days; // Days of its own consumption the army carries.
 	ui8 raising;
 	ui8 idle; // Not raising, not in a battle, not chasing and not walking anywhere.
 };
@@ -90,12 +115,15 @@ struct ai_context
 	match_player_id player;
 	ui32 day = 0;
 	ui32 treasury = 0;
+	ui32 income = 0; // Last day's tax.
 
 	ui16 settlement_count = 0;
 	ai_settlement_view settlements[AI_MAX_OWNED_SETTLEMENTS] = {};
+	ui32 population = 0; // Of the owned settlements.
 	ui16 army_count = 0;
 	ai_army_view armies[AI_MAX_OWNED_ARMIES] = {};
 	ui32 army_strength = 0; // Troops of the owned armies, raising ones at their target.
+	ui32 army_ready_strength = 0; // Troops of the armies done raising and carrying AI_ATTACK_MIN_SUPPLY_DAYS of supplies.
 };
 
 // Pushes a command into the decision's sequence with a zeroed payload (the arena memory is not). Returns nullptr when the budget is spent.
@@ -119,9 +147,11 @@ static bool ai_view_settlement_by_guid(const match_world_state& world, entity_gu
 static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view& out);
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement); // settlement invalid = any of the player's.
 static bool ai_site_is_valid(const match_world_state& world, world_location loc, match_player_id player);
-static i32 ai_site_land_score(const match_world_state& world, world_location loc); // 0 = unusable.
+static i32 ai_site_land_score(const match_world_state& world, world_location loc); // Compared to AI_SITE_MIN_LAND_SCORE.
 static bool ai_site_is_owned(const match_world_state& world, world_location loc);
-static bool ai_has_road_next_to(const match_world_state& world, world_location loc);
+static bool ai_tile_is_road(const match_world_state& world, world_location loc); // False outside the world.
+static bool ai_tile_is_buildable(const match_world_state& world, world_location loc); // Plains or hills.
+static bool ai_tile_owned_by(const match_world_state& world, world_location loc, entity_guid settlement);
 static world_dimensions ai_world_size(const match_world_state& world);
 static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops); // What these soldiers consume per day (same rule as army supplies).
 static void ai_gather_own(ai_context& ctx);

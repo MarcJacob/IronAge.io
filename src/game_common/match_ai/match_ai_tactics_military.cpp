@@ -144,13 +144,15 @@ static bool ai_is_next_to_own_settlement(const ai_context& ctx, const ai_army_vi
 	return false;
 }
 
-// Idle remnants of battles standing next to their home settlement are disbanded into it (a few per run).
+// Idle remnants of battles standing next to their home settlement are disbanded into it (a few per run). In EXPAND every idle army
+// at home is: its levies go back to work the land and it stops costing supplies.
 static void ai_tactics_disband_remnants(ai_context& ctx)
 {
 	ui32 disbands = 0;
 	for (ui16 index = 0; index < ctx.army_count && disbands < 3; index++)
 	{
-		if (!ctx.armies[index].idle || ctx.armies[index].troops >= AI_TINY_ARMY || !ai_is_next_to_own_settlement(ctx, ctx.armies[index])) continue;
+		bool remnant = ctx.armies[index].troops < AI_TINY_ARMY || ctx.state.mode == AI_MODE_EXPAND;
+		if (!ctx.armies[index].idle || !remnant || !ai_is_next_to_own_settlement(ctx, ctx.armies[index])) continue;
 
 		auto* disband = ai_push<command_data_disband_army>(ctx, MATCH_COMMAND_TYPE::DISBAND_ARMY);
 		if (disband == nullptr) return;

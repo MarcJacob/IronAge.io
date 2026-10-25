@@ -1,9 +1,10 @@
 // Strategy layer: picks the goal (target player, target settlement, rally point) and runs the mode state machine.
 // Runs on a slow sub-cadence. Tactics read its results from ai_player_state and the mode.
 //
-// EXPAND   -> BUILD_UP : enough settlements for the goal, or no site found 3 times, or a threat showed up.
-// BUILD_UP -> ATTACK   : a target exists and our armies reach its attack need.
-// BUILD_UP -> EXPAND   : well below the settlement goal, no threat, sites still found.
+// EXPAND is the economy phase (founding, no armies). Armies wait for a big enough population, attacks for supplied armies.
+// EXPAND   -> BUILD_UP : a threat showed up, or the population reached AI_BUILD_UP_MIN_POPULATION with enough settlements for the goal (or no site found 3 times).
+// BUILD_UP -> ATTACK   : a target exists and our supplied armies reach its attack need.
+// BUILD_UP -> EXPAND   : no threat, and the population fell under AI_BUILD_UP_MIN_POPULATION or we are well below the settlement goal with sites still found.
 // ATTACK   -> BUILD_UP : target gone, army fell under a third of the need, or the campaign took too long.
 
 #include "match_ai_internal.h"
@@ -16,7 +17,7 @@ static void ai_set_mode(ai_context& ctx, AI_MODE mode)
 
 static ui32 ai_expand_goal(const ai_context& ctx)
 {
-	return ia_min(AI_GOAL_SETTLEMENTS_MAX, 3 + ctx.day / AI_GOAL_DAYS_PER_SETTLEMENT);
+	return ia_min(AI_GOAL_SETTLEMENTS_MAX, AI_GOAL_SETTLEMENTS_START + ctx.day / AI_GOAL_DAYS_PER_SETTLEMENT);
 }
 
 // Target player: the hostile-est (lowest opinion) one with a settlement within campaign distance of ours.
@@ -95,16 +96,17 @@ static void ai_strategy_update(ai_context& ctx)
 	ui32 need = hasTarget ? ai_attack_need(target) : 0xFFFFFFFF;
 
 	ui32 daysInMode = ctx.day - ctx.state.mode_start_day;
+	if (ctx.day % AI_EXPAND_RETRY_DAYS == 0) ctx.state.expand_failures = 0; // Try colonizing again now and then.
 	bool canExpand = ctx.state.expand_failures < 3;
+	bool bigEnough = ctx.population >= AI_BUILD_UP_MIN_POPULATION;
 	switch (ctx.state.mode)
 	{
 	case AI_MODE_EXPAND:
-		if (threatened || ctx.settlement_count >= ai_expand_goal(ctx) || !canExpand) ai_set_mode(ctx, AI_MODE_BUILD_UP);
+		if (threatened || (bigEnough && (ctx.settlement_count >= ai_expand_goal(ctx) || !canExpand))) ai_set_mode(ctx, AI_MODE_BUILD_UP);
 		break;
 	case AI_MODE_BUILD_UP:
-		if (daysInMode >= 20) ctx.state.expand_failures = 0; // Try colonizing again now and then.
-		if (hasTarget && ctx.army_strength >= need && daysInMode >= AI_BUILD_UP_MIN_DAYS) ai_set_mode(ctx, AI_MODE_ATTACK);
-		else if (!threatened && canExpand && ctx.settlement_count + 2 < ai_expand_goal(ctx)) ai_set_mode(ctx, AI_MODE_EXPAND);
+		if (hasTarget && ctx.army_ready_strength >= need && daysInMode >= AI_BUILD_UP_MIN_DAYS) ai_set_mode(ctx, AI_MODE_ATTACK);
+		else if (!threatened && (!bigEnough || (canExpand && ctx.settlement_count + 2 < ai_expand_goal(ctx)))) ai_set_mode(ctx, AI_MODE_EXPAND);
 		break;
 	case AI_MODE_ATTACK:
 		if (!hasTarget || ctx.army_strength < need / 3 || daysInMode > AI_ATTACK_MAX_DAYS) ai_set_mode(ctx, AI_MODE_BUILD_UP);
