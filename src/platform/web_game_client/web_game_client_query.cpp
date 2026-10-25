@@ -171,7 +171,8 @@ WASM_EXPORT ui8* client_get_path_buffer_offset()
 
 // Returns the number of waypoints written to the path buffer (0 if there is no path to follow).
 // territory_guid: a settlement's guid to limit the path to its territory, or 0 for no limit.
-WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 end_y, ui32 territory_guid)
+// tile_mode: 0 writes the waypoints (straight lines), non-zero writes the tiles of the path's segments instead (see game_client_query_path).
+WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 end_y, ui32 territory_guid, ui32 tile_mode)
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
 
@@ -179,6 +180,6 @@ WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 
 	result.points = (world_location*)PATH_BUFFER;
 	result.points_capacity = PATH_BUFFER_CAPACITY;
 
-	game_client_query_path(*WEB_CLIENT.backend, { (ui16)start_x, (ui16)start_y }, { (ui16)end_x, (ui16)end_y }, result, entity_guid{ territory_guid });
+	game_client_query_path(*WEB_CLIENT.backend, { (ui16)start_x, (ui16)start_y }, { (ui16)end_x, (ui16)end_y }, result, entity_guid{ territory_guid }, tile_mode != 0);
 	return result.count;
 }

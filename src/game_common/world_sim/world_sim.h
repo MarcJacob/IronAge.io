@@ -87,10 +87,12 @@ static inline void world_movement_stop(world_entity_movement& movement, world_lo
 {
     movement.destination = location;
     movement.move_target = location;
+    movement.path_destination = location;
     movement.path_handle = INVALID_PATH_HANDLE;
 }
 
-// Moves the entity along the way to its destination. When it stands on its move target, it picks the next one from a path.
+// Moves the entity one step in a straight line towards its current waypoint (move_target), at travel_speed divided by the cost of the tile it stands on.
+// It picks a new waypoint from a path when it reaches the waypoint or when its destination changed. Arrived once its tile is the destination tile.
 // Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
 // params: what the entity can cross (see world_system_movement.cpp).
 // out_partial (optional) is set to true when the path found only gets partway to the destination (the entity still follows it).

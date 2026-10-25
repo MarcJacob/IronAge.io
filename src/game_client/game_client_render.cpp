@@ -69,6 +69,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = settlements.owners[settlementIndex];
 			outEntity.guid = settlements.guids[settlementIndex];
 			outEntity.viewport_location = settlementLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = {};
 
 			visibleCount++;
 		}
@@ -84,6 +85,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = armies.owners[armyIndex];
 			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = armyLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = armies.movements[armyIndex].fractional_loc;
 
 			visibleCount++;
 		}
@@ -103,6 +105,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = world_entity_get_owner(world, workers.guids[workerIndex]);
 			outEntity.guid = workers.guids[workerIndex];
 			outEntity.viewport_location = workerLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = workers.movements[workerIndex].fractional_loc;
 
 			visibleCount++;
 		}
@@ -118,6 +121,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
 			outEntity.guid = battles.guids[battleIndex];
 			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = {};
 
 			visibleCount++;
 		}
@@ -134,6 +138,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = world_entity_get_owner(world, caravans.guids[caravanIndex]);
 			outEntity.guid = caravans.guids[caravanIndex];
 			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = caravans.movements[caravanIndex].fractional_loc;
 
 			visibleCount++;
 		}

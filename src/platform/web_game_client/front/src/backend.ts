@@ -179,7 +179,7 @@ interface ClientExports extends WebAssembly.Exports
     // Path query
 
     client_get_path_buffer_offset(): number;
-    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number, territory_guid: number): number; // Waypoint count written to the path buffer.
+    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number, territory_guid: number, tile_mode: number): number; // Point count written to the path buffer.
 }
 
 let CLIENT_BACKEND: ClientExports;
@@ -518,10 +518,11 @@ export function get_memory_bytes(): Uint8Array<ArrayBuffer>
 // Asks the backend for a land path between two world tiles. Returns its waypoints in order, start tile excluded:
 // move in a straight line from the start to the first waypoint, then to the second, and so on. Empty if there is nothing to follow.
 // If territory_guid is a settlement's guid, the path is limited to that settlement's territory.
+// If tile_mode is true, returns instead the tiles covered by the path's segments, in order, start excluded (for tile-bound uses such as roads).
 // The path buffer holds (x, y) ui16 pairs (see web_game_client_query.cpp).
-export function query_path(start: { x: number, y: number }, end: { x: number, y: number }, territory_guid: number = 0): { x: number, y: number }[]
+export function query_path(start: { x: number, y: number }, end: { x: number, y: number }, territory_guid: number = 0, tile_mode: boolean = false): { x: number, y: number }[]
 {
-    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y, territory_guid);
+    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y, territory_guid, tile_mode ? 1 : 0);
     const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_path_buffer_offset(), count * 4);
 
     const points: { x: number, y: number }[] = [];
@@ -536,6 +537,8 @@ export class RenderEntity
     guid: number = 0;
     viewport_x: number = 0;
     viewport_y: number = 0;
+    fractional_x: number = 0; // Offset from the tile center, in thousandths of a tile.
+    fractional_y: number = 0;
 }
 
 export class RenderState
@@ -635,9 +638,9 @@ function read_render_state()
     const entityStatesOffset: number = CLIENT_BACKEND.client_render_state_get_entities();
     const entityStatesDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
 
-    // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y). 
-    // Packed, offsets 0 / 1 / 3 / 7, sizeof 15 (static_assert'd in game_client_backend.h).
-    const ENTITY_MEM_SIZE: number = 15;
+    // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y), fractional_offset (i16 x/y).
+    // Packed, offsets 0 / 1 / 3 / 7 / 15, sizeof 19 (static_assert'd in game_client_backend.h).
+    const ENTITY_MEM_SIZE: number = 19;
 
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push(
@@ -647,6 +650,8 @@ function read_render_state()
                 guid: entityStatesDataView.getUint32(ENTITY_MEM_SIZE * i + 3, true),
                 viewport_x: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 7, true),
                 viewport_y: entityStatesDataView.getFloat32(ENTITY_MEM_SIZE * i + 11, true),
+                fractional_x: entityStatesDataView.getInt16(ENTITY_MEM_SIZE * i + 15, true),
+                fractional_y: entityStatesDataView.getInt16(ENTITY_MEM_SIZE * i + 17, true),
             });
     }
 

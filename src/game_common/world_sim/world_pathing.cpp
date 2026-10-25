@@ -1,4 +1,4 @@
-// Pathfinding implementation: A* over the 8-neighbour tile grid, outputting paths as waypoints (one waypoint per change of direction).
+// Pathfinding implementation: A* over the 8-neighbour tile grid, then either a line-of-sight merge (params.straight_segments: waypoints joined by straight lines) or waypoints at the direction changes (runs).
 
 // @NOTE(Marc): Most of this implementation was originall AI-generated. I've of course applied my usual policy of reviewing and manually changing stuff multiple times on this,
 // but I've come to see that this will eventually need a rewrite, with three objectives:
@@ -143,22 +143,120 @@ static path_node* path_node_get(path_search& search, ui32 tile)
     return nullptr;
 }
 
-// Estimated cost left to the target: chamfer distance.
+// Estimated cost left to the target: chamfer distance, assuming a tile cost of 1.
 static ui32 path_heuristic(world_location from, world_location to)
 {
     ui32 dx = ia_abs(to.x - from.x);
     ui32 dy = ia_abs(to.y - from.y);
     ui32 diagonal = dx < dy ? dx : dy;
 
-    return (PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal);
+    // Each diagonal step uses up one unit on both axes, so the orthogonal steps left are (dx - diagonal) + (dy - diagonal).
+    return (PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - 2 * diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal);
 }
 
 // Weighted A*: the heuristic is multiplied by this, for every search distance. Found paths cost at most this times the optimal.
-// Must stay below the plains / road cost ratio (3), or straight plains paths become as good as roads and roads get ignored.
+// Must stay below the plains / road cost ratio (5: plains 25, road 5 in path cost units), or straight plains paths become as good as roads and roads get ignored.
 // 2 keeps roads followed while open plains searches of ~100 tiles still fit the node budget.
 static constexpr ui32 PATH_HEURISTIC_WEIGHT = 2;
 
-void world_path_find(const world_terrain& terrain, world_location start, world_location end, const path_params& params,
+// Longest line, in A* steps, the merge pass tries from one anchor. Bounds its cost (it is re-run on every path request).
+static constexpr ui32 PATH_MERGE_MAX_STEPS = 64;
+
+path_segment_walk path_segment_walk_begin(world_location from, world_location to)
+{
+    path_segment_walk walk = {};
+    walk.tile = from;
+    walk.dx = ia_abs((i32)to.x - from.x);
+    walk.dy = ia_abs((i32)to.y - from.y);
+    walk.step_x = to.x > from.x ? 1 : -1;
+    walk.step_y = to.y > from.y ? 1 : -1;
+    walk.ex = walk.dx > 0 ? walk.dx : 1;
+    walk.ey = walk.dy > 0 ? walk.dy : 1;
+    walk.total_time = 2 * walk.ex * walk.ey;
+    return walk;
+}
+
+bool path_segment_walk_next(path_segment_walk& walk, i64& out_time)
+{
+    if (walk.crossed_x >= walk.dx && walk.crossed_y >= walk.dy) return false;
+
+    // Time of the next border crossing on each axis, "never" once an axis is done.
+    i64 nextX = walk.crossed_x < walk.dx ? (2 * walk.crossed_x + 1) * walk.ey : walk.total_time;
+    i64 nextY = walk.crossed_y < walk.dy ? (2 * walk.crossed_y + 1) * walk.ex : walk.total_time;
+    out_time = nextX < nextY ? nextX : nextY;
+
+    // Crossing both borders at the same time means passing exactly through a corner: the step is diagonal.
+    if (nextX <= nextY) { walk.crossed_x++; walk.tile.x = (ui16)(walk.tile.x + walk.step_x); }
+    if (nextY <= nextX) { walk.crossed_y++; walk.tile.y = (ui16)(walk.tile.y + walk.step_y); }
+    return true;
+}
+
+ui32 world_path_expand_tiles(world_location start, const path& p, world_location* out_tiles, ui32 capacity)
+{
+    ui32 written = 0;
+    world_location tile = start;
+    for (ui16 i = 0; i < p.count; i++)
+    {
+        // Each leg is a run in one direction: world_path_next_tile steps along it.
+        while (tile != p.points[i])
+        {
+            if (written == capacity) return written;
+            tile = world_path_next_tile(tile, p.points[i]);
+            out_tiles[written++] = tile;
+        }
+    }
+    return written;
+}
+
+// Cost of the straight line between the centers of two distinct tiles, in A* units (tile cost x chamfer length: 5 per orthogonal tile, 7 per diagonal one).
+// Returns false if any tile the line crosses is impassable for params. The start tile is not checked, like in A*.
+//
+// Tiles are the integer supercover of the line: all tiles it goes through. A line passing exactly through a tile corner goes diagonally from one tile to the
+// next, the two tiles that only touch the line at that point do not count (the same diagonal move A* allows).
+// Time t runs from 0 (start center) to T (end center), T = 2 * ex * ey, with ex = max(dx, 1) and ey = max(dy, 1), so that every tile border crossing
+// falls on an integer: the k-th x border is crossed at (2k - 1) * ey, the k-th y border at (2k - 1) * ex.
+//
+// Cost = W * sum(tile cost x share of the line) with W = 5 * max(dx, dy) + 2 * min(dx, dy) (chamfer length of the whole line).
+// A tile's share runs from the middle of the previous tile's chord (the part of the line inside the tile) to the middle of its own, the start counting as
+// the middle of the first chord and the end as the middle of the last one. The shares sum to the whole line. This is how A* charges a step (center to center
+// at the cost of the tile entered), so a line along an existing 8-direction run costs exactly what A* charged for it, and a shortcut over cheaper or
+// costlier terrain than the run costs less or more. Integer math: shares are in doubled time units, divided once at the end, rounded to nearest.
+static bool path_line_cost(const world_terrain& terrain, const path_params& params, world_location from, world_location to, ui32& out_cost)
+{
+    path_segment_walk walk = path_segment_walk_begin(from, to);
+    i64 totalTime = walk.total_time;
+
+    i64 chordStart = 0; // Time at which the line entered the current tile.
+    i64 previousMiddle = 0; // Doubled time at the middle of the previous tile's chord.
+    i64 weighted = 0; // Sum of tile cost x doubled time share, for the tiles left so far (start excluded).
+    ui8 tileCost = 0; // Cost of the current tile. 0 for the start tile, which is not charged.
+
+    i64 t;
+    while (path_segment_walk_next(walk, t))
+    {
+        // Leaving the previous tile: its chord is [chordStart, t].
+        i64 middle = chordStart + t; // Doubled.
+        if (tileCost > 0) weighted += (i64)tileCost * (middle - previousMiddle);
+        previousMiddle = tileCost > 0 ? middle : 0;
+        chordStart = t;
+
+        ui16 regionIndex, tileIndex;
+        world_get_tile(terrain, walk.tile, regionIndex, tileIndex);
+        tileCost = world_tile_move_cost(terrain, regionIndex, tileIndex, params);
+        if (tileCost == 0) return false;
+    }
+
+    // The last tile ends at the end of the line, its chord middle being the end.
+    weighted += (i64)tileCost * (2 * totalTime - previousMiddle);
+
+    i64 dx = walk.dx, dy = walk.dy;
+    i64 chamferLength = 5 * (dx > dy ? dx : dy) + 2 * (dx < dy ? dx : dy);
+    out_cost = (ui32)((weighted * chamferLength + totalTime) / (2 * totalTime));
+    return true;
+}
+
+// The search itself, from start to end as given (see world_path_find for the public behavior).
+static void path_search_run(const world_terrain& terrain, world_location start, world_location end, const path_params& params,
     mem_arena& scratch, path& out_path)
 {
     ASSERT(out_path.points != nullptr && out_path.points_capacity > 0);
@@ -250,33 +348,142 @@ void world_path_find(const world_terrain& terrain, world_location start, world_l
         node->state = PATH_NODE_CLOSED;
     }
 
-    // Walk back from the best tile to the start, twice. The path is found end first but waypoints are stored start first,
-    // and only the first points_capacity of them are kept, so the first pass counts them and the second one writes them.
-    // A tile is a waypoint if it is the last one, or if the step direction changes there. The start itself is not stored.
-    out_path.partial = bestTile != endTile;
-    out_path.cost = out_path.partial ? 0 : path_node_get(search, bestTile)->g;
-    ui16 total = 0;
-    for (ui8 pass = 0; pass < 2; pass++)
+    // Walk back from the best tile to the start, twice: the first pass counts the steps, the second one lays the tile path out start first.
+    // The search heap is dead by now, so its entries are reused as the tile path: .tile = tile index, .g = cost from the start. Index 0 is the start.
+    // The path has at most node_count tiles, which is far below heap_cap (the node table takes at most half of the arena, the heap the rest at 12 bytes an entry).
+    ui32 steps = 0;
+    for (ui32 tile = bestTile; tile != startTile; steps++)
     {
-        ui16 seen = 0;
-        ui8 laterDir = path_node_get(search, bestTile)->from_dir; // Direction of the step after the current tile.
-        out_path.length = 0;
-
-        for (ui32 tile = bestTile; tile != startTile; out_path.length++)
-        {
-            ui8 dir = path_node_get(search, tile)->from_dir;
-            if (tile == bestTile || dir != laterDir)
-            {
-                ui16 index = total - 1 - seen++; // Only meaningful on the second pass.
-                if (pass == 1 && index < out_path.points_capacity) out_path.points[index] = { (ui16)(tile % world_width), (ui16)(tile / world_width) };
-            }
-
-            laterDir = dir;
-            tile = (ui32)((i32)tile - NEIGHBOUR_OFFSETS_ALL[dir].x - NEIGHBOUR_OFFSETS_ALL[dir].y * (i32)world_width);
-        }
-        total = seen;
+        ui8 dir = path_node_get(search, tile)->from_dir;
+        tile = (ui32)((i32)tile - NEIGHBOUR_OFFSETS_ALL[dir].x - NEIGHBOUR_OFFSETS_ALL[dir].y * (i32)world_width);
     }
+    ASSERT(steps < search.heap_cap);
+
+    for (ui32 tile = bestTile, i = steps; ; i--)
+    {
+        path_node* node = path_node_get(search, tile);
+        search.heap[i].tile = tile;
+        search.heap[i].g = node->g;
+        if (i == 0) break;
+
+        tile = (ui32)((i32)tile - NEIGHBOUR_OFFSETS_ALL[node->from_dir].x - NEIGHBOUR_OFFSETS_ALL[node->from_dir].y * (i32)world_width);
+    }
+
+    out_path.partial = bestTile != endTile;
+    ui32 mergedCost = 0;
+    ui16 total = 0;
+    out_path.length = 0;
+
+    if (!params.straight_segments)
+    {
+        // Runs: a tile is a waypoint if it is the last one, or if the step direction changes there (the step into it differs from the step out of it).
+        // Steps are compared as tile index differences, which are unique per direction. Waypoints are stored start first, only the first points_capacity are kept.
+        for (ui32 i = 1; i <= steps; i++)
+        {
+            if (i < steps && (i32)search.heap[i + 1].tile - (i32)search.heap[i].tile == (i32)search.heap[i].tile - (i32)search.heap[i - 1].tile) continue;
+
+            if (total < out_path.points_capacity) out_path.points[total] = { (ui16)(search.heap[i].tile % world_width), (ui16)(search.heap[i].tile / world_width) };
+            total++;
+        }
+        out_path.length = (ui16)steps;
+        mergedCost = search.heap[steps].g;
+    }
+
+    // Line-of-sight merge: from an anchor tile, extend a straight line to the farthest later tile of the path (scanning forward, stopping at the first
+    // refusal) such that the line is passable and costs no more than the A* subpath it replaces. The end of that line is the next waypoint and anchor.
+    // Waypoints are stored start first, only the first points_capacity are kept. The start itself is not stored.
+    for (ui32 anchor = 0; params.straight_segments && anchor < steps; )
+    {
+        world_location anchorLoc = { (ui16)(search.heap[anchor].tile % world_width), (ui16)(search.heap[anchor].tile / world_width) };
+
+        // The next tile is always reachable, at A*'s own cost.
+        ui32 reach = anchor + 1;
+        ui32 reachCost = search.heap[reach].g - search.heap[anchor].g;
+
+        for (ui32 j = anchor + 2; j <= steps && j <= anchor + PATH_MERGE_MAX_STEPS; j++)
+        {
+            world_location jLoc = { (ui16)(search.heap[j].tile % world_width), (ui16)(search.heap[j].tile / world_width) };
+            ui32 lineCost;
+            if (!path_line_cost(terrain, params, anchorLoc, jLoc, lineCost) || lineCost > search.heap[j].g - search.heap[anchor].g) break;
+
+            reach = j;
+            reachCost = lineCost;
+        }
+
+        world_location reachLoc = { (ui16)(search.heap[reach].tile % world_width), (ui16)(search.heap[reach].tile / world_width) };
+        if (total < out_path.points_capacity) out_path.points[total] = reachLoc;
+        total++;
+
+        mergedCost += reachCost;
+        out_path.length += (ui16)ia_max(ia_abs((i32)reachLoc.x - anchorLoc.x), ia_abs((i32)reachLoc.y - anchorLoc.y));
+        anchor = reach;
+    }
+
+    out_path.cost = out_path.partial ? 0 : mergedCost;
     out_path.count = total < out_path.points_capacity ? total : out_path.points_capacity;
+}
+
+void world_path_find(const world_terrain& terrain, world_location start, world_location end, const path_params& params,
+    mem_arena& scratch, path& out_path)
+{
+    if (!params.require_complete)
+    {
+        path_search_run(terrain, start, end, params, scratch, out_path);
+        return;
+    }
+
+    // Complete paths only, searched from the lexicographically lower endpoint so that A to B and B to A are the same route.
+    bool reversed = start.x > end.x || (start.x == end.x && start.y > end.y);
+    world_location from = reversed ? end : start, to = reversed ? start : end;
+
+    // Both endpoints must be passable (A* never checks its start), so that a path exists from A to B exactly when it exists from B to A.
+    ui16 regionIndex, tileIndex;
+    world_get_tile(terrain, start, regionIndex, tileIndex);
+    bool startPassable = world_tile_move_cost(terrain, regionIndex, tileIndex, params) > 0;
+
+    if (startPassable) path_search_run(terrain, from, to, params, scratch, out_path);
+
+    // Complete = the last stored waypoint is the end (a path never visits a tile twice, so a truncated waypoint list cannot end on it).
+    bool complete = startPassable && (from == to || (!out_path.partial && out_path.count > 0 && out_path.points[out_path.count - 1] == to));
+    if (!complete)
+    {
+        out_path.count = 0;
+        out_path.length = 0;
+        out_path.partial = false;
+        out_path.cost = 0;
+        return;
+    }
+
+    if (!reversed || out_path.count == 0) return;
+
+    // Waypoints from the lower endpoint: p1 ... pk (pk = higher endpoint = the requested start). Asked from the higher one they are
+    // pk-1 ... p1, then the lower endpoint. Reversing p1..pk-1 in place and overwriting pk does it.
+    ui16 count = out_path.count;
+    for (ui16 i = 0; i < (count - 1) / 2; i++)
+    {
+        world_location swap = out_path.points[i];
+        out_path.points[i] = out_path.points[count - 2 - i];
+        out_path.points[count - 2 - i] = swap;
+    }
+    out_path.points[count - 1] = from;
+
+    // The cost charges the tiles entered, so it changes with the direction: recompute it leg by leg along the reversed waypoints (the length does not change).
+    ui32 cost = 0;
+    world_location legStart = start;
+    for (ui16 i = 0; i < count; i++)
+    {
+        ui32 legCost;
+        if (!path_line_cost(terrain, params, legStart, out_path.points[i], legCost))
+        {
+            out_path.count = 0;
+            out_path.length = 0;
+            out_path.cost = 0;
+            return;
+        }
+        cost += legCost;
+        legStart = out_path.points[i];
+    }
+    out_path.cost = cost;
 }
 
 world_path_store* world_path_store_init(mem_arena& memory)

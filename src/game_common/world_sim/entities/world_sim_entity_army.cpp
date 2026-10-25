@@ -32,7 +32,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	world.entities->armies.desertions[freeIndex] = 0;
 
     // Init default values if they weren't specified by start state.
-    SET_DEFAULT_VAL(world.entities->armies.movements[freeIndex].travel_speed, 4);
+    SET_DEFAULT_VAL(world.entities->armies.movements[freeIndex].travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
     SET_DEFAULT_VAL_STRUCT(world.entities->armies.movements[freeIndex].destination, start_state.location);
     world.entities->armies.movements[freeIndex].move_target = start_state.location;
 

@@ -50,6 +50,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
 
     path_params params = {};
     params.passable_terrain = PATH_TERRAIN_LAND;
+    params.require_complete = true; // Same route from either end, and no partial road: an unreachable destination ends the project (count 0 below).
 
     // Find the next tile to build, skipping the ones that are already roads.
     world_location next;

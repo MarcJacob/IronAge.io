@@ -52,6 +52,10 @@ struct game_parameters
     // MOVEMENT
     // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only.
     ui32 armies_workers_cross_water = 1;
+    // Speed of each entity kind ON A ROAD, in thousandths of a tile per tick (world_entity_movement::travel_speed). Off-road it is divided by the tile's travel cost.
+    ui32 army_travel_speed = 200;
+    ui32 worker_travel_speed = 200;
+    ui32 caravan_travel_speed = 200;
 
     // ECONOMY
     // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (500 = 0.5), computed on the army's levy total and rounded down.
@@ -102,6 +106,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(armies_workers_cross_water, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_travel_speed, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(worker_travel_speed, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(caravan_travel_speed, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(upkeep_levy_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)

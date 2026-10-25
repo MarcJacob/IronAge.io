@@ -58,7 +58,7 @@ void world_system_caravan_spawn(match_world_state& world)
             caravan.origin_settlement = origin;
             caravan.value = (ui16)investment;
             caravan.location = settlements.locations[settlementIndex];
-            caravan.movement.travel_speed = 4; // Same as workers and armies.
+            caravan.movement.travel_speed = (ui16)GAME_PARAMETERS.caravan_travel_speed;
             caravan.movement.destination = world_entity_get_location(world, caravan.destination_settlement);
             caravan.movement.move_target = caravan.location;
             caravan.movement.path_handle = INVALID_PATH_HANDLE;

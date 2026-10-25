@@ -35,7 +35,7 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 	world.entities->workers.locations[freeIndex] = start;
 	world_entity_movement& movement = world.entities->workers.movements[freeIndex];
 	movement = {};
-	movement.travel_speed = 4; // Same as armies.
+	movement.travel_speed = (ui16)GAME_PARAMETERS.worker_travel_speed;
 	movement.destination = start;
 	movement.move_target = start;
 	movement.path_handle = INVALID_PATH_HANDLE;

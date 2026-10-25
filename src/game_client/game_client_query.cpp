@@ -33,7 +33,7 @@ bool game_client_query_command_valid(game_client& backend, ui8 command_type, con
 	return match_command_validity_check(*backend.local_match->world, backend.controlled_player_id, header, out_feedback);
 }
 
-void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory)
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory, bool tile_mode)
 {
 	out_path.count = 0;
 	out_path.length = 0;
@@ -47,7 +47,30 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	params.passable_terrain = PATH_TERRAIN_LAND;
 	params.within_settlement_territory = within_settlement_territory;
 	backend.path_scratch.clear();
-	world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
+
+	if (!tile_mode)
+	{
+		params.straight_segments = true; // Movement previews: straight segments, like entities follow them.
+		world_path_find(terrain, start, end, params, backend.path_scratch, out_path);
+		return;
+	}
+
+	// Tile mode: straight_segments off (runs) and require_complete (no path at all, count 0, when the end can't be reached), like the road builder, so that the
+	// route found is the one the builder gets. Searches into a waypoint buffer of the same size as the simulation's path store (WORLD_PATH_STORE_MAX_WAYPOINTS),
+	// then expands it into tiles in the caller's buffer. out_path.count is the number of tiles written; length, partial and cost are kept.
+	params.require_complete = true;
+	static constexpr ui16 TILE_MODE_MAX_WAYPOINTS = 256;
+	world_location waypoints[TILE_MODE_MAX_WAYPOINTS];
+	path found = {};
+	found.points = waypoints;
+	found.points_capacity = TILE_MODE_MAX_WAYPOINTS;
+	world_path_find(terrain, start, end, params, backend.path_scratch, found);
+
+	ui32 tileCount = world_path_expand_tiles(start, found, out_path.points, out_path.points_capacity);
+	out_path.count = (ui16)tileCount;
+	out_path.length = found.length;
+	out_path.partial = found.partial;
+	out_path.cost = found.cost;
 }
 
 ia_string_view game_client_get_player_name(game_client& backend, match_player_id player_id)

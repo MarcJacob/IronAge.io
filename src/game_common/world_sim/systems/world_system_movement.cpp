@@ -2,88 +2,99 @@
 
 #include "game_common/match/world/world.h"
 #include "../world_sim.h"
+#include "../world_movement.h"
 
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_caravan.h"
 
-// What entities can cross. Caravans: land only. Other members zero-initialized.
-static const path_params CARAVAN_PATH_PARAMS = { PATH_TERRAIN_LAND };
+// What entities can cross. Caravans: land only. Entities move in straight segments. Other members zero-initialized.
+static const path_params CARAVAN_PATH_PARAMS = { .passable_terrain = PATH_TERRAIN_LAND, .straight_segments = true };
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
-static const path_params ARMY_WORKER_PATH_PARAMS = { (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)) };
+static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
 
-// Moves the entity towards its move target (always an adjacent tile, or its own tile) using its speed and in-tile location.
-static void process_entity_movement (world_entity_movement& movement, world_location& location)
+// Divides rounding to the nearest integer (halves away from zero). den must be above 0.
+static i64 div_round_nearest(i64 num, i64 den)
 {
-    if (movement.move_target == location) return;
+    return num >= 0 ? (num + den / 2) / den : -((-num + den / 2) / den);
+}
 
-    vec2<i32> travelVec = (vec2<i32>)(movement.move_target) - location;
+// Moves the entity one step in a straight line towards the center of its move target (its current waypoint).
+// Positions are absolute fractional units: tile * 1000 + fractional_loc (a tile's center is its fractional 0).
+// The step is travel_speed / cost of the tile the entity stands on (rounded to nearest, cost at least 1): travel_speed is the speed on a road.
+// Returns false, without moving, if the step would enter a tile that is impassable for params.
+static bool process_entity_movement(const match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params)
+{
+    ui16 regionIndex, tileIndex;
+    world_get_tile(*world.terrain, location, regionIndex, tileIndex);
+    ui8 cost = ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)); // An entity left on an impassable tile still moves.
+    i32 step = ((i32)movement.travel_speed + cost / 2) / cost;
 
-    // Figure out a distribution over the 0, 256 range of both axis representing an absolute travel direction.
-    // The relative values of the axis will determine which will get more of the movement.
-    vec2<ui8> travelDir;
-    if (travelVec.y == 0) travelDir = { 255, 0 };
-    else if (travelVec.x == 0) travelDir = { 0, 255 };
-    else
+    i32 posX = (i32)location.x * 1000 + movement.fractional_loc.x;
+    i32 posY = (i32)location.y * 1000 + movement.fractional_loc.y;
+    i32 toTargetX = (i32)movement.move_target.x * 1000 - posX;
+    i32 toTargetY = (i32)movement.move_target.y * 1000 - posY;
+
+    // Distance rounded down by the integer square root. A step reaching it lands exactly on the waypoint's center.
+    ui32 dist = ia_isqrt((ui64)((i64)toTargetX * toTargetX + (i64)toTargetY * toTargetY));
+    i32 newPosX = (i32)movement.move_target.x * 1000;
+    i32 newPosY = (i32)movement.move_target.y * 1000;
+    if ((ui32)step < dist)
     {
-        ui16 travelAbsX = ia_abs(travelVec.x), travelAbsY = ia_abs(travelVec.y);
-        if (travelAbsX == travelAbsY) travelDir = { 127, 127 };
-        // Get a reasonably accurate measure of how much larger one is compared to the other and use it to determine distribution.
-        if (travelAbsX > travelAbsY)
-        {
-            ui32 xMult = travelAbsX * 1000 / travelAbsY;
-            ui8 parts = 255 * 1000 / (xMult + 1000);
-            travelDir.x = 255 - parts;
-            travelDir.y = parts;
-        }
-        else
-        {
-            ui32 yMult = travelAbsY * 1000 / travelAbsX;
-            ui8 parts = 255 * 1000 / (yMult + 1000);
-            travelDir.y = 255 - parts;
-            travelDir.x = parts;
-        }
+        newPosX = posX + (i32)div_round_nearest((i64)toTargetX * step, dist);
+        newPosY = posY + (i32)div_round_nearest((i64)toTargetY * step, dist);
     }
 
-    // Turn the travel vector into a signs vector.
-    travelVec = { (travelVec.x >= 0) ? 1 : -1, (travelVec.y >= 0) ? 1 : -1 };
+    // Back to tile + fraction. Shifted by 500 so that the tile edges are multiples of 1000 and the fraction ends up in [-500, 499].
+    // The position never goes below -500: it moves between points that are not below it.
+    i32 shiftedX = newPosX + 500, shiftedY = newPosY + 500;
+    world_location newLocation = { (ui16)(shiftedX / 1000), (ui16)(shiftedY / 1000) };
 
-    // With absolute travel vector, we can determine where to apply the movement value of the entity.
-    i16 xTravel = travelDir.x * 1000 / 255 * movement.travel_speed / 100;
-    i16 yTravel = travelDir.y * 1000 / 255 * movement.travel_speed / 100;
+    if (newLocation != location)
+    {
+        ui16 newRegionIndex, newTileIndex;
+        world_get_tile(*world.terrain, newLocation, newRegionIndex, newTileIndex);
+        if (world_tile_move_cost(*world.terrain, newRegionIndex, newTileIndex, params) == 0) return false;
+    }
 
-    i16 newFracX = movement.fractional_loc.x + (i16)xTravel * travelVec.x;
-    i16 newFracY = movement.fractional_loc.y + (i16)yTravel * travelVec.y;
+    location = newLocation;
+    movement.fractional_loc = { (i16)(shiftedX % 1000 - 500), (i16)(shiftedY % 1000 - 500) };
+    return true;
+}
 
-    while (newFracX > 100 && location.x < movement.move_target.x) { location.x++; newFracX -= 200; }
-    while (newFracX < -100 && location.x > movement.move_target.x) { location.x--; newFracX += 200; }
+// Asks for a path from the entity's tile to its destination and makes the path's first waypoint the move target.
+// Returns false if there is nothing to follow (the destination is unreachable even partially), leaving the entity as it is.
+static bool request_next_waypoint(match_world_state& world, world_entity_movement& movement, world_location location, const path_params& params, bool* out_partial)
+{
+    // The path handle is always invalid for now, so the path is recalculated from the current tile every time it is requested.
+    path_result result;
+    world_request_path(world, location, movement.destination, params, result);
+    movement.path_handle = result.handle;
+    if (out_partial != nullptr) *out_partial = result.partial;
 
-    while (newFracY > 100 && location.y < movement.move_target.y) { location.y++; newFracY -= 200; }
-    while (newFracY < -100 && location.y > movement.move_target.y) { location.y--; newFracY += 200; }
+    // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
+    if (result.count == 0) return false;
 
-    movement.fractional_loc.x = newFracX * (location.x != movement.move_target.x);
-    movement.fractional_loc.y = newFracY * (location.y != movement.move_target.y);
-
+    movement.move_target = result.next_point;
+    movement.path_destination = movement.destination;
+    return true;
 }
 
 bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params, bool* out_partial)
 {
-    if (location == movement.move_target)
+    if (location == movement.destination) return true; // Arrived.
+
+    // A new path is needed when the entity stands on its waypoint (also true for an entity that never had one) or when its destination changed.
+    bool onWaypoint = location == movement.move_target && movement.fractional_loc.x == 0 && movement.fractional_loc.y == 0;
+    if (onWaypoint || movement.destination != movement.path_destination)
     {
-        if (location == movement.destination) return true; // Arrived.
-
-        // The path handle is always invalid for now, so the path is recalculated from the current tile every time.
-        path_result result;
-        world_request_path(world, location, movement.destination, params, result);
-        movement.path_handle = result.handle;
-        if (out_partial != nullptr) *out_partial = result.partial;
-
-        // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
-        if (result.count == 0) return false;
-
-        movement.move_target = world_path_next_tile(location, result.next_point);
+        if (!request_next_waypoint(world, movement, location, params, out_partial)) return false;
     }
 
-    process_entity_movement(movement, location);
+    // The step would enter a tile that became impassable: path again from here instead.
+    if (!process_entity_movement(world, movement, location, params))
+    {
+        if (!request_next_waypoint(world, movement, location, params, out_partial)) return false;
+    }
     return true;
 }
 

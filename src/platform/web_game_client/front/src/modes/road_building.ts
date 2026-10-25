@@ -48,7 +48,7 @@ export class RoadBuilding extends Core.Mode
             return;
         }
 
-        const points = Backend.query_path(this.origin, hovered);
+        const points = Backend.query_path(this.origin, hovered, 0, true); // Tile mode: roads cover tiles, not straight lines.
         const valid = points.length > 0 && is_command_valid("BUILD_ROAD", { settlement: this.settlement_guid, origin: this.origin, destination: hovered });
         Render.RENDER_CONFIG.path_preview = { start: this.origin, points, valid };
     }

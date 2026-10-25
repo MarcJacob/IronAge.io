@@ -596,24 +596,27 @@ export function draw(render_state: Backend.RenderState | null)
     {
         const entity = render_state.entity_states[i];
         if (!RENDER_CONFIG.show_entity_type[entity.entity_type]) continue;
+        // Moving entities sit between tile centers: fractional offset is in thousandths of a tile, i.e. world units / 1000 (same axes as the viewport).
+        const vx = entity.viewport_x + entity.fractional_x / 1000;
+        const vy = entity.viewport_y + entity.fractional_y / 1000;
         const isSelected = selectedGuid !== null && entity.guid === selectedGuid;
         const local = render_state.controlled_player_id;
         const color = RENDER_CONFIG.tint_entities ? RENDER_CONFIG.entity_color(entity.owner, local) : null;
         const outline = RENDER_CONFIG.outline_entities ? RENDER_CONFIG.entity_outline_color(entity.owner, local) : null;
 
         if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
-            draw_entity_settlement(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
+            draw_entity_settlement(vx, vy, color, outline, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
-            draw_entity_army(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
-            draw_army_troop_count(entity.viewport_x, entity.viewport_y, entity.guid);
+            draw_entity_army(vx, vy, color, outline, isSelected);
+            draw_army_troop_count(vx, vy, entity.guid);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(entity.viewport_x, entity.viewport_y, color, outline, isSelected);
+            draw_entity_caravan(vx, vy, color, outline, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
             // Simple marker, no sprite yet: filled with the entity color (red if tinting is off).
-            const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+            const center = entity_canvas_center(vx, vy);
             const size = compute_entity_canvas_size(entity.entity_type);
             ctx.fillStyle = color !== null ? `rgb(${color[0]}, ${color[1]}, ${color[2]})` : 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
@@ -625,7 +628,7 @@ export function draw(render_state: Backend.RenderState | null)
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
             // Simple red marker.
-            const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+            const center = entity_canvas_center(vx, vy);
             const size = compute_entity_canvas_size(entity.entity_type);
             ctx.fillStyle = 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
@@ -781,7 +784,7 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
         if (entity.entity_type == Backend.ENTITY_TYPE.INVALID) continue;
         if (exclude_owner !== null && entity.owner === exclude_owner) continue;
 
-        const center = entity_canvas_center(entity.viewport_x, entity.viewport_y);
+        const center = entity_canvas_center(entity.viewport_x + entity.fractional_x / 1000, entity.viewport_y + entity.fractional_y / 1000);
         const dx = clickPos.x - center.x;
         const dy = clickPos.y - center.y;
         const halfSize = compute_entity_canvas_size(entity.entity_type) / 2;

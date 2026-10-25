@@ -146,11 +146,12 @@ struct world_entity_container
 
 struct world_entity_movement
 {
-	ui8 travel_speed; // Speed in twentieths of a tile per tick, along an axis (a tile spans 200 fractional units, each tick adds 10 per speed point). Diagonal moves split it between the axes.
-	vec2<i8> fractional_loc; // "In-tile location" of the entity. Affects movement.
+	ui16 travel_speed; // Speed in thousandths of a tile per tick (fractional units per tick), along an axis. Diagonal moves split it between the axes.
+	vec2<i16> fractional_loc; // "In-tile location" of the entity, centered on 0, in thousandths of a tile (range [-500, 500]). Affects movement.
 	world_location destination; // Tile the entity wants to reach. Set by orders and decisions.
-	world_location move_target; // Next tile of the path the entity is stepping to. Only set by the movement system.
+	world_location move_target; // Current waypoint: the tile whose center the entity is moving straight towards. Only set by the movement system.
 	ui32 path_handle; // Path the entity is following, INVALID_PATH_HANDLE if none.
+	world_location path_destination; // The destination move_target was computed for: a different destination means a new path is needed. Not exposed.
 };
 
 struct army_troop_count
@@ -406,8 +407,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 
-	GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed,       GAME_DATA_PROP_TYPE::UI8)
-	GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc,   GAME_DATA_PROP_TYPE::VEC2_I8)
+	GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed,       GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc,   GAME_DATA_PROP_TYPE::VEC2_I16)
 	GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination,         GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target,         GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(movement_path_handle, movement.path_handle,         GAME_DATA_PROP_TYPE::UI32)
@@ -610,8 +611,8 @@ GAME_DATA_PROPERTY(flags, GAME_DATA_PROP_TYPE::UI8)
 
 GAME_DATA_PROPERTY_PATH(movement_destination, movement.destination, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 GAME_DATA_PROPERTY_PATH(movement_move_target, movement.move_target, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
-GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_DATA_PROP_TYPE::VEC2_UI8)
-GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_DATA_PROP_TYPE::VEC2_I16)
+GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI16)
 
 GAME_DATA_PROPERTY(origin_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_PROPERTY(destination_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)

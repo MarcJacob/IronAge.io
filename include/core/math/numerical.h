@@ -85,6 +85,26 @@ static inline Numeric ia_clamped(Numeric val, Numeric min, Numeric max)
 
 // FIXED-POINT HELPERS
 
+// Integer square root: the largest r such that r * r <= val. Exact and integer-only, so results are identical on every machine.
+static inline ui32 ia_isqrt(ui64 val)
+{
+	ui64 result = 0;
+	ui64 bit = (ui64)1 << 62;
+	while (bit > val) bit >>= 2;
+
+	while (bit != 0)
+	{
+		if (val >= result + bit)
+		{
+			val -= result + bit;
+			result = (result >> 1) + bit;
+		}
+		else result >>= 1;
+		bit >>= 2;
+	}
+	return (ui32)result;
+}
+
 // Approximate log2(n) in fixed point with 8 fractional bits (256 = 1.0). n = 0 returns 0.
 // Piecewise linear between powers of two: exact at powers of two, monotonic non-decreasing.
 static inline ui32 ia_log2_q8(ui64 val)
