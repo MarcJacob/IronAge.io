@@ -51,7 +51,7 @@ static void settlement_goods_production(match_world_state& world, ui32 settlemen
     world_entity_settlements& settlements = world.entities->settlements;
     settlement_economy& economy = settlements.economies[settlement_index];
 
-    economy.raw_output = settlement_raw_output(settlements.base_land_outputs[settlement_index], settlements.populations[settlement_index].peasants);
+    economy.raw_output = settlement_raw_output(settlements.base_land_surplus[settlement_index], settlements.populations[settlement_index].peasants);
     economy.production = land_output_to_wealth(economy.raw_output);
 
     // Negative rates are future investment (treasury -> settlement): not applied yet.
@@ -95,12 +95,14 @@ static void settlement_goods_sales(world_entity_settlements& settlements, ui32 s
     stratum_consume(economy.workers, population.workers, workersShare);
     left -= economy.workers.consumed;
 
-    stratum_consume(economy.peasants, population.peasants, left);
+    stratum_consume(economy.unemployed, population.unemployed, left);
 
-    goods -= economy.soldiers.consumed + economy.workers.consumed + economy.peasants.consumed;
+    goods -= economy.soldiers.consumed + economy.workers.consumed + economy.unemployed.consumed;
+
+    // Peasants do not consume anything, they feed themselves from the land. They do contribute to population growth and thus benefit from extra goods in that way.
 }
 
-// Population growth in per mille, from how well the consumption was met. required must not be 0.
+// Population growth in per mille, from how well consumption demand was met. required must not be 0.
 // available is what was offered, excess what it holds beyond the requirement (not consumed).
 // Curve points are in GAME_PARAMETERS (now: r >= 1: +2% to +4%, more with excess up to excess == required; 0.9 <= r < 1: +2% down to 0%;
 // 0.5 <= r < 0.9: 0% down to -20%; r < 0.5: -20%).
@@ -167,7 +169,7 @@ static void settlement_apply_growth(match_world_state& world, ui32 settlement_in
 
     economy.soldiers.growth_per_mille = stratum_growth_per_mille(economy.soldiers);
     economy.workers.growth_per_mille = stratum_growth_per_mille(economy.workers);
-    economy.peasants.growth_per_mille = stratum_growth_per_mille(economy.peasants);
+    economy.unemployed.growth_per_mille = stratum_growth_per_mille(economy.unemployed);
 
     i32 soldiersChange = stratum_change(population.soldiers_home(), economy.soldiers.growth_per_mille);
     i32 workersChange = stratum_change(population.workers, economy.workers.growth_per_mille);

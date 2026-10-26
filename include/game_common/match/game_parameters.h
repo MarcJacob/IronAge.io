@@ -88,6 +88,7 @@ struct game_parameters
 
     // COLONIZATION
     ui32 found_settlement_colonists = 100; // Peasants a founding worker takes from its origin settlement. They become the new settlement's population.
+    ui16 minimum_settlement_distance = 16; // Minimum distance between two settlements in tiles.
 
     // TAXES
     i32 tax_rate_min = 0; // Lowest tax rate (%) a player can set. Negative would be investment (treasury -> settlement), not applied yet.

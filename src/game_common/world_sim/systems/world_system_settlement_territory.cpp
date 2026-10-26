@@ -8,26 +8,37 @@
 
 #include "../entities/world_sim_entity_settlement.h"
 
-// Base land output of each terrain type: peasants that can work the tile at full efficiency.
-static const ui8 TILE_TERRAIN_BASE_OUTPUT[] = {
-    20, // LAND_PLAINS
-    14, // LAND_HILLS
-    6, // LAND_MOUNTAINS
-
-    30, // WATER_COAST
-    10, // WATER_SEA
+struct tile_arable_land_def
+{
+    ui8 peasant_job_count; // Number of full-efficiency peasant jobs available on that tile.
+    ui8 surplus_percent; // How much each peasant produces in surplus on that tile assuming no proximity penalties, as a percentage.
 };
 
-// Proximity at which land output is reduced by 5%, stacking.
-static constexpr ui16 LAND_OUTPUT_DECREASE_STEP_DIST = 10;
+// Number of peasants worth of arable land per terrain type, and the surplus percentage per peasant at full proximity.
+// Each tile can support a certain number of inhabitants natively, and they feed themselves first. Surplus is what is available to be put on the local market.
+// When surplus reaches 0 because of proximity penalties, the population on the tile is effectively neutral to the settlement's economy and produce no taxable value.
+static constexpr tile_arable_land_def TILE_TERRAIN_ARABLE_LAND[] = {
+    { 40, 100 }, // LAND_PLAINS
+    { 30, 75 }, // LAND_HILLS
+    { 8, 75 }, // LAND_MOUNTAINS
 
-// Returns the land output of a tile based on its terrain base output and proximity to settlement root.
-static ui32 world_get_tile_land_output(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 proximity)
+    { 30, 125 }, // WATER_COAST
+    { 30, 60 }, // WATER_SEA
+};
+
+// Proximity below max at which surplus is reduced by 10%, stacking additively (IE if surplus is 100, then ten times this value below max proximity will wipe surplus).
+static constexpr ui8 LAND_SURPLUS_DECREASE_STEP_PROXIMITY = 10;
+
+static constexpr ui16 PROXIMITY_MAX = ~0;
+
+// Returns the surplus output of a tile based on its proxmity to the settlement center.
+static ui32 world_get_tile_land_production_surplus(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 proximity)
 {
-    ui8 output = TILE_TERRAIN_BASE_OUTPUT[(ui8)world.terrain->regions[region_index].terrain_types[tile_index]];
+    const tile_arable_land_def& arable_land_props = TILE_TERRAIN_ARABLE_LAND[(ui8)world.terrain->regions[region_index].terrain_types[tile_index]];
 
-    // Full width on purpose: narrowing before the check wraps far tiles back to full output.
-    ui16 decreaseStepCount = proximity / LAND_OUTPUT_DECREASE_STEP_DIST;
+    ui8 output = arable_land_props.peasant_job_count * arable_land_props.surplus_percent / 100;
+
+    ui16 decreaseStepCount = (255 - proximity) / LAND_SURPLUS_DECREASE_STEP_PROXIMITY;
     if (decreaseStepCount >= 10) return 0;
 
     for (ui16 decreaseStep = 0; decreaseStep < decreaseStepCount; decreaseStep++)
@@ -54,11 +65,11 @@ static void world_influence_update_tile_proximity(const match_world_state& world
     ui16& currentProximity = world.terrain->regions[region_index].proximities[tile_index];
 
     // Calculate old and new land outputs based on proximity
-    ui32 currentOutput = world_get_tile_land_output(world, region_index, tile_index, currentProximity);
-    ui32 newOutput = world_get_tile_land_output(world, region_index, tile_index, new_proximity);
+    ui32 currentOutput = world_get_tile_land_production_surplus(world, region_index, tile_index, currentProximity);
+    ui32 newOutput = world_get_tile_land_production_surplus(world, region_index, tile_index, new_proximity);
 
     // Update base land output (subtract old, add new)
-    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
+    auto& landOutput = world.entities->settlements.base_land_surplus[settlement_index];
     ASSERT(landOutput >= currentOutput);
     landOutput = landOutput - currentOutput + newOutput;
 
@@ -72,7 +83,7 @@ static ui16 world_influence_get_claim_proximity(const match_world_state& world, 
 {
     ui16 travelCost = world_tile_move_cost(*world.terrain, region_index, tile_index, {}); // Determine travel cost based on pathing move cost with no default parameters.
     world_location tileWorldLocation = world_get_tile_location(*world.terrain, region_index, tile_index);
-    bool found = false;
+
     ui16 claimProximity = 0;
     for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
     {
@@ -82,18 +93,18 @@ static ui16 world_influence_get_claim_proximity(const match_world_state& world, 
 
         bool isDiagonal = offset.x != 0 && offset.y != 0;
         ui16 stepProximity = world.terrain->regions[neighbourRegionIndex].proximities[neighbourTileIndex]
-                + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
-        if (!found || stepProximity < claimProximity)
+                - travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
+        if (stepProximity > claimProximity)
         {
             claimProximity = stepProximity;
-            found = true;
         }
     }
 
     return claimProximity;
 }
 
-static void world_influence_flag_same_settlement_neighbours(const match_world_state& world,
+// Has a tile flag all of its neighbours for proximity recalculation.
+static void world_influence_flag_proximity_neighbours(const match_world_state& world,
         ui16 region_index, ui16 tile_index, ui16 settlement_index, ui16 proximity, bool flag_higher, bool flag_lower)
 {
     world_location tileLocation = world_get_tile_location(*world.terrain, region_index, tile_index);
@@ -121,10 +132,10 @@ static void world_influence_unclaim_tile(const match_world_state& world, ui16 re
     ui16& proximity = world.terrain->regions[region_index].proximities[tile_index];
 
     // Calculate land output based on current proximity and subtract from settlement's total
-    ui32 tileOutput = world_get_tile_land_output(world, region_index, tile_index, proximity);
+    ui32 tileOutput = world_get_tile_land_production_surplus(world, region_index, tile_index, proximity);
 
     // Decreased land output.
-    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
+    auto& landOutput = world.entities->settlements.base_land_surplus[settlement_index];
     ASSERT(landOutput >= tileOutput);
     landOutput -= tileOutput;
 
@@ -135,7 +146,7 @@ static void world_influence_unclaim_tile(const match_world_state& world, ui16 re
 
     // The tile is about to disappear from this settlement's graph. Recalculate all
     // neighbouring tiles that may have depended on it as their shortest path.
-    world_influence_flag_same_settlement_neighbours(world, region_index, tile_index, settlement_index,
+    world_influence_flag_proximity_neighbours(world, region_index, tile_index, settlement_index,
             proximity, false, false);
 
     // Increase all non-diagonal neighbour tile border count owned by the same settlement.
@@ -167,12 +178,12 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     ui16 claimProximity = world_influence_get_claim_proximity(world, region_index, tile_index, settlement_index);
 
     // Calculate land output based on proximity
-    ui32 tileOutput = world_get_tile_land_output(world, region_index, tile_index, claimProximity);
+    ui32 tileOutput = world_get_tile_land_production_surplus(world, region_index, tile_index, claimProximity);
 
     world.terrain->regions[region_index].owners[tile_index] = settlement_index;
 
     // Increase land output.
-    auto& landOutput = world.entities->settlements.base_land_outputs[settlement_index];
+    auto& landOutput = world.entities->settlements.base_land_surplus[settlement_index];
     landOutput += tileOutput;
 
     // Increase land size.
@@ -184,7 +195,7 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     world.terrain->regions[region_index].status[tile_index].proximity_recalc = true;
 
     // A new connection can improve existing same-settlement paths.
-    world_influence_flag_same_settlement_neighbours(world, region_index, tile_index, settlement_index,
+    world_influence_flag_proximity_neighbours(world, region_index, tile_index, settlement_index,
             claimProximity, true, false);
 
     // Tile's own border count starts at 4, then decreases for each non-diagonal neighbour that is owned by the same settlement or off the map edge.
@@ -242,13 +253,13 @@ void world_system_settlement_territory_proximity_recalc(match_world_state& world
                 world_location tileLocation = {x, y};
                 if (tileLocation == settlements.locations[settlementIndex])
                 {
-                    world_influence_update_tile_proximity(world, regionIndex, tileIndex, settlementIndex, 0);
+                    world_influence_update_tile_proximity(world, regionIndex, tileIndex, settlementIndex, PROXIMITY_MAX);
                     continue;
                 }
 
-                ui16 lowestNeighbourProximity = 0;
-                vec2<i8> lowestNeighbourOffset = { 0, 0 };
-                bool foundLowerNeighbour = false;
+                ui16 highestNeighbourProximity = 0;
+                vec2<i8> highestProximityNeighbour = { 0, 0 };
+                bool foundHigherNeighbour = false;
                 ui16 currentProximity = terrain.regions[regionIndex].proximities[tileIndex];
 
                 for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
@@ -258,16 +269,16 @@ void world_system_settlement_territory_proximity_recalc(match_world_state& world
                     if (terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex] != settlementIndex) continue;
 
                     ui16 neighbourProximity = terrain.regions[neighbourRegionIndex].proximities[neighbourTileIndex];
-                    if (neighbourProximity >= currentProximity) continue;
-                    if (!foundLowerNeighbour || neighbourProximity < lowestNeighbourProximity)
+                    if (neighbourProximity <= currentProximity) continue;
+                    if (!foundHigherNeighbour || neighbourProximity < highestNeighbourProximity)
                     {
-                        foundLowerNeighbour = true;
-                        lowestNeighbourProximity = neighbourProximity;
-                        lowestNeighbourOffset = offset;
+                        foundHigherNeighbour = true;
+                        highestNeighbourProximity = neighbourProximity;
+                        highestProximityNeighbour = offset;
                     }
                 }
 
-                if (!foundLowerNeighbour)
+                if (!foundHigherNeighbour)
                 {
                     world_influence_unclaim_tile(world, regionIndex, tileIndex, settlementIndex);
                     continue;
@@ -275,60 +286,20 @@ void world_system_settlement_territory_proximity_recalc(match_world_state& world
 
                 TERRAIN_TILE_TYPE tileTerrain = terrain.regions[regionIndex].terrain_types[tileIndex];
                 ui8 travelCost = world_tile_move_cost(*world.terrain, regionIndex, tileIndex, {});
-                bool isDiagonal = lowestNeighbourOffset.x != 0 && lowestNeighbourOffset.y != 0;
-                ui16 newProximity = lowestNeighbourProximity
-                        + travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
+                bool isDiagonal = highestProximityNeighbour.x != 0 && highestProximityNeighbour.y != 0;
+                ui16 newProximity = highestNeighbourProximity
+                        - travelCost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
 
                 if (newProximity == currentProximity) continue;
 
                 world_influence_update_tile_proximity(world, regionIndex, tileIndex, settlementIndex, newProximity);
-                world_influence_flag_same_settlement_neighbours(world, regionIndex, tileIndex, settlementIndex,
+                world_influence_flag_proximity_neighbours(world, regionIndex, tileIndex, settlementIndex,
                         newProximity, newProximity < currentProximity, newProximity > currentProximity);
             }
         }
     }
 }
 
-// Returns true if the settlement can push into the given tile, owned by another settlement.
-// Uses new simplified formula: (attacker_pressure / attacker_population) * proximity_ratio > (defender_pressure / defender_population)
-// Defense bonus: If defender_pressure <= 0, flip it to positive and add it to attacker pressure.
-static bool world_influence_can_push(const match_world_state& world, ui16 border_region_index, ui16 border_tile_index,
-        ui16 target_region_index, ui16 target_tile_index, ui16 settlement_index, i32 attacker_pressure)
-{
-    ui16 defenderIndex = world.terrain->regions[target_region_index].owners[target_tile_index];
-    ASSERT(defenderIndex != world_terrain::UNOWNED_TILE && defenderIndex != settlement_index);
-
-    ui32 attackerPop = world.entities->settlements.populations[settlement_index].population_total;
-    ui32 defenderPop = world.entities->settlements.populations[defenderIndex].population_total;
-    if (attackerPop == 0 || defenderPop == 0) return false;
-
-    i32 defenderPressure = world.entities->settlements.territories[defenderIndex].pressure;
-    i32 effectiveDefenderPressure = defenderPressure + POP_CAP_PER_TILE; // Give defender pressure as if they'd already lost the tile, for stability.
-    i32 effectiveAttackerPressure = attacker_pressure;
-
-    // Defense bonus: If defender pressure <= 0, flip it and add to attacker
-    if (defenderPressure <= 0)
-    {
-        effectiveDefenderPressure = -defenderPressure; // negative or zero
-        effectiveAttackerPressure = attacker_pressure - defenderPressure; // -(-defender) becomes +
-    }
-
-    // Compute pressure ratios (in per mille)
-    i32 attackerRatio = (i32)((i64)effectiveAttackerPressure * 1000 / (i64)attackerPop);
-    i32 defenderRatio = (i32)((i64)effectiveDefenderPressure * 1000 / (i64)defenderPop);
-
-    // Proximity ratio: (attacker_tile_claim_proximity) / (defender_tile_proximity + 1)
-    // Add 1 to avoid division by zero
-    i64 attackerProximity = world_influence_get_claim_proximity(world, target_region_index, target_tile_index, settlement_index);
-    i64 defenderProximity = world.terrain->regions[target_region_index].proximities[target_tile_index] + 1;
-
-    i64 proximityRatio = defenderProximity * 1000 / attackerProximity;
-
-    // Compare: attacker_ratio * proximity_ratio > defender_ratio
-    i64 attackerEffective = (i64)attackerRatio * proximityRatio;
-
-    return attackerEffective > (i64)defenderRatio * 1400; // Give slight advantage to defender.
-}
 
 // Returns true if the border tile has at least one non-diagonal neighbour the settlement could expand into.
 // That means an unclaimed tile or a tile that can be pushed into.
@@ -342,8 +313,8 @@ static bool world_influence_can_expand(const match_world_state& world, ui16 regi
 
         ui16 neighbourOwner = world.terrain->regions[neighbourRegionIndex].owners[neighbourTileIndex];
         if (neighbourOwner == world_terrain::UNOWNED_TILE) return true;
-        if (neighbourOwner != settlement_index
-                && world_influence_can_push(world, region_index, tile_index, neighbourRegionIndex, neighbourTileIndex, settlement_index, pressure)) return true;
+
+        // @TODO(Marc): Push mechanics, allowing territories to be redrawn.
     }
 
     return false;
@@ -371,14 +342,10 @@ static void world_influence_border_logic(const match_world_state& world, ui16 re
         bool isUnowned = targetOwner == world_terrain::UNOWNED_TILE;
         if (targetOwner == settlement_index) continue;
 
-        // Colonize empty tile, or push into a foreign tile that is contested enough. Both cost the same.
-        if (!isUnowned && !world_influence_can_push(world, region_index, tile_index, claimRegionIndex, claimTileIndex, settlement_index, pressure)) continue;
+        // Colonize empty tile
+        if (!isUnowned) continue;
 
-        // A pushed tile is first unclaimed by its defender, and has its contestation reset.
-        if (!isUnowned) world_influence_unclaim_tile(world, claimRegionIndex, claimTileIndex, targetOwner);
         pressure -= world_influence_claim_tile(world, claimRegionIndex, claimTileIndex, settlement_index);
-        if (!isUnowned) world.terrain->regions[claimRegionIndex].contestation_levels[claimTileIndex] = 0;
-
         world_bounds_include(bounds_min, bounds_max, { (ui16)(tileLocation.x + offset.x), (ui16)(tileLocation.y + offset.y) });
 
         // Check border flag and return from the function immediately if tile isn't a border anymore.

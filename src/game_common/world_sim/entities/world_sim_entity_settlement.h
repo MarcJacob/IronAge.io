@@ -4,8 +4,7 @@
 #define WORLD_SIM_ECONOMY_INCLUDED
 
 #include "core/std_types.h"
-#include "game_common/match/game_parameters.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 #include "world_sim_entity_army.h"
 
@@ -32,134 +31,162 @@ void world_settlement_change_owner(match_world_state& world, ui16 settlement_ind
 // Births. Adds peasants.
 static inline void settlement_add_peasants(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	population.peasants += count;
-	population.population_total += count;
+	auto& population = world.entities->settlements.pop_peasants[settlement_index];
+	population += count;
+    world.entities->settlements.pop_total += count;
 }
 
 // Deaths. Removes up to count peasants, returns how many were removed.
 static inline ui32 settlement_remove_peasants(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui32 removed = ia_min(count, population.peasants);
-	population.peasants -= removed;
-	population.population_total -= ia_min(removed, population.population_total);
+	auto& peasants = world.entities->settlements.pop_peasants[settlement_index];
+	ui32 removed = ia_min(count, peasants);
+	peasants -= removed;
+	world.entities->settlements.pop_total[settlement_index] -= removed;
+
 	return removed;
 }
 
 // Deaths of raised soldiers. Removes up to count raised soldiers of a type, returns how many were removed.
 static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& raised = troop_count_field(population.raised, troop_type);
+	auto& raisedSoldiers = world.entities->settlements.raised[settlement_index];
+	ui16& raised = troop_count_field(raisedSoldiers, troop_type);
 	ui16 removed = ia_min(count, raised);
 	raised -= removed;
-	population.population_total -= ia_min((ui32)removed, population.population_total);
+	world.entities->settlements.pop_total[settlement_index] -= ia_min((ui32)removed, world.entities->settlements.pop_total[settlement_index]);
+
 	return removed;
 }
 
-// Training. Moves up to count peasants into the home soldiers of a type (not levies). Returns how many were moved.
+// Training. Moves up to count peasants into the garrison of a type. Returns how many were moved.
 static inline ui16 settlement_train_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& home = troop_count_field(population.home, troop_type);
-	ui32 moved = ia_min(ia_min(count, population.peasants), (ui32)(0xFFFF - home));
-	population.peasants -= moved;
-	home += (ui16)moved;
+	auto& garrisonTroops = world.entities->settlements.garrison[settlement_index];
+	ui16& troops = troop_count_field(garrisonTroops, troop_type);
+
+    ui16 moved = 0;
+
+    auto& unemployed = world.entities->settlements.pop_unemployed[settlement_index];
+    auto& peasants = world.entities->settlements.pop_peasants[settlement_index];
+
+    ui16 fromUnemployed = ia_min(unemployed, count);
+    unemployed -= fromUnemployed;
+    moved += fromUnemployed;
+
+    // If unemployed population was not sufficient, take from peasants.
+    if (count > moved)
+    {
+        ui16 fromPeasants = ia_min(peasants, count - moved);
+        peasants -= fromPeasants;
+        moved += fromPeasants;
+    }
+
+	troops += (ui16)moved;
 	return (ui16)moved;
 }
 
-// Discharge. Moves up to count home soldiers of a type back to peasants. Returns how many were moved.
+// Discharge. Moves up to count garrison soldiers of a type back to peasants. Returns how many were moved.
 static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& home = troop_count_field(population.home, troop_type);
-	ui16 moved = ia_min(count, home);
-	home -= moved;
-	population.peasants += moved;
+	ui16& troops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+	ui16 moved = ia_min(count, troops);
+	troops -= moved;
+	world.entities->settlements.pop_unemployed += moved;
 	return moved;
 }
 
-// Levy. Moves up to count peasants into raised levies. Returns how many were moved.
-static inline ui16 settlement_raise_levies(match_world_state& world, ui16 settlement_index, ui32 count)
-{
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui32 moved = ia_min(ia_min(count, population.peasants), (ui32)(0xFFFF - population.raised.levies));
-	population.peasants -= moved;
-	population.raised.levies += (ui16)moved;
-	return (ui16)moved;
-}
-
-// Raising from the local troop pool. Moves up to count home soldiers of a type (not levies) to raised. Returns how many were moved.
+// Raising from the garrison. Moves up to count home soldiers of a type to raised. Returns how many were moved.
 static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& home = troop_count_field(population.home, troop_type);
-	ui16& raised = troop_count_field(population.raised, troop_type);
-	ui16 moved = ia_min(ia_min(count, home), (ui16)(0xFFFF - raised));
-	home -= moved;
+	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
+
+	ui16 moved = ia_min(count, garrisonTroops);
+
+	garrisonTroops -= moved;
 	raised += moved;
+
 	return moved;
 }
 
-// Standing down. Moves up to count raised soldiers of a type back to the settlement: levies become peasants, the others rejoin the home pool.
+// Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison.
 // Returns how many were moved.
 static inline ui16 settlement_release_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& raised = troop_count_field(population.raised, troop_type);
+	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
+
 	ui16 moved = ia_min(count, raised);
-	if (troop_type == TROOP_TYPE_LEVIES)
-	{
-		raised -= moved;
-		population.peasants += moved;
-		return moved;
-	}
-	ui16& home = troop_count_field(population.home, troop_type);
-	moved = ia_min(moved, (ui16)(0xFFFF - home));
+
+	garrisonTroops += moved;
 	raised -= moved;
-	home += moved;
+
 	return moved;
 }
 
-// Construction manpower. Moves up to count free peasants into workers. Returns how many were moved. population_total is unchanged.
+// Construction manpower. Moves up to count free unemployed (then peasants) into workers. Returns how many were moved. population_total is unchanged.
 static inline ui32 settlement_assign_workers(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui32 moved = ia_min(count, population.peasants);
-	population.peasants -= moved;
-	population.workers += moved;
+    auto& workers = world.entities->settlements.pop_workers[settlement_index];
+
+    ui16 moved = 0;
+
+    auto& unemployed = world.entities->settlements.pop_unemployed[settlement_index];
+    auto& peasants = world.entities->settlements.pop_peasants[settlement_index];
+
+    ui16 fromUnemployed = ia_min(unemployed, count);
+    unemployed -= fromUnemployed;
+    moved += fromUnemployed;
+
+    // If unemployed population was not sufficient, take from peasants.
+    if (count > moved)
+    {
+        ui16 fromPeasants = ia_min(peasants, count - moved);
+        peasants -= fromPeasants;
+        moved += fromPeasants;
+    }
+
+	workers += moved;
 	return moved;
 }
 
 // Construction manpower. Moves up to count workers back to free peasants. Returns how many were moved.
 static inline ui32 settlement_release_workers(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui32 moved = ia_min(count, population.workers);
-	population.workers -= moved;
-	population.peasants += moved;
+    auto& workers = world.entities->settlements.pop_workers[settlement_index];
+
+    ui16 moved = ia_min(count, workers);
+
+    auto& unemployed = world.entities->settlements.pop_unemployed[settlement_index];
+
+    unemployed += moved;
+	workers -= moved;
+
 	return moved;
 }
 
 // Deaths of workers. Removes up to count workers, returns how many were removed. Projects holding them are not told (they re-check their crew).
 static inline ui32 settlement_remove_workers(match_world_state& world, ui16 settlement_index, ui32 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui32 removed = ia_min(count, population.workers);
-	population.workers -= removed;
-	population.population_total -= ia_min(removed, population.population_total);
+    auto& workers = world.entities->settlements.pop_workers[settlement_index];
+
+    ui16 removed = ia_min(count, workers);
+	workers -= removed;
+
+    world.entities->settlements.pop_total[settlement_index] -= removed;
+
 	return removed;
 }
 
-// Deaths of home soldiers (local pool). Removes up to count home soldiers of a type, returns how many were removed.
+// Deaths of home soldiers (local pool). Removes up to count garrison soldiers of a type, returns how many were removed.
 static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	settlement_population& population = world.entities->settlements.populations[settlement_index];
-	ui16& home = troop_count_field(population.home, troop_type);
-	ui16 removed = ia_min(count, home);
-	home -= removed;
-	population.population_total -= ia_min((ui32)removed, population.population_total);
+    auto& troops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+
+    ui16 removed = ia_min(count, troops);
+	troops -= removed;
+
 	return removed;
 }
 
@@ -169,7 +196,7 @@ static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui1
 // Capacity = people at home + buildings' part.
 static inline ui32 settlement_market_capacity(const world_entity_settlements& settlements, ui16 settlement_index)
 {
-	return settlements.populations[settlement_index].at_home() + settlements.trade[settlement_index].market_capacity_buildings;
+	return settlements.at_home(settlement_index) + settlements.trade[settlement_index].market_capacity_buildings;
 }
 
 // Fill of the market goods: goods / capacity as a fixed-point fraction (0 = empty, IA_FIXED_ONE = full), clamped to full.
@@ -229,17 +256,14 @@ static inline ui16 settlement_building_remove(match_world_state& world, ui16 set
 
 // Ceiling actually in force: the raw player-set ceiling capped by the settlement's troop max. It applies to the total of a type (home + raised).
 // Levies have no max: their ceiling is the raw one.
-static inline army_troop_count settlement_troop_effective_ceilings(const settlement_population& population, const army_troop_count& raw_ceilings)
+static inline army_troop_count settlement_troop_effective_ceilings(const army_troop_count& troop_maxes, const army_troop_count& raw_ceilings)
 {
-	const army_troop_count& max = population.troop_max;
 	return {
 		raw_ceilings.levies,
-		raw_ceilings.men_at_arms < max.men_at_arms ? raw_ceilings.men_at_arms : max.men_at_arms,
-		raw_ceilings.horsemen < max.horsemen ? raw_ceilings.horsemen : max.horsemen,
-		raw_ceilings.knights < max.knights ? raw_ceilings.knights : max.knights,
+		raw_ceilings.men_at_arms < troop_maxes.men_at_arms ? raw_ceilings.men_at_arms : troop_maxes.men_at_arms,
+		raw_ceilings.horsemen < troop_maxes.horsemen ? raw_ceilings.horsemen : troop_maxes.horsemen,
+		raw_ceilings.knights < troop_maxes.knights ? raw_ceilings.knights : troop_maxes.knights,
 	};
 }
-
-
 
 #endif // WORLD_SIM_ECONOMY_INCLUDED

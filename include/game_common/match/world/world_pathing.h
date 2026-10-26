@@ -4,7 +4,7 @@
 #define MATCH_PATHING_INCLUDED
 
 #include "world_terrain.h"
-#include "world_entities.h"
+#include "entities/world_entity_common.h"
 
 // Bit masks of terrain types a path may cross, to be combined into path_params::passable_terrain.
 static constexpr ui8 PATH_TERRAIN_LAND = (1 << (ui8)TERRAIN_TILE_TYPE::LAND_PLAINS) | (1 << (ui8)TERRAIN_TILE_TYPE::LAND_HILLS) | (1 << (ui8)TERRAIN_TILE_TYPE::LAND_MOUNTAINS);

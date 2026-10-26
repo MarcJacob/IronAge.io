@@ -25,7 +25,7 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	world.entities->settlements.locations[freeIndex] = start_state.location;
     world.entities->settlements.founding_ticks[freeIndex] = world.age;
 
-    world.entities->settlements.base_land_outputs[freeIndex] = start_state.base_land_output;
+    world.entities->settlements.base_land_surplus[freeIndex] = start_state.base_land_output;
 	world.entities->settlements.tax_rates[freeIndex] = start_state.tax_rate;
 	world.entities->settlements.economies[freeIndex] = start_state.economy;
     world.entities->settlements.territories[freeIndex] = start_state.territory;
@@ -97,8 +97,8 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.populations = memory.alloc<settlement_population>(count);
 	if (settlements.populations == nullptr) return false;
 
-	settlements.base_land_outputs = memory.alloc<ui32>(count);
-	if (settlements.base_land_outputs == nullptr) return false;
+	settlements.base_land_surplus = memory.alloc<ui32>(count);
+	if (settlements.base_land_surplus == nullptr) return false;
 
 	settlements.tax_rates = memory.alloc<i8>(count);
 	if (settlements.tax_rates == nullptr) return false;
@@ -136,7 +136,7 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 		.tax_rate = settlements.tax_rates[i],
 		.economy = settlements.economies[i],
 		.territory = settlements.territories[i],
-		.base_land_output = settlements.base_land_outputs[i],
+		.base_land_output = settlements.base_land_surplus[i],
         .buildings = settlements.buildings[i],
         .trade = settlements.trade[i],
         .market_capacity = settlement_market_capacity(settlements, i),

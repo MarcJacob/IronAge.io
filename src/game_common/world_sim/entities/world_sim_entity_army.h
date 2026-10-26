@@ -4,7 +4,7 @@
 #define WORLD_SIM_ARMY_INCLUDED
 
 #include "game_common/match/game_parameters.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 // An army reaches its attack target when within this many tiles of it.
 constexpr i32 ATTACK_REACH_TILES = 5;

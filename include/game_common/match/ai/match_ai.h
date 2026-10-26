@@ -9,8 +9,7 @@
 
 #include "game_common/match/match.h"
 #include "game_common/match/commands.h"
-#include "game_common/match/world/world.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 // Opinions are tracked for the first players only; others are ignored by the AI's opinion / target logic.
 constexpr ui8 AI_MAX_TRACKED_PLAYERS = 32;

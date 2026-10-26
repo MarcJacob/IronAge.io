@@ -10,7 +10,7 @@
 #include "game_common/match/commands.h"
 
 #include "game_common/match/world/world.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 #include "world_sim/world_sim.h"
 
 // Unity compile game common components.

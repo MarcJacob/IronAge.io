@@ -29,7 +29,7 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.peasants = population.peasants;
 	out.workers = population.workers;
 	out.local_wealth = settlements.trade[slot].market_goods;
-	out.land_output = settlements.base_land_outputs[slot];
+	out.land_output = settlements.base_land_surplus[slot];
 	out.growth_per_mille = population.growth_per_mille;
 	out.tax_rate = settlements.tax_rates[slot];
 	out.home_troops = population.home;

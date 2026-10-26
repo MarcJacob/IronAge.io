@@ -9,7 +9,6 @@
 // What we have now works well enough.
 
 #include "game_common/match/world/world_terrain.h"
-#include "world_sim.h"
 #include "world_movement.h"
 
 // A* bookkeeping for one tile. Nodes live in an open-addressing hash table (linear probing) allocated from the scratch arena.
