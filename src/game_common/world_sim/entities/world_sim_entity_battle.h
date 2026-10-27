@@ -3,7 +3,7 @@
 #ifndef WORLD_SIM_BATTLE_INCLUDED
 #define WORLD_SIM_BATTLE_INCLUDED
 
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 // Armies in a battle move towards the battle location until they are this many tiles from it, then stay pinned.
 constexpr i32 BATTLE_ARMY_DISTANCE = 2;

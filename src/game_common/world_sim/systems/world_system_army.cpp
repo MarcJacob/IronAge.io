@@ -1,13 +1,13 @@
 // Army systems: armies reaching their attack targets and the resolution of those attacks. Siege start is resolved here too.
 
-#include "game_common/match/world/world.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
+
 #include "../entities/world_sim_entity_army.h"
 
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_settlement.h"
 
-#include "../world_sim.h"
+#include "../world_movement.h"
 
 // Resolves an attack of an army that reached its target.
 static void world_resolve_attack(match_world_state& world, entity_guid attacker, entity_guid target)
@@ -36,38 +36,16 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 			}
 		}
 
-		// Otherwise the settlement raises levies (20% of its population, at least 1), its whole local troop pool joins them and the siege begins.
-		settlement_population& population = settlements.populations[targetIndex];
-		ui32 levies = population.population_total / 5 > 0 ? population.population_total / 5 : 1;
-		if (levies > 0xFFFF) levies = 0xFFFF; // Army levies is a ui16.
-		if (levies > population.peasants) levies = population.peasants; // SIEGE ADAPTATION: levies come out of the peasants.
-		army_troop_count defenderTroops = {};
-		defenderTroops.levies = settlement_raise_levies(world, targetIndex, levies); // Peasants became soldiers.
-		// SIEGE ADAPTATION: the pool joins the army, so it becomes raised.
-		for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT; troopType++)
-		{
-			troop_count_field(defenderTroops, troopType) = settlement_raise_soldiers(world, targetIndex, troopType, troop_count_field(population.home, troopType));
-		}
-
-		world_entity_armies::single defenders = {};
-		defenders.owner = settlements.owners[targetIndex];
-		defenders.home_settlement = target; // Casualties and disbanding go back to the besieged settlement.
-		defenders.location = settlements.locations[targetIndex];
-		defenders.raised_troops = defenderTroops;
-		entity_guid defenderArmy = world_spawn_army(world, defenders);
-		for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
-		{
-			army_add_troops(world, defenderArmy.get_index(), troopType, troop_count_field(defenderTroops, troopType));
-		}
+        // @TODO(Marc): Create temp army for garrison defending the settlement ?
+        // Adapt battle system so settlement garrisons can join directly ?
+        // For now all sieges will immediately be won by attackers.
 
 		world_entity_battles::state start = {};
 		start.location = (armies.locations[attackerIndex] + settlements.locations[targetIndex]) / 2; // Start battle at midpoint between beligerent armies.
 		start.siege_settlement = target;
 		start.siege_owner = attackerOwner;
-		start.siege_defenders = defenderArmy;
 		entity_guid battle = world_spawn_battle(world, start);
 		army_battle_join(world, battle, attacker, 0);
-		army_battle_join(world, battle, defenderArmy, 1);
 		break;
 	}
 	case ENTITY_TYPE::ARMY:
@@ -135,18 +113,9 @@ void world_system_armies_raising(match_world_state& world)
 		ui16 homeIndex = home.get_index();
 		army_troop_count& composition = armies.compositions[armyIndex];
 		const army_troop_count& target = armies.raised_troops[armyIndex];
-		settlement_population& population = settlements.populations[homeIndex];
 
-
-		// Levies come out of the peasants, RAISE_LEVIES_PER_TICK per tick, never leaving less than the minimum or going past the target.
-		// They become raised soldiers of the settlement.
-		if (composition.levies < target.levies && population.peasants > GAME_PARAMETERS.raise_min_population_left)
-		{
-			ui32 wanted = ia_min((ui32)RAISE_LEVIES_PER_TICK, (ui32)(target.levies - composition.levies));
-			wanted = ia_min(wanted, population.peasants - GAME_PARAMETERS.raise_min_population_left);
-			army_add_troops(world, armyIndex, TROOP_TYPE_LEVIES, settlement_raise_levies(world, homeIndex, wanted));
-		}
-
+        // @TODO(Marc): Deduct unemployed / peasant population ?
+        raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_LEVIES, composition.levies, target.levies);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_HORSEMEN, composition.horsemen, target.horsemen);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_KNIGHTS, composition.knights, target.knights);

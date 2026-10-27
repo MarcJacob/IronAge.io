@@ -68,6 +68,8 @@ struct world_entity_workers : public world_entity_container
 	world_location* locations; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
 	world_entity_movement* movements; // Movement state, used by work types that travel (like armies').
 
+	struct view;
+
 	// Consolidated representation of a single worker for viewing purposes.
 	struct single
 	{
@@ -84,10 +86,76 @@ struct world_entity_workers : public world_entity_container
 		world_entity_movement movement;
 
 		match_player_id owner; // Derived: owner of the origin entity (world_entity_get_owner). Not stored per worker.
+
+		void copy_from(const view& source);
+		void copy_from(const world_entity_workers& collection, ui16 index);
+	};
+
+	// Reference view of a worker slot. The owner is derived by the query and is not stored in the collection.
+	struct view
+	{
+		entity_guid& origin_entity;
+		WORK_TYPE& work_type;
+		ui32& work_time;
+		ui8& work_progress_ratio;
+		ui32& daily_cost;
+		world_worker_action_data& action_data;
+		world_location& position;
+		world_entity_movement& movement;
+
+		void copy_from(const single& source)
+		{
+			origin_entity = source.origin_entity;
+			work_type = source.work_type;
+			work_time = source.work_time;
+			work_progress_ratio = source.work_progress_ratio;
+			daily_cost = source.daily_cost;
+			action_data = source.action_data;
+			position = source.position;
+			movement = source.movement;
+		}
+
+		view(world_entity_workers& collection, ui16 index)
+			: origin_entity(collection.origin_entity[index])
+			, work_type(collection.work_types[index])
+			, work_time(collection.work_times[index])
+			, work_progress_ratio(collection.work_progress_ratios[index])
+			, daily_cost(collection.daily_costs[index])
+			, action_data(collection.action_data[index])
+			, position(collection.locations[index])
+			, movement(collection.movements[index])
+		{}
 	};
 };
 
+inline void world_entity_workers::single::copy_from(const world_entity_workers::view& source)
+{
+	origin_entity = source.origin_entity;
+	work_type = source.work_type;
+	work_time = source.work_time;
+	work_progress_ratio = source.work_progress_ratio;
+	daily_cost = source.daily_cost;
+	action_data = source.action_data;
+	position = source.position;
+	movement = source.movement;
+	owner = INVALID_MATCH_PLAYER_ID;
+}
+
+inline void world_entity_workers::single::copy_from(const world_entity_workers& collection, ui16 index)
+{
+	origin_entity = collection.origin_entity[index];
+	work_type = collection.work_types[index];
+	work_time = collection.work_times[index];
+	work_progress_ratio = collection.work_progress_ratios[index];
+	daily_cost = collection.daily_costs[index];
+	action_data = collection.action_data[index];
+	position = collection.locations[index];
+	movement = collection.movements[index];
+	owner = INVALID_MATCH_PLAYER_ID;
+}
+
 using world_entity_worker = world_entity_workers::single;
+using world_entity_worker_view = world_entity_workers::view;
 
 // action_data is left out: it is a byte buffer, which has no property type yet.
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_worker)
@@ -98,6 +166,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_worker)
 	GAME_DATA_PROPERTY_PATH(location, position, GAME_DATA_PROP_TYPE::WORLD_LOCATION) // Named like the other entities' so generic inspection shows it.
 GAME_DATA_OBJECT_DEF_END()
 
-bool world_entity_query_worker(const match_world_state& world, entity_guid entity, world_entity_workers& out_state);
+bool world_entity_query_worker(const match_world_state& world, entity_guid entity, world_entity_worker& out_state);
 
 #endif // WORLD_ENTITY_WORKERS_INCLUDED

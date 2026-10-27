@@ -2,19 +2,21 @@
 
 entity_guid world_spawn_battle(match_world_state& world, const world_entity_battles::state& start_state)
 {
+	world_entity_battles& battles = world.entities->battles;
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities->battles.max_count && world.entities->battles.guids[freeIndex].is_valid())
+	while (freeIndex < battles.max_count && battles.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
-	ASSERT(freeIndex < world.entities->battles.max_count);
+	ASSERT(freeIndex < battles.max_count);
 
 	entity_guid newID = entity_guid_new(ENTITY_TYPE::BATTLE, freeIndex, world.age % 0x100); // 8-bit extra field.
 
-	world.entities->battles.guids[freeIndex] = newID;
-	world.entities->battles.active_count++;
-	world.entities->battles.states[freeIndex] = start_state;
+	world_entity_battles::view newBattle { battles, freeIndex };
+	newBattle.copy_from(start_state);
+	battles.guids[freeIndex] = newID;
+	battles.active_count++;
 
 	return newID;
 }
@@ -24,7 +26,10 @@ void world_destroy_battle(match_world_state& world, entity_guid battle)
 	ASSERT(world_entity_is_valid(world, battle) && battle.get_type() == ENTITY_TYPE::BATTLE);
 	world_entity_battles& battles = world.entities->battles;
 
-	battles.guids[battle.get_index()] = INVALID_ENTITY_GUID;
+	ui16 index = battle.get_index();
+	world_entity_battle_view destroyedBattle { battles, index };
+	destroyedBattle.copy_from(world_entity_battle {});
+	battles.guids[index] = INVALID_ENTITY_GUID;
 	battles.active_count--;
 }
 
@@ -32,7 +37,9 @@ bool world_entity_query_battle(const match_world_state& world, entity_guid entit
 {
 	if (entity.get_type() != ENTITY_TYPE::BATTLE || !world_entity_is_valid(world, entity)) return false;
 
-	out_state = world.entities->battles.states[entity.get_index()];
+	const world_entity_battles& battles = world.entities->battles;
+	ui16 index = entity.get_index();
+	out_state.copy_from(battles, index);
 	return true;
 }
 

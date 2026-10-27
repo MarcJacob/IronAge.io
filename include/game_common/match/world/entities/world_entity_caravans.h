@@ -24,6 +24,8 @@ struct world_entity_caravans : public world_entity_container
 
     ui16* values;
 
+    struct view;
+
     struct single
     {
         world_location location;
@@ -36,10 +38,66 @@ struct world_entity_caravans : public world_entity_container
         ui16 value;
 
         match_player_id owner; // Derived: owner of the origin settlement (world_entity_get_owner). Not stored per caravan.
+
+        void copy_from(const view& source);
+        void copy_from(const world_entity_caravans& collection, ui16 index);
+    };
+
+    // Reference view of a caravan slot. The owner is derived by the query and is not stored in the collection.
+    struct view
+    {
+        world_location& location;
+        world_entity_movement& movement;
+        WORLD_ENTITY_CARAVAN_FLAGS& flags;
+        entity_guid& origin_settlement;
+        entity_guid& destination_settlement;
+        ui16& value;
+
+        void copy_from(const single& source)
+        {
+            location = source.location;
+            movement = source.movement;
+            flags = source.flags;
+            origin_settlement = source.origin_settlement;
+            destination_settlement = source.destination_settlement;
+            value = source.value;
+        }
+
+        view(world_entity_caravans& collection, ui16 index)
+            : location(collection.locations[index])
+            , movement(collection.movements[index])
+            , flags(collection.flags[index])
+            , origin_settlement(collection.origin_settlements[index])
+            , destination_settlement(collection.destination_settlements[index])
+            , value(collection.values[index])
+        {}
     };
 };
 
+inline void world_entity_caravans::single::copy_from(const world_entity_caravans::view& source)
+{
+    location = source.location;
+    movement = source.movement;
+    flags = source.flags;
+    origin_settlement = source.origin_settlement;
+    destination_settlement = source.destination_settlement;
+    value = source.value;
+    owner = INVALID_MATCH_PLAYER_ID;
+}
+
+inline void world_entity_caravans::single::copy_from(const world_entity_caravans& collection, ui16 index)
+{
+    location = collection.locations[index];
+    movement = collection.movements[index];
+    flags = collection.flags[index];
+    origin_settlement = collection.origin_settlements[index];
+    destination_settlement = collection.destination_settlements[index];
+    value = collection.values[index];
+    owner = INVALID_MATCH_PLAYER_ID;
+}
+
 using world_entity_caravan = world_entity_caravans::single;
+using world_entity_caravan_view = world_entity_caravans::view;
 
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_caravan)
 GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)

@@ -3,7 +3,7 @@
 #ifndef WORLD_SIM_WORKER_INCLUDED
 #define WORLD_SIM_WORKER_INCLUDED
 
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 // Spawns a new worker in the world with the provided start state and returns its GUID.
 // Returns INVALID_ENTITY_GUID if the origin is not a valid entity. Asserts if its type is not the one the work type requires.

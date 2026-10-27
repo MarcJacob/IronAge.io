@@ -2,7 +2,7 @@
 
 #include "world_sim_entity_caravan.h"
 #include "world_sim_entity_settlement.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 #include "game_common/match/world/world_trade.h"
 
 // Returns the trade state of a caravan's origin settlement, or nullptr if the origin is invalid (never set, destroyed, or its slot reused).
@@ -25,16 +25,9 @@ entity_guid world_spawn_entity_caravan(match_world_state& world, const world_ent
     caravans.guids[freeIndex] = newCaravanGuid;
     caravans.active_count++;
 
-    // Apply start state
-
-    caravans.locations[freeIndex] = start_state.location;
-    caravans.flags[freeIndex] = start_state.flags;
-    caravans.movements[freeIndex] = start_state.movement;
-
-    caravans.origin_settlements[freeIndex] = start_state.origin_settlement;
-    caravans.destination_settlements[freeIndex] = start_state.destination_settlement;
-
-    caravans.values[freeIndex] = start_state.value;
+    // Apply start state.
+    world_entity_caravans::view newCaravan { caravans, freeIndex };
+    newCaravan.copy_from(start_state);
 
     // The origin's active count goes up with the caravan (and down in destroy, exactly once).
     settlement_trading* originTrade = caravan_origin_trade(world, start_state.origin_settlement);
@@ -47,12 +40,15 @@ void world_destroy_entity_caravan(match_world_state& world, const entity_guid& c
 {
     ASSERT(world_entity_is_valid(world, caravan) && caravan.get_type() == ENTITY_TYPE::CARAVAN);
     world_entity_caravans& caravans = world.entities->caravans;
+    ui16 index = caravan.get_index();
 
     // Only a valid origin is touched: a destroyed settlement (or one whose slot was reused) keeps its own count.
-    settlement_trading* originTrade = caravan_origin_trade(world, caravans.origin_settlements[caravan.get_index()]);
+    settlement_trading* originTrade = caravan_origin_trade(world, caravans.origin_settlements[index]);
     if (originTrade != nullptr && originTrade->caravan_count > 0) originTrade->caravan_count--;
 
-    caravans.guids[caravan.get_index()] = INVALID_ENTITY_GUID;
+    world_entity_caravan_view destroyedCaravan { caravans, index };
+    destroyedCaravan.copy_from(world_entity_caravan {});
+    caravans.guids[index] = INVALID_ENTITY_GUID;
     caravans.active_count--;
 }
 
@@ -61,17 +57,10 @@ bool world_entity_query_caravan(const match_world_state& world, entity_guid enti
     if (entity.get_type() != ENTITY_TYPE::CARAVAN || !world_entity_is_valid(world, entity)) return false;
 
     const world_entity_caravans& caravans = world.entities->caravans;
-    ui16 i = entity.get_index();
+    ui16 index = entity.get_index();
 
-    out_state = {
-        .location = caravans.locations[i],
-        .movement = caravans.movements[i],
-        .flags = caravans.flags[i],
-        .origin_settlement = caravans.origin_settlements[i],
-        .destination_settlement = caravans.destination_settlements[i],
-        .value = caravans.values[i],
-        .owner = world_entity_get_owner(world, caravans.origin_settlements[i]),
-    };
+    out_state.copy_from(caravans, index);
+    out_state.owner = world_entity_get_owner(world, out_state.origin_settlement);
     return true;
 }
 

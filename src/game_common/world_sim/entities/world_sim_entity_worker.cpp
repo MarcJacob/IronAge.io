@@ -7,33 +7,29 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 
     // @TODO(Marc): Similarly to input command, have a validation function for each work type.
 
+	world_entity_workers& workers = world.entities->workers;
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities->workers.max_count && world.entities->workers.guids[freeIndex].is_valid())
+	while (freeIndex < workers.max_count && workers.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
-	ASSERT(freeIndex < world.entities->workers.max_count);
+	ASSERT(freeIndex < workers.max_count);
 
 	// Compute GUID (stored and returned value are the same).
 	entity_guid newID = entity_guid_new(ENTITY_TYPE::WORKER, freeIndex, world.age % 0x100); // 8-bit extra field.
 
-	world.entities->workers.guids[freeIndex] = newID;
-	world.entities->workers.active_count++;
+	workers.guids[freeIndex] = newID;
+	workers.active_count++;
 
 	// Apply start state.
-	world.entities->workers.origin_entity[freeIndex] = start_state.origin_entity;
-	world.entities->workers.work_types[freeIndex] = start_state.work_type;
-	world.entities->workers.work_times[freeIndex] = start_state.work_time;
-    world.entities->workers.work_progress_ratios[freeIndex] = start_state.work_progress_ratio;
-	world.entities->workers.daily_costs[freeIndex] = start_state.daily_cost;
-
-	world.entities->workers.action_data[freeIndex] = start_state.action_data;
+	world_entity_workers::view newWorker { workers, freeIndex };
+	newWorker.copy_from(start_state);
 
 	// Every worker starts at its origin. Moving work types take it from there (start_state.position / movement are not read).
 	world_location start = world_entity_get_location(world, start_state.origin_entity);
-	world.entities->workers.locations[freeIndex] = start;
-	world_entity_movement& movement = world.entities->workers.movements[freeIndex];
+	workers.locations[freeIndex] = start;
+	world_entity_movement& movement = workers.movements[freeIndex];
 	movement = {};
 	movement.travel_speed = (ui16)GAME_PARAMETERS.worker_travel_speed;
 	movement.destination = start;
@@ -48,7 +44,10 @@ void world_destroy_worker(match_world_state& world, entity_guid worker)
 	ASSERT(world_entity_is_valid(world, worker) && worker.get_type() == ENTITY_TYPE::WORKER);
 	world_entity_workers& workers = world.entities->workers;
 
-	workers.guids[worker.get_index()] = INVALID_ENTITY_GUID;
+	ui16 index = worker.get_index();
+	world_entity_worker_view destroyedWorker { workers, index };
+	destroyedWorker.copy_from(world_entity_worker {});
+	workers.guids[index] = INVALID_ENTITY_GUID;
 	workers.active_count--;
 }
 
@@ -57,19 +56,10 @@ bool world_entity_query_worker(const match_world_state& world, entity_guid entit
 	if (entity.get_type() != ENTITY_TYPE::WORKER || !world_entity_is_valid(world, entity)) return false;
 
 	const world_entity_workers& workers = world.entities->workers;
-	ui16 i = entity.get_index();
+	ui16 index = entity.get_index();
 
-	out_state = {
-		.origin_entity = workers.origin_entity[i],
-		.work_type = workers.work_types[i],
-		.work_time = workers.work_times[i],
-        .work_progress_ratio = workers.work_progress_ratios[i],
-		.daily_cost = workers.daily_costs[i],
-		.action_data = workers.action_data[i],
-		.position = workers.locations[i],
-		.movement = workers.movements[i],
-		.owner = world_entity_get_owner(world, workers.origin_entity[i]),
-	};
+	out_state.copy_from(workers, index);
+	out_state.owner = world_entity_get_owner(world, out_state.origin_entity);
 	return true;
 }
 

@@ -2,12 +2,14 @@
 // @TODO(Marc): Move to battles folder.
 
 #include "core/math/random.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 #include "../world_sim.h"
+#include "../entities/world_sim_entity_settlement.h"
 #include "../entities/world_sim_entity_battle.h"
-
 #include "../entities/world_sim_entity_army.h"
+
+#include "../world_movement.h"
 
 // @TODO(Marc): Move this to army-specific file
 void army_battle_join(match_world_state& world, entity_guid battle, entity_guid army, ui8 side)

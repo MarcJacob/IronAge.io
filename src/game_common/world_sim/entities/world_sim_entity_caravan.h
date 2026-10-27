@@ -6,8 +6,7 @@
 #include "core.h"
 
 #include "../world_sim.h"
-#include "game_common/match/world/world.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 entity_guid world_spawn_entity_caravan(match_world_state& world, const world_entity_caravan& start_state);
 void world_destroy_entity_caravan(match_world_state& world, const entity_guid& caravan);

@@ -5,39 +5,31 @@
 
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state)
 {
+	world_entity_armies& armies = world.entities->armies;
+
 	ui16 freeIndex = 0;
-	while (freeIndex < world.entities->armies.max_count && world.entities->armies.guids[freeIndex].is_valid())
+	while (freeIndex < armies.max_count && armies.guids[freeIndex].is_valid())
 	{
 		freeIndex++;
 	}
 
-	ASSERT(freeIndex < world.entities->armies.max_count);
+	ASSERT(freeIndex < armies.max_count);
 
 	// Compute GUID (stored and returned value are the same).
 	entity_guid newID = entity_guid_new(ENTITY_TYPE::ARMY, freeIndex, world.age % 0x100); // 8-bit extra field.
 
-	world.entities->armies.guids[freeIndex] = newID;
-	world.entities->armies.active_count++;
+	world_entity_armies::view newArmy { armies, freeIndex };
+	newArmy.copy_from(start_state);
+	newArmy.battle = INVALID_ENTITY_GUID;
+	newArmy.desertions = 0;
 
-	// Apply start state.
-	world.entities->armies.owners[freeIndex] = start_state.owner;
-	world.entities->armies.locations[freeIndex] = start_state.location;
-	world.entities->armies.movements[freeIndex] = start_state.movement;
-	world.entities->armies.compositions[freeIndex] = start_state.composition;
-	world.entities->armies.action_targets[freeIndex] = start_state.action_target;
-	world.entities->armies.raised_troops[freeIndex] = start_state.raised_troops;
-	world.entities->armies.home_settlements[freeIndex] = start_state.home_settlement;
-	world.entities->armies.raising[freeIndex] = start_state.raising;
-	world.entities->armies.supplies[freeIndex] = start_state.supplies;
-	world.entities->armies.desertions[freeIndex] = 0;
+	// Init default values if they weren't specified by start state.
+	SET_DEFAULT_VAL(newArmy.movement.travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
+	SET_DEFAULT_VAL_STRUCT(newArmy.movement.destination, start_state.location);
+	newArmy.movement.move_target = start_state.location;
 
-    // Init default values if they weren't specified by start state.
-    SET_DEFAULT_VAL(world.entities->armies.movements[freeIndex].travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
-    SET_DEFAULT_VAL_STRUCT(world.entities->armies.movements[freeIndex].destination, start_state.location);
-    world.entities->armies.movements[freeIndex].move_target = start_state.location;
-
-	// Not in a battle (the slot may have been used before).
-	world.entities->armies.battles[freeIndex] = INVALID_ENTITY_GUID;
+	armies.guids[freeIndex] = newID;
+	armies.active_count++;
 
 	return newID;
 }
@@ -47,7 +39,10 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	ASSERT(world_entity_is_valid(world, army) && army.get_type() == ENTITY_TYPE::ARMY);
 	world_entity_armies& armies = world.entities->armies;
 
-	armies.guids[army.get_index()] = INVALID_ENTITY_GUID;
+	ui16 index = army.get_index();
+	world_entity_army_view destroyedArmy { armies, index };
+	destroyedArmy.copy_from(world_entity_army {});
+	armies.guids[index] = INVALID_ENTITY_GUID;
 	armies.active_count--;
 }
 
@@ -123,22 +118,9 @@ bool world_entity_query_army(const match_world_state& world, entity_guid entity,
 	const world_entity_armies& armies = world.entities->armies;
 	ui16 i = entity.get_index();
 
-	out_state = {
-		.owner = armies.owners[i],
-		.location = armies.locations[i],
-		.movement = armies.movements[i],
-		.composition = armies.compositions[i],
-		.raised_troops = armies.raised_troops[i],
-		.raising = armies.raising[i],
-		.home_settlement = armies.home_settlements[i],
-		.action_target = armies.action_targets[i],
-		.battle = armies.battles[i],
-		.battle_side = armies.battle_sides[i],
-		.supplies = armies.supplies[i],
-		.supplies_consumption = army_daily_consumption(armies.compositions[i]),
-		.supplies_capacity = army_supply_capacity(world, i),
-		.desertions = armies.desertions[i],
-	};
+	out_state.copy_from(armies, i);
+	out_state.supplies_consumption = army_daily_consumption(armies.compositions[i]);
+	out_state.supplies_capacity = army_supply_capacity(world, i);
 	return true;
 }
 

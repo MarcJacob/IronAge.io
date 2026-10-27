@@ -101,7 +101,7 @@ void world_system_local_troops_pay(match_world_state& world)
 		if (owner >= world.player_count) continue;
 
 		world_player_state& player = world.player_states[owner];
-		ui32 paid = ia_min(army_daily_consumption(settlements.populations[settlementIndex].home), player.treasury);
+		ui32 paid = ia_min(army_daily_consumption(settlements.garrison[settlementIndex]), player.treasury);
 		player.treasury -= paid;
 		player.expenses += paid;
 	}

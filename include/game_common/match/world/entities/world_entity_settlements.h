@@ -72,6 +72,7 @@ struct settlement_economy
 	ui32 production; // Goods produced by the settlement.
 	ui32 production_tax;           // Part of the production moved to the owner's treasury. The rest goes to the market goods.
 	ui32 sellable; // Most goods that could be consumed today: sellable_percent of the market goods.
+    ui32 consumption; // Goods consumed on last economic tick.
 };
 
 // Buildings-related data for a settlement.
@@ -116,7 +117,7 @@ struct world_entity_settlements : public world_entity_container
 	army_troop_count* raised; // Soldiers in armies raised from the settlement.
 
 	army_troop_count* troop_max; // Max of each soldier type, garrison + raised.
-	settlement_troop_training* troop_training[4]; // Indexed by troop type (TROOP_TYPE_*).
+	settlement_troop_training (*troop_training)[4]; // Indexed by troop type (TROOP_TYPE_*).
 
 	inline ui32 soldiers_home(ui16 index) const { return (ui32)garrison[index].levies + garrison[index].men_at_arms + garrison[index].horsemen + garrison[index].knights; }
 	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights; }
@@ -135,6 +136,7 @@ struct world_entity_settlements : public world_entity_container
     settlement_buildings* buildings;
 
     settlement_trading* trade;
+    settlement_economy* economies;
 
     struct territory
     {
@@ -144,8 +146,10 @@ struct world_entity_settlements : public world_entity_container
 
 	territory* territories; // Influence values used to claim / lose land.
 
-	// Desired counts of the local troop pool (populations[].home).
+	// Desired counts of the local troop pool.
 	army_troop_count*	troop_ceilings;
+
+	struct view;
 
 	// Consolidated representation of a single settlement for viewing purposes.
 	struct single
@@ -182,7 +186,7 @@ struct world_entity_settlements : public world_entity_container
         settlement_economy economy;
 
         territory territory;
-        ui32 base_land_output;
+        ui32 base_land_surplus;
 
         settlement_buildings buildings;
 
@@ -191,10 +195,156 @@ struct world_entity_settlements : public world_entity_container
 
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
+
+		void copy_from(const view& source);
+		void copy_from(const world_entity_settlements& collection, ui16 index);
+	};
+
+
+	// Reference view of a settlement slot. Computed values are not stored in the collection and are not included.
+	struct view
+	{
+		match_player_id& owner;
+		world_location& location;
+        ui64& founding_tick;
+
+        ui32& pop_total;
+        ui32& pop_unemployed;
+        ui32& pop_peasants;
+        ui32& pop_peasants_cap;
+        ui32& pop_workers;
+
+        army_troop_count& garrison;
+        army_troop_count& raised;
+        army_troop_count& troop_max;
+        settlement_troop_training (&troop_training)[4]; // Indexed by troop type (TROOP_TYPE_*).
+
+        i32& pop_change;
+        i32& pop_growth_per_mille;
+        ui32& base_land_surplus;
+        i8& tax_rate;
+
+        settlement_buildings& buildings;
+        settlement_trading& trade;
+        settlement_economy& economy;
+        territory& territory;
+        army_troop_count& troop_ceilings;
+
+        inline ui32 soldiers_home() const { return (ui32)garrison.levies + garrison.men_at_arms + garrison.horsemen + garrison.knights; }
+        inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
+        inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); }
+        inline ui32 at_home() const { return pop_peasants + pop_workers + soldiers_home(); }
+
+        void copy_from(const single& source)
+        {
+            owner = source.owner;
+            location = source.location;
+            founding_tick = source.founding_tick;
+            pop_total = source.pop_total;
+            pop_unemployed = source.pop_unemployed;
+            pop_peasants = source.pop_peasants;
+            pop_peasants_cap = source.pop_peasants_cap;
+            pop_workers = source.pop_workers;
+            garrison = source.garrison;
+            raised = source.raised;
+            troop_max = source.troop_max;
+            for (ui8 troopType = 0; troopType < 4; troopType++) troop_training[troopType] = source.troop_training[troopType];
+            pop_change = source.pop_change;
+            pop_growth_per_mille = source.pop_growth_per_mille;
+            base_land_surplus = source.base_land_surplus;
+            tax_rate = source.tax_rate;
+            buildings = source.buildings;
+            trade = source.trade;
+            economy = source.economy;
+            territory = source.territory;
+            troop_ceilings = source.troop_ceilings;
+        }
+
+        view(world_entity_settlements& collection, ui16 index)
+            : owner(collection.owners[index])
+            , location(collection.locations[index])
+            , founding_tick(collection.founding_ticks[index])
+            , pop_total(collection.pop_total[index])
+            , pop_unemployed(collection.pop_unemployed[index])
+            , pop_peasants(collection.pop_peasants[index])
+            , pop_peasants_cap(collection.pop_peasants_cap[index])
+            , pop_workers(collection.pop_workers[index])
+            , garrison(collection.garrison[index])
+            , raised(collection.raised[index])
+            , troop_max(collection.troop_max[index])
+            , troop_training(collection.troop_training[index])
+            , pop_change(collection.pop_change[index])
+            , pop_growth_per_mille(collection.pop_growth_per_mille[index])
+            , base_land_surplus(collection.base_land_surplus[index])
+            , tax_rate(collection.tax_rates[index])
+            , buildings(collection.buildings[index])
+            , trade(collection.trade[index])
+            , economy(collection.economies[index])
+            , territory(collection.territories[index])
+            , troop_ceilings(collection.troop_ceilings[index])
+        {
+        }
 	};
 };
 
+inline void world_entity_settlements::single::copy_from(const world_entity_settlements::view& source)
+{
+	owner = source.owner;
+	location = source.location;
+	founding_tick = source.founding_tick;
+	pop_total = source.pop_total;
+	pop_unemployed = source.pop_unemployed;
+	pop_peasants = source.pop_peasants;
+	pop_peasants_cap = source.pop_peasants_cap;
+	pop_workers = source.pop_workers;
+	garrison = source.garrison;
+	raised = source.raised;
+	troop_max = source.troop_max;
+	for (ui8 troopType = 0; troopType < 4; troopType++) troop_training[troopType] = source.troop_training[troopType];
+	pop_change = source.pop_change;
+	pop_growth_per_mille = source.pop_growth_per_mille;
+	tax_rate = source.tax_rate;
+	territory = source.territory;
+	base_land_surplus = source.base_land_surplus;
+	buildings = source.buildings;
+	trade = source.trade;
+	economy = source.economy;
+	market_capacity = 0;
+	troop_ceilings = source.troop_ceilings;
+	economy = {};
+	troop_effective_ceilings = {};
+}
+
+inline void world_entity_settlements::single::copy_from(const world_entity_settlements& collection, ui16 index)
+{
+	owner = collection.owners[index];
+	location = collection.locations[index];
+	founding_tick = collection.founding_ticks[index];
+	pop_total = collection.pop_total[index];
+	pop_unemployed = collection.pop_unemployed[index];
+	pop_peasants = collection.pop_peasants[index];
+	pop_peasants_cap = collection.pop_peasants_cap[index];
+	pop_workers = collection.pop_workers[index];
+	garrison = collection.garrison[index];
+	raised = collection.raised[index];
+	troop_max = collection.troop_max[index];
+	for (ui8 troopType = 0; troopType < 4; troopType++) troop_training[troopType] = collection.troop_training[index][troopType];
+	pop_change = collection.pop_change[index];
+	pop_growth_per_mille = collection.pop_growth_per_mille[index];
+	tax_rate = collection.tax_rates[index];
+	territory = collection.territories[index];
+	base_land_surplus = collection.base_land_surplus[index];
+	buildings = collection.buildings[index];
+	trade = collection.trade[index];
+	economy = collection.economies[index];
+	market_capacity = 0;
+	troop_ceilings = collection.troop_ceilings[index];
+	economy = {};
+	troop_effective_ceilings = {};
+}
+
 using world_entity_settlement = world_entity_settlements::single;
+using world_entity_settlement_view = world_entity_settlements::view;
 
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
@@ -206,7 +356,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(peasants, pop_peasants, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(workers, pop_workers, GAME_DATA_PROP_TYPE::UI32)
 
-	GAME_DATA_PROPERTY(base_land_output, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(base_land_surplus, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
 
     GAME_DATA_PROPERTY_PATH_ARRAY(building_counts, buildings.building_counts, GAME_DATA_PROP_TYPE::UI16, SETTLEMENT_BUILDING_TYPE_COUNT);

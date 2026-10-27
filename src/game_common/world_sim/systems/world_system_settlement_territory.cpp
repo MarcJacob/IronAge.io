@@ -1,6 +1,6 @@
 // Territory systems: settlement influence over world tiles. Claiming / unclaiming tiles, proximity to the settlement, influence spread and contestation.
 
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 #include "game_common/match/world/world_terrain.h"
 
 #include "../world_sim.h"
@@ -385,11 +385,13 @@ void world_system_settlement_territory(match_world_state& world)
     {
         if (!world.entities->settlements.guids[settlementIndex].is_valid()) continue;
 
+        world_entity_settlement_view settlementView { world.entities->settlements, settlementIndex };
+
         world_location newBoundsMin = world.entities->settlements.locations[settlementIndex];
         world_location newBoundsMax = world.entities->settlements.locations[settlementIndex];
 
         world_entity_settlements::territory& settlementTerritory = world.entities->settlements.territories[settlementIndex];
-        i32 pressure = settlementTerritory.pressure;
+        i32 pressure = settlementView.pop_peasants - settlementView.pop_peasants_cap + settlementView.pop_unemployed;
 
         // Low pressure doesn't automatically unclaim territory, but leaves it vulnerable for takeover. The bounds are still rescanned.
 
