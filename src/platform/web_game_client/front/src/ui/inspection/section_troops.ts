@@ -20,6 +20,6 @@ export const MAX_COUNT = 0xFFFF; // Counts are ui16.
 export function raise_available(home: EntityData, troop_index: number): number
 {
     return troop_index === 0
-        ? Math.max(0, home.get_number("peasants") - get_game_parameters().get_number("raise_min_population_left"))
+        ? Math.max(0, home.get_number("pop_peasants") - get_game_parameters().get_number("raise_min_population_left"))
         : home.get_number(`troops_${TROOPS[troop_index].name}`);
 }

@@ -66,6 +66,7 @@ export class LobbyBase extends Core.Mode
             LobbyUI.on("set_player_count", (player_count) => send(Backend.build_lobby_admin_set_player_count(player_count))),
             LobbyUI.on("set_map_size", (width, height) => send(Backend.build_lobby_admin_set_map_size(width, height))),
             LobbyUI.on("set_seed", (seed) => send(Backend.build_lobby_admin_set_seed(seed))),
+            LobbyUI.on("set_tick_rate", (tick_rate) => send(Backend.build_lobby_admin_set_tick_rate(tick_rate))),
         ];
         this.refresh();
     }
@@ -160,6 +161,7 @@ export class LobbyBase extends Core.Mode
             map_width: lobby.match_start_params.world_size_regions_x,
             map_height: lobby.match_start_params.world_size_regions_y,
             seed: lobby.match_start_params.random_seed,
+            tick_rate: lobby.match_start_params.tick_rate,
             countdown_ms: lobby.countdown_remaining_ms === 0 ? null : lobby.countdown_remaining_ms - (performance.now() - this.lobby_state_received_ms),
         };
     }

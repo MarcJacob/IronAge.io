@@ -8,6 +8,7 @@
 //
 // What we have now works well enough.
 
+#include "game_common/match/world/world_state.h"
 #include "game_common/match/world/world_terrain.h"
 #include "world_movement.h"
 
@@ -150,7 +151,7 @@ static ui32 path_heuristic(world_location from, world_location to)
     ui32 diagonal = dx < dy ? dx : dy;
 
     // Each diagonal step uses up one unit on both axes, so the orthogonal steps left are (dx - diagonal) + (dy - diagonal).
-    return (PROXIMITY_WEIGHT_ORTHOGONAL * (dx + dy - 2 * diagonal) + PROXIMITY_WEIGHT_DIAGONAL * diagonal);
+    return (TRAVEL_DIST_WEIGHT_ORTHOGONAL * (dx + dy - 2 * diagonal) + TRAVEL_DIST_WEIGHT_DIAGONAL * diagonal);
 }
 
 // Weighted A*: the heuristic is multiplied by this, for every search distance. Found paths cost at most this times the optimal.
@@ -322,7 +323,7 @@ static void path_search_run(const world_terrain& terrain, world_location start, 
             if (cost == 0) continue;
 
             bool isDiagonal = NEIGHBOUR_OFFSETS_ALL[dir].x != 0 && NEIGHBOUR_OFFSETS_ALL[dir].y != 0;
-            ui32 g = entry.g + cost * (isDiagonal ? PROXIMITY_WEIGHT_DIAGONAL : PROXIMITY_WEIGHT_ORTHOGONAL);
+            ui32 g = entry.g + cost * (isDiagonal ? TRAVEL_DIST_WEIGHT_DIAGONAL : TRAVEL_DIST_WEIGHT_ORTHOGONAL);
 
             path_node* neighbour = path_node_get(search, y * world_width + x);
             if (neighbour == nullptr) continue; // Table full: this tile is simply never explored.

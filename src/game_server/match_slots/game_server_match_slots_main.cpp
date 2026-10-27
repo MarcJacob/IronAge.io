@@ -224,6 +224,7 @@ bool game_server_match_slot_handle_message(game_server& server, game_server_clie
     case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_PLAYER_COUNT:
     case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_MAP_SIZE:
     case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_SEED:
+    case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_TICK_RATE:
         match_slot_handle_message_lobby_admin(server, slotIndex, playerClient, msg);
         return true;
     default:

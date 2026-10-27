@@ -69,10 +69,10 @@ struct settlement_troop_training
 // Last day's economy figures of a settlement, written by the daily economy tick every day. Zero is a valid (empty) value.
 struct settlement_economy
 {
-	ui32 production; // Goods produced by the settlement.
-	ui32 production_tax;           // Part of the production moved to the owner's treasury. The rest goes to the market goods.
-	ui32 sellable; // Most goods that could be consumed today: sellable_percent of the market goods.
-    ui32 consumption; // Goods consumed on last economic tick.
+	ui32 production;        // Goods produced by the settlement.
+	ui32 production_tax;    // Part of the production moved to the owner's treasury. The rest goes to the market goods.
+	ui32 sellable;          // Most goods that could be consumed today: sellable_percent of the market goods.
+    ui32 consumption;       // Goods consumed on last economic tick.
 };
 
 // Buildings-related data for a settlement.
@@ -122,7 +122,7 @@ struct world_entity_settlements : public world_entity_container
 	inline ui32 soldiers_home(ui16 index) const { return (ui32)garrison[index].levies + garrison[index].men_at_arms + garrison[index].horsemen + garrison[index].knights; }
 	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights; }
 	inline ui32 soldiers_total(ui16 index) const { return soldiers_home(index) + soldiers_raised(index); } // Everyone who is a soldier, at home or raised.
-	inline ui32 at_home(ui16 index) const { return pop_peasants[index] + pop_workers[index] + soldiers_home(index); }
+	inline ui32 at_home(ui16 index) const { return pop_unemployed[index] + pop_peasants[index] + pop_workers[index] + soldiers_home(index); }
 
     // GROWTH
 
@@ -142,6 +142,8 @@ struct world_entity_settlements : public world_entity_container
     {
         world_location bounds_min, bounds_max; // Rectangle bounds of all currently claimed tiles.
         ui16 tile_count; // Total number of claimed tiles.
+        bool distances_stale; // A tile was lost: tile distances must be rebuilt from the settlement tile (cut off tiles are unclaimed).
+        bool takeover_pending; // Some tiles have takeover_check set.
     };
 
 	territory* territories; // Influence values used to claim / lose land.
@@ -154,6 +156,8 @@ struct world_entity_settlements : public world_entity_container
 	// Consolidated representation of a single settlement for viewing purposes.
 	struct single
 	{
+        entity_guid guid;
+
 		match_player_id owner;
 		world_location location;
         ui64 founding_tick;
@@ -176,7 +180,7 @@ struct world_entity_settlements : public world_entity_container
         inline ui32 soldiers_home() const { return (ui32)garrison.levies + garrison.men_at_arms + garrison.horsemen + garrison.knights; }
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
-        inline ui32 at_home() const { return pop_peasants + pop_workers + soldiers_home(); }
+        inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
 
         i32 pop_change;
         i32 pop_growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
@@ -204,6 +208,8 @@ struct world_entity_settlements : public world_entity_container
 	// Reference view of a settlement slot. Computed values are not stored in the collection and are not included.
 	struct view
 	{
+        entity_guid& guid;
+
 		match_player_id& owner;
 		world_location& location;
         ui64& founding_tick;
@@ -233,10 +239,11 @@ struct world_entity_settlements : public world_entity_container
         inline ui32 soldiers_home() const { return (ui32)garrison.levies + garrison.men_at_arms + garrison.horsemen + garrison.knights; }
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); }
-        inline ui32 at_home() const { return pop_peasants + pop_workers + soldiers_home(); }
+        inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
 
         void copy_from(const single& source)
         {
+            guid = source.guid;
             owner = source.owner;
             location = source.location;
             founding_tick = source.founding_tick;
@@ -261,7 +268,8 @@ struct world_entity_settlements : public world_entity_container
         }
 
         view(world_entity_settlements& collection, ui16 index)
-            : owner(collection.owners[index])
+            : guid(collection.guids[index])
+            , owner(collection.owners[index])
             , location(collection.locations[index])
             , founding_tick(collection.founding_ticks[index])
             , pop_total(collection.pop_total[index])
@@ -317,6 +325,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 
 inline void world_entity_settlements::single::copy_from(const world_entity_settlements& collection, ui16 index)
 {
+	guid = collection.guids[index];
 	owner = collection.owners[index];
 	location = collection.locations[index];
 	founding_tick = collection.founding_ticks[index];
@@ -339,22 +348,27 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	economy = collection.economies[index];
 	market_capacity = 0;
 	troop_ceilings = collection.troop_ceilings[index];
-	economy = {};
-	troop_effective_ceilings = {};
+	economy = collection.economies[index];
+	troop_effective_ceilings = collection.troop_ceilings[index];
 }
 
 using world_entity_settlement = world_entity_settlements::single;
 using world_entity_settlement_view = world_entity_settlements::view;
 
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
+
+    GAME_DATA_PROPERTY(guid, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+
 	GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+
 	GAME_DATA_PROPERTY_PATH(population, pop_total, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(population_change, pop_change, GAME_DATA_PROP_TYPE::I32)
 	GAME_DATA_PROPERTY_PATH(population_growth_rate, pop_growth_per_mille, GAME_DATA_PROP_TYPE::I32)
 
-	GAME_DATA_PROPERTY_PATH(peasants, pop_peasants, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(workers, pop_workers, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(pop_unemployed, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(pop_peasants, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(pop_workers, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY(base_land_surplus, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
@@ -362,11 +376,14 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
     GAME_DATA_PROPERTY_PATH_ARRAY(building_counts, buildings.building_counts, GAME_DATA_PROP_TYPE::UI16, SETTLEMENT_BUILDING_TYPE_COUNT);
 
 	GAME_DATA_PROPERTY_PATH(economy_production, economy.production, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_tax, economy.production_tax, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(economy_sellable, economy.sellable, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(economy_consumption, economy.consumption, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
+
     GAME_DATA_PROPERTY(market_capacity, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)

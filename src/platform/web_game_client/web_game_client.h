@@ -3,12 +3,12 @@
 #ifndef WASM_CLIENT_INCLUDED
 #define WASM_CLIENT_INCLUDED
 
+#include "core.h"
+
 // Only functions marked WASM_EXPORT are exported (build uses -fvisibility=hidden).
 #include "core/assert.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 #define WASM_EXPORT extern "C" __attribute__((visibility("default")))
-
-#include "core.h"
 
 class game_client;
 

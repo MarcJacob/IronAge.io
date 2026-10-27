@@ -24,7 +24,10 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	newSettlement.founding_tick = world.age;
 
 	// Init default values if they weren't specified by start state.
-	SET_DEFAULT_VAL(newSettlement.pop_peasants, 100);
+    if (newSettlement.at_home() == 0)
+    {
+	    newSettlement.pop_unemployed = 100; // 100 Unemployed population if no starting population of any kind was given.
+    }
 	SET_DEFAULT_VAL(newSettlement.pop_total, newSettlement.at_home());
 	SET_DEFAULT_VAL(newSettlement.pop_peasants_cap, newSettlement.pop_peasants);
 	SET_DEFAULT_VAL(newSettlement.trade.market_goods, (ui32)((ui64)newSettlement.pop_total * GAME_PARAMETERS.trade.start_goods_percent / 100));

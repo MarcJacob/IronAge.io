@@ -1,4 +1,4 @@
-// Population systems: settlement expansion pressure, daily economy (wealth, tax, consumption, population growth) and troop pool growth.
+// Population systems: daily economy (wealth, tax, consumption, population growth) and troop pool growth.
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/entities/world_entity_settlements.h"
@@ -10,38 +10,31 @@
 // DAILY ECONOMY
 // Per settlement, in this order: production, tax on it, the rest into the market goods, sales of the sellable goods to the strata, growth of each stratum.
 
-// Peasants able to work the land at full efficiency (base) count fully, the surplus on top of it gives diminishing returns.
-static ui32 settlement_raw_output(ui32 base_land_output, ui32 peasants)
-{
-    if (peasants <= base_land_output) return peasants;
-    if (base_land_output == 0) return 0; // No land to work.
-
-    // Surplus gives B * s / (B + s): smooth, monotonic, tends to B (so the total tends to 2B). 64 bits since B * s can pass 32.
-    ui64 surplus = peasants - base_land_output;
-    return base_land_output + (ui32)(surplus * base_land_output / (base_land_output + surplus));
-}
-
-// Wealth produced by a raw land output.
-static ui32 land_output_to_wealth(ui32 raw_output)
-{
-    return raw_output + raw_output / (100 / GAME_PARAMETERS.peasant_production_percent_base);
-}
-
 // PRODUCTION: the owner's treasury takes the tax rate of the production, the rest goes into the market goods.
 static void settlement_goods_production(match_world_state& world, ui16 settlement_index)
 {
     world_entity_settlement_view settlement { world.entities->settlements, settlement_index };
 
-    ui16 peasantsFillPerMille = settlement.pop_peasants * 1000 / settlement.pop_peasants_cap;
-    settlement.economy.production = settlement.base_land_surplus * ia_min(peasantsFillPerMille, 1000);
+    if (settlement.pop_peasants_cap == 0)
+    {
+        settlement.economy.production = 0;
+    }
+    else
+    {
+        ui16 peasantsFillPerMille = settlement.pop_peasants * 1000 / settlement.pop_peasants_cap;
+        settlement.economy.production = settlement.base_land_surplus * ia_min(peasantsFillPerMille, 1000) / 1000 + settlement.pop_peasants;
+    }
 
-    // Negative rates are future investment (treasury -> settlement): not applied yet.
     match_player_id owner = settlement.owner;
     if (settlement.tax_rate > 0 && owner < world.player_count)
     {
         settlement.economy.production_tax = (ui32)((ui64)settlement.economy.production * (ui64)settlement.tax_rate / 100); // Rate <= 100: never above the production.
         world.player_states[owner].treasury += settlement.economy.production_tax;
         world.player_states[owner].income += settlement.economy.production_tax;
+    }
+    else
+    {
+        settlement.economy.production_tax = 0;
     }
 
     settlement_market_add(world.entities->settlements, settlement_index, settlement.economy.production - settlement.economy.production_tax);
@@ -58,28 +51,9 @@ static void settlement_goods_sales(world_entity_settlements& settlements, ui16 s
     ui32& goods = settlements.trade[settlement_index].market_goods;
 
     settlement.economy.sellable = (ui32)((ui64)goods * ia_min(params.sellable_percent, (ui32)100) / 100);
-    settlement.economy.consumption = settlement.soldiers_home() + settlement.pop_workers + settlement.pop_unemployed;
-    goods -= settlement.economy.consumption;
+    settlement.economy.consumption = settlement.at_home();
 
-    // Peasants do not consume anything, they feed themselves from the land. They do contribute to population growth and thus benefit from extra goods in that way.
-}
-
-// Population growth in per mille, from how well consumption demand was met. required must not be 0.
-// available is what was offered, excess what it holds beyond the requirement (not consumed).
-// Curve points are in GAME_PARAMETERS (now: r >= 1: +2% to +4%, more with excess up to excess == required; 0.9 <= r < 1: +2% down to 0%;
-// 0.5 <= r < 0.9: 0% down to -20%; r < 0.5: -20%).
-static i32 settlement_growth_per_mille(ui32 available, ui32 required, ui32 excess)
-{
-    const game_parameters& params = GAME_PARAMETERS;
-    ui64 avail = available;
-    ui64 req = required;
-    ui64 zeroRatio = params.growth_zero_ratio_per_mille;
-    ui64 floorRatio = params.growth_floor_ratio_per_mille;
-
-    if (avail >= req) return params.growth_enough_per_mille + (i32)((ui64)(params.growth_max_per_mille - params.growth_enough_per_mille) * ia_min(excess, required) / req);
-    if (avail * 1000 >= req * zeroRatio) return (i32)((ui64)params.growth_enough_per_mille * (avail * 1000 - req * zeroRatio) / (req * (1000 - zeroRatio)));
-    if (avail * 1000 >= req * floorRatio) return -(i32)((ui64)(-params.growth_floor_per_mille) * (req * zeroRatio - avail * 1000) / (req * (zeroRatio - floorRatio)));
-    return params.growth_floor_per_mille;
+    goods -= ia_min(settlement.economy.consumption, settlement.economy.sellable);
 }
 
 // Deaths of home soldiers: each type loses its share of the count (rounded down), the rounding rest is taken in type order. Returns how many died.
@@ -102,6 +76,26 @@ static ui32 settlement_soldiers_home_die(match_world_state& world, ui16 settleme
     return removed;
 }
 
+// Population growth in per mille, from how well consumption demand was met. required must not be 0.
+// available is what was offered, excess what it holds beyond the requirement (not consumed).
+// Curve points are in GAME_PARAMETERS (now: r >= 1: +6% to +12%, more with excess up to excess == required; 0.5 <= r < 1: 0% down to -20%;
+// r < 0.5: -20%. The zero ratio is 1, so the 0% to +6% branch is unused).
+static i32 settlement_growth_per_mille(ui32 available, ui32 required)
+{
+    const game_parameters& params = GAME_PARAMETERS;
+    ui64 avail = available;
+    ui64 req = required;
+    ui64 zeroRatio = params.growth_zero_ratio_per_mille;
+    ui64 floorRatio = params.growth_floor_ratio_per_mille;
+
+    ui32 excess = available - required;
+
+    if (avail >= req) return params.growth_enough_per_mille + (i32)((ui64)(params.growth_max_per_mille - params.growth_enough_per_mille) * ia_min(excess, required) / req);
+    if (avail * 1000 >= req * zeroRatio) return (i32)((ui64)params.growth_enough_per_mille * (avail * 1000 - req * zeroRatio) / (req * (1000 - zeroRatio)));
+    if (avail * 1000 >= req * floorRatio) return -(i32)((ui64)(-params.growth_floor_per_mille) * (req * zeroRatio - avail * 1000) / (req * (zeroRatio - floorRatio)));
+    return params.growth_floor_per_mille;
+}
+
 // GROWTH, per stratum (soldiers at home, workers, peasants), from how well its need was met.
 // New population starts out unemployed.
 static void settlement_apply_growth(match_world_state& world, ui16 settlement_index)
@@ -111,26 +105,33 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
     ui32 atHome = settlement.at_home();
     if (atHome == 0) return; // Nobody at home: nothing to grow or shrink.
 
-    settlement.pop_growth_per_mille = settlement.economy.sellable * 1000 / settlement.economy.consumption;
+    settlement.pop_growth_per_mille = settlement_growth_per_mille(settlement.economy.sellable, settlement.economy.consumption);
+    settlement.pop_change = (i32)((i64)atHome * settlement.pop_growth_per_mille / 1000);
 
-    settlement.pop_change = (settlement.pop_total * 1000 / settlement.pop_growth_per_mille) / 1000;
+    // Ensure SOME growth happens if growth is positive.
+    if (settlement.pop_growth_per_mille > 0)
+    {
+        settlement.pop_change = ia_max(1, settlement.pop_change);
+    }
 
     if (settlement.pop_change > 0)
     {
         settlement.pop_unemployed += settlement.pop_change;
+        settlement.pop_total += settlement.pop_change;
     }
-    else
+    else if (settlement.pop_change < 0)
     {
         ui32 deaths = -settlement.pop_change;
-        ui16 deaths_unemployed = ia_min(settlement.pop_unemployed, deaths);
+        ui32 deaths_unemployed = ia_min(settlement.pop_unemployed, deaths);
 
         settlement.pop_unemployed -= deaths_unemployed;
+        settlement.pop_total -= deaths_unemployed;
         if (deaths > deaths_unemployed)
         {
             ui32 deaths_peasants = settlement_remove_peasants(world, settlement_index, deaths - deaths_unemployed);
             if (deaths > deaths_unemployed + deaths_peasants)
             {
-                ui32 deaths_workers = settlement_remove_workers(world, settlement_index, deaths - deaths_unemployed - deaths_peasants);
+                settlement_remove_workers(world, settlement_index, deaths - deaths_unemployed - deaths_peasants);
 
                 // @TEMP(Marc): Garrison troops never die for now.
             }
@@ -211,9 +212,9 @@ void world_system_economy_troop_growth(match_world_state& world)
 
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
-        if (!settlements.guids[settlementIndex].is_valid() || settlements.pop_total == 0) continue;
+        if (!settlements.guids[settlementIndex].is_valid() || settlements.pop_total[settlementIndex] == 0) continue;
 
-        army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_max[settlementIndex]);
+        army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 
         train_troop(world, settlementIndex, TROOP_TYPE_MEN_AT_ARMS, ceilings.men_at_arms);
         train_troop(world, settlementIndex, TROOP_TYPE_HORSEMEN, ceilings.horsemen);

@@ -33,7 +33,7 @@ struct path
 	ui16 count; // Number of waypoints stored. May be less than the path really has if the caller's capacity was smaller, and 0 if start == end or no progress was possible.
 	ui16 length; // Total length of the whole path found, not only of the stored waypoints: sum over legs of max(dx, dy) in tiles (the step count of an 8-direction run).
 	bool partial; // The path doesn't reach the target: it is unreachable or the search ran out of memory, and the path ends at the explored tile closest to it.
-	ui32 cost; // Total cost of the whole path (tile move costs times chamfer weights, see PROXIMITY_WEIGHT_*), with merged legs at their line cost: never above the plain A* cost. 0 if partial or if start == end.
+	ui32 cost; // Total cost of the whole path (tile move costs times chamfer weights, see TRAVEL_DIST_WEIGHT_*), with merged legs at their line cost: never above the plain A* cost. 0 if partial or if start == end.
 };
 
 // Computes a path from start to end into out_path, whose points and points_capacity (above 0) must be set by the caller, using the scratch arena for the search.

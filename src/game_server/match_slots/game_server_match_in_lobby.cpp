@@ -198,6 +198,18 @@ void match_slot_handle_message_lobby_admin(game_server& server, match_slot_index
 		slot.match_params->random_seed = msg.get_payload_ref<game_message_payload_lobby_admin_set_seed>().random_seed;
 		break;
 
+	case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_TICK_RATE:
+	{
+		ui8 tickRate = msg.get_payload_ref<game_message_payload_lobby_admin_set_tick_rate>().tick_rate;
+		if (tickRate < LOBBY_MIN_TICK_RATE || tickRate > LOBBY_MAX_TICK_RATE)
+		{
+			server.logf("MATCH", LOG_WARNING, "Client %d sent an out of range tick rate (%d). Ignored.", player_client->handle.value, (i32)tickRate);
+			return;
+		}
+		slot.match_params->tick_rate = tickRate;
+		break;
+	}
+
 	default:
 		return;
 	}

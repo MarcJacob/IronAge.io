@@ -119,3 +119,9 @@ WASM_EXPORT ui32 client_lobby_admin_set_seed(ui32 random_seed)
 	ASSERT(WEB_CLIENT.backend != nullptr);
 	return game_client_lobby_admin_set_seed(*WEB_CLIENT.backend, random_seed);
 }
+
+WASM_EXPORT ui32 client_lobby_admin_set_tick_rate(ui8 tick_rate)
+{
+	ASSERT(WEB_CLIENT.backend != nullptr);
+	return game_client_lobby_admin_set_tick_rate(*WEB_CLIENT.backend, tick_rate);
+}

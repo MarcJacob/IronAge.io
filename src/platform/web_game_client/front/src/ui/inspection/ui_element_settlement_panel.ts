@@ -303,9 +303,9 @@ function submit_economy(state: SettlementPanelState): void
             `Needed ${consumption.needed}`,
             "Surplus / deficit: goods sold minus goods needed",
             `Growth ${consumption.population_change} per day`,
-            "When goods run short, peasants start",
-            "starving sooner than workers, and",
-            "workers sooner than soldiers.",
+            "When goods run short, the unemployed",
+            "die first, then peasants, then workers.",
+            "Soldiers do not starve.",
         ]);
     }
 

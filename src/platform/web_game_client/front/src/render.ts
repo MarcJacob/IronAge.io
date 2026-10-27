@@ -106,7 +106,7 @@ class RESOURCES_STORE
 let RESOURCES: RESOURCES_STORE | null = null; // Run constructor to load resources.
 
 let BACKBUFFER_TILES_TERRAIN: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent terrain.
-let BACKBUFFER_TILES_TERRITORY: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent territory ownership & contestation.
+let BACKBUFFER_TILES_TERRITORY: ImageData | null = null; // Off-screen buffer of pixels, one pixel per tile to represent territory ownership.
 
 // Minimum view size (in canvas pixels) of entities before scale multiplier is taken into account.
 let ENTITY_MIN_VIEW_SIZE = 10;
@@ -358,11 +358,9 @@ function draw_territory(render_state: Backend.RenderState)
 {
     const tileCount = render_state.world_size.width * render_state.world_size.height;
     const ownerSettlementBytes = Backend.get_owner_settlement_tiles_view();
-    const contestationBytes = Backend.get_contestation_tiles_view();
-
     const flagBytes = Backend.get_tile_flags_view();
 
-    if (ownerSettlementBytes === null || contestationBytes === null || flagBytes === null
+    if (ownerSettlementBytes === null || flagBytes === null
         || canvas_offscreen_tiles_territory === undefined) return;
 
     // Owner player per settlement slot, from the visible settlement entities (-1 = unknown). The slot is the index
@@ -392,11 +390,8 @@ function draw_territory(render_state: Backend.RenderState)
         }
     }
 
-    // Build explicit RGBA bytes. Owned tiles use the territory color policy's color for their settlement.
-    // Color is a straight (non-premultiplied) lerp from that owner color to red by contestation fraction.
-    // Opacity is max(owned ? OWNED_ALPHA : 0, contestation scaled by OWNED_ALPHA), so it never dips mid-transition
-    // and unowned tiles remain transparent over the terrain. Tiles of the hovered settlement use HOVERED_ALPHA instead.
-    const CONTESTATION_COLOR = [255, 0, 0];
+    // Build explicit RGBA bytes. Owned tiles use the territory color policy's color for their settlement at OWNED_ALPHA,
+    // unowned tiles remain transparent over the terrain. Tiles of the hovered settlement use HOVERED_ALPHA instead.
     const OWNED_ALPHA = 0.15;
     const HOVERED_ALPHA = 0.35;
 
@@ -406,14 +401,12 @@ function draw_territory(render_state: Backend.RenderState)
         const isOwned = (flagBytes[i] & TILE_FLAG_OWNED) !== 0;
         const ownerColor = isOwned ? slotColors[ownerSettlementBytes[i]] : UNKNOWN_OWNER_COLOR;
         const ownedAlpha = isOwned && ownerSettlementBytes[i] === hoveredSettlement ? HOVERED_ALPHA : OWNED_ALPHA;
-        const contestationVal = contestationBytes[i];
-        const contestationFraction = contestationVal / 255;
         const pixelOffset = i * 4;
 
-        drawBytes[pixelOffset] = ownerColor[0] + (CONTESTATION_COLOR[0] - ownerColor[0]) * contestationFraction;
-        drawBytes[pixelOffset + 1] = ownerColor[1] + (CONTESTATION_COLOR[1] - ownerColor[1]) * contestationFraction;
-        drawBytes[pixelOffset + 2] = ownerColor[2] + (CONTESTATION_COLOR[2] - ownerColor[2]) * contestationFraction;
-        drawBytes[pixelOffset + 3] = Math.max(isOwned ? 255 : 0, contestationVal) * ownedAlpha;
+        drawBytes[pixelOffset] = ownerColor[0];
+        drawBytes[pixelOffset + 1] = ownerColor[1];
+        drawBytes[pixelOffset + 2] = ownerColor[2];
+        drawBytes[pixelOffset + 3] = isOwned ? 255 * ownedAlpha : 0;
 
         if ((flagBytes[i] & TILE_FLAG_BORDER) !== 0)
         {

@@ -3,10 +3,11 @@
 #include "game_common/match/world/world.h"
 
 #include "../world_sim.h"
+#include "../world_movement.h"
 #include "../entities/world_sim_entity_worker.h"
 #include "../entities/world_sim_entity_settlement.h"
 
-// Makes the tile at the given location a road, and flags it for proximity recalculation if it is owned.
+// Makes the tile at the given location a road, and flags it for distance recalculation if it is owned.
 static void world_tile_set_road(match_world_state& world, world_location location)
 {
     ui16 regionIndex, tileIndex;
@@ -14,7 +15,8 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 
     world_terrain::region& region = world.terrain->regions[regionIndex];
     region.status[tileIndex].is_road = true;
-    if (region.owners[tileIndex] != world_terrain::UNOWNED_TILE) region.status[tileIndex].proximity_recalc = true;
+    if (region.owners[tileIndex] != world_terrain::UNOWNED_TILE)
+        region.status[tileIndex].distance_recalc = true;
 }
 
 // Pays a worker's day (its daily cost) from its payer's treasury, all or nothing (spent). Returns false if the treasury cannot afford it.
@@ -117,10 +119,11 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
         return false;
     }
 
-    // Back home: the colonists rejoin the peasants.
+    // Back home: the colonists rejoin the unemployed.
     if (data.returning)
     {
-        settlement_add_peasants(world, originIndex, data.colonists);
+        settlements.pop_unemployed[originIndex] += data.colonists;
+        settlements.pop_total[originIndex] += data.colonists;
         return true;
     }
 
@@ -135,7 +138,7 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
     world_entity_settlements::single newSettlement = {};
     newSettlement.owner = owner;
     newSettlement.location = data.target;
-    newSettlement.population.peasants = data.colonists;
+    newSettlement.pop_unemployed = data.colonists;
     world_spawn_settlement(world, newSettlement);
     return true;
 }

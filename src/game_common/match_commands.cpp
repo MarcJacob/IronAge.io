@@ -2,7 +2,7 @@
 
 #include "game_common/match/commands.h"
 #include "game_common/match/world/world_terrain.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 #include "world_sim/world_sim.h"
 
@@ -67,7 +67,7 @@ void command_server_spawn_player_apply(match_world_state& world, match_player_id
     world_entity_settlements::single startSettlement = {
         .owner = command.spawned_player,
         .location = command.spawn_location,
-        .population = { .peasants = 200 },
+        .pop_unemployed = 200,
         .tax_rate = 5,
     };
 
@@ -152,7 +152,7 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 
 	// The colonists are taken out of the settlement's peasants.
 	ui32 colonists = GAME_PARAMETERS.found_settlement_colonists;
-	ui32 peasants = settlements.populations[settlementIndex].peasants;
+	ui32 peasants = settlements.pop_peasants[settlementIndex];
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = colonists;
@@ -246,9 +246,9 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;
-		feedback->population_current = settlements.populations[settlementIndex].peasants;
+		feedback->population_current = settlements.pop_unemployed[settlementIndex] + settlements.pop_peasants[settlementIndex];
 	}
-	if (settlements.populations[settlementIndex].peasants < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
+	if (settlements.pop_peasants[settlementIndex] < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
 
 	if (!raise_army_can_afford(world, command, feedback) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
@@ -437,12 +437,11 @@ void command_set_settlement_troop_ceiling_apply(match_world_state& world, match_
 	// Raw value stored as is, never clamped.
 	*settlement_troops_field(settlements.troop_ceilings[index], command.troop_type) = command.ceiling;
 
-	// The ceiling applies to home + raised: lowering it below that total releases only HOME troops back to peasants (raised ones are never touched).
-	settlement_population& population = settlements.populations[index];
-	ui16 home = *settlement_troops_field(population.home, command.troop_type);
-	ui16 raised = *settlement_troops_field(population.raised, command.troop_type);
-	ui16 homeAllowed = command.ceiling > raised ? command.ceiling - raised : 0;
-	if (home > homeAllowed) settlement_discharge_soldiers(world, index, command.troop_type + TROOP_TYPE_MEN_AT_ARMS, home - homeAllowed);
+	// The ceiling applies to garrison + raised: lowering it below that total releases only HOME troops back to peasants (raised ones are never touched).
+	ui16 garrisonTotal = *settlement_troops_field(settlements.garrison[index], command.troop_type);
+	ui16 raised = *settlement_troops_field(settlements.raised[index], command.troop_type);
+	ui16 garrisonAllowed = command.ceiling > raised ? command.ceiling - raised : 0;
+	if (garrisonTotal > garrisonAllowed) settlement_discharge_soldiers(world, index, command.troop_type + TROOP_TYPE_MEN_AT_ARMS, garrisonTotal - garrisonAllowed);
 }
 
 // SET SETTLEMENT TAX RATE
@@ -547,7 +546,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	}
 
 	ui32 populationNeeded = (ui32)command.target_levies + GAME_PARAMETERS.raise_min_population_left;
-	ui32 populationCurrent = world.entities->settlements.populations[home.get_index()].peasants;
+	ui32 populationCurrent = world.entities->settlements.pop_peasants[home.get_index()];
 	if (feedback != nullptr)
 	{
 		feedback->population_needed = populationNeeded;

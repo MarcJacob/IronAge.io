@@ -30,10 +30,10 @@ struct game_trade_parameters
     // Profit
     ui32 flat_profit_percent_of_min = 10; // Flat profit always added = investment_min * this / 100 (at least 1). Independent of the caravan's value. Clamped to 10000.
     // Barter exchange: the destination values each caravan good at r% of its own goods, r linear in its fill (pool / capacity): max at 0% fill, min at 100%. Clamped to 10000.
-    ui32 scarcity_value_min_percent = 50;
-    ui32 scarcity_value_max_percent = 200;
+    ui32 scarcity_value_min_percent = 90;
+    ui32 scarcity_value_max_percent = 110;
 
-    // Extra margin earned per exchanged good, per specified distance between origin and destination (in number of times, "as the crow flies").
+    // Extra margin earned per exchanged good, per specified distance between origin and destination (in number of tiles, "as the crow flies").
     ui16 good_val_markup_increase_dist = 256;
 };
 
@@ -71,18 +71,14 @@ struct game_parameters
     ui16 road_build_ticks_per_cost = 30; // Ticks to build a road tile, per point of its travel cost without a road.
     ui8 road_build_foreign_multiplier = 5; // Build time multiplier for road tiles not owned by the building settlement's player (including unowned tiles).
 
-    // PRODUCTION
-    ui8 peasant_production_percent_base = 6; // Percent surplus output per peasant (each peasant will produce at most 1 wealth + surplus%)
-
     // CONSUMPTION & POPULATION GROWTH
     // Per stratum (soldiers at home, workers, peasants): r = its share of the goods sold / goods it required. Growth is in per mille of the stratum per day,
     // linear between these points (excess = share above the requirement):
     //   r >= 1000: growth_enough, plus up to (growth_max - growth_enough) as the excess goes from 0 to the requirement.
     //   r == growth_zero_ratio: 0. r <= growth_floor_ratio: growth_floor.
-    ui32 consumption_per_person = 1; // Market goods consumed per day by each person at home (every stratum).
-    i32 growth_enough_per_mille = 75; // Growth when consumption is exactly met.
+    i32 growth_enough_per_mille = 60; // Growth when consumption is exactly met.
     i32 growth_max_per_mille = 120; // Growth when the excess is at least the requirement.
-    ui32 growth_zero_ratio_per_mille = 750; // r at which growth is 0.
+    ui32 growth_zero_ratio_per_mille = 1000; // r at which growth is 0.
     ui32 growth_floor_ratio_per_mille = 500; // r at and below which growth is growth_floor.
     i32 growth_floor_per_mille = -200; // Lowest growth (shrinking).
 
@@ -122,9 +118,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)
     GAME_DATA_PROPERTY(road_build_foreign_multiplier, GAME_DATA_PROP_TYPE::UI8)
 
-    GAME_DATA_PROPERTY(peasant_production_percent_base, GAME_DATA_PROP_TYPE::UI8)
-
-    GAME_DATA_PROPERTY(consumption_per_person, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(growth_enough_per_mille, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(growth_max_per_mille, GAME_DATA_PROP_TYPE::I32)
     GAME_DATA_PROPERTY(growth_zero_ratio_per_mille, GAME_DATA_PROP_TYPE::UI32)

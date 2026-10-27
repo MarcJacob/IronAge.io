@@ -102,12 +102,6 @@ WASM_EXPORT ui16* client_render_state_get_owner_settlement_tiles()
     return game_client_get_render_state(*WEB_CLIENT.backend)->tiles.owner_settlement_tiles_bitmap;
 }
 
-WASM_EXPORT ui8* client_render_state_get_contestation_tiles()
-{
-    ASSERT(WEB_CLIENT.backend != nullptr);
-    return game_client_get_render_state(*WEB_CLIENT.backend)->tiles.contestation_tiles_bitmap;
-}
-
 WASM_EXPORT ui8* client_render_state_get_tile_flags()
 {
     ASSERT(WEB_CLIENT.backend != nullptr);

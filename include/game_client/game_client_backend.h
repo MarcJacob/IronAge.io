@@ -69,8 +69,6 @@ struct client_render_state
         // Settlements whose influence bounds touch the viewport are always in the frame's render entities, so the
         // frontend can resolve the owning player through them.
         ui16* owner_settlement_tiles_bitmap;
-        // One byte value per world tile. Row major.
-        ui8* contestation_tiles_bitmap;
         // One RENDER_TILE_FLAGS bit set per world tile. Row major.
         ui8* tile_flags_bitmap;
     } tiles;
@@ -217,6 +215,7 @@ ui32 game_client_lobby_admin_start_match(game_client& backend);
 ui32 game_client_lobby_admin_set_player_count(game_client& backend, ui16 player_count);
 ui32 game_client_lobby_admin_set_map_size(game_client& backend, ui16 width_regions, ui16 height_regions);
 ui32 game_client_lobby_admin_set_seed(game_client& backend, ui32 random_seed);
+ui32 game_client_lobby_admin_set_tick_rate(game_client& backend, ui8 tick_rate);
 
 // Returns pointer to the request buffer filled by the functions above.
 ui8* game_client_get_net_request_buffer(game_client& backend);

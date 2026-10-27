@@ -51,6 +51,7 @@ when it finishes.
 - `work_units/trade_market_goods_2026-10-24.md`
 - `work_units/server_test_mode_2026-10-25.md` [DONE]
 - `work_units/path_commitment_rewrite_2026-10-22.md`
+- `work_units/territory_economy_redesign_2026-10-27.md`
 
 Finished units are moved to `management/archive/` after a time.
 

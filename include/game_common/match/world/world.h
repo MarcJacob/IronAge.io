@@ -17,8 +17,8 @@ using world_dimensions = vec2<ui16>;
 static constexpr world_location INVALID_WORLD_LOCATION = { ~0, ~0 };
 //
 // @TEMP(Marc): Static memory size / layout properties.
-constexpr ui32 SETTLEMENTS_PER_REGION = 10;
-constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 32;
+constexpr ui32 SETTLEMENTS_PER_REGION = 32;
+constexpr ui32 MICRO_ENTITIES_PER_TYPE_PER_REGION = 64;
 
 struct world_terrain;
 struct world_entities;
@@ -30,8 +30,8 @@ struct match_world_state;
 
 // Distances are measured with chamfer weights (integer approximation of euclidean distance, ratio 7 / 5 = 1.4 ~ sqrt(2)).
 // Stepping to a tile adds its travel cost times the weight.
-static constexpr ui16 PROXIMITY_WEIGHT_ORTHOGONAL = 5;
-static constexpr ui16 PROXIMITY_WEIGHT_DIAGONAL = 7;
+static constexpr ui16 TRAVEL_DIST_WEIGHT_ORTHOGONAL = 5;
+static constexpr ui16 TRAVEL_DIST_WEIGHT_DIAGONAL = 7;
 
 // Neighbour offsets, non-diagonal only or all 8.
 static const vec2<i8> NEIGHBOUR_OFFSETS_ORTHOGONAL[] = { {-1, 0}, {0, -1}, {0, 1}, {1, 0} };

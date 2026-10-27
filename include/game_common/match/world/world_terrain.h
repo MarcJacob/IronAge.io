@@ -36,12 +36,12 @@ struct world_terrain
         {
             ui8 border_count : 3; // How many neighbouring tiles are unowned or owned by a different settlements ? Tile is considered to be a border if above 0.
             bool is_road : 1;
-            bool proximity_recalc : 1;
+            bool distance_recalc : 1; // Whether this tile's distance to settlement may be lowered by its neighbours (never raised: see territories' distances_stale).
+            bool takeover_check : 1; // Whether this tile (or a neighbour) changed owner or distance since a neighbouring settlement last checked for taking it over.
             // ...
         } status[REGION_TILE_COUNT]; // Various status values packed together in a byte.
         ui16 owners[REGION_TILE_COUNT]; // Tile owner if any, as a settlement slot index (see UNOWNED_TILE). Determines which settlement obtains the tile's production output.
-        ui8 contestation_levels[REGION_TILE_COUNT]; // How contested the tile is between its owner settlement and neighbouring settlements. Decreases productivity.
-        ui16 proximities[REGION_TILE_COUNT]; // Proximity to settlement value for claimed tiles.
+        ui16 distances[REGION_TILE_COUNT]; // Travel distances to settlement value for claimed tiles.
     } *regions;
 
     static constexpr ui16 UNOWNED_TILE = ~0; // Owner value of a tile with no owner (influence 0).

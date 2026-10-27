@@ -2,8 +2,7 @@
 
 #include "game_client.h"
 #include "game_client/game_client_backend.h"
-#include "game_common/match/world/world.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 
 
 static constexpr ui8 SETTLEMENT_RENDER_SIZE = 12; // Square size of a settlement icon in viewport tiles.
@@ -171,7 +170,6 @@ void game_client_render_influence(client_render_state& render_state, const game_
                     bool isOwned = ownerSettlement != world_terrain::UNOWNED_TILE;
 
                     render_state.tiles.owner_settlement_tiles_bitmap[worldTileIndex] = ownerSettlement;
-                    render_state.tiles.contestation_tiles_bitmap[worldTileIndex] = terrain.regions[regionIndex].contestation_levels[tileIndex];
 
                     bool isBorder = terrain.regions[regionIndex].status[tileIndex].border_count > 0 && isOwned;
                     bool isRoad = terrain.regions[regionIndex].status[tileIndex].is_road;
@@ -194,6 +192,6 @@ void game_client_rebuild_render_state(client_render_state& render_state, const g
     render_state.frame.memory.clear();
     game_client_render_entities(render_state, match);
 
-    // Update tile influence & contestation bitmaps.
+    // Update tile influence bitmaps.
     game_client_render_influence(render_state, match);
 }

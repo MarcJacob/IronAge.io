@@ -3,7 +3,7 @@
 #include "game_client/game_client_backend.h"
 #include "game_common/game_data_object.h"
 #include "game_common/match/game_parameters.h"
-#include "game_common/match/world/world_entities.h"
+#include "game_common/match/world/world_state.h"
 #include "web_game_client.h"
 
 static entity_inspection_context ENTITY_INSPECTION; // Inspection context for the currently selected entity.

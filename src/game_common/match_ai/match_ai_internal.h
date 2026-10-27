@@ -54,7 +54,7 @@ constexpr ui32 AI_TRADE_DEPOT_MIN_POPULATION = 800; // One trade depot in settle
 constexpr ui32 AI_POPULATION_PER_BARRACKS = 600; // Outside of EXPAND, a settlement wants population / this barracks.
 constexpr ui32 AI_MIN_ROAD_TREASURY = 100;
 constexpr ui32 AI_INCOME_PER_EXTRA_ROAD = 100; // Parallel road crews: 1, plus one per this much daily income.
-constexpr ui32 AI_ROAD_LAND_USE_PERCENT = 80; // Spokes are built once the peasants work this % of the land output.
+constexpr ui32 AI_ROAD_LAND_USE_PERCENT = 80; // Spokes are built once the peasants work this % of the peasant jobs.
 constexpr i32 AI_SPOKE_TILES_STRAIGHT = 5; // Road spoke lengths: further tiles are past the land output falloff.
 constexpr i32 AI_SPOKE_TILES_DIAGONAL = 4;
 constexpr i32 AI_TAX_HIGH = 9; // While the treasury is under AI_TREASURY_COMFORT.
@@ -77,7 +77,7 @@ struct ai_settlement_view
 	match_player_id owner;
 	world_location location;
 	ui32 population, peasants, workers, local_wealth;
-	ui32 land_output; // Peasants the land employs at full efficiency.
+	ui32 peasant_jobs; // Peasants the land employs at full efficiency (pop_peasants_cap).
 	i32 growth_per_mille;
 	i8 tax_rate;
 	army_troop_count home_troops;

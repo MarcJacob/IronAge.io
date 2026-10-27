@@ -28,7 +28,7 @@ static inline ui64 trade_profit(ui32 caravan_value, ui32 destination_pool, ui32 
     i32 scarcityRateMin = trade_parameters.scarcity_value_min_percent;
 
     ui64 scarcityRatePermille = ia_max(ia_lerp_fixed(scarcityRateMax, scarcityRateMin, destinationExchangeFill), (i32)1) * 10;
-    ui32 distanceFactorPermille = travel_distance / trade_parameters.good_val_markup_increase_dist * 1000;
+    ui32 distanceFactorPermille = travel_distance * 1000 / trade_parameters.good_val_markup_increase_dist;
 
     ui32 exchangeProfit = caravan_value * (scarcityRatePermille + distanceFactorPermille) / 1000;
 

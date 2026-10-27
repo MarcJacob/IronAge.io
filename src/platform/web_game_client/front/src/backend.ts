@@ -28,6 +28,7 @@ export enum MESSAGE_TYPE
     LOBBY_ADMIN_SET_PLAYER_COUNT = 16,
     LOBBY_ADMIN_SET_MAP_SIZE = 17,
     LOBBY_ADMIN_SET_SEED = 18,
+    LOBBY_ADMIN_SET_TICK_RATE = 19,
 
     TYPE_COUNT,
     INVALID,
@@ -64,6 +65,8 @@ export enum LOBBY_KICK_REASON
 export const PLAYER_NAME_MAX_LENGTH = 32;
 export const LOBBY_MAX_PLAYER_COUNT = 32;
 export const LOBBY_MAX_MAP_SIZE_REGIONS = 8;
+export const LOBBY_MIN_TICK_RATE = 5;
+export const LOBBY_MAX_TICK_RATE = 120;
 
 // Mirrors INPUT_EVENT_TYPE (include/game_client/game_client_backend.h). Update here if the enum changes.
 export enum INPUT_EVENT_TYPE
@@ -131,6 +134,7 @@ interface ClientExports extends WebAssembly.Exports
     client_lobby_admin_set_player_count(player_count: number): number;
     client_lobby_admin_set_map_size(width_regions: number, height_regions: number): number;
     client_lobby_admin_set_seed(random_seed: number): number;
+    client_lobby_admin_set_tick_rate(tick_rate: number): number;
 
     // Render state
     client_render_state_get_viewport(): number; // Pointer to client_render_state::viewport_state.
@@ -139,7 +143,6 @@ interface ClientExports extends WebAssembly.Exports
 
     client_render_state_get_terrain_tiles(): number; // Pointer to TERRAIN_TILE_TYPE array (1 byte each).
     client_render_state_get_owner_settlement_tiles(): number; // Pointer to ui16 array with owner settlement slot per tile (valid if TILE_FLAG_OWNED).
-    client_render_state_get_contestation_tiles(): number; // Pointer to byte array with contestation values.
     client_render_state_get_tile_flags(): number; // Pointer to byte array with TILE_FLAGS bits.
 
     web_client_get_world_size(): number; // Pointer to vec2<ui16> (x = width, y = height).
@@ -382,6 +385,8 @@ export function build_lobby_admin_start_match(): ByteBuffer | null { return take
 export function build_lobby_admin_set_player_count(player_count: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_player_count(player_count)); }
 export function build_lobby_admin_set_map_size(width_regions: number, height_regions: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_map_size(width_regions, height_regions)); }
 export function build_lobby_admin_set_seed(random_seed: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_seed(random_seed)); }
+// Rejected by the server outside [LOBBY_MIN_TICK_RATE, LOBBY_MAX_TICK_RATE].
+export function build_lobby_admin_set_tick_rate(tick_rate: number): ByteBuffer | null { return take_request(CLIENT_BACKEND.client_lobby_admin_set_tick_rate(tick_rate)); }
 
 // Mirrors game_message_payload_match_ended: winner_id (ui16). Returns null if there is no winner (0xFFFF).
 // Only call after process_net_message returned MATCH_ENDED.
@@ -556,7 +561,6 @@ export class RenderState
 
     terrain_tiles_pointer: number = 0; // WASM memory offset of the terrain tile type bytes.
     owner_settlement_tiles_pointer: number = 0; // WASM memory offset of the tile owner settlement ui16s.
-    contestation_tiles_pointer: number = 0; // WASM memory offset of the tile contestation bytes.
     tile_flags_pointer: number = 0; // WASM memory offset of the tile flags bytes.
 }
 
@@ -581,17 +585,6 @@ export function get_owner_settlement_tiles_view(): Uint16Array<ArrayBuffer> | nu
     const world = LAST_RENDER_STATE.world_size;
     const length = world.width * world.height;
     return new Uint16Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.owner_settlement_tiles_pointer, length);
-}
-
-// Fresh view of tile contestation bytes over wasm memory, or null if there is no match.
-// Created anew on every call as wasm memory growth detaches older views: do NOT hold the result across frames.
-export function get_contestation_tiles_view(): Uint8Array<ArrayBuffer> | null
-{
-    if (LAST_RENDER_STATE === null || LAST_RENDER_STATE.contestation_tiles_pointer === 0) return null;
-
-    const world = LAST_RENDER_STATE.world_size;
-    const length = world.width * world.height;
-    return new Uint8Array(CLIENT_BACKEND.memory.buffer, LAST_RENDER_STATE.contestation_tiles_pointer, length);
 }
 
 // Fresh view of tile flags bytes (TILE_FLAGS bits) over wasm memory, or null if there is no match.
@@ -630,7 +623,6 @@ function read_render_state()
 
     renderState.terrain_tiles_pointer = CLIENT_BACKEND.client_render_state_get_terrain_tiles();
     renderState.owner_settlement_tiles_pointer = CLIENT_BACKEND.client_render_state_get_owner_settlement_tiles();
-    renderState.contestation_tiles_pointer = CLIENT_BACKEND.client_render_state_get_contestation_tiles();
     renderState.tile_flags_pointer = CLIENT_BACKEND.client_render_state_get_tile_flags();
 
     // ENTITIES

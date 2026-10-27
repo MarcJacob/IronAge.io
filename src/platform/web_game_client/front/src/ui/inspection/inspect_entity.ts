@@ -53,7 +53,6 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
     // Levies have no home pool (always 0 at home), so the home soldiers are the pooled types.
     const soldiers_home = prop("troops_men_at_arms") + prop("troops_horsemen") + prop("troops_knights");
     const raised = prop("raised_levies") + prop("raised_men_at_arms") + prop("raised_horsemen") + prop("raised_knights");
-    const strata = ["soldiers", "workers", "peasants"];
     const parameters = get_game_parameters();
 
     // Ongoing projects by building type, as their progress (0..255).
@@ -64,7 +63,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
     return {
         population: Math.max(0, prop("population") - raised),
         raised,
-        peasants: prop("peasants"),
+        peasants: prop("pop_peasants"),
         soldiers_home,
         // Server per-mille rate (guarded against an empty settlement there).
         growth_percent: prop("population_growth_rate") / 10,
@@ -74,8 +73,8 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
         tax_rate_min: parameters.get_number("tax_rate_min"),
         tax_rate_max: parameters.get_number("tax_rate_max"),
         consumption: !editable ? null : {
-            sold: strata.reduce((sum, name) => sum + prop(`economy_${name}_consumed`), 0),
-            needed: strata.reduce((sum, name) => sum + prop(`economy_${name}_required`), 0),
+            sold: Math.min(prop("economy_consumption"), prop("economy_sellable")),
+            needed: prop("economy_consumption"),
             population_change: prop("population_change"),
         },
         market_goods: !editable ? null : { goods: prop("trading_market_goods"), capacity: prop("market_capacity") },

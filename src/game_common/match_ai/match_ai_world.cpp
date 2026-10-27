@@ -1,8 +1,11 @@
 // World access of the match AI: the ONLY file reading the world state. Everything else works with the views and queries below.
 // All of it is read-only. Keeping the reads here is what lets the AI later run parallel to the world tick (or on a copy).
 
+
+#include "game_common/match/world/entities/world_entity_settlements.h"
 #include "match_ai_internal.h"
 #include "game_common/match/world/world_terrain.h"
+#include "game_common/match/world/world_state.h"
 
 static ui32 ai_world_player_count(const match_world_state& world) { return world.player_count; }
 static ui32 ai_world_day(const match_world_state& world) { return (ui32)(world.age / GAME_PARAMETERS.ticks_per_day); }
@@ -18,25 +21,26 @@ static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops) { 
 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out)
 {
-	const world_entity_settlements& settlements = world.entities->settlements;
-	if (slot >= settlements.max_count || !settlements.guids[slot].is_valid()) return false;
+	if (slot >= world.entities->settlements.max_count || !world.entities->settlements.guids[slot].is_valid()) 
+        return false;
 
-	const settlement_population& population = settlements.populations[slot];
-	out.guid = settlements.guids[slot];
-	out.owner = settlements.owners[slot];
-	out.location = settlements.locations[slot];
-	out.population = population.population_total;
-	out.peasants = population.peasants;
-	out.workers = population.workers;
-	out.local_wealth = settlements.trade[slot].market_goods;
-	out.land_output = settlements.base_land_surplus[slot];
-	out.growth_per_mille = population.growth_per_mille;
-	out.tax_rate = settlements.tax_rates[slot];
-	out.home_troops = population.home;
-	out.barracks = settlements.buildings[slot].building_counts[AI_BUILDING_BARRACKS];
-	out.caravanserai = settlements.buildings[slot].building_counts[AI_BUILDING_CARAVANSERAI];
-	out.trade_depots = settlements.buildings[slot].building_counts[AI_BUILDING_TRADE_DEPOT];
-	out.maa_ceiling = settlements.troop_ceilings[slot].men_at_arms;
+	const world_entity_settlement_view settlement { world.entities->settlements, slot };
+
+	out.guid = settlement.guid;             
+	out.owner = settlement.owner;
+	out.location = settlement.location;
+	out.population = settlement.pop_total;
+	out.peasants = settlement.pop_peasants;
+	out.workers = settlement.pop_workers;
+	out.local_wealth = settlement.trade.market_goods;
+	out.peasant_jobs = settlement.pop_peasants_cap;
+	out.growth_per_mille = settlement.pop_growth_per_mille;
+	out.tax_rate = settlement.tax_rate;
+	out.home_troops = settlement.garrison;
+	out.barracks = settlement.buildings.building_counts[AI_BUILDING_BARRACKS];
+	out.caravanserai = settlement.buildings.building_counts[AI_BUILDING_CARAVANSERAI];
+	out.trade_depots = settlement.buildings.building_counts[AI_BUILDING_TRADE_DEPOT];
+	out.maa_ceiling = settlement.troop_ceilings.men_at_arms;
 	return true;
 }
 

@@ -38,6 +38,8 @@ Server + platform-independent client state (`src/game_client`, wasm) + client ba
 2. [DONE, unbuilt] Client state (`CLIENT_CONNECTION_STATE`, `game_client.h` connection block), wasm exports (`web_game_client_connection.cpp`), `backend.ts` readers / builders. Temporary path: `main.ts` auto-authenticates, `LobbyBase` auto-joins first non-full lobby (and rejoins after a match).
 3. [DONE, unbuilt] Client UI as the pilot of `web_ui_static_modules`: login, lobby list, lobby (+ admin controls) modules, `lobby_base.ts` as driver, temporary auto-join removed, keydown input fix. Match end returns client to the lobby list. Dead `ui/lobby_ui.ts` to delete (user).
 
+4. [DONE, unbuilt] Test lobby tick rate: admin message `LOBBY_ADMIN_SET_TICK_RATE`, slider 5-120 (default 20), lobby only, not changeable in a running match. Sim timing is tick-counted, so the rate changes game speed.
+
 ## Decisions (builder pass)
 
 - Lobby id = slot index (4 slots = 4 lobbies). Limits in `game_messages.h`: players 1-32, map size 1-8 regions per side.

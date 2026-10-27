@@ -33,6 +33,7 @@ enum class GAME_MESSAGE_TYPE : ui8
 	LOBBY_ADMIN_SET_PLAYER_COUNT,	// Client -> Server = Test lobbies only: set the player cap (humans above it are kicked).
 	LOBBY_ADMIN_SET_MAP_SIZE,		// Client -> Server = Test lobbies only: set the world size in regions.
 	LOBBY_ADMIN_SET_SEED,			// Client -> Server = Test lobbies only: set the match seed.
+	LOBBY_ADMIN_SET_TICK_RATE,		// Client -> Server = Test lobbies only: set the match tick rate, in ticks per second. Out of range values are ignored.
 
 	TYPE_COUNT,
 	INVALID,
@@ -65,6 +66,8 @@ static constexpr ui8 LOBBY_LIST_MAX_COUNT = 16; // Lobbies a SERVER_LOBBY_LIST m
 // Hard limits of the lobby admin commands (test lobbies).
 static constexpr ui16 LOBBY_MAX_PLAYER_COUNT = 32; // Players in a match, humans and AI. Also the size of a lobby's player array.
 static constexpr ui16 LOBBY_MAX_MAP_SIZE_REGIONS = 8; // World width and height, in regions.
+static constexpr ui8 LOBBY_MIN_TICK_RATE = 5; // Ticks per second.
+static constexpr ui8 LOBBY_MAX_TICK_RATE = 120;
 
 // State of a lobby, as shown to clients in it (LOBBY_JOINED) and in the lobby list (SERVER_LOBBY_LIST).
 // Read by the web client at fixed offsets (backend.ts).
@@ -182,6 +185,11 @@ struct game_message_payload_lobby_admin_set_map_size
 struct game_message_payload_lobby_admin_set_seed
 {
 	ui32 random_seed;
+};
+
+struct game_message_payload_lobby_admin_set_tick_rate
+{
+	ui8 tick_rate; // Ticks per second, [LOBBY_MIN_TICK_RATE, LOBBY_MAX_TICK_RATE]. Rejected outside of it.
 };
 
 // Server -> Client message payload.
@@ -315,6 +323,9 @@ static inline ui16 get_message_type_payload_size(GAME_MESSAGE_TYPE type)
 
 	case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_SEED:
 		return sizeof(game_message_payload_lobby_admin_set_seed);
+
+	case GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_TICK_RATE:
+		return sizeof(game_message_payload_lobby_admin_set_tick_rate);
 
 	default:
 		ASSERT_MSG(0, "Message type %d is missing a payload structure size association.", type);

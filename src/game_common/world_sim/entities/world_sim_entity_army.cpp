@@ -171,3 +171,26 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 
 	return true;
 }
+
+// What the given soldiers consume per day: sum of count x per-type upkeep rate. Levies are per mille on the levy total, rounded down.
+ui32 army_daily_consumption(const army_troop_count& troops)
+{
+	ui64 consumption = ((ui64)troops.levies * GAME_PARAMETERS.upkeep_levy_per_mille) / 1000
+		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.upkeep_men_at_arms
+		+ (ui64)troops.horsemen * GAME_PARAMETERS.upkeep_horseman
+		+ (ui64)troops.knights * GAME_PARAMETERS.upkeep_knight;
+	return (ui32)ia_min(consumption, (ui64)0xFFFFFFFF);
+}
+
+// The troops supplies are sized for: the raise targets while the army is raising, its composition after that.
+const army_troop_count& army_supply_basis(const match_world_state& world, ui16 army_index)
+{
+	const world_entity_armies& armies = world.entities->armies;
+	return armies.raising[army_index] ? armies.raised_troops[army_index] : armies.compositions[army_index];
+}
+
+// Supplies the army refills up to: army_supply_capacity_days of the consumption of its supply basis.
+ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
+{
+	return (ui32)ia_min((ui64)army_daily_consumption(army_supply_basis(world, army_index)) * GAME_PARAMETERS.army_supply_capacity_days, (ui64)0xFFFFFFFF);
+}

@@ -32,7 +32,7 @@ export class SettlementFounding extends Core.Mode
         }
 
         const colonists = get_game_parameters().get_number("found_settlement_colonists");
-        const peasants = view.get_number("peasants");
+        const peasants = view.get_number("pop_peasants");
 
         const hovered = Render.get_hovered_tile();
         if (hovered === null)

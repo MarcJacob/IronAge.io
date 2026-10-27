@@ -8,10 +8,6 @@
 
 #include "world_sim_entity_army.h"
 
-// How much population "Fills" one tile of terrain.
-// If population is higher than this, the settlement gets pressure to expand.
-static const ui8 POP_CAP_PER_TILE = 2;
-
 // Spawns a new settlement in the world with the provided start state and returns its GUID.
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_settlement(match_world_state& world, const world_entity_settlements::single& start_state);
@@ -27,14 +23,6 @@ void world_settlement_change_owner(match_world_state& world, ui16 settlement_ind
 // Every change to a settlement's peasants / home / raised counts and population_total goes through these (taking the settlement's index).
 // They keep population_total = peasants + home + raised, never underflow (they return what was actually moved) and do not touch the player stats.
 // Troop types are the TROOP_TYPE_* of world_sim_army.h. Levies have no home pool (home.levies stays 0).
-
-// Births. Adds peasants.
-static inline void settlement_add_peasants(match_world_state& world, ui16 settlement_index, ui32 count)
-{
-	auto& population = world.entities->settlements.pop_peasants[settlement_index];
-	population += count;
-    world.entities->settlements.pop_total += count;
-}
 
 // Deaths. Removes up to count peasants, returns how many were removed.
 static inline ui32 settlement_remove_peasants(match_world_state& world, ui16 settlement_index, ui32 count)
@@ -92,7 +80,7 @@ static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 
 	ui16& troops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
 	ui16 moved = ia_min(count, troops);
 	troops -= moved;
-	world.entities->settlements.pop_unemployed += moved;
+	world.entities->settlements.pop_unemployed[settlement_index] += moved;
 	return moved;
 }
 
@@ -186,6 +174,7 @@ static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui1
 
     ui16 removed = ia_min(count, troops);
 	troops -= removed;
+	world.entities->settlements.pop_total[settlement_index] -= removed;
 
 	return removed;
 }
@@ -217,7 +206,8 @@ static inline void settlement_market_add(world_entity_settlements& settlements, 
 	goods += (ui32)amount;
 }
 
-// Claims a tile in the world for the given settlement using the origin proximity value as proximity base.
+// Claims a non-sea tile in the world for the given settlement (taking it from its current owner if any). Its travel distance comes from the settlement's neighbouring tiles.
+// Returns the pressure cost (the tile's peasant job count).
 // Ensure settlement's influence bounds rectangle is kept up to date !
 ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_index, ui16 tile_index, ui16 settlement_index);
 

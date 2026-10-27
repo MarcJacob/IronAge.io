@@ -1,5 +1,6 @@
 // Expansion tactics: founding settlements on good land, and road spokes raising the land output of our settlements.
 
+#include "game_common/match/game_parameters.h"
 #include "match_ai_internal.h"
 
 constexpr i32 AI_SITE_RANGE = 34; // Candidate sites are within this many tiles of the origin settlement (on each axis).
@@ -37,7 +38,7 @@ static bool ai_find_site(ai_context& ctx, const ai_settlement_view& origin, worl
 		i32 dx = (i32)ai_random(ctx, 2 * AI_SITE_RANGE + 1) - AI_SITE_RANGE;
 		i32 dy = (i32)ai_random(ctx, 2 * AI_SITE_RANGE + 1) - AI_SITE_RANGE;
 		i32 x = origin.location.x + dx, y = origin.location.y + dy;
-		if (x < 0 || y < 0 || ia_max(ia_abs(dx), ia_abs(dy)) <= (i32)SETTLEMENT_MIN_DISTANCE) continue;
+		if (x < 0 || y < 0 || ia_max(ia_abs(dx), ia_abs(dy)) <= (i32)GAME_PARAMETERS.minimum_settlement_distance) continue;
 
 		world_location site = { (ui16)x, (ui16)y };
 		if (!ai_site_is_valid(ctx.world, site, ctx.player)) continue;
@@ -72,7 +73,7 @@ static void ai_tactics_found_settlement(ai_context& ctx)
 	ctx.state.expand_failures = 0;
 }
 
-// Road spokes: road tiles lower the proximity of the land they cross, so it produces (the only way to raise a settlement's land output;
+// Road spokes: road tiles lower the travel distance of the land they cross, so it produces (the only way to raise a settlement's land output;
 // output falls to 0 past about 5 road tiles). A settlement whose peasants work most of its land output gets a straight road to its first
 // missing spoke tip: 8 directions, tip on buildable land in its own territory. One crew per settlement, 1 + income / AI_INCOME_PER_EXTRA_ROAD overall.
 static void ai_tactics_roads(ai_context& ctx)
@@ -85,7 +86,7 @@ static void ai_tactics_roads(ai_context& ctx)
 	for (ui32 index = 0; index < ai_window_size(ctx) && crews < maxCrews; index++)
 	{
 		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
-		if (settlement.peasants * 100 < settlement.land_output * AI_ROAD_LAND_USE_PERCENT) continue;
+		if (settlement.peasants * 100 < settlement.peasant_jobs * AI_ROAD_LAND_USE_PERCENT) continue;
 		if (ai_count_projects(ctx.world, WORK_TYPE::BUILD_ROAD, ctx.player, settlement.guid) > 0) continue;
 
 		for (ui32 direction = 0; direction < 8; direction++)

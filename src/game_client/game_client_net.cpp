@@ -153,6 +153,13 @@ ui32 game_client_lobby_admin_set_seed(game_client& backend, ui32 random_seed)
 	return game_client_request_size(backend);
 }
 
+ui32 game_client_lobby_admin_set_tick_rate(game_client& backend, ui8 tick_rate)
+{
+	if (!game_client_can_send_lobby_admin(backend)) return 0;
+	game_client_build_request<game_message_payload_lobby_admin_set_tick_rate>(backend, GAME_MESSAGE_TYPE::LOBBY_ADMIN_SET_TICK_RATE).tick_rate = tick_rate;
+	return game_client_request_size(backend);
+}
+
 GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 message_size)
 {
 	if (message_size < sizeof(game_message_header)) return GAME_MESSAGE_TYPE::INVALID;

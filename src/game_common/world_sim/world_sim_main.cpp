@@ -195,10 +195,9 @@ void world_update_player_stats(match_world_state& world)
         if (!settlements.guids[settlementIndex].is_valid() || settlements.owners[settlementIndex] >= world.player_count) continue;
 
         world_player_state& player = world.player_states[settlements.owners[settlementIndex]];
-        const settlement_population& population = settlements.populations[settlementIndex];
         player.settlement_count++;
-        player.total_population += population.population_total;
-        player.total_troops += population.soldiers_total();
+        player.total_population += settlements.pop_total[settlementIndex];
+        player.total_troops += settlements.soldiers_total(settlementIndex);
     }
 }
 
@@ -213,13 +212,13 @@ void world_state_tick(match_world_state& world)
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.
     world_system_caravan_spawn(world); // After the economy's sales and buildings set the caravan max.
-    world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before proximity recalc so new roads count this tick.
+    world_system_worker_construction(world); // After the daily economy (treasury is filled by tax, expenses reset), before distance recalc so new roads count this tick.
     world_system_armies_upkeep(world); // After the daily economy reset expenses.
     world_system_local_troops_pay(world);
 
     world_system_settlement_territory(world);
-    world_system_settlement_territory_proximity_recalc(world);
-    world_system_settlement_territory_update_pressure(world);
+    world_system_settlement_territory_distance_recalc(world);
+    world_system_settlement_territory_takeover(world); // After the distance recalc: decides from settled distances.
 
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);

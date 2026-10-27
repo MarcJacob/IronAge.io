@@ -367,7 +367,8 @@ void game_server_tick_match_slot_ongoing(game_server& server, ui8 slot_index)
 
 		// Placeholder end condition, checked every few ticks.
 		// Never with a single player: they would trivially hold 100% from the start.
-		if (slot.match_params->player_count > 1 && slot.match.match_ptr->tick % MATCH_END_CHECK_INTERVAL_TICKS == 0)
+        // @TEMP(Marc): Victory disabled for now.
+		if (0 && slot.match_params->player_count > 1 && slot.match.match_ptr->tick % MATCH_END_CHECK_INTERVAL_TICKS == 0)
 		{
 			match_player_id winner = match_find_dominant_player(*slot.match.match_ptr->world);
 			if (winner != INVALID_MATCH_PLAYER_ID)

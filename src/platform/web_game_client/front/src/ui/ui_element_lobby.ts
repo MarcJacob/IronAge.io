@@ -23,6 +23,8 @@ const IDS = {
     map_height: "lobby_admin_map_height",
     map_height_value: "lobby_admin_map_height_value",
     seed: "lobby_admin_seed",
+    tick_rate: "lobby_admin_tick_rate",
+    tick_rate_value: "lobby_admin_tick_rate_value",
     start: "lobby_admin_start",
 };
 
@@ -38,6 +40,7 @@ export interface LobbyState
     map_width: number; // Regions.
     map_height: number;
     seed: number;
+    tick_rate: number; // Ticks per second.
     countdown_ms: number | null; // Remaining before the match starts. Null = no countdown running.
 }
 
@@ -47,6 +50,7 @@ const events = new UiEvents<{
     set_player_count: (player_count: number) => void;
     set_map_size: (width_regions: number, height_regions: number) => void;
     set_seed: (seed: number) => void;
+    set_tick_rate: (tick_rate: number) => void;
 }>();
 export const on = events.on.bind(events);
 
@@ -64,6 +68,8 @@ let el: {
     map_height: HTMLInputElement;
     map_height_value: HTMLElement;
     seed: HTMLInputElement;
+    tick_rate: HTMLInputElement;
+    tick_rate_value: HTMLElement;
     start: HTMLButtonElement;
 } | null = null;
 
@@ -87,6 +93,8 @@ function init(): void
         map_height: get(IDS.map_height) as HTMLInputElement,
         map_height_value: get(IDS.map_height_value),
         seed: get(IDS.seed) as HTMLInputElement,
+        tick_rate: get(IDS.tick_rate) as HTMLInputElement,
+        tick_rate_value: get(IDS.tick_rate_value),
         start: get(IDS.start) as HTMLButtonElement,
     };
     const e = el;
@@ -94,6 +102,8 @@ function init(): void
     e.player_count.max = String(Backend.LOBBY_MAX_PLAYER_COUNT);
     e.map_width.max = String(Backend.LOBBY_MAX_MAP_SIZE_REGIONS);
     e.map_height.max = String(Backend.LOBBY_MAX_MAP_SIZE_REGIONS);
+    e.tick_rate.min = String(Backend.LOBBY_MIN_TICK_RATE);
+    e.tick_rate.max = String(Backend.LOBBY_MAX_TICK_RATE);
 
     e.leave.addEventListener("click", () => { e.leave.blur(); events.emit("leave"); });
     e.start.addEventListener("click", () => { e.start.blur(); events.emit("start"); });
@@ -109,6 +119,8 @@ function init(): void
         const seed = Number(e.seed.value);
         if (e.seed.value !== "" && Number.isInteger(seed) && seed >= 0 && seed <= SEED_MAX) events.emit("set_seed", seed);
     });
+
+    bind_slider(e.tick_rate, e.tick_rate_value, () => events.emit("set_tick_rate", e.tick_rate.valueAsNumber));
 }
 
 function bind_slider(input: HTMLInputElement, label: HTMLElement, on_release: () => void): void
@@ -159,6 +171,7 @@ export function submit(state: LobbyState | null): void
     set_control(el.map_width, el.map_width_value, state.map_width);
     set_control(el.map_height, el.map_height_value, state.map_height);
     set_control(el.seed, null, state.seed);
+    set_control(el.tick_rate, el.tick_rate_value, state.tick_rate);
 }
 
 function status_text(state: LobbyState): string

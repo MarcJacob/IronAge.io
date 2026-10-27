@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "world_entity_common.h"
+#include "game_common/match/game_parameters.h"
 
 // Property arrays for a world's armies.
 struct world_entity_armies : public world_entity_container
@@ -176,6 +177,17 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 GAME_DATA_OBJECT_DEF_END()
 
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_army& out_state);
+
+// SUPPLIES MECHANICS HELPERS / QUERIES
+
+// What the given soldiers consume per day: sum of count x per-type upkeep rate. Levies are per mille on the levy total, rounded down.
+ui32 army_daily_consumption(const army_troop_count& troops);
+
+// The troops supplies are sized for: the raise targets while the army is raising, its composition after that.
+const army_troop_count& army_supply_basis(const match_world_state& world, ui16 army_index);
+
+// Supplies the army refills up to: army_supply_capacity_days of the consumption of its supply basis.
+ui32 army_supply_capacity(const match_world_state& world, ui16 army_index);
 
 // A battle between two sides of armies. A battle is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_battles : public world_entity_container
