@@ -25,8 +25,8 @@ import { settlement_text } from "./section_trade.js"
 
 export interface InspectionContext
 {
-    // Settlement panel: own settlement. Makes the tax and ceiling sliders interactive and shows the build buttons, consumption and Market Goods.
-    // The mode owning the panel subscribes to SettlementPanelUI "tax_rate", "ceiling" and "build".
+    // Settlement panel: own settlement. Makes the tax, export and ceiling sliders interactive and shows the build buttons.
+    // The mode owning the panel subscribes to SettlementPanelUI "tax_rate", "export_ratio", "ceiling" and "build".
     edit_settlement?: boolean;
 
     // Settlement panel with edit_settlement: whether a project of each building type (index = row of the building table) would be accepted now
@@ -44,7 +44,7 @@ function owner_name(view: EntityData): string
     return Backend.get_player_name(view.get_number("owner"));
 }
 
-// Settlement panel. Consumption and Market Goods are shown for own settlements only (edit_settlement), as the build buttons and the sliders.
+// Settlement panel. All information is shown for any settlement. Only the controls depend on edit_settlement: sliders (read-only otherwise) and build buttons.
 function settlement_panel_state(settlement: EntityData, context: InspectionContext): SettlementPanelUI.SettlementPanelState
 {
     const editable = context.edit_settlement === true;
@@ -72,13 +72,14 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
         tax_rate: prop("tax_rate"),
         tax_rate_min: parameters.get_number("tax_rate_min"),
         tax_rate_max: parameters.get_number("tax_rate_max"),
-        consumption: !editable ? null : {
+        consumption: {
             sold: Math.min(prop("economy_consumption"), prop("economy_sellable")),
             needed: prop("economy_consumption"),
             population_change: prop("population_change"),
         },
-        market_goods: !editable ? null : { goods: prop("trading_market_goods"), capacity: prop("market_capacity") },
-        trade_volume: !editable ? null : { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
+        export_ratio: { ratio: prop("trading_export_ratio"), max: parameters.get_number("trade_export_ratio_max_percent") },
+        market_goods: { goods: prop("trading_market_goods"), export_goods: prop("trading_export_goods"), capacity: prop("market_capacity") },
+        trade_volume: { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
         // Pooled types (no levies). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
         garrison: TROOPS.slice(1).map((troop): SettlementPanelUI.SettlementGarrisonState | null => {
             const home = prop(`troops_${troop.name}`);

@@ -660,6 +660,35 @@ void command_disband_army_apply(match_world_state& world, match_player_id player
 	world_disband_army(world, command.army, world.entities->armies.home_settlements[command.army.get_index()]);
 }
 
+// SET EXPORT RATIO
+
+bool command_set_export_ratio_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_set_export_ratio& command = command_header.get_command_data<command_data_set_export_ratio>();
+
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	if (world.entities->settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// ui8: never below 0. Above 100 is refused whatever the parameter says.
+	if (command.export_ratio > ia_min(GAME_PARAMETERS.trade.export_ratio_max_percent, (ui32)100) && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_set_export_ratio_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_set_export_ratio_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_set_export_ratio& command = command_header.get_command_data<command_data_set_export_ratio>();
+	world.entities->settlements.trade[command.settlement.get_index()].export_ratio = command.export_ratio;
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS

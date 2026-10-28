@@ -27,9 +27,9 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 
 // Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
 // Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
-// Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - pool). Sizes below min_value are not candidates.
+// Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - local and export pools). Sizes below min_value are not candidates.
 // Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
-// (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (home scarcity included), only candidates
+// (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (profit x 100 / tile distance), only candidates
 // reaching trade.min_profit_per_travel_dist_percent count (see caravan_spawn_score). Returns false if there is no destination, otherwise the destination and the caravan size for it.
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
     WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_value,

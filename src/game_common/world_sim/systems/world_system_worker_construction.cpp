@@ -124,7 +124,7 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
     {
         settlements.pop_unemployed[originIndex] += data.colonists;
         settlements.pop_total[originIndex] += data.colonists;
-        settlements.trade[originIndex].market_goods += data.goods;
+        settlement_market_add(world.entities->settlements, originIndex, data.goods); // Split by the export ratio like any income.
         return true;
     }
 
@@ -141,8 +141,14 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
     newSettlement.location = data.target;
     newSettlement.pop_unemployed = data.colonists;
     entity_guid founded = world_spawn_settlement(world, newSettlement);
-    // The pool is exactly what was carried (the spawn default would add goods out of nothing, notably for 0).
-    if (founded.is_valid()) world.entities->settlements.trade[founded.get_index()].market_goods = data.goods;
+    // The pools hold exactly what was carried (the spawn default would add goods out of nothing, notably for 0), split by the new settlement's export ratio.
+    if (founded.is_valid())
+    {
+        settlement_trading& foundedTrade = world.entities->settlements.trade[founded.get_index()];
+        foundedTrade.market_goods = 0;
+        foundedTrade.export_goods = 0;
+        settlement_market_add(world.entities->settlements, founded.get_index(), data.goods);
+    }
     return true;
 }
 

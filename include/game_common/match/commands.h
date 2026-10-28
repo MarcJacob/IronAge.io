@@ -41,6 +41,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	DISBAND_ARMY, // Disbands an army standing in its home settlement's territory: its men return to the home settlement.
 
+	SET_EXPORT_RATIO, // Sets the % of a settlement's incoming goods that goes to its export pool, within 0..export_ratio_max_percent.
+
 	TYPE_COUNT,
 };
 
@@ -338,6 +340,24 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 void command_disband_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// SET EXPORT RATIO
+struct command_data_set_export_ratio
+{
+	entity_guid settlement;
+	ui8 export_ratio; // % of the settlement's incoming goods sent to its export pool. Must be within 0..GAME_PARAMETERS.trade.export_ratio_max_percent.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_export_ratio)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(export_ratio, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_export_ratio_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_export_ratio_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -452,6 +472,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_build_settlement_building_validity_check, command_build_settlement_building_apply },
 	{ "DISBAND_ARMY", MATCH_COMMAND_TYPE::DISBAND_ARMY, sizeof(command_data_disband_army),
 		command_disband_army_validity_check, command_disband_army_apply },
+	{ "SET_EXPORT_RATIO", MATCH_COMMAND_TYPE::SET_EXPORT_RATIO, sizeof(command_data_set_export_ratio),
+		command_set_export_ratio_validity_check, command_set_export_ratio_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

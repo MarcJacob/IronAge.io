@@ -11,6 +11,8 @@ export interface StaticGaugeState
     color: string; // CSS color of the filled part.
     current: number;
     raised?: number; // Amount out in the field (in armies): "(X Raised)" in the text and a darker segment after current (needs a .gauge_raised in the markup). The slider is then on the total.
+    right?: { amount: number, color: string }; // A second segment filling from the right end (needs a .gauge_right in the markup). Shares the scale with current: beyond max the two split the bar in proportion. Compact text becomes "current + amount".
+    right_cap?: number; // Size the right segment may reach: the marker (when there is no slider) sits where it would end if it were full, that much from the right end of the bar.
     max?: number; // Without it no max is shown: the bar is drawn against scale instead.
     scale?: number; // Bar scale when there is no max.
     slider?: number; // Position of the marker (e.g. a target), 0..max. Without it only current and max are shown.
@@ -31,6 +33,7 @@ export class StaticGauge
     private max_text: HTMLElement;
     private fill: HTMLElement;
     private raised_fill: HTMLElement | null;
+    private right_fill: HTMLElement | null;
     private marker: HTMLElement;
     private slider: HTMLInputElement | null;
     private dragging = false;
@@ -45,6 +48,7 @@ export class StaticGauge
         this.max_text = root.querySelector(".gauge_max") as HTMLElement;
         this.fill = root.querySelector(".gauge_fill") as HTMLElement;
         this.raised_fill = root.querySelector(".gauge_raised");
+        this.right_fill = root.querySelector(".gauge_right");
         this.marker = root.querySelector(".gauge_marker") as HTMLElement;
         this.slider = root.querySelector<HTMLInputElement>("input[type=range]");
 
@@ -94,7 +98,8 @@ export class StaticGauge
         if (state === null) return;
 
         const raised = state.raised ?? 0;
-        const scale = Math.max(state.max ?? state.scale ?? 0, state.current + raised, shown ?? 0, 1);
+        const right = state.right?.amount ?? 0;
+        const scale = Math.max(state.max ?? state.scale ?? 0, state.current + raised + right, shown ?? 0, 1);
         const discards = shown === undefined ? 0 : Math.max(0, state.current - Math.max(0, shown - raised));
         const warn = state.warn_below_current === true && discards > 0;
 
@@ -105,13 +110,19 @@ export class StaticGauge
             this.raised_fill.style.width = `${100 * raised / scale}%`;
             this.raised_fill.style.background = `color-mix(in srgb, ${state.color} 45%, black)`;
         }
-        this.marker.hidden = shown === undefined;
-        this.marker.style.left = `${100 * (shown ?? 0) / scale}%`;
+        if (this.right_fill !== null)
+        {
+            this.right_fill.style.width = `${100 * right / scale}%`;
+            this.right_fill.style.background = state.right?.color ?? "";
+        }
+        const markerAt = shown ?? (state.right_cap === undefined ? undefined : scale - Math.min(state.right_cap, scale));
+        this.marker.hidden = markerAt === undefined;
+        this.marker.style.left = `${100 * (markerAt ?? 0) / scale}%`;
         this.marker.classList.toggle("warn", warn);
 
         const lost = state.losses !== undefined && state.losses > 0 ? ` (-${state.losses})` : "";
         const text = state.compact === true
-            ? `${shown ?? state.current}`
+            ? `${shown ?? state.current}` + (state.right !== undefined ? ` + ${state.right.amount}` : "")
             : `${state.current}` + (state.raised !== undefined ? ` (${state.raised} Raised)` : "") + (shown !== undefined ? ` / ${state.slider_name ?? ""} ${shown}` : "") + (state.max !== undefined ? ` / max ${state.max}${lost}` : "")
                 + (warn ? `  (discards ${discards})` : "");
         const max_text = state.compact === true && state.max !== undefined ? `${state.max}${lost}` : "";
@@ -128,7 +139,7 @@ export interface StaticSliderState
     min: number;
     max: number;
     unit?: string; // Appended to the shown value (e.g. "%").
-    editable: boolean; // Shows the range input. Without it only the value text shows.
+    editable: boolean; // Lets the range input be moved. Without it the input is shown disabled (read-only).
 }
 
 // A value text (.slider_row_value classes: negative blue, positive yellow, zero neutral) and a range input. Same hold behavior as StaticGauge:
@@ -161,8 +172,9 @@ export class StaticSlider
             this.dragging = false;
             this.pending = null;
         }
-        if (this.slider.hidden === editable) this.slider.hidden = !editable;
+        if (this.slider.hidden !== (state === null)) this.slider.hidden = state === null;
         if (state === null) return;
+        if (this.slider.disabled === editable) this.slider.disabled = !editable; // Not editable: shown, read-only.
 
         if (this.pending !== null && (this.pending.value === state.value || performance.now() - this.pending.time > PENDING_MS)) this.pending = null;
 

@@ -46,8 +46,9 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     caravans.movements[index].destination = settlements.locations[origin.get_index()];
 }
 
-// Caravans standing on their destination settlement deliver their goods to its market goods, both ends gain trade volume, and the caravan disappears.
-// Returning caravans refund their value to their origin's market goods on reaching it. Invalid destinations are handled by the movement decision.
+// Caravans standing on their destination settlement deliver their goods to it (split by the destination's export ratio), both ends gain trade volume,
+// and the caravan disappears. Returning caravans refund their value to their origin on reaching it (split by the origin's export ratio, like any income).
+// Invalid destinations are handled by the movement decision.
 void world_system_caravan_trade(match_world_state& world)
 {
     world_entity_caravans& caravans = world.entities->caravans;
@@ -84,7 +85,7 @@ void world_system_caravan_trade(match_world_state& world)
         if (originValid)
         {
             ui16 originIndex = origin.get_index();
-            profit = trade_volume_profit(value, settlements.trade[destinationIndex].market_goods, settlement_market_capacity(settlements, destinationIndex),
+            profit = trade_volume_profit(value, settlement_market_total(settlements, destinationIndex), settlement_market_capacity(settlements, destinationIndex),
                 settlement_market_capacity(settlements, originIndex), settlement_trade_volume_fraction(settlements, destinationIndex),
                 trade_tile_distance(settlements.locations[originIndex], settlements.locations[destinationIndex]), GAME_PARAMETERS.trade);
         }

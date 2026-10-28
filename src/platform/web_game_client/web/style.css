@@ -156,8 +156,14 @@ body {
 }
 
 .gauge_fill,
-.gauge_raised {
+.gauge_raised,
+.gauge_right {
     height: 100%;
+}
+
+/* Segment filling from the right end (export pool). */
+.gauge_right {
+    margin-left: auto;
 }
 
 /* Ceiling / target position. */
@@ -288,6 +294,11 @@ body {
 
 .slider_row input[type=range].zero {
     accent-color: #9aa0a6;
+}
+
+.slider_row input[type=range]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .value_row_delta {
@@ -632,9 +643,24 @@ body {
     margin-bottom: 4px;
 }
 
-#settlement_panel_tax input[type=range] {
+#settlement_panel_tax input[type=range],
+#settlement_panel_export input[type=range] {
     width: 5rem;
     margin: 0 0 0 0.5rem;
+}
+
+/* Export ratio: Tax's layout, always light blue (same as the export segment of the Market Goods gauge). */
+#settlement_panel_export {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    cursor: help;
+}
+
+#settlement_panel_export .slider_row_value,
+#settlement_panel_export input[type=range] {
+    color: #7fd0ff;
+    accent-color: #7fd0ff;
 }
 
 .settlement_panel_header {

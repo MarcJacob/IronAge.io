@@ -91,9 +91,12 @@ struct settlement_trading
 {
     ui8 caravan_count; // Current number of active caravans originating from this settlement.
     ui8 caravan_count_max; // Maximum number of active caravans a settlement can have.
-    // Market goods: post-tax production and caravan revenue go in, consumption (sales) and caravan investments come out. Zero by default.
-    // Nothing is ever refused: the pool may exceed its capacity, which is only the reference for its fill (settlement_market_capacity).
+    ui8 export_ratio; // Player-set % (0..export_ratio_max_percent) of all incoming goods that goes to the export pool instead of the market goods.
+    // Incoming goods (post-tax production, caravan deliveries and refunds) are split by export_ratio between these two pools (settlement_market_add).
+    // Market goods (local pool): consumption (sales) comes out. Export goods: only caravans take from it, it is never consumed locally.
+    // Nothing is ever refused: the pools may exceed their shared capacity (settlement_market_capacity), the excess of their sum is wasted daily.
     ui32 market_goods;
+    ui32 export_goods;
     ui32 market_capacity_buildings; // Buildings' part of the capacity, kept by their added / removed events (constants there).
     // Trade volume: absolute, may exceed its max (settlement_trade_volume_max); only the part up to the max is effective. Decays daily.
     ui32 trade_volume;
@@ -406,6 +409,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
     GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_export_goods, trade.export_goods, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trading_export_ratio, trade.export_ratio, GAME_DATA_PROP_TYPE::UI8)
 
     GAME_DATA_PROPERTY_PATH(trading_trade_volume, trade.trade_volume, GAME_DATA_PROP_TYPE::UI32)
 

@@ -3,7 +3,7 @@
 // the surplus / deficit), Market Goods. Top right: the garrison (one gauge per pooled troop type: home, raised, ceiling, max). Bottom: one box per
 // building type (count, one bar per ongoing project, build button). Value rows and buildings have hover tooltips.
 // Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it.
-// Emits, on release / press: "tax_rate"(tax_rate), "ceiling"(troop_type, ceiling) with the raw ceiling of SET_SETTLEMENT_TROOP_CEILING
+// Emits, on release / press: "tax_rate"(tax_rate), "export_ratio"(export_ratio),"ceiling"(troop_type, ceiling) with the raw ceiling of SET_SETTLEMENT_TROOP_CEILING
 // (troop_type 0 men-at-arms, 1 horsemen, 2 knights; released at max = follows max), "build"(building_type).
 
 import { UiEvents } from "../ui_events.js"
@@ -22,6 +22,9 @@ const IDS = {
     production_value: "settlement_panel_production_value",
     tax_value: "settlement_panel_tax_value",
     tax_slider: "settlement_panel_tax_slider",
+    export_row: "settlement_panel_export",
+    export_value: "settlement_panel_export_value",
+    export_slider: "settlement_panel_export_slider",
     consumption: "settlement_panel_consumption",
     consumption_value: "settlement_panel_consumption_value",
     consumption_delta: "settlement_panel_consumption_delta",
@@ -36,6 +39,7 @@ const IDS = {
 const GARRISON_COLORS = ["#4aa3ff", "#f0b040", "#c060e0"]; // troop_type order, as in section_troops.ts.
 const MARKET_GOODS_COLOR = "#d4a93c";
 const TRADE_VOLUME_COLOR = "#4fc08d";
+const EXPORT_COLOR = "#7fd0ff"; // Export pool gauge segment (the export ratio slider's color is in style.css).
 
 // Population growth per day (in %) above 0 but below this is shown yellow instead of green.
 const GROWTH_CLOSE_TO_ZERO_PERCENT = 0.5;
@@ -71,15 +75,17 @@ export interface SettlementPanelState
     tax_rate_min: number;
     tax_rate_max: number;
     consumption: { sold: number, needed: number, population_change: number } | null; // Last day. Null hides the row.
-    market_goods: { goods: number, capacity: number } | null; // Null hides the gauge.
+    export_ratio: { ratio: number, max: number } | null; // % of incoming goods set aside for export, and the highest settable. Null hides the slider.
+    market_goods: { goods: number, export_goods: number, capacity: number } | null; // Local pool, export pool, capacity shared by both. Null hides the gauge.
     trade_volume: { volume: number, max: number } | null; // Null hides the gauge.
     garrison: (SettlementGarrisonState | null)[]; // troop_type order. Null hides the gauge.
     buildings: (SettlementBuildingState | null)[]; // Building table order. Null hides the box.
-    editable: boolean; // Tax and ceiling sliders can be moved.
+    editable: boolean; // Tax, export and ceiling sliders can be moved (tax and export show disabled otherwise).
 }
 
 const events = new UiEvents<{
     tax_rate: (tax_rate: number) => void;
+    export_ratio: (export_ratio: number) => void;
     ceiling: (troop_type: number, ceiling: number) => void;
     build: (building_type: number) => void;
 }>();
@@ -181,12 +187,16 @@ let el: {
     production_tooltip: HoverTooltip;
     production_value: HTMLElement;
     tax: StaticSlider;
+    export_row: HTMLElement;
+    export_ratio: StaticSlider;
+    export_tooltip: HoverTooltip;
     consumption: HTMLElement;
     consumption_tooltip: HoverTooltip;
     consumption_value: HTMLElement;
     consumption_delta: HTMLElement;
     market_goods: StaticGauge;
     market_goods_percent: HTMLElement;
+    market_goods_tooltip: HoverTooltip;
     trade_volume: StaticGauge;
     trade_volume_tooltip: HoverTooltip;
     garrison: StaticGauge[];
@@ -213,12 +223,16 @@ function init(): void
         production_tooltip: new HoverTooltip(get(IDS.production)),
         production_value: get(IDS.production_value),
         tax: new StaticSlider(get(IDS.tax_value), get(IDS.tax_slider) as HTMLInputElement, value => events.emit("tax_rate", value)),
+        export_row: get(IDS.export_row),
+        export_ratio: new StaticSlider(get(IDS.export_value), get(IDS.export_slider) as HTMLInputElement, value => events.emit("export_ratio", value)),
+        export_tooltip: new HoverTooltip(get(IDS.export_row)),
         consumption,
         consumption_tooltip: new HoverTooltip(consumption),
         consumption_value: get(IDS.consumption_value),
         consumption_delta: get(IDS.consumption_delta),
         market_goods: new StaticGauge(get(IDS.market_goods)),
         market_goods_percent: get(IDS.market_goods_percent),
+        market_goods_tooltip: new HoverTooltip(get(IDS.market_goods)),
         trade_volume: new StaticGauge(get(IDS.trade_volume)),
         trade_volume_tooltip: new HoverTooltip(get(IDS.trade_volume)),
         garrison: IDS.garrison.map((id, troop_type) => new StaticGauge(get(id), value => emit_ceiling(troop_type, value))),
@@ -244,6 +258,9 @@ export function submit(state: SettlementPanelState | null): void
     {
         // Forgets held slider values, closes tooltips (no mouseleave once hidden).
         el.tax.submit(null);
+        el.export_ratio.submit(null);
+        el.export_tooltip.hide();
+        el.market_goods_tooltip.hide();
         for (const gauge of el.garrison) gauge.submit(null);
         for (const box of el.buildings) box.submit(null);
         el.population_tooltip.hide();
@@ -305,9 +322,28 @@ function submit_economy(state: SettlementPanelState): void
         "Last day",
         `Production ${state.production}`,
         `Tax -${state.tax}`,
-        `Added to Market Goods ${state.production - state.tax}`,
+        `Added to goods (local + export) ${state.production - state.tax}`,
     ]);
     el.tax.submit({ value: state.tax_rate, min: state.tax_rate_min, max: state.tax_rate_max, unit: "%", editable: state.editable });
+
+    const exporting = state.export_ratio;
+    el.export_row.hidden = exporting === null;
+    if (exporting === null)
+    {
+        el.export_ratio.submit(null);
+        el.export_tooltip.hide();
+    }
+    else
+    {
+        el.export_ratio.submit({ value: exporting.ratio, min: 0, max: exporting.max, unit: "%", editable: state.editable });
+        el.export_tooltip.submit([
+            "Share of all incoming goods (production and imports)",
+            "set aside for export, until the export pool holds",
+            "that share of the capacity (the rest goes to the local pool).",
+            "The export pool is never consumed locally.",
+            "Caravans take up to 50% of it.",
+        ]);
+    }
 
     const consumption = state.consumption;
     el.consumption.hidden = consumption === null;
@@ -330,10 +366,22 @@ function submit_economy(state: SettlementPanelState): void
         ]);
     }
 
-    // The pool may exceed its capacity: the bar then stays full and the percentage shows it.
+    // Both pools share the capacity and may exceed it: the bar then stays full (split in proportion) and the percentage shows it.
     const market = state.market_goods;
-    el.market_goods.submit(market === null ? null : { color: MARKET_GOODS_COLOR, current: market.goods, max: market.capacity, compact: true, editable: false });
-    if (market !== null) set_text(el.market_goods_percent, `(${market.capacity > 0 ? Math.round(100 * market.goods / market.capacity) : 0}%)`);
+    // The marker shows where the export pool ends when full: export cap = capacity x export ratio.
+    const exportCap = market === null || state.export_ratio === null ? undefined : Math.floor(market.capacity * state.export_ratio.ratio / 100);
+    el.market_goods.submit(market === null ? null : { color: MARKET_GOODS_COLOR, current: market.goods, right: { amount: market.export_goods, color: EXPORT_COLOR }, right_cap: exportCap, max: market.capacity, compact: true, editable: false });
+    if (market === null) el.market_goods_tooltip.hide();
+    else
+    {
+        const percent = market.capacity > 0 ? Math.round(100 * (market.goods + market.export_goods) / market.capacity) : 0;
+        set_text(el.market_goods_percent, `(${percent}%)`);
+        el.market_goods_tooltip.submit([
+            `Local goods ${market.goods}`,
+            `Export goods ${market.export_goods}` + (exportCap === undefined ? "" : ` (cap ${exportCap})`),
+            `Capacity ${market.capacity} (shared), ${percent}% full`,
+        ]);
+    }
 
     const trade = state.trade_volume;
     el.trade_volume.submit(trade === null ? null : { color: TRADE_VOLUME_COLOR, current: trade.max > 0 ? Math.min(trade.volume, trade.max) : 0, max: trade.max, compact: true, editable: false });

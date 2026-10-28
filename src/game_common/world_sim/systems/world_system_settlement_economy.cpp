@@ -109,8 +109,8 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
     ui32 atHome = settlement.at_home();
     if (atHome == 0) return; // Nobody at home: nothing to grow or shrink.
 
-    settlement.pop_growth_per_mille = settlement_growth_per_mille(settlement.economy.sellable, settlement.economy.consumption);
-    settlement.pop_change = (i32)((i64)atHome * settlement.pop_growth_per_mille / 1000);
+    i16 baseGrowthPerMille = settlement_growth_per_mille(settlement.economy.sellable, settlement.economy.consumption);
+    settlement.pop_change = (i32)((i64)atHome * baseGrowthPerMille / 1000);
 
     // Ensure SOME growth happens if growth is positive.
     if (settlement.pop_growth_per_mille > 0)
@@ -123,6 +123,8 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
         // Decrease pop growth due to urban overcrowding.
         settlement.pop_change -= (settlement.urban_pop() - settlement.pop_urban_cap) / 2;
     }
+
+    settlement.pop_growth_per_mille = settlement.pop_change * 1000 / settlement.pop_total;
 
     if (settlement.pop_change > 0)
     {

@@ -31,7 +31,13 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     SET_DEFAULT_VAL(newSettlement.pop_urban_cap, 100);
 	SET_DEFAULT_VAL(newSettlement.pop_total, newSettlement.at_home());
 	SET_DEFAULT_VAL(newSettlement.pop_peasants_cap, newSettlement.pop_peasants);
-	SET_DEFAULT_VAL(newSettlement.trade.market_goods, (ui32)((ui64)newSettlement.pop_total * GAME_PARAMETERS.trade.start_goods_percent / 100));
+	SET_DEFAULT_VAL(newSettlement.trade.export_ratio, (ui8)ia_min(GAME_PARAMETERS.trade.start_export_ratio_percent, (ui32)100));
+	SET_DEFAULT_VAL(newSettlement.trade.caravan_count_max, (ui8)ia_min(GAME_PARAMETERS.trade.start_caravan_slots, (ui32)0xFF));
+	// Default goods only if the start state gives none in either pool. Split by the export ratio like any income (set above).
+	if (newSettlement.trade.market_goods == 0 && newSettlement.trade.export_goods == 0)
+	{
+		settlement_market_add(settlements, freeIndex, (ui64)newSettlement.pop_total * GAME_PARAMETERS.trade.start_goods_percent / 100);
+	}
 	SET_DEFAULT_VAL_STRUCT(newSettlement.territory, (world_entity_settlements::territory
 		{
 			.bounds_min = newSettlement.location,

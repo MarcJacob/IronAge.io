@@ -139,28 +139,20 @@ static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, 
     return ia_pow(ia_min(ratio, CARAVAN_WEIGHT_RATIO_MAX), CARAVAN_WEIGHT_EXPONENT);
 }
 
-// SPAWN SCORE (spawning mode). Score = total profit x 100 / tile distance x home scarcity factor, in thousandths (1000 = 1 percent of profit per tile).
-// Home scarcity factor, from the origin's fill f = pool / capacity (fixed point), s = sellable_percent (the stockpile target):
-// linear from 0 at f <= s to home_scarcity_max_factor_percent at f = 1 (so 1.0 at f = s + 2/3 (1 - s) with the default 150%). Zero if s >= 100%.
-static ui64 caravan_spawn_score(ui64 profit, ui32 tile_distance, ui32 origin_fill)
+// SPAWN SCORE (spawning mode). Score = total profit x 100 / tile distance, in thousandths (1000 = 1 percent of profit per tile).
+static ui64 caravan_spawn_score(ui64 profit, ui32 tile_distance)
 {
-    const game_trade_parameters& trade = GAME_PARAMETERS.trade;
-    ui64 sellable = (ui64)ia_min(trade.sellable_percent, (ui32)100) * IA_FIXED_ONE / 100;
-    if (origin_fill <= sellable || sellable >= IA_FIXED_ONE) return 0;
-
-    // Factor in fixed point (IA_FIXED_ONE = 1.0).
-    ui64 factor = (ui64)(origin_fill - sellable) * ((ui64)ia_min(trade.home_scarcity_max_factor_percent, (ui32)10000) * IA_FIXED_ONE / 100) / (IA_FIXED_ONE - sellable);
-    return profit * 100000 / ia_max(tile_distance, (ui32)1) * factor / IA_FIXED_ONE;
+    return profit * 100000 / ia_max(tile_distance, (ui32)1);
 }
 
-// Caravan size towards a candidate: the value (at most 0xFFFF), and when spawning at most the candidate's room (capacity - pool, floor 0).
+// Caravan size towards a candidate: the value (at most 0xFFFF), and when spawning at most the candidate's room (capacity - both pools, floor 0).
 static ui32 caravan_candidate_size(const world_entity_settlements& settlements, ui16 index, ui32 caravan_value, bool size_to_room)
 {
     ui32 size = ia_min(caravan_value, (ui32)0xFFFF);
     if (!size_to_room) return size;
-    ui32 pool = settlements.trade[index].market_goods;
+    ui32 total = settlement_market_total(settlements, index);
     ui32 capacity = settlement_market_capacity(settlements, index);
-    return ia_min(size, capacity > pool ? capacity - pool : (ui32)0);
+    return ia_min(size, capacity > total ? capacity - total : (ui32)0);
 }
 
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
@@ -168,14 +160,13 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 {
     const world_entity_settlements& settlements = world.entities->settlements;
 
-    // @TODO(Marc): Restore path-based target selection for a more accurate travel cost assessment, and to be able to add ships.
+    // @TODO(Marc): Restore path-based target selection for a more accurate travel cost assessment.
 
     bool originValid = origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin);
     ui32 originCapacity = originValid ? settlement_market_capacity(settlements, origin.get_index()) : 0;
 
     // size_to_room means a spawn: threshold scoring (caravan_spawn_score) instead of the retarget weight. Needs a valid origin.
     bool spawning = size_to_room && originValid;
-    ui32 originFill = spawning ? settlement_market_fill(settlements, origin.get_index()) : 0;
     ui64 minScore = (ui64)GAME_PARAMETERS.trade.min_profit_per_travel_dist_percent * 1000;
 
     // Weight of each settlement slot, 0 = not a candidate.
@@ -203,14 +194,14 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         if (spawning)
         {
             // Eligible only at or above the threshold. The weight is the score itself.
-            ui64 profit = trade_volume_profit(size, settlements.trade[index].market_goods, settlement_market_capacity(settlements, index), originCapacity,
+            ui64 profit = trade_volume_profit(size, settlement_market_total(settlements, index), settlement_market_capacity(settlements, index), originCapacity,
                     settlement_trade_volume_fraction(settlements, index), tradeDist, GAME_PARAMETERS.trade);
-            ui64 score = caravan_spawn_score(profit, tradeDist, originFill);
+            ui64 score = caravan_spawn_score(profit, tradeDist);
             weights[index] = score >= minScore ? score : 0;
         }
         else
         {
-            weights[index] = caravan_candidate_weight(size, settlements.trade[index].market_goods, settlement_market_capacity(settlements, index), originCapacity,
+            weights[index] = caravan_candidate_weight(size, settlement_market_total(settlements, index), settlement_market_capacity(settlements, index), originCapacity,
                     settlement_trade_volume_fraction(settlements, index), tradeDist, tradeDist);
         }
 

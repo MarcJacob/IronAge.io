@@ -1,6 +1,6 @@
 # Trade network redesign
 
-Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2026-10-24.md` and `trade_caravans_2026-10-22.md` (caravan movement code reused). Army supply via trade (phase 2 of `trade_market_goods`) builds on this. Design doc: `management/design/economy_design.md`, Trade > Trade Flow. Code map and formulas: `src/game_common/world_sim/.ai_imprint/trade_survey.md` (6b trade volume, 6c spawn / profit / arrival).
+Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2026-10-24.md` and `trade_caravans_2026-10-22.md` (caravan movement code reused). Army supply via trade (phase 2 of `trade_market_goods`) builds on this. Design doc: `management/design/economy_design.md`, Trade > Trade Flow. Code map and formulas: `src/game_common/world_sim/.ai_imprint/trade_survey.md` (6b trade volume, 6c arrival / profit, 6d threshold spawn, 6e export pool).
 
 ## Goal
 
@@ -10,36 +10,43 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 
 ## Model (decided)
 
-- Caravans move goods (origin pool to destination pool, conserved). Trade value is a buff, not goods.
+- Caravans move goods (origin export pool to destination pools, conserved). Trade value is a buff, not goods.
 - "Trade volume" (`settlement_trading.trade_volume`): absolute value. Exporter gains the caravan's value + profit; receiver gains the received value (+ profit x `profit_receiver_percent`, 0 now). Profit is volume only.
 - Max trade volume = 2 x pool capacity; gains above it are wasted for that settlement only. Decay linear, max / 30 per day.
 - Bonus (linear in volume / max): production +50% at full (before tax); profit of incoming caravans +200% at full.
-- Profit = value x (scarcity + distance terms), scaled by relative capacity (+25% / -75% clamp), x destination bonus, x short-trade ramp (0 at <= 8 tiles, full at 16). Stateless ping-pong guard (no partner memory).
-- Spawn: opportunity first, then caravan sized to it. Reserve = `reserve_days` (3) of local need; one spawn per settlement per day, max 3 picks; min worthwhile size = % of origin pool (2% all slots free, 15% last slot / single slot); size = min(investable, destination room), destination room = capacity - pool. Weighted random on (exporter gain / tile distance)^2. Evaluation uses tile distance; real travel cost after pathing optimization.
+- Profit = value x (scarcity + distance terms), scaled by relative capacity (+25% / -75% clamp), x destination bonus, x short-trade ramp (0 at <= 8 tiles, full at 16). Stateless ping-pong guard (no partner memory). Destination fill uses local + export total.
+- Export pool: each settlement has a player-set `export_ratio` (0-90%, default 20). That share of ALL incoming goods (production, imports, refunds) goes to an export pool until it holds ratio x capacity; overflow goes to the local pool; excess above the cap (ratio lowered) moves to local at the daily tick. Export pool is never consumed locally. Pools share one capacity; waste applies to the sum.
+- Spawn: per settlement per day, max 3 picks, one spawn. Score = profit x 100 / tile distance, eligible if >= `min_profit_per_travel_dist_percent`; weighted random on score (linear). No home-stock factor, no reserve (starvation for a good deal is intended). Caravan size = min(50% of export pool, destination room, 0xFFFF), floor 10. Destination room = capacity - (local + export). New settlements start with 1 caravan slot (`start_caravan_slots`, experimental); Caravanserai +1. Evaluation uses tile distance; real travel cost after pathing optimization.
+- Colonists take their share of the LOCAL pool only (colonists / total population).
 - Inter-player from the start. Later: embargo / open routes as diplomacy, armies blocking and despoiling caravans.
-- Base pool capacity pop x 4, sellable 25% (user, after play-test 1 saw no caravans).
-- Spawn rework (decided 2026-10-28, replaces weighted random + sellable gate; export slider dropped): caravan spawnable whatever the goods level; best candidate spawns if profit per tile travelled (ratio vs caravan value, percent) >= parameter `min profit per travel dist percent`, after a home scarcity malus (weight falls as origin pool drops). Sellable 25% stays as stockpile target (shapes malus, no longer gates). Caravan size = min(origin pool, origin capacity x `max_caravan_capacity_percent` (10), destination room); no sellable / reserve cap. No hard floor: starvation for a very good deal is intended (like taxation).
+- Base pool capacity pop x 4, sellable 25% (stockpile target for sales / growth).
+- UI rule (user): entity information is never hidden by ownership; only controls are owner-only (foreign sliders show disabled).
 
 ## Tasks
 
 1. [DONE] Survey.
 2. [DONE, hand-tested] Trade volume field, decay, cap, production bonus.
-3. [DONE, hand-tested] Opportunity-first spawn, goods delivery, volume gains, volume-only profit, ramp. User: new trading model works far better.
-4. Dissolved into 3. Left: tuning (weight exponent, clamps, ramp, bonus); travel cost instead of tile distance (blocked on `path_commitment_rewrite` / `path_store_cache`).
-5. [DONE, unbuilt] UI: Trade volume gauge below Market Goods, both gauges thinner.
-6. [DONE, unbuilt] Threshold spawn rework (see Model). Replaces the export slider idea. Scarcity factor linear: 0 at fill = sellable (25%), 1.5 at full (1.0 at 75%); weight = score (linear); params `min_profit_per_travel_dist_percent` (5 in code, user wants ~50; confirmed curve and linear weight), `home_scarcity_max_factor_percent` (150); `reserve_days` removed.
+3. [DONE, hand-tested] Opportunity-first spawn, goods delivery, volume gains, volume-only profit, ramp.
+4. Left: tuning (weight exponent, clamps, ramp, bonus); travel cost instead of tile distance (blocked on `path_commitment_rewrite` / `path_store_cache`).
+5. [DONE] Trade volume gauge UI.
+6. [DONE] Threshold spawn rework (replaced random + sellable gate).
+7. [DONE] Export pool + `export_ratio` + `SET_EXPORT_RATIO` command + UI (slider next to Tax, light-blue right-to-left segment on the goods gauge).
+8. [DONE] Export pool cap + gauge marker.
+9. [DONE, unbuilt] Info visibility regardless of ownership in the inspection UI.
+- Hand-tested by user: a trade center loop (Housing, Caravanserai, Trade Depot, falling export ratio) works; model "works much better".
 
 ## Open questions
 
-- Destination room = capacity - pool: no room when pools sit at or above capacity. Watch; fixes: higher target, or delivery beyond room.
+- Recommendations raised, none started: travel cost in the score (roads have no trade payoff until then); AI export ratio logic (AI keeps 20%); trade statistics for tuning (overlaps backlog `player_stats_analytics`); counterweights to the trade-center snowball (embargo, caravan blocking: military / diplomacy units).
 - Urban population seeding: total population placeholder until the urban stratum exists.
+- Garrison ceiling gauges on foreign settlements show values, no disabled slider.
 
-## Idea to experiment with (user, end of 2026-10-28): Trade Routes
+## Idea to experiment with: Trade Routes
 
-- Each trade building creates a Trade Route entity linking a sender and a receiver; it spawns caravans at regular intervals (route itself upgradeable, or one caravan with duplicates).
-- Decouples choosing a partner from spawning caravans; routes are not recomputed per spawn, so real path cost can come back before pathing is optimized.
-- Flags: new entity type (multi-file architecture change); route lifecycle (destination destroyed, owner change, border change, disconnection); caravan sizing still adapts per spawn; route choice would become a decision made at creation or periodic re-evaluation.
+- Each trade building creates a Trade Route entity linking a sender and a receiver; it spawns caravans at regular intervals.
+- Decouples choosing a partner from spawning caravans; could bring real path cost back before pathing is optimized.
+- Flags: new entity type (multi-file architecture change); route lifecycle; caravan sizing still adapts. Held: export pool already fixed the motivating problem.
 
 ## Next step
 
-Build + hand-test task 5 (TS build, hard reload). Then decide: trade route experiment (discuss design first, then survey of entity creation cost) vs tuning vs military design. Trade must be settled before military supply (`army_supplies`, `alpha_troops_recruitment`).
+Play-test further (user). Then: travel cost (check size of `path_commitment_rewrite` / `path_store_cache`), trade stats counters, AI ratio rule. Trade must be settled before military supply (`army_supplies`, `alpha_troops_recruitment`).

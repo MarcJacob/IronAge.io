@@ -193,30 +193,40 @@ static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui1
 }
 
 // MARKET GOODS
-// The pool is never capped: capacity is only the reference for its fill.
+// Two pools: market goods (local, consumed) and export goods (caravans only). They share one capacity, which never refuses goods (excess is wasted daily).
 
-// Capacity = people at home + buildings' part.
+// Capacity of both pools together = people at home + buildings' part.
 static inline ui32 settlement_market_capacity(const world_entity_settlements& settlements, ui16 settlement_index)
 {
 	return settlements.at_home(settlement_index) * 4 + settlements.trade[settlement_index].market_capacity_buildings;
 }
 
-// Fill of the market goods: goods / capacity as a fixed-point fraction (0 = empty, IA_FIXED_ONE = full), clamped to full.
-// A 0 capacity counts as full if there are any goods.
-static inline ui32 settlement_market_fill(const world_entity_settlements& settlements, ui16 settlement_index)
+// Goods in both pools (local + export), the amount measured against the capacity.
+static inline ui32 settlement_market_total(const world_entity_settlements& settlements, ui16 settlement_index)
 {
-	ui64 goods = settlements.trade[settlement_index].market_goods;
-	ui64 capacity = settlement_market_capacity(settlements, settlement_index);
-	if (capacity == 0) return goods > 0 ? IA_FIXED_ONE : 0;
-	return (ui32)ia_min(goods * IA_FIXED_ONE / capacity, (ui64)IA_FIXED_ONE);
+	const settlement_trading& trade = settlements.trade[settlement_index];
+	return (ui32)ia_min((ui64)trade.market_goods + trade.export_goods, (ui64)0xFFFFFFFF);
 }
 
-// Adds goods to the pool.
+// Cap of the export pool = capacity x export ratio (clamped to 100) / 100, rounded down.
+static inline ui32 settlement_export_cap(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	return (ui32)((ui64)settlement_market_capacity(settlements, settlement_index) * ia_min(settlements.trade[settlement_index].export_ratio, (ui8)100) / 100);
+}
+
+// Adds incoming goods, split by the export ratio (clamped to 100): export share = amount x ratio / 100 rounded down, kept only up to the room left under the export cap.
+// The rest (rounding and export overflow included) goes to the local pool.
+// Every goods income goes through here: production, caravan deliveries and refunds, colonists' goods.
 static inline void settlement_market_add(world_entity_settlements& settlements, ui16 settlement_index, ui64 amount)
 {
-	ui32& goods = settlements.trade[settlement_index].market_goods;
-	ASSERT((ui64)goods + amount <= 0xFFFFFFFF);
-	goods += (ui32)amount;
+	settlement_trading& trade = settlements.trade[settlement_index];
+	ui32 exportCap = settlement_export_cap(settlements, settlement_index);
+	ui64 toExport = amount * ia_min(trade.export_ratio, (ui8)100) / 100;
+	toExport = ia_min(toExport, (ui64)(exportCap > trade.export_goods ? exportCap - trade.export_goods : 0));
+	ui64 toLocal = amount - toExport;
+	ASSERT((ui64)trade.market_goods + toLocal <= 0xFFFFFFFF && (ui64)trade.export_goods + toExport <= 0xFFFFFFFF);
+	trade.market_goods += (ui32)toLocal;
+	trade.export_goods += (ui32)toExport;
 }
 
 // TRADE VOLUME

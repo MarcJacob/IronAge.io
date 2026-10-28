@@ -8,27 +8,6 @@
 
 #include "../entities/world_sim_entity_settlement.h"
 
-struct tile_arable_land_def
-{
-    ui8 peasant_job_count; // Number of full-efficiency peasant jobs available on that tile.
-    ui8 surplus_percent; // How much each peasant produces in surplus on that tile assuming no distance penalties, as a percentage.
-};
-
-// Number of peasants worth of arable land per terrain type, and the surplus percentage per peasant at 0 distance.
-// Each tile can support a certain number of inhabitants natively, and they feed themselves first. Surplus is what is available to be put on the local market.
-// When surplus reaches 0 because of distance penalties, the population on the tile is effectively neutral to the settlement's economy and produces no taxable value.
-static constexpr tile_arable_land_def TILE_TERRAIN_ARABLE_LAND[] = {
-    { 3, 20 }, // LAND_PLAINS
-    { 2, 15 }, // LAND_HILLS
-    { 2, 30 }, // LAND_MOUNTAINS
-
-    { 3, 45 }, // WATER_COAST
-    { 2, 30 }, // WATER_SEA
-};
-
-// Distance below max at which surplus is reduced by 10%, stacking additively (IE if surplus is 100, then ten times this value below max distance will wipe surplus).
-static constexpr ui8 LAND_SURPLUS_DECREASE_STEP_TRAVEL_DISTANCE = 30;
-
 // Distance value of a tile with no known route to its settlement.
 static constexpr ui16 TERRITORY_NO_DISTANCE = ~0;
 

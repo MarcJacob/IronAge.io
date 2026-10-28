@@ -122,7 +122,7 @@
                     <!-- Settlement "Found settlement" panel (ui/inspection/ui_element_found_settlement_panel.ts), shown by the Found settlement mode. -->
                     <div id="game_hud_found_settlement_panel" hidden>
                         <div class="text_row"><span class="text_row_label">Colonists</span><span id="found_settlement_panel_colonists"></span></div>
-                        <div class="text_row"><span class="text_row_label">Market Goods taken</span><span id="found_settlement_panel_goods"></span></div>
+                        <div class="text_row"><span class="text_row_label">Local goods taken</span><span id="found_settlement_panel_goods"></span></div>
                         <div class="text_row"><span class="text_row_label">Target</span><span id="found_settlement_panel_target"></span></div>
                     </div>
 
@@ -141,13 +141,17 @@
                                         <span class="text_row_label">Tax</span><span id="settlement_panel_tax_value" class="slider_row_value"></span>
                                         <input id="settlement_panel_tax_slider" type="range" step="1" hidden>
                                     </div>
+                                    <div id="settlement_panel_export" class="slider_row has_tooltip">
+                                        <span class="text_row_label">Export</span><span id="settlement_panel_export_value" class="slider_row_value"></span>
+                                        <input id="settlement_panel_export_slider" type="range" step="1" hidden>
+                                    </div>
                                 </div>
                                 <div id="settlement_panel_consumption" class="text_row value_row has_tooltip">
                                     <span class="text_row_label">Consumption</span><span id="settlement_panel_consumption_value"></span><span id="settlement_panel_consumption_delta" class="value_row_delta"></span>
                                 </div>
-                                <div id="settlement_panel_market_goods" class="gauge thin">
+                                <div id="settlement_panel_market_goods" class="gauge thin has_tooltip">
                                     <div class="gauge_header"><div class="gauge_text">Market Goods <span id="settlement_panel_market_goods_percent"></span> <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
-                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                                    <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_right"></div><div class="gauge_marker"></div></div>
                                 </div>
                                 <div id="settlement_panel_trade_volume" class="gauge thin has_tooltip">
                                     <div class="gauge_header"><div class="gauge_text">Trade volume <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
