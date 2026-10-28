@@ -27,8 +27,9 @@ struct render_entity
 
 	vec2f viewport_location; // Location of center of entity.
 	vec2<i16> fractional_offset; // Offset of the entity from the center of its tile, in thousandths of a tile (same axes as the world). Zero for entities without one.
+	ui8 flags; // Caravans: WORLD_ENTITY_CARAVAN_FLAGS (bit 0 = ship). Zero for other entities.
 };
-static_assert(sizeof(render_entity) == 19, "render_entity struct size changed. Adapt TS reading code, then this assertion.");
+static_assert(sizeof(render_entity) == 20, "render_entity struct size changed. Adapt TS reading code, then this assertion.");
 
 enum class RENDER_TILE_FLAGS : ui8
 {
@@ -156,13 +157,13 @@ world_player_state game_client_query_controlled_player_state(game_client& backen
 
 // PATH QUERY
 
-// Computes a land path between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
+// Computes a land path (water path if water is set, for ships) between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
 // Leaves out_path empty (count 0) if there is no local match or a location is outside the world. See world_path_find for the rest.
 // If within_settlement_territory is a settlement, the path is limited to its territory.
 // If tile_mode is set, out_path.points holds the tiles of the path's segments (see world_path_expand_tiles, start excluded) instead of its waypoints,
 // the way a tile-bound use such as road building covers them, and out_path.count their number (limited by points_capacity).
 void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path,
-	entity_guid within_settlement_territory = INVALID_ENTITY_GUID, bool tile_mode = false);
+	entity_guid within_settlement_territory = INVALID_ENTITY_GUID, bool tile_mode = false, bool water = false);
 
 // COMMAND VALIDITY QUERY
 

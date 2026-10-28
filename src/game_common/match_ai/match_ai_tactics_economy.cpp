@@ -35,10 +35,12 @@ static void ai_tactics_taxes(ai_context& ctx)
 	}
 }
 
-// Row of SETTLEMENT_BUILDING_TABLE to build in the settlement, or -1. Trade first: caravanserais (caravans bring goods beyond the land output),
-// then a trade depot in big trading settlements (more capacity: caravans pay more there), then barracks outside of EXPAND.
+// Row of SETTLEMENT_BUILDING_TABLE to build in the settlement, or -1. Housing first when the urban population nears its cap (growth stalls above it),
+// then trade: caravanserais (caravans bring goods beyond the land output), then a trade depot in big trading settlements
+// (more capacity: caravans pay more there), then barracks outside of EXPAND.
 static i32 ai_pick_building(const ai_context& ctx, const ai_settlement_view& settlement)
 {
+	if (settlement.urban_pop * 100 >= settlement.urban_cap * AI_HOUSING_URBAN_PERCENT) return AI_BUILDING_HOUSING;
 	if (settlement.caravanserai < ia_min(AI_MAX_CARAVANSERAI, settlement.population / AI_POPULATION_PER_CARAVANSERAI)) return AI_BUILDING_CARAVANSERAI;
 	if (settlement.population >= AI_TRADE_DEPOT_MIN_POPULATION && settlement.caravanserai > 0 && settlement.trade_depots == 0) return AI_BUILDING_TRADE_DEPOT;
 	if (ctx.state.mode != AI_MODE_EXPAND && settlement.barracks < settlement.population / AI_POPULATION_PER_BARRACKS) return AI_BUILDING_BARRACKS;

@@ -124,7 +124,7 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
         settlement.pop_change -= (settlement.urban_pop() - settlement.pop_urban_cap) / 2;
     }
 
-    settlement.pop_growth_per_mille = settlement.pop_change * 1000 / settlement.pop_total;
+    settlement.pop_growth_per_mille = (i64)settlement.pop_change * 1000 / (i64)settlement.pop_total;
 
     if (settlement.pop_change > 0)
     {
@@ -151,14 +151,34 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
     }
 }
 
-// WASTE: overflow_waste_percent of the goods above the market capacity (rounded down) disappears. Run after growth, so the capacity is the settled one.
+// EXPORT EXCESS: export goods above the export cap (e.g. after the ratio was lowered) move to the local pool. Run after growth, so the cap is the settled one.
+static void settlement_export_excess_to_local(world_entity_settlements& settlements, ui32 settlement_index)
+{
+    settlement_trading& trade = settlements.trade[settlement_index];
+    ui32 exportCap = settlement_export_cap(settlements, (ui16)settlement_index);
+    if (trade.export_goods <= exportCap) return;
+
+    ui64 excess = trade.export_goods - exportCap;
+    ASSERT((ui64)trade.market_goods + excess <= 0xFFFFFFFF);
+    trade.export_goods = exportCap;
+    trade.market_goods += (ui32)excess;
+}
+
+// WASTE: overflow_waste_percent of the goods above the market capacity, both pools together (rounded down), disappears.
+// Taken proportionally: the export pool loses waste x export / total (rounded down), the local pool the rest (never more than it holds).
+// Run after growth, so the capacity is the settled one.
 static void settlement_goods_waste(world_entity_settlements& settlements, ui32 settlement_index)
 {
-    ui32& goods = settlements.trade[settlement_index].market_goods;
-    ui32 capacity = settlement_market_capacity(settlements, (ui16)settlement_index);
-    if (goods <= capacity) return;
+    settlement_trading& trade = settlements.trade[settlement_index];
+    ui64 total = (ui64)trade.market_goods + trade.export_goods;
+    ui64 capacity = settlement_market_capacity(settlements, (ui16)settlement_index);
+    if (total <= capacity) return;
 
-    goods -= (ui32)((ui64)(goods - capacity) * ia_min(GAME_PARAMETERS.trade.overflow_waste_percent, (ui32)100) / 100);
+    ui64 waste = (total - capacity) * ia_min(GAME_PARAMETERS.trade.overflow_waste_percent, (ui32)100) / 100;
+    ui64 exportWaste = waste * trade.export_goods / total;
+    ui64 localWaste = ia_min(waste - exportWaste, (ui64)trade.market_goods);
+    trade.export_goods -= (ui32)exportWaste;
+    trade.market_goods -= (ui32)localWaste;
 }
 
 // TRADE VOLUME DECAY: the volume loses max / volume_decay_days (at least 1), floored at 0. Uses the max after growth.
@@ -199,6 +219,7 @@ void world_system_economy_daily_tick(match_world_state& world)
         settlement_goods_production(world, settlementIndex);
         settlement_goods_sales(settlements, settlementIndex);
         settlement_apply_growth(world, settlementIndex);
+        settlement_export_excess_to_local(settlements, settlementIndex);
         settlement_goods_waste(settlements, settlementIndex);
         settlement_trade_volume_decay(settlements, settlementIndex);
     }

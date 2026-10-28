@@ -33,7 +33,7 @@ bool game_client_query_command_valid(game_client& backend, ui8 command_type, con
 	return match_command_validity_check(*backend.local_match->world, backend.controlled_player_id, header, out_feedback);
 }
 
-void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory, bool tile_mode)
+void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory, bool tile_mode, bool water)
 {
 	out_path.count = 0;
 	out_path.length = 0;
@@ -44,7 +44,7 @@ void game_client_query_path(game_client& backend, world_location start, world_lo
 	if (start.x >= terrain.size_tiles.x || start.y >= terrain.size_tiles.y || end.x >= terrain.size_tiles.x || end.y >= terrain.size_tiles.y) return;
 
 	path_params params = {};
-	params.passable_terrain = PATH_TERRAIN_LAND;
+	params.passable_terrain = water ? PATH_TERRAIN_WATER : PATH_TERRAIN_LAND;
 	params.within_settlement_territory = within_settlement_territory;
 	backend.path_scratch.clear();
 

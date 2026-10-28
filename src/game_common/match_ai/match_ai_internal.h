@@ -48,6 +48,7 @@ constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 25;
 constexpr ui32 AI_BUILD_RESERVE_DAYS = 3; // A building starts when the treasury holds this many days of its cost.
 constexpr ui32 AI_MAX_BUILD_PROJECTS = 2; // Plus one per AI_TREASURY_PER_EXTRA_PROJECT in the treasury.
 constexpr ui32 AI_TREASURY_PER_EXTRA_PROJECT = 1500;
+constexpr ui32 AI_HOUSING_URBAN_PERCENT = 80; // Housing is built first once the urban population is at least this % of its cap.
 constexpr ui32 AI_POPULATION_PER_CARAVANSERAI = 300; // A settlement wants population / this caravanserais...
 constexpr ui32 AI_MAX_CARAVANSERAI = 3; // ...up to this many.
 constexpr ui32 AI_TRADE_DEPOT_MIN_POPULATION = 800; // One trade depot in settlements this big that already trade.
@@ -68,10 +69,28 @@ constexpr ui32 AI_TREASURY_COMFORT = 1500;
 constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
 constexpr ui32 AI_TINY_ARMY = 10; // Idle armies under this are disbanded.
 
-// Rows of SETTLEMENT_BUILDING_TABLE the AI knows.
-constexpr ui8 AI_BUILDING_BARRACKS = 0;
-constexpr ui8 AI_BUILDING_CARAVANSERAI = 1;
-constexpr ui8 AI_BUILDING_TRADE_DEPOT = 2;
+// Rows of SETTLEMENT_BUILDING_TABLE the AI knows, looked up by row name at compile time (the table has no enum), so inserting or reordering rows cannot break them.
+// Returns SETTLEMENT_BUILDING_TYPE_COUNT if there is no such row (caught by the static_asserts below).
+constexpr ui8 ai_find_building_row(const char* name)
+{
+	for (ui8 row = 0; row < SETTLEMENT_BUILDING_TYPE_COUNT; row++)
+	{
+		const char* rowName = SETTLEMENT_BUILDING_TABLE[row].name;
+		ui8 i = 0;
+		while (name[i] != 0 && name[i] == rowName[i]) i++;
+		if (name[i] == rowName[i]) return row;
+	}
+	return SETTLEMENT_BUILDING_TYPE_COUNT;
+}
+
+constexpr ui8 AI_BUILDING_HOUSING = ai_find_building_row("Housing");
+constexpr ui8 AI_BUILDING_BARRACKS = ai_find_building_row("Barracks");
+constexpr ui8 AI_BUILDING_CARAVANSERAI = ai_find_building_row("Caravanserai");
+constexpr ui8 AI_BUILDING_TRADE_DEPOT = ai_find_building_row("Trade Depot");
+static_assert(AI_BUILDING_HOUSING < SETTLEMENT_BUILDING_TYPE_COUNT, "No Housing row in SETTLEMENT_BUILDING_TABLE (renamed?)");
+static_assert(AI_BUILDING_BARRACKS < SETTLEMENT_BUILDING_TYPE_COUNT, "No Barracks row in SETTLEMENT_BUILDING_TABLE (renamed?)");
+static_assert(AI_BUILDING_CARAVANSERAI < SETTLEMENT_BUILDING_TYPE_COUNT, "No Caravanserai row in SETTLEMENT_BUILDING_TABLE (renamed?)");
+static_assert(AI_BUILDING_TRADE_DEPOT < SETTLEMENT_BUILDING_TYPE_COUNT, "No Trade Depot row in SETTLEMENT_BUILDING_TABLE (renamed?)");
 
 // VIEWS: copies of the few properties of an entity the AI reads. Filled only by the accessors of match_ai_world.cpp.
 
@@ -82,6 +101,7 @@ struct ai_settlement_view
 	world_location location;
 	ui32 population, peasants, workers, local_wealth;
 	ui32 peasant_jobs; // Peasants the land employs at full efficiency (pop_peasants_cap).
+	ui32 urban_pop, urban_cap; // Non-peasant population (unemployed + workers + home soldiers) and its cap (Housing raises it).
 	i32 growth_per_mille;
 	i8 tax_rate;
 	army_troop_count home_troops;

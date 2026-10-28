@@ -38,6 +38,8 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.growth_per_mille = settlement.pop_growth_per_mille;
 	out.tax_rate = settlement.tax_rate;
 	out.home_troops = settlement.garrison;
+	out.urban_pop = settlement.urban_pop();
+	out.urban_cap = settlement.pop_urban_cap;
 	out.barracks = settlement.buildings.building_counts[AI_BUILDING_BARRACKS];
 	out.caravanserai = settlement.buildings.building_counts[AI_BUILDING_CARAVANSERAI];
 	out.trade_depots = settlement.buildings.building_counts[AI_BUILDING_TRADE_DEPOT];

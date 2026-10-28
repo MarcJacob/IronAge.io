@@ -43,9 +43,11 @@ struct game_trade_parameters
     ui32 start_export_ratio_percent = 20; // Export ratio of new settlements (when their start state gives none).
     ui32 start_caravan_slots = 1; // Max active caravans of new settlements, before buildings (when their start state gives none). Clamped to 255.
 
-    // Caravan Spawning. A candidate is eligible if its score (total profit x 100 / tile distance) reaches this, in %.
+    // Caravan Spawning. A caravan takes up to max_caravan_export_pool_percent of the export pool. A candidate destination is eligible if its score
+    // (total profit x 100 / tile distance) reaches this, in %. One is picked among the eligible, at random weighted by score.
     ui32 min_profit_per_travel_dist_percent = 50;
     ui32 max_caravan_export_pool_percent = 50; // A caravan takes at most this % of its origin's export pool. Clamped to 100.
+    ui32 max_ship_export_pool_percent = 80; // Same for ships (shared export pool, ships spawn after land caravans). Clamped to 100.
 
     // Profit (trade volume, never goods). Scarcity rate r% of the caravan value, r linear in the destination's fill: max at 0% fill, min at 100%. Clamped to 10000.
     ui32 scarcity_value_min_percent = 25;
@@ -82,12 +84,13 @@ struct game_parameters
     
 
     // MOVEMENT
-    // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only.
+    // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only, ships water only.
     ui32 armies_workers_cross_water = 1;
     // Speed of each entity kind ON A ROAD, in thousandths of a tile per tick (world_entity_movement::travel_speed). Off-road it is divided by the tile's travel cost.
     ui32 army_travel_speed = 200;
     ui32 worker_travel_speed = 200;
     ui32 caravan_travel_speed = 200;
+    ui32 ship_travel_speed = 400; // Ships (caravans with IS_SHIP): twice caravan_travel_speed. Water costs are unchanged (coast 3, sea 7).
 
     // ECONOMY
     // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (500 = 0.5), computed on the army's levy total and rounded down.
@@ -138,6 +141,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(army_travel_speed, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(worker_travel_speed, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(caravan_travel_speed, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(ship_travel_speed, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(upkeep_levy_per_mille, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
@@ -169,6 +173,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY_PATH(trade_start_caravan_slots, trade.start_caravan_slots, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_min_profit_per_travel_dist_percent, trade.min_profit_per_travel_dist_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_max_caravan_export_pool_percent, trade.max_caravan_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_max_ship_export_pool_percent, trade.max_ship_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_capacity_ratio_max_bonus_percent, trade.capacity_ratio_max_bonus_percent, GAME_DATA_PROP_TYPE::UI32)

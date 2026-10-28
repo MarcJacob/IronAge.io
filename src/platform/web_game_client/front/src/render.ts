@@ -98,6 +98,7 @@ class RESOURCES_STORE
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
         CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
+        SHIP: new RESOURCE_SPRITE("art/entity_ship.svg"), // Caravans with the ship flag.
     };
 
     // ...
@@ -309,13 +310,14 @@ function draw_entity_army(viewport_x: number, viewport_y: number, color: RGB | n
     draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), color, outline_color, is_selected);
 }
 
-// Draws a caravan entity icon at the given viewport location.
-function draw_entity_caravan(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
+// Draws a caravan entity icon at the given viewport location (a ship sprite for ships).
+function draw_entity_caravan(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false, is_ship: boolean = false)
 {
     if (RESOURCES == null) return;
-    if (!RESOURCES.ENTITY.CARAVAN.loaded) return;
+    const sprite = is_ship ? RESOURCES.ENTITY.SHIP : RESOURCES.ENTITY.CARAVAN;
+    if (!sprite.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.CARAVAN.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), color, outline_color, is_selected);
+    draw_entity(sprite.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), color, outline_color, is_selected);
 }
 
 // Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -605,7 +607,7 @@ export function draw(render_state: Backend.RenderState | null)
             draw_army_troop_count(vx, vy, entity.guid);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(vx, vy, color, outline, isSelected);
+            draw_entity_caravan(vx, vy, color, outline, isSelected, (entity.flags & Backend.CARAVAN_FLAG_IS_SHIP) !== 0);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
             // Simple marker, no sprite yet: filled with the entity color (red if tinting is off).

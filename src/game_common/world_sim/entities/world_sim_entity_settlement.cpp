@@ -289,3 +289,26 @@ void settlement_building_tradedepot_on_removed(match_world_state& world, entity_
 
     world.entities->settlements.trade[settlement.get_index()].market_capacity_buildings -= TRADE_DEPOT_MARKET_CAPACITY;
 }
+
+// TRADE PORTS (placeholder: a trade post with a ship slot instead of a caravan slot)
+
+// Market goods capacity added by each trade port.
+static constexpr ui32 TRADE_PORT_MARKET_CAPACITY = 300;
+
+void settlement_building_tradeport_on_added(match_world_state& world, entity_guid settlement)
+{
+    ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+
+    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
+    trade.ship_count_max++;
+    trade.market_capacity_buildings += TRADE_PORT_MARKET_CAPACITY;
+}
+
+void settlement_building_tradeport_on_removed(match_world_state& world, entity_guid settlement)
+{
+    ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+
+    settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
+    trade.ship_count_max--;
+    trade.market_capacity_buildings -= TRADE_PORT_MARKET_CAPACITY;
+}

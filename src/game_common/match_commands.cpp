@@ -498,6 +498,11 @@ bool command_build_settlement_building_validity_check(const match_world_state& w
 
 	if (command.building_type >= SETTLEMENT_BUILDING_TYPE_COUNT && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
+	// Coastal-only rows (Trade Port). No dedicated error flag: a plain rejection.
+	world_location dock;
+	if (command.building_type < SETTLEMENT_BUILDING_TYPE_COUNT && SETTLEMENT_BUILDING_TABLE[command.building_type].requires_coast
+		&& !settlement_dock_tile(world, command.settlement.get_index(), dock) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+
 	// No limit on parallel projects, only on worker slots.
 	const world_entity_workers& workers = world.entities->workers;
 	if (workers.active_count >= workers.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg height="800px" width="800px" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<style type="text/css">
+	.st0{fill:#000000;}
+</style>
+<g>
+	<path class="st0" d="M256,40v300H176C176,200,208,100,256,40z"/>
+	<path class="st0" d="M276,100c60,60,92,140,92,240H276V100z"/>
+	<path class="st0" d="M64,370h384l-56,86H120L64,370z"/>
+</g>
+</svg>

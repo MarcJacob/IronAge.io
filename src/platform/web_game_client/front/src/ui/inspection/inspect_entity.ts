@@ -225,7 +225,7 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     {
     case Backend.ENTITY_TYPE.SETTLEMENT: show({ title: "Settlement", subtitle, settlement: settlement_panel_state(view, context) }); break;
     case Backend.ENTITY_TYPE.ARMY: show({ title: "Army", subtitle, army: army_panel_state(view, context.edit_raise_targets === true) }); break;
-    case Backend.ENTITY_TYPE.CARAVAN: show({ title: "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
+    case Backend.ENTITY_TYPE.CARAVAN: show({ title: (view.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? "Ship" : "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.WORKER: show({ title: worker_title(view), subtitle, worker: worker_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.BATTLE: show({ title: "Battle", subtitle, battle: { location: view.get_location("location") } }); break;
     default: show({ title: type_title(view), subtitle }); break;

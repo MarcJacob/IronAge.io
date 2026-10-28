@@ -6,6 +6,7 @@
 #include "core/std_types.h"
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_state.h"
+#include "game_common/match/world/world_pathing.h"
 
 #include "world_sim_entity_army.h"
 
@@ -254,6 +255,24 @@ static inline void settlement_trade_volume_add(world_entity_settlements& settlem
 	ui64 max = settlement_trade_volume_max(settlements, settlement_index);
 	if (volume >= max) return;
 	volume = (ui32)ia_min((ui64)volume + gain, max);
+}
+
+// COAST
+// A settlement is coastal if one of its 8 neighbouring tiles is water (coast or sea). Its dock tile is the first such neighbour in the fixed
+// NEIGHBOUR_OFFSETS_ALL order (deterministic). Ships spawn and arrive there. Terrain and settlement tiles never change: computed on demand, not stored.
+// Known limits, ignored for now: the first water neighbour may be a pond while another one is the sea; two settlements may share a dock tile.
+static inline bool settlement_dock_tile(const match_world_state& world, ui16 settlement_index, world_location& out_dock)
+{
+	world_location location = world.entities->settlements.locations[settlement_index];
+	for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
+	{
+		ui16 regionIndex, tileIndex;
+		if (!world_get_neighbour_tile(*world.terrain, location, offset, regionIndex, tileIndex)) continue;
+		if ((PATH_TERRAIN_WATER & (1 << (ui8)world.terrain->regions[regionIndex].terrain_types[tileIndex])) == 0) continue;
+		out_dock = { (ui16)(location.x + offset.x), (ui16)(location.y + offset.y) };
+		return true;
+	}
+	return false;
 }
 
 // Claims a non-sea tile in the world for the given settlement (taking it from its current owner if any). Its travel distance comes from the settlement's neighbouring tiles.

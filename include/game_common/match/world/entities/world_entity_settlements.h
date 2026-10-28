@@ -26,6 +26,9 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
 void settlement_building_tradedepot_on_added(match_world_state& world, entity_guid settlement);
 void settlement_building_tradedepot_on_removed(match_world_state& world, entity_guid settlement);
 
+void settlement_building_tradeport_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_tradeport_on_removed(match_world_state& world, entity_guid settlement);
+
 struct settlement_building_def
 {
 	static constexpr ui8 NAME_MAX = 32;
@@ -37,6 +40,7 @@ struct settlement_building_def
 	ui32 cost_per_day; // Wealth per day while under construction.
 	ui8 workers; // Workers taken from the peasants while under construction.
 	settlement_building_events events;
+	bool requires_coast; // Only coastal settlements can build it (settlement_dock_tile, checked by BUILD_SETTLEMENT_BUILDING's validity check).
 };
 
 // SETTLEMENT BUILDING TYPES TABLE
@@ -51,6 +55,8 @@ static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
         6, 100, 50, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
     { "Trade Depot", "Large increase to market goods capacity.",
         10, 150, 50, { .on_added = settlement_building_tradedepot_on_added, .on_removed = settlement_building_tradedepot_on_removed } },
+    { "Trade Port", "Increases maximum amount of active trade ships. Small increase to market goods capacity. Coastal settlements only.",
+        6, 100, 50, { .on_added = settlement_building_tradeport_on_added, .on_removed = settlement_building_tradeport_on_removed }, true },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
@@ -91,6 +97,8 @@ struct settlement_trading
 {
     ui8 caravan_count; // Current number of active caravans originating from this settlement.
     ui8 caravan_count_max; // Maximum number of active caravans a settlement can have.
+    ui8 ship_count; // Same for ships (caravans with IS_SHIP), counted apart.
+    ui8 ship_count_max; // 0 by default, +1 per Trade Port.
     ui8 export_ratio; // Player-set % (0..export_ratio_max_percent) of all incoming goods that goes to the export pool instead of the market goods.
     // Incoming goods (post-tax production, caravan deliveries and refunds) are split by export_ratio between these two pools (settlement_market_add).
     // Market goods (local pool): consumption (sales) comes out. Export goods: only caravans take from it, it is never consumed locally.
@@ -408,6 +416,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 
     GAME_DATA_PROPERTY_PATH(trading_caravans_active, trade.caravan_count, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
+    GAME_DATA_PROPERTY_PATH(trading_ships_active, trade.ship_count, GAME_DATA_PROP_TYPE::UI8)
+    GAME_DATA_PROPERTY_PATH(trading_ships_max, trade.ship_count_max, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trading_export_goods, trade.export_goods, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trading_export_ratio, trade.export_ratio, GAME_DATA_PROP_TYPE::UI8)

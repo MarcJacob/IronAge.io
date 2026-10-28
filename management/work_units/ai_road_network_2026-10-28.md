@@ -17,7 +17,7 @@ AI builds roads to connect all its settlements into one network, so trade works 
 
 1. [DONE] Survey (notes in `src/game_common/match_ai/.ai_imprint/ai_roads_survey.md`). Key facts: AI has spoke-only roads, no path use; `world_path_find` (const terrain, own scratch arena) is the usable public path call; BUILD_ROAD origin must be settlement tile or own road tile, destination unchecked; foreign / unowned tiles build 5x slower; water uncrossable.
 2. [DONE] Design.
-3. [DONE, unbuilt] Implement (Opus). Notes: `src/game_common/match_ai/.ai_imprint/ai_road_network.md`.
+3. [DONE, hand-tested: clear improvement] Implement (Opus). AI also builds Housing near the urban cap (`AI_HOUSING_URBAN_PERCENT` 80) and finds buildings by name. Notes: `src/game_common/match_ai/.ai_imprint/ai_road_network.md`.
 
 ## Decisions
 

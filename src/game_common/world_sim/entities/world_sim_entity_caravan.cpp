@@ -29,9 +29,13 @@ entity_guid world_spawn_entity_caravan(match_world_state& world, const world_ent
     world_entity_caravans::view newCaravan { caravans, freeIndex };
     newCaravan.copy_from(start_state);
 
-    // The origin's active count goes up with the caravan (and down in destroy, exactly once).
+    // The origin's active count goes up with the caravan (and down in destroy, exactly once). Ships have their own count (IS_SHIP never changes after spawn).
     settlement_trading* originTrade = caravan_origin_trade(world, start_state.origin_settlement);
-    if (originTrade != nullptr && originTrade->caravan_count < 0xFF) originTrade->caravan_count++;
+    if (originTrade != nullptr)
+    {
+        ui8& count = caravan_is_ship(start_state.flags) ? originTrade->ship_count : originTrade->caravan_count;
+        if (count < 0xFF) count++;
+    }
 
     return newCaravanGuid;
 }
@@ -44,7 +48,11 @@ void world_destroy_entity_caravan(match_world_state& world, const entity_guid& c
 
     // Only a valid origin is touched: a destroyed settlement (or one whose slot was reused) keeps its own count.
     settlement_trading* originTrade = caravan_origin_trade(world, caravans.origin_settlements[index]);
-    if (originTrade != nullptr && originTrade->caravan_count > 0) originTrade->caravan_count--;
+    if (originTrade != nullptr)
+    {
+        ui8& count = caravan_is_ship(caravans.flags[index]) ? originTrade->ship_count : originTrade->caravan_count;
+        if (count > 0) count--;
+    }
 
     world_entity_caravan_view destroyedCaravan { caravans, index };
     destroyedCaravan.copy_from(world_entity_caravan {});
@@ -184,6 +192,10 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         bool excluded = false;
         for (ui32 i = 0; i < destination_exclude_count; i++) excluded = excluded || guid == destination_excludes[i];
         if (excluded) continue;
+
+        // Ships only go to coastal settlements (they arrive at the dock tile).
+        world_location dock;
+        if (caravan_is_ship(caravan_flags) && !settlement_dock_tile(world, index, dock)) continue;
 
         ui32 size = caravan_candidate_size(settlements, index, caravan_value, size_to_room);
         if (size == 0 || size < min_value) continue;

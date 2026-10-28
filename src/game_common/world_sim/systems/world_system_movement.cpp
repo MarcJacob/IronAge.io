@@ -7,7 +7,7 @@
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_caravan.h"
 
-// What entities can cross (caravans: CARAVAN_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
+// What entities can cross (caravans: CARAVAN_PATH_PARAMS, ships: SHIP_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
 static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
 
@@ -138,7 +138,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 
     world_entity_caravans& caravans = world.entities->caravans;
     
-    // Caravans move towards their destination settlement. If it is gone, they pick a new one.
+    // Caravans move towards their destination settlement (ships: its dock tile, see caravan_endpoint). If it is gone, they pick a new one.
     for (ui32 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
     {
         entity_guid caravan = caravans.guids[caravanIndex];
@@ -149,7 +149,7 @@ void world_system_entity_movement_decision(match_world_state& world)
         {
             entity_guid origin = caravans.origin_settlements[caravanIndex];
             if (origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin))
-                caravans.movements[caravanIndex].destination = world_entity_get_location(world, origin);
+                caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
             else
                 world_destroy_entity_caravan(world, caravan);
             continue;
@@ -158,7 +158,7 @@ void world_system_entity_movement_decision(match_world_state& world)
         entity_guid destination = caravans.destination_settlements[caravanIndex];
         if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
         {
-            caravans.movements[caravanIndex].destination = world_entity_get_location(world, destination);
+            caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], destination.get_index());
         }
         else
         {
@@ -189,7 +189,7 @@ void world_system_entity_movement(match_world_state& world)
         if (!caravans.guids[caravanIndex].is_valid()) continue;
 
         bool partial = false;
-        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], CARAVAN_PATH_PARAMS, &partial);
+        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], caravan_path_params(caravans.flags[caravanIndex]), &partial);
 
         // No (or only a partial) path means the destination is unreachable: pick another one.
         // Returning caravans are left alone: they keep asking for a path home.

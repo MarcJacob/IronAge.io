@@ -29,7 +29,7 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     {
         caravans.destination_settlements[index] = newDestination;
         world_movement_stop(caravans.movements[index], caravans.locations[index]);
-        caravans.movements[index].destination = settlements.locations[newDestination.get_index()];
+        caravans.movements[index].destination = caravan_endpoint(world, caravans.flags[index], newDestination.get_index());
         return;
     }
 
@@ -43,10 +43,10 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     caravans.flags[index] = (WORLD_ENTITY_CARAVAN_FLAGS)((ui8)caravans.flags[index] | (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME);
     caravans.destination_settlements[index] = INVALID_ENTITY_GUID;
     world_movement_stop(caravans.movements[index], caravans.locations[index]);
-    caravans.movements[index].destination = settlements.locations[origin.get_index()];
+    caravans.movements[index].destination = caravan_endpoint(world, caravans.flags[index], origin.get_index());
 }
 
-// Caravans standing on their destination settlement deliver their goods to it (split by the destination's export ratio), both ends gain trade volume,
+// Caravans standing on their destination settlement (ships: its dock tile) deliver their goods to it (split by the destination's export ratio), both ends gain trade volume,
 // and the caravan disappears. Returning caravans refund their value to their origin on reaching it (split by the origin's export ratio, like any income).
 // Invalid destinations are handled by the movement decision.
 void world_system_caravan_trade(match_world_state& world)
@@ -62,7 +62,7 @@ void world_system_caravan_trade(match_world_state& world)
         if (((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0)
         {
             entity_guid origin = caravans.origin_settlements[caravanIndex];
-            if (caravan_settlement_is_valid(world, origin) && caravans.locations[caravanIndex] == settlements.locations[origin.get_index()])
+            if (caravan_settlement_is_valid(world, origin) && caravans.locations[caravanIndex] == caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index()))
             {
                 settlement_market_add(settlements, origin.get_index(), caravans.values[caravanIndex]); // No profit.
                 world_destroy_entity_caravan(world, caravan);
@@ -74,7 +74,7 @@ void world_system_caravan_trade(match_world_state& world)
         if (!caravan_settlement_is_valid(world, destination)) continue;
 
         ui16 destinationIndex = destination.get_index();
-        if (caravans.locations[caravanIndex] != settlements.locations[destinationIndex]) continue; // Still travelling.
+        if (caravans.locations[caravanIndex] != caravan_endpoint(world, caravans.flags[caravanIndex], destinationIndex)) continue; // Still travelling (ships: until the dock tile).
 
         entity_guid origin = caravans.origin_settlements[caravanIndex];
         bool originValid = caravan_settlement_is_valid(world, origin);

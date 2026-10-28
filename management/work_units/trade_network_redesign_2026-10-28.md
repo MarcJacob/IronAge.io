@@ -31,8 +31,8 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 5. [DONE] Trade volume gauge UI.
 6. [DONE] Threshold spawn rework (replaced random + sellable gate).
 7. [DONE] Export pool + `export_ratio` + `SET_EXPORT_RATIO` command + UI (slider next to Tax, light-blue right-to-left segment on the goods gauge).
-8. [DONE] Export pool cap + gauge marker.
-9. [DONE, unbuilt] Info visibility regardless of ownership in the inspection UI.
+8. [DONE, hand-tested] Export pool cap + gauge marker + daily excess-to-local move (after growth, before waste) + waste on the sum of both pools (proportional).
+9. [DONE, hand-tested] Info visibility regardless of ownership in the inspection UI.
 - Hand-tested by user: a trade center loop (Housing, Caravanserai, Trade Depot, falling export ratio) works; model "works much better".
 
 ## Open questions
