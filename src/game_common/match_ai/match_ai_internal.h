@@ -57,6 +57,10 @@ constexpr ui32 AI_INCOME_PER_EXTRA_ROAD = 100; // Parallel road crews: 1, plus o
 constexpr ui32 AI_ROAD_LAND_USE_PERCENT = 80; // Spokes are built once the peasants work this % of the peasant jobs.
 constexpr i32 AI_SPOKE_TILES_STRAIGHT = 5; // Road spoke lengths: further tiles are past the land output falloff.
 constexpr i32 AI_SPOKE_TILES_DIAGONAL = 4;
+constexpr ui32 AI_ROAD_LINK_PAIRS_PER_TACTICS = 8; // Own settlement pairs the road network sweep checks per tactics run (a road-only path search each)...
+constexpr ui32 AI_ROAD_LINK_SEARCHES_PER_TACTICS = 2; // ...of which at most this many get a full route search (pairs not joined by roads yet).
+constexpr ui64 AI_PATH_SCRATCH_SIZE = KiB(256); // Path search memory. Same as the world's path store, so AI searches reach as far as the road crews' ones.
+constexpr ui16 AI_PATH_MAX_WAYPOINTS = 256; // Same as the world's path store: a crew route with more waypoints fails, so the AI's search must fail too.
 constexpr i32 AI_TAX_HIGH = 9; // While the treasury is under AI_TREASURY_COMFORT.
 constexpr i32 AI_TAX_NORMAL = 5;
 constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
@@ -152,6 +156,8 @@ static bool ai_site_is_owned(const match_world_state& world, world_location loc)
 static bool ai_tile_is_road(const match_world_state& world, world_location loc); // False outside the world.
 static bool ai_tile_is_buildable(const match_world_state& world, world_location loc); // Plains or hills.
 static bool ai_tile_owned_by(const match_world_state& world, world_location loc, entity_guid settlement);
+static bool ai_road_connected(const match_world_state& world, world_location a, world_location b); // A path over road tiles only (roads of any owner) joins the two tiles.
+static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b); // Path cost of the route a road crew from a to b builds (existing roads at road cost). 0 = no route.
 static world_dimensions ai_world_size(const match_world_state& world);
 static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops); // What these soldiers consume per day (same rule as army supplies).
 static void ai_gather_own(ai_context& ctx);

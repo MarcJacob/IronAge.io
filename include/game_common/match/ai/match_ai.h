@@ -37,6 +37,13 @@ struct ai_player_state
 	entity_guid target_settlement; // Settlement the campaign aims at.
 	entity_guid rally_settlement; // Own settlement the armies gather at before attacking.
 
+	// Road network: a sweep over the pairs of own settlements keeps the cheapest one not joined by roads, which then becomes the link to build.
+	ui16 link_sweep_first, link_sweep_second; // Pair the sweep checks next (indices in the owned settlements).
+	ui32 link_best_cost; // 0 = no candidate yet in this sweep.
+	entity_guid link_best_a, link_best_b;
+	entity_guid link_a, link_b; // Link being built. Invalid = none.
+	ui8 link_started; // 1 once a crew of the link was sent.
+
 	i16 opinions[AI_MAX_TRACKED_PLAYERS]; // Per other player. Zero = neutral, negative = hostile (preferred target), positive = friendly / feared.
 	ui32 rng_state; // 0 = seeded on first use.
 };

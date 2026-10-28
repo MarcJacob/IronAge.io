@@ -6,6 +6,7 @@
 #include "match_ai_internal.h"
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_state.h"
+#include "game_common/match/world/world_pathing.h"
 
 static ui32 ai_world_player_count(const match_world_state& world) { return world.player_count; }
 static ui32 ai_world_day(const match_world_state& world) { return (ui32)(world.age / GAME_PARAMETERS.ticks_per_day); }
@@ -162,6 +163,41 @@ static bool ai_tile_owned_by(const match_world_state& world, world_location loc,
 	ui16 regionIndex, tileIndex;
 	world_get_tile(*world.terrain, loc, regionIndex, tileIndex);
 	return world.terrain->regions[regionIndex].owners[tileIndex] == settlement.get_index();
+}
+
+// Path search memory, shared by all AIs: the server runs ai_update for one AI at a time on its one thread. NOT thread safe (one buffer per thread if AIs ever run in parallel).
+alignas(8) static ui8 AI_PATH_SCRATCH[AI_PATH_SCRATCH_SIZE];
+static world_location AI_PATH_POINTS[AI_PATH_MAX_WAYPOINTS];
+
+static path ai_path_find(const match_world_state& world, world_location start, world_location end, const path_params& params)
+{
+	mem_arena scratch = mem_arena_create(AI_PATH_SCRATCH, sizeof(AI_PATH_SCRATCH));
+	path found = {};
+	found.points = AI_PATH_POINTS;
+	found.points_capacity = AI_PATH_MAX_WAYPOINTS;
+	world_path_find(*world.terrain, start, end, params, scratch, found);
+	return found;
+}
+
+static bool ai_road_connected(const match_world_state& world, world_location a, world_location b)
+{
+	if (a == b) return true;
+
+	path_params params = {};
+	params.passable_terrain = PATH_TERRAIN_LAND;
+	params.roads_only = true;
+	path found = ai_path_find(world, a, b, params);
+	return found.count > 0 && !found.partial;
+}
+
+static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b)
+{
+	// The road crews' params (world_system_worker_construction.cpp): same route, and a route the crews can't find fails here too.
+	path_params params = {};
+	params.passable_terrain = PATH_TERRAIN_LAND;
+	params.require_complete = true;
+	path found = ai_path_find(world, a, b, params);
+	return found.count > 0 ? found.cost : 0;
 }
 
 // Fills the context's owned settlements and armies (up to the caps), treasury, income, population and army strengths.
