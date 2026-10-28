@@ -100,6 +100,7 @@ struct match_command_validity_feedback
 	ui8 invalid_path_reason; // With COMMAND_ERROR_INVALID_PATH: a COMMAND_INVALID_PATH_REASON.
 	ui32 population_needed; // Population the command costs. Set whenever the command has a cost, valid or not.
 	ui32 population_current; // Population available, set with population_needed.
+	ui32 goods_taken; // FOUND_SETTLEMENT: Market Goods the colonists take from the settlement, set with population_needed.
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(match_command_validity_feedback)
@@ -107,6 +108,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(match_command_validity_feedback)
 	GAME_DATA_PROPERTY(invalid_path_reason, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(population_needed, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(population_current, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(goods_taken, GAME_DATA_PROP_TYPE::UI32)
 GAME_DATA_OBJECT_DEF_END()
 
 // SERVER SPAWN PLAYER

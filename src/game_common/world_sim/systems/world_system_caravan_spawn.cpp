@@ -22,7 +22,7 @@ static ui32 caravan_min_size(ui32 pool, ui32 free_slots, ui32 max_slots)
 }
 
 // Daily: every settlement with a free caravan slot looks for a trade opportunity and spawns at most one caravan, sized to it.
-// Only goods above the reserve (reserve_days of the need of the people at home) can be invested.
+// A destination is eligible if its spawn score reaches min_profit_per_travel_dist_percent (see caravan_spawn_score), picked at random weighted by score.
 void world_system_caravan_spawn(match_world_state& world)
 {
     if (!world_is_daily_tick(world)) return;
@@ -37,10 +37,11 @@ void world_system_caravan_spawn(match_world_state& world)
         settlement_trading& settlementTrade = settlements.trade[settlementIndex];
         if (settlementTrade.caravan_count >= settlementTrade.caravan_count_max) continue;
 
+        // Investable: at most the pool (starving the origin for a very good deal is intended), and at most max_caravan_capacity_percent of the origin's capacity.
+        // The selector then caps the size per candidate by its room, so this is the size ceiling for min size, profit and score alike.
         ui64 pool = settlementTrade.market_goods;
-        ui64 reserve = (ui64)settlements.at_home((ui16)settlementIndex) * GAME_PARAMETERS.trade.reserve_days;
-        if (pool <= reserve) continue;
-        ui32 investable = (ui32)ia_min(pool - reserve, (ui64)0xFFFF); // A caravan holds a ui16 value.
+        ui64 sizeCap = (ui64)settlement_market_capacity(settlements, (ui16)settlementIndex) * GAME_PARAMETERS.trade.max_caravan_capacity_percent / 100;
+        ui32 investable = (ui32)ia_min(ia_min(pool, sizeCap), (ui64)0xFFFF); // A caravan holds a ui16 value.
 
         ui32 minSize = caravan_min_size((ui32)pool, settlementTrade.caravan_count_max - settlementTrade.caravan_count, settlementTrade.caravan_count_max);
         if (investable < minSize) continue;

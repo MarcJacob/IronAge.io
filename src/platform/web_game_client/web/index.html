@@ -122,6 +122,7 @@
                     <!-- Settlement "Found settlement" panel (ui/inspection/ui_element_found_settlement_panel.ts), shown by the Found settlement mode. -->
                     <div id="game_hud_found_settlement_panel" hidden>
                         <div class="text_row"><span class="text_row_label">Colonists</span><span id="found_settlement_panel_colonists"></span></div>
+                        <div class="text_row"><span class="text_row_label">Market Goods taken</span><span id="found_settlement_panel_goods"></span></div>
                         <div class="text_row"><span class="text_row_label">Target</span><span id="found_settlement_panel_target"></span></div>
                     </div>
 
@@ -174,19 +175,11 @@
                             </div>
                         </div>
 
-                        <!-- One box per building type, in the order of SETTLEMENT_BUILDING_TABLE (world_entities.h). Name static here; one bar per ongoing project, cloned from the template. -->
+                        <!-- One box per building type of SETTLEMENT_BUILDING_TABLE (world_entities.h), cloned from the box template (name from the building definition); one bar per ongoing project, cloned from the bar template. -->
                         <div class="settlement_panel_buildings">
                             <div id="settlement_panel_building_bar_template" class="building_row_bar" hidden><div></div></div>
-                            <div id="settlement_panel_building_barracks" class="building_row">
-                                <span class="building_row_name">Barracks</span><span class="building_row_count"></span>
-                                <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
-                            </div>
-                            <div id="settlement_panel_building_caravanserai" class="building_row">
-                                <span class="building_row_name">Caravanserai</span><span class="building_row_count"></span>
-                                <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
-                            </div>
-                            <div id="settlement_panel_building_trade_depot" class="building_row">
-                                <span class="building_row_name">Trade Depot</span><span class="building_row_count"></span>
+                            <div id="settlement_panel_building_template" class="building_row" hidden>
+                                <span class="building_row_name"></span><span class="building_row_count"></span>
                                 <div class="building_row_bars"></div><button class="building_row_button" hidden>+</button>
                             </div>
                         </div>

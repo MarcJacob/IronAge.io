@@ -79,7 +79,13 @@ Trade Flow decays quickly and is capped by a Max Trade Flow, seeded by urban pop
 Trade Flow converts into a percentage Trade Bonus (relative to population) on the settlement's production, peasants included, and makes the settlement a more attractive destination.
 
 This snowballs by design: invested trade centers keep attracting trade and tend to become production centers, while small villages send caravans to nearby or regional hubs to earn a little more.
-Trade is inter-player. Embargoes, closed routes and blocking or despoiling caravans with armies come later.
+Trade is inter-settlement AND inter-player. Embargoes, closed routes and blocking or despoiling caravans with armies come later.
+
+### Goods Export
+
+Caravans get their value from taking goods from their origin settlement's goods pool, and transfer those goods to the destination.
+
+The goods can be taken at any time when the system sees that a good deal is currently awaiting a caravan if it would spawn. To discourage caravans starving settlements, a heavy penalty is imposed to the decision making (but NOT final profit) when goods are scarce in the origin settlement. This means that to get trade started somewhere, a good opportunity needs to exist. The trade volume bonus then ensures that the activity is worthwhile through increased production.
 
 ### Comments
 

@@ -37,7 +37,9 @@ export class SettlementFounding extends Core.Mode
         const hovered = Render.get_hovered_tile();
         if (hovered === null)
         {
-            show_found_settlement_panel({ colonists, peasants, target: null });
+            // Goods taken do not depend on the target: the feedback is asked with the settlement's own tile.
+            const goods = get_command_feedback("FOUND_SETTLEMENT", { settlement: this.settlement_guid, target: view.get_location("location") }).values.goods_taken ?? 0;
+            show_found_settlement_panel({ colonists, peasants, goods, target: null });
             Render.RENDER_CONFIG.path_preview = null;
             return;
         }
@@ -48,7 +50,7 @@ export class SettlementFounding extends Core.Mode
         const points = Backend.query_path(start, hovered);
         const feedback = get_command_feedback("FOUND_SETTLEMENT", { settlement: this.settlement_guid, target: hovered });
 
-        show_found_settlement_panel({ colonists, peasants, target: this.target_text(feedback.valid, feedback.values, points.length > 0) });
+        show_found_settlement_panel({ colonists, peasants, goods: feedback.values.goods_taken ?? 0, target: this.target_text(feedback.valid, feedback.values, points.length > 0) });
         Render.RENDER_CONFIG.path_preview = { start, points, valid: feedback.valid && points.length > 0 };
     }
 

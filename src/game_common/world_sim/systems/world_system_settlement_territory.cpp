@@ -18,12 +18,12 @@ struct tile_arable_land_def
 // Each tile can support a certain number of inhabitants natively, and they feed themselves first. Surplus is what is available to be put on the local market.
 // When surplus reaches 0 because of distance penalties, the population on the tile is effectively neutral to the settlement's economy and produces no taxable value.
 static constexpr tile_arable_land_def TILE_TERRAIN_ARABLE_LAND[] = {
-    { 10, 15 }, // LAND_PLAINS
-    { 8, 15 }, // LAND_HILLS
-    { 6, 25 }, // LAND_MOUNTAINS
+    { 3, 20 }, // LAND_PLAINS
+    { 2, 15 }, // LAND_HILLS
+    { 2, 30 }, // LAND_MOUNTAINS
 
-    { 6, 75 }, // WATER_COAST
-    { 4, 30 }, // WATER_SEA
+    { 3, 45 }, // WATER_COAST
+    { 2, 30 }, // WATER_SEA
 };
 
 // Distance below max at which surplus is reduced by 10%, stacking additively (IE if surplus is 100, then ten times this value below max distance will wipe surplus).

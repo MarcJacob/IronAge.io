@@ -12,16 +12,18 @@ struct game_trade_parameters
 {
     // Market goods sales (daily). Shares are % of the sellable goods; peasants get the rest. Unused shares go to the next stratum (soldiers -> workers -> peasants).
     ui32 sellable_percent = 25; // % of the market goods that can be consumed per day (100 = the pool can be emptied).
-    ui32 soldier_share_percent = 20; // Share of the soldiers at home, served first.
-    ui32 worker_share_percent = 20; // Share of the workers, served second.
-    ui32 start_goods_percent = 100; // Default market goods a settlement starts with, in % of its starting population (when its start state gives none).
+    ui32 start_goods_percent = 400; // Default market goods a settlement starts with, in % of its starting population (when its start state gives none).
     ui32 overflow_waste_percent = 25; // % of the goods above the market capacity that is wasted (removed) each day, after sales and growth.
 
-    // Spawning. Investable goods = market goods - reserve_days x people at home (floor 0).
-    ui32 reserve_days = 1;
+    // Caravan Spawning. A candidate is eligible if its score (total profit x 100 / tile distance x home scarcity factor) reaches this, in %.
+    ui32 min_profit_per_travel_dist_percent = 50;
+    // Home scarcity factor on the score, linear in the origin's fill: 0 at sellable_percent fill, this % at full.
+    ui32 home_scarcity_max_factor_percent = 150;
     // Minimum worthwhile caravan size, in % of the origin's market goods: linear in free slots / max slots, from the last free slot to all free.
     ui32 min_size_percent_all_free = 2;
     ui32 min_size_percent_last_free = 15;
+    // Caravan size cap, in % of the origin's market capacity (not of its current pool).
+    ui32 max_caravan_capacity_percent = 10;
 
     // Profit (trade volume, never goods). Scarcity rate r% of the caravan value, r linear in the destination's fill: max at 0% fill, min at 100%. Clamped to 10000.
     ui32 scarcity_value_min_percent = 90;
@@ -29,7 +31,7 @@ struct game_trade_parameters
     // Profit scaling by (destination capacity - origin capacity) / origin capacity, in %, clamped to [-malus, +bonus]. Malus clamped to 100.
     ui32 capacity_ratio_max_bonus_percent = 25;
     ui32 capacity_ratio_max_malus_percent = 75;
-    ui32 incoming_profit_bonus_percent_max = 200; // Profit bonus (%) at the destination's full volume fraction, linear. Clamped to 10000.
+    ui32 incoming_profit_bonus_percent_max = 50; // Profit bonus (%) at the destination's full volume fraction, linear. Clamped to 10000.
     ui32 profit_receiver_percent = 0; // Share (%) of the profit gained by the receiver as volume, the exporter gains the rest. Clamped to 100.
     ui32 distance_margin_min_tiles = 8; // Profit is 0 up to this tile distance, rises linearly to 100% at twice this distance. 0 = no ramp.
 
@@ -84,9 +86,9 @@ struct game_parameters
     // linear between these points (excess = share above the requirement):
     //   r >= 1000: growth_enough, plus up to (growth_max - growth_enough) as the excess goes from 0 to the requirement.
     //   r == growth_zero_ratio: 0. r <= growth_floor_ratio: growth_floor.
-    i32 growth_enough_per_mille = 60; // Growth when consumption is exactly met.
+    i32 growth_enough_per_mille = 20; // Growth when consumption is exactly met.
     i32 growth_max_per_mille = 120; // Growth when the excess is at least the requirement.
-    ui32 growth_zero_ratio_per_mille = 1000; // r at which growth is 0.
+    ui32 growth_zero_ratio_per_mille = 800; // r at which growth is 0.
     ui32 growth_floor_ratio_per_mille = 500; // r at and below which growth is growth_floor.
     i32 growth_floor_per_mille = -200; // Lowest growth (shrinking).
 
@@ -138,13 +140,13 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(tax_rate_max, GAME_DATA_PROP_TYPE::I32)
 
     GAME_DATA_PROPERTY_PATH(trade_sellable_percent, trade.sellable_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_soldier_share_percent, trade.soldier_share_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_worker_share_percent, trade.worker_share_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_start_goods_percent, trade.start_goods_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_overflow_waste_percent, trade.overflow_waste_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_reserve_days, trade.reserve_days, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_min_profit_per_travel_dist_percent, trade.min_profit_per_travel_dist_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_home_scarcity_max_factor_percent, trade.home_scarcity_max_factor_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_min_size_percent_all_free, trade.min_size_percent_all_free, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_min_size_percent_last_free, trade.min_size_percent_last_free, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_max_caravan_capacity_percent, trade.max_caravan_capacity_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_capacity_ratio_max_bonus_percent, trade.capacity_ratio_max_bonus_percent, GAME_DATA_PROP_TYPE::UI32)

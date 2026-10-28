@@ -39,6 +39,7 @@ struct found_settlement_data
 {
     world_location target; // Tile the settlement is founded at.
     ui32 colonists; // Peasants carried. Start population of the new settlement, or given back to the origin if the worker has to return.
+    ui32 goods; // Market Goods taken from the origin with the colonists (see settlement_colonist_goods). The new settlement's pool, or given back to the origin if the worker has to return.
     ui8 returning; // 0 = going to the target, 1 = going back to the origin settlement.
 };
 static_assert(sizeof(found_settlement_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Found settlement action data doesn't fit the worker action data buffer.");

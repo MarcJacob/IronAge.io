@@ -36,6 +36,18 @@ static inline ui32 settlement_remove_peasants(match_world_state& world, ui16 set
 	return removed;
 }
 
+// COLONISTS' GOODS (separate block)
+// Goods the given number of colonists would take from the settlement's Market Goods: pool x leaving / (leaving + staying), staying = the whole remaining population (home or not).
+// Call before the colonists are removed (pop_total is then leaving + staying). Only the goods pool is shared out (there is no local wealth).
+static inline ui32 settlement_colonist_goods(const match_world_state& world, ui16 settlement_index, ui32 colonists)
+{
+	ui32 total = world.entities->settlements.pop_total[settlement_index];
+	if (total == 0) return 0;
+
+	ui64 goods = world.entities->settlements.trade[settlement_index].market_goods;
+	return (ui32)(goods * ia_min(colonists, total) / total);
+}
+
 // Deaths of raised soldiers. Removes up to count raised soldiers of a type, returns how many were removed.
 static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {

@@ -8,8 +8,7 @@
 #include "../entities/world_sim_entity_settlement.h"
 
 // DAILY ECONOMY
-// Per settlement, in this order: production (with the trade volume bonus), tax on it, the rest into the market goods, sales of the sellable goods to the strata,
-// growth of each stratum, waste, trade volume decay.
+// Per settlement, in this order: production (with the trade volume bonus), tax on it, the rest into the market goods, sales of the sellable goods, pop growth.
 
 // PRODUCTION: the owner's treasury takes the tax rate of the production, the rest goes into the market goods.
 static void settlement_goods_production(match_world_state& world, ui16 settlement_index)
@@ -84,8 +83,7 @@ static ui32 settlement_soldiers_home_die(match_world_state& world, ui16 settleme
 
 // Population growth in per mille, from how well consumption demand was met. required must not be 0.
 // available is what was offered, excess what it holds beyond the requirement (not consumed).
-// Curve points are in GAME_PARAMETERS (now: r >= 1: +6% to +12%, more with excess up to excess == required; 0.5 <= r < 1: 0% down to -20%;
-// r < 0.5: -20%. The zero ratio is 1, so the 0% to +6% branch is unused).
+// Curve points are in GAME_PARAMETERS.
 static i32 settlement_growth_per_mille(ui32 available, ui32 required)
 {
     const game_parameters& params = GAME_PARAMETERS;

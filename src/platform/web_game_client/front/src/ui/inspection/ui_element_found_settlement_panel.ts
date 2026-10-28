@@ -6,6 +6,7 @@
 const IDS = {
     root: "game_hud_found_settlement_panel",
     colonists: "found_settlement_panel_colonists",
+    goods: "found_settlement_panel_goods",
     target: "found_settlement_panel_target",
 };
 
@@ -13,12 +14,14 @@ export interface FoundSettlementPanelState
 {
     colonists: number; // Peasants taken by the founding.
     peasants: number; // Peasants of the settlement.
+    goods: number; // Market Goods the colonists take from the settlement (from the order's validity feedback).
     target: string | null; // Verdict on the hovered tile, in words (from the order's validity feedback, worded by the mode). Null: nothing hovered.
 }
 
 let el: {
     root: HTMLElement;
     colonists: HTMLElement;
+    goods: HTMLElement;
     target: HTMLElement;
 } | null = null;
 
@@ -27,6 +30,7 @@ function init(): void
     el = {
         root: document.getElementById(IDS.root) as HTMLElement,
         colonists: document.getElementById(IDS.colonists) as HTMLElement,
+        goods: document.getElementById(IDS.goods) as HTMLElement,
         target: document.getElementById(IDS.target) as HTMLElement,
     };
 }
@@ -39,6 +43,7 @@ export function submit(state: FoundSettlementPanelState | null): void
     if (state === null) return;
 
     set_text(el.colonists, `${state.colonists} (peasants ${state.peasants})`);
+    set_text(el.goods, `${state.goods}`);
     set_text(el.target, state.target ?? "Pick a location");
 }
 

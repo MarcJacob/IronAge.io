@@ -30,7 +30,7 @@ const IDS = {
     trade_volume: "settlement_panel_trade_volume",
     garrison: ["settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights"], // troop_type order.
     building_bar_template: "settlement_panel_building_bar_template",
-    buildings: ["settlement_panel_building_barracks", "settlement_panel_building_caravanserai", "settlement_panel_building_trade_depot"], // Building table order.
+    building_template: "settlement_panel_building_template",
 };
 
 const GARRISON_COLORS = ["#4aa3ff", "#f0b040", "#c060e0"]; // troop_type order, as in section_troops.ts.
@@ -88,6 +88,7 @@ export const on = events.on.bind(events);
 // A building box of the markup: count, project bars (cloned from the template), build button. Hovering the button shows the cost, the rest the description.
 class BuildingBox
 {
+    private name: HTMLElement;
     private count: HTMLElement;
     private bars: HTMLElement;
     private button: HTMLElement;
@@ -99,6 +100,7 @@ class BuildingBox
 
     constructor(private root: HTMLElement, private bar_template: HTMLElement, on_build: () => void)
     {
+        this.name = root.querySelector(".building_row_name") as HTMLElement;
         this.count = root.querySelector(".building_row_count") as HTMLElement;
         this.bars = root.querySelector(".building_row_bars") as HTMLElement;
         this.button = root.querySelector(".building_row_button") as HTMLElement;
@@ -123,6 +125,7 @@ class BuildingBox
             return;
         }
 
+        set_text(this.name, state.definition.name);
         set_text(this.count, `x${state.count}`);
 
         // Bars are only added / removed when the number of projects changes, otherwise their width is updated in place.
@@ -187,7 +190,8 @@ let el: {
     trade_volume: StaticGauge;
     trade_volume_tooltip: HoverTooltip;
     garrison: StaticGauge[];
-    buildings: BuildingBox[];
+    buildings: BuildingBox[]; // Grown on demand to the number of building types submitted.
+    building_template: HTMLElement;
 } | null = null;
 
 let shown: SettlementPanelState | null = null; // Last submitted state: the max the ceiling event needs.
@@ -199,7 +203,6 @@ function get(id: string): HTMLElement
 
 function init(): void
 {
-    const bar_template = get(IDS.building_bar_template);
     const consumption = get(IDS.consumption);
     el = {
         root: get(IDS.root),
@@ -219,7 +222,8 @@ function init(): void
         trade_volume: new StaticGauge(get(IDS.trade_volume)),
         trade_volume_tooltip: new HoverTooltip(get(IDS.trade_volume)),
         garrison: IDS.garrison.map((id, troop_type) => new StaticGauge(get(id), value => emit_ceiling(troop_type, value))),
-        buildings: IDS.buildings.map((id, building_type) => new BuildingBox(get(id), bar_template, () => events.emit("build", building_type))),
+        buildings: [],
+        building_template: get(IDS.building_template),
     };
 }
 
@@ -266,6 +270,15 @@ export function submit(state: SettlementPanelState | null): void
         });
     }
 
+    // One box per building type given, cloned from the template when missing (the table can grow without touching the markup).
+    while (el.buildings.length < state.buildings.length)
+    {
+        const building_type = el.buildings.length;
+        const root = el.building_template.cloneNode(true) as HTMLElement;
+        root.removeAttribute("id");
+        el.building_template.parentElement!.appendChild(root);
+        el.buildings.push(new BuildingBox(root, get(IDS.building_bar_template), () => events.emit("build", building_type)));
+    }
     for (let i = 0; i < el.buildings.length; i++) el.buildings[i].submit(state.buildings[i] ?? null);
 }
 

@@ -147,6 +147,9 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 	const world_entity_settlements& settlements = world.entities->settlements;
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
+	// Reported before the target check so the preview can show it without a valid target.
+	if (feedback != nullptr) feedback->goods_taken = settlement_colonist_goods(world, settlementIndex, GAME_PARAMETERS.found_settlement_colonists);
+
 	// The target must be a place where the player could found a settlement (it is checked again when the colonists get there).
 	if (!world_is_valid_settlement_location(world, command.target, player) && command_add_path_error(feedback, COMMAND_INVALID_PATH_DESTINATION_INVALID)) return false;
 
@@ -176,7 +179,11 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 	const command_data_found_settlement& command = command_header.get_command_data<command_data_found_settlement>();
 
-	ui32 colonists = settlement_remove_peasants(world, command.settlement.get_index(), GAME_PARAMETERS.found_settlement_colonists);
+	// The goods share is computed before the colonists leave (it depends on who stays).
+	ui16 originIndex = command.settlement.get_index();
+	ui32 goods = settlement_colonist_goods(world, originIndex, GAME_PARAMETERS.found_settlement_colonists);
+	world.entities->settlements.trade[originIndex].market_goods -= goods;
+	ui32 colonists = settlement_remove_peasants(world, originIndex, GAME_PARAMETERS.found_settlement_colonists);
 
 	world_entity_workers::single worker = {};
 	worker.origin_entity = command.settlement;
@@ -184,6 +191,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 	*(found_settlement_data*)worker.action_data.bytes = {
 		.target = command.target,
 		.colonists = colonists,
+		.goods = goods,
 	};
 
 	world_spawn_worker(world, worker);

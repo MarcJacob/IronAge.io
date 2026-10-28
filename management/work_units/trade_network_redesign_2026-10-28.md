@@ -18,6 +18,7 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 - Spawn: opportunity first, then caravan sized to it. Reserve = `reserve_days` (3) of local need; one spawn per settlement per day, max 3 picks; min worthwhile size = % of origin pool (2% all slots free, 15% last slot / single slot); size = min(investable, destination room), destination room = capacity - pool. Weighted random on (exporter gain / tile distance)^2. Evaluation uses tile distance; real travel cost after pathing optimization.
 - Inter-player from the start. Later: embargo / open routes as diplomacy, armies blocking and despoiling caravans.
 - Base pool capacity pop x 4, sellable 25% (user, after play-test 1 saw no caravans).
+- Spawn rework (decided 2026-10-28, replaces weighted random + sellable gate; export slider dropped): caravan spawnable whatever the goods level; best candidate spawns if profit per tile travelled (ratio vs caravan value, percent) >= parameter `min profit per travel dist percent`, after a home scarcity malus (weight falls as origin pool drops). Sellable 25% stays as stockpile target (shapes malus, no longer gates). Caravan size = min(origin pool, origin capacity x `max_caravan_capacity_percent` (10), destination room); no sellable / reserve cap. No hard floor: starvation for a very good deal is intended (like taxation).
 
 ## Tasks
 
@@ -26,12 +27,11 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 3. [DONE, hand-tested] Opportunity-first spawn, goods delivery, volume gains, volume-only profit, ramp. User: new trading model works far better.
 4. Dissolved into 3. Left: tuning (weight exponent, clamps, ramp, bonus); travel cost instead of tile distance (blocked on `path_commitment_rewrite` / `path_store_cache`).
 5. [DONE, unbuilt] UI: Trade volume gauge below Market Goods, both gauges thinner.
+6. [DONE, unbuilt] Threshold spawn rework (see Model). Replaces the export slider idea. Scarcity factor linear: 0 at fill = sellable (25%), 1.5 at full (1.0 at 75%); weight = score (linear); params `min_profit_per_travel_dist_percent` (5 in code, user wants ~50; confirmed curve and linear weight), `home_scarcity_max_factor_percent` (150); `reserve_days` removed.
 
 ## Open questions
 
-- Coupling: spawning while fed needs reserve_days < 1 / sellable fraction (3 < 4); raising either breaks it.
 - Destination room = capacity - pool: no room when pools sit at or above capacity. Watch; fixes: higher target, or delivery beyond room.
-- Export slider (player-set reserve / export share): idea, deferred (command + UI).
 - Urban population seeding: total population placeholder until the urban stratum exists.
 
 ## Idea to experiment with (user, end of 2026-10-28): Trade Routes
