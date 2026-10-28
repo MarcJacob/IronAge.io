@@ -4,7 +4,7 @@ Started: 2026-10-27. Supersedes the contestation model of `village_influence_202
 
 ## Scope
 
-Rewrite land production, population strata and territory claiming / borders. Uncommitted on top of 5b5ea31; everything below is unbuilt and untested.
+Rewrite land production, population strata and territory claiming / borders. Built and hand-tested by user 2026-10-28: territory behaves as wanted.
 
 ## Decisions
 
@@ -37,4 +37,4 @@ Rewrite land production, population strata and territory claiming / borders. Unc
 
 ## Next step
 
-Build + hand-test: starving settlement shrinks, founding on own land, border stability between two villages, roads through borders, cut-off land unclaimed, stats consistent across flips. Then decide counter plumbing.
+Territory done. Remaining: open questions above (levies, growth basis, Unemployed UI, counter plumbing). Trade and military are to be redesigned from scratch (separate units).

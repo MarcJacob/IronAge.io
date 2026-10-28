@@ -119,47 +119,70 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 // CARAVAN DESTINATION SELECTION
 
 
-// Weight of a candidate: (potential profit (flat bonus included) per unit of cost) ^ CARAVAN_WEIGHT_EXPONENT, so better candidates are favored more than proportionally.
-// destination_pool / destination_production / destination_capacity are the candidate's market goods, last daily production and capacity (settlement_market_capacity).
-// The profit uses the tile distance between source and candidate, the cost is only the divisor (callers pass the tile distance, see below).
-// Fixed point with 3 decimals (profit * 1000 / cost) before the power, so far candidates do not round down to 0. Zero profit = 0, zero cost counts as 1.
+// Weight of a candidate: (expected exporter gain per unit of cost) ^ CARAVAN_WEIGHT_EXPONENT, so better candidates are favored more than proportionally.
+// Expected exporter gain = caravan value + exporter share of trade_volume_profit (computed with the tile distance between source and candidate).
+// The cost is only the divisor (callers pass the tile distance, see below).
+// Fixed point with 3 decimals (gain * 1000 / cost) before the power, so far candidates do not round down to 0. Zero gain = 0, zero cost counts as 1.
 // Overflow: the ratio is clamped to 2^20 before the power, so a weight is at most 2^40 (exponent 2) and the sum over 4096 candidates at most 2^52.
 // A higher exponent needs a lower clamp (ratio ^ exponent x 4096 must stay under 2^64).
 static constexpr ui32 CARAVAN_WEIGHT_EXPONENT = 2;
 static constexpr ui64 CARAVAN_WEIGHT_RATIO_MAX = 1 << 20;
-static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_production, ui32 destination_capacity, ui32 tile_distance, ui32 path_cost)
+static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity, ui32 destination_volume_fraction,
+    ui32 tile_distance, ui32 path_cost)
 {
     static constexpr ui64 WEIGHT_SCALE = 1000;
-    ui64 profit = trade_profit(caravan_value, destination_pool, destination_production, destination_capacity, tile_distance, GAME_PARAMETERS.trade);
-    if (profit == 0) return 0;
-    ui64 ratio = profit * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
+    const game_trade_parameters& trade = GAME_PARAMETERS.trade;
+    ui64 profit = trade_volume_profit(caravan_value, destination_pool, destination_capacity, origin_capacity, destination_volume_fraction, tile_distance, trade);
+    ui64 gain = caravan_value + profit - trade_profit_receiver_share(profit, trade);
+    if (gain == 0) return 0;
+    ui64 ratio = gain * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
     return ia_pow(ia_min(ratio, CARAVAN_WEIGHT_RATIO_MAX), CARAVAN_WEIGHT_EXPONENT);
 }
 
-bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
-    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost, entity_guid destination_exclude)
+// Caravan size towards a candidate: the value (at most 0xFFFF), and with size_to_room at most the candidate's room (capacity - pool, floor 0).
+static ui32 caravan_candidate_size(const world_entity_settlements& settlements, ui16 index, ui32 caravan_value, bool size_to_room)
+{
+    ui32 size = ia_min(caravan_value, (ui32)0xFFFF);
+    if (!size_to_room) return size;
+    ui32 pool = settlements.trade[index].market_goods;
+    ui32 capacity = settlement_market_capacity(settlements, index);
+    return ia_min(size, capacity > pool ? capacity - pool : (ui32)0);
+}
+
+bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
+    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_value, const entity_guid* destination_excludes, ui32 destination_exclude_count)
 {
     const world_entity_settlements& settlements = world.entities->settlements;
 
     // @TODO(Marc): Restore path-based target selection for a more accurate travel cost assessment, and to be able to add ships.
+
+    bool originValid = origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin);
+    ui32 originCapacity = originValid ? settlement_market_capacity(settlements, origin.get_index()) : 0;
 
     // Weight of each settlement slot, 0 = not a candidate.
     // Macro entity indices are 12 bits, so this covers every settlement slot.
     ui64 weights[4096] = {};
     ASSERT(settlements.max_count <= 4096);
 
-    // Pass 1: weigh candidates.
+    // Pass 1: size and weigh candidates.
     ui64 totalWeight = 0;
     for (ui16 index = 0; index < settlements.max_count; index++)
     {
         entity_guid guid = settlements.guids[index];
-        if (!guid.is_valid() || guid == origin_exclude || guid == destination_exclude) continue;
+        if (!guid.is_valid() || guid == origin) continue;
+
+        bool excluded = false;
+        for (ui32 i = 0; i < destination_exclude_count; i++) excluded = excluded || guid == destination_excludes[i];
+        if (excluded) continue;
+
+        ui32 size = caravan_candidate_size(settlements, index, caravan_value, size_to_room);
+        if (size == 0 || size < min_value) continue;
 
         ui32 tradeDist = trade_tile_distance(source, settlements.locations[index]);
 
         // Cost is linear in the tile distance: placeholder until the real path cost is usable again.
-        weights[index] = caravan_candidate_weight(caravan_value, settlements.trade[index].market_goods,
-                settlements.economies[index].production, settlement_market_capacity(settlements, index), tradeDist, tradeDist);
+        weights[index] = caravan_candidate_weight(size, settlements.trade[index].market_goods, settlement_market_capacity(settlements, index), originCapacity,
+                settlement_trade_volume_fraction(settlements, index), tradeDist, tradeDist);
 
         totalWeight += weights[index];
     }
@@ -182,7 +205,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         if (roll < weight)
         {
             out_destination = settlements.guids[index];
-            out_path_cost = trade_tile_distance(source, settlements.locations[index]); // Tile distance, not a path cost (callers ignore it).
+            out_value = caravan_candidate_size(settlements, index, caravan_value, size_to_room);
             return true;
         }
         roll -= weight;

@@ -22,10 +22,10 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     world_location source = originValid ? settlements.locations[origin.get_index()] : caravans.locations[index];
 
     entity_guid newDestination;
-    ui32 pathCost; // Unused: the trade system measures the tile distance on arrival.
+    ui32 size; // Always the caravan's value: not sized to room.
     // The previous destination is excluded: it was invalid or unreachable, picking it again would loop.
-    if (world_caravan_select_destination(world, source, origin, caravans.values[index], caravans.flags[index], newDestination, pathCost,
-        caravans.destination_settlements[index]))
+    if (world_caravan_select_destination(world, source, origin, caravans.values[index], 0, false, caravans.flags[index], newDestination, size,
+        &caravans.destination_settlements[index], 1))
     {
         caravans.destination_settlements[index] = newDestination;
         world_movement_stop(caravans.movements[index], caravans.locations[index]);
@@ -46,7 +46,7 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     caravans.movements[index].destination = settlements.locations[origin.get_index()];
 }
 
-// Caravans standing on their destination settlement sell their goods and disappear.
+// Caravans standing on their destination settlement deliver their goods to its market goods, both ends gain trade volume, and the caravan disappears.
 // Returning caravans refund their value to their origin's market goods on reaching it. Invalid destinations are handled by the movement decision.
 void world_system_caravan_trade(match_world_state& world)
 {
@@ -79,15 +79,21 @@ void world_system_caravan_trade(match_world_state& world)
         bool originValid = caravan_settlement_is_valid(world, origin);
         ui32 value = caravans.values[caravanIndex];
 
-        // Distance is the tile distance between the settlements. Homeless caravans have no origin to measure from: 0.
-        ui32 distance = originValid ? trade_tile_distance(settlements.locations[origin.get_index()], settlements.locations[destinationIndex]) : 0;
+        // Profit is measured before delivery, from the destination's current state. Homeless caravans have no origin to measure from: no profit.
+        ui64 profit = 0;
+        if (originValid)
+        {
+            ui16 originIndex = origin.get_index();
+            profit = trade_volume_profit(value, settlements.trade[destinationIndex].market_goods, settlement_market_capacity(settlements, destinationIndex),
+                settlement_market_capacity(settlements, originIndex), settlement_trade_volume_fraction(settlements, destinationIndex),
+                trade_tile_distance(settlements.locations[originIndex], settlements.locations[destinationIndex]), GAME_PARAMETERS.trade);
+        }
+        ui64 receiverProfit = trade_profit_receiver_share(profit, GAME_PARAMETERS.trade);
 
-        ui64 profit = trade_profit(value, settlements.trade[destinationIndex].market_goods, settlements.economies[destinationIndex].production, settlement_market_capacity(settlements, destinationIndex), distance, GAME_PARAMETERS.trade);
-
-        // Origin: capital back + half the profit. Destination: the other half. Homeless: the destination gets the profit, the capital is lost.
-        ui64 originProfit = originValid ? profit / 2 : 0;
-        if (originValid) settlement_market_add(settlements, origin.get_index(), value + originProfit);
-        settlement_market_add(settlements, destinationIndex, profit - originProfit);
+        // The goods are delivered (none are created). Both ends gain volume: value + their share of the profit. Homeless: the exporter side is lost.
+        settlement_market_add(settlements, destinationIndex, value);
+        settlement_trade_volume_add(settlements, destinationIndex, value + receiverProfit);
+        if (originValid) settlement_trade_volume_add(settlements, origin.get_index(), value + profit - receiverProfit);
 
         world_destroy_entity_caravan(world, caravan);
     }

@@ -4,6 +4,7 @@
 #define WORLD_SIM_ECONOMY_INCLUDED
 
 #include "core/std_types.h"
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_state.h"
 
 #include "world_sim_entity_army.h"
@@ -185,7 +186,7 @@ static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui1
 // Capacity = people at home + buildings' part.
 static inline ui32 settlement_market_capacity(const world_entity_settlements& settlements, ui16 settlement_index)
 {
-	return settlements.at_home(settlement_index) + settlements.trade[settlement_index].market_capacity_buildings;
+	return settlements.at_home(settlement_index) * 4 + settlements.trade[settlement_index].market_capacity_buildings;
 }
 
 // Fill of the market goods: goods / capacity as a fixed-point fraction (0 = empty, IA_FIXED_ONE = full), clamped to full.
@@ -204,6 +205,33 @@ static inline void settlement_market_add(world_entity_settlements& settlements, 
 	ui32& goods = settlements.trade[settlement_index].market_goods;
 	ASSERT((ui64)goods + amount <= 0xFFFFFFFF);
 	goods += (ui32)amount;
+}
+
+// TRADE VOLUME
+
+// Max effective trade volume = volume_max_multiplier x market capacity.
+static inline ui32 settlement_trade_volume_max(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	ui64 max = (ui64)settlement_market_capacity(settlements, settlement_index) * GAME_PARAMETERS.trade.volume_max_multiplier;
+	return (ui32)ia_min(max, (ui64)0xFFFFFFFF);
+}
+
+// Trade bonus fraction: min(volume, max) / max as a fixed-point fraction (0 to IA_FIXED_ONE). 0 if the max is 0.
+static inline ui32 settlement_trade_volume_fraction(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	ui64 max = settlement_trade_volume_max(settlements, settlement_index);
+	if (max == 0) return 0;
+	ui64 effective = ia_min((ui64)settlements.trade[settlement_index].trade_volume, max);
+	return (ui32)(effective * IA_FIXED_ONE / max);
+}
+
+// Adds a trade volume gain, up to the settlement's max: the excess is wasted. A volume already above the max is kept as it is.
+static inline void settlement_trade_volume_add(world_entity_settlements& settlements, ui16 settlement_index, ui64 gain)
+{
+	ui32& volume = settlements.trade[settlement_index].trade_volume;
+	ui64 max = settlement_trade_volume_max(settlements, settlement_index);
+	if (volume >= max) return;
+	volume = (ui32)ia_min((ui64)volume + gain, max);
 }
 
 // Claims a non-sea tile in the world for the given settlement (taking it from its current owner if any). Its travel distance comes from the settlement's neighbouring tiles.

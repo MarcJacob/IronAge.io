@@ -69,11 +69,21 @@ This is the main aspect where #Distance_Cost happens. At transaction time, dista
 
 Since small transactions benefit less *in absolute value* from Distance, going further for more value per good will quickly be outweighed by the unattractiveness of the time it takes to get there. Ergo, to perform longer-distance trades that are more profitable per good, the caravan / ship must be larger in volume, which can only happen from larger settlements / good pools. It also eventually becomes necessary to perform the trade by sea, where volumes can be much larger and travel times overall lower.
 
-Trading expeditions are the other #Goods_Sources: They are ALWAYS profitable (even if only a little, so possible unprofitable when taking into account opportunity cost).
+### Trade Flow
 
-Both buyer and seller finish the transaction with more goods than they started with, an even split of the profits.
+Trade does not create goods. A settlement invests goods above its reserve (a few days of local need) into a caravan, which delivers them to the destination's pool.
+Both ends of a delivery gain Trade Flow, scaled by caravan size and distance (short trades gain little, trading towards a smaller settlement is penalized).
 
-By default, a settlement sets aside goods that are above half its capacity for export.
+Trade Flow decays quickly and is capped by a Max Trade Flow, seeded by urban population and mostly raised by buildings (Trade Depots, which also raise pool size).
+
+Trade Flow converts into a percentage Trade Bonus (relative to population) on the settlement's production, peasants included, and makes the settlement a more attractive destination.
+
+This snowballs by design: invested trade centers keep attracting trade and tend to become production centers, while small villages send caravans to nearby or regional hubs to earn a little more.
+Trade is inter-player. Embargoes, closed routes and blocking or despoiling caravans with armies come later.
+
+### Comments
+
+*This new design based on the Trade Flow property instead of generating goods from thin air works MUCH better, but we definitely have a problem with being able to accumulate resources. Two possible solutions: limit non-peasant population and make peasants more productive, or give the player a slider and allow goods to pool into an export pool that is never sold.*
 
 ## Buildings & Construction
 

@@ -8,6 +8,9 @@
 #include "../world_sim.h"
 #include "game_common/match/world/world_state.h"
 
+// What caravans can cross: land only, straight segments. Other members zero-initialized.
+static const path_params CARAVAN_PATH_PARAMS = { .passable_terrain = PATH_TERRAIN_LAND, .straight_segments = true };
+
 entity_guid world_spawn_entity_caravan(match_world_state& world, const world_entity_caravan& start_state);
 void world_destroy_entity_caravan(match_world_state& world, const entity_guid& caravan);
 

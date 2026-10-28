@@ -78,6 +78,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
             population_change: prop("population_change"),
         },
         market_goods: !editable ? null : { goods: prop("trading_market_goods"), capacity: prop("market_capacity") },
+        trade_volume: !editable ? null : { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
         // Pooled types (no levies). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
         garrison: TROOPS.slice(1).map((troop): SettlementPanelUI.SettlementGarrisonState | null => {
             const home = prop(`troops_${troop.name}`);

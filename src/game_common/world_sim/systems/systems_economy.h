@@ -13,10 +13,10 @@ void world_system_economy_troop_growth(match_world_state& world);
 // Daily: runs the on_daily_tick event of every building type a settlement has at least one unit of.
 void world_system_settlement_buildings_daily_tick(match_world_state& world);
 
-// Daily: settlements roll for each missing caravan slot, investing part of their market goods in caravans towards a selected destination.
+// Daily: each settlement with a free caravan slot picks a trade opportunity and spawns at most one caravan sized to it, from its goods above the reserve.
 void world_system_caravan_spawn(match_world_state& world);
 
-// Caravans that reached their destination settlement trade and disappear; those whose destination is gone are cancelled.
+// Caravans that reached their destination settlement deliver their goods, both ends gain trade volume, and the caravan disappears.
 void world_system_caravan_trade(match_world_state& world);
 
 // Daily: armies inside their owner's territory refill their supplies from the treasury (down to 0, no debt, adds to the player's expenses),

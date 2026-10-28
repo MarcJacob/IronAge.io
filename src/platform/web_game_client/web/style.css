@@ -143,6 +143,18 @@ body {
     border: 1px solid #c7cbd1;
 }
 
+.gauge.thin {
+    margin-bottom: 4px;
+}
+
+.gauge.thin .gauge_bar {
+    height: 5px;
+}
+
+.gauge.has_tooltip {
+    cursor: help;
+}
+
 .gauge_fill,
 .gauge_raised {
     height: 100%;

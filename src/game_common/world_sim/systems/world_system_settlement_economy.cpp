@@ -8,7 +8,8 @@
 #include "../entities/world_sim_entity_settlement.h"
 
 // DAILY ECONOMY
-// Per settlement, in this order: production, tax on it, the rest into the market goods, sales of the sellable goods to the strata, growth of each stratum.
+// Per settlement, in this order: production (with the trade volume bonus), tax on it, the rest into the market goods, sales of the sellable goods to the strata,
+// growth of each stratum, waste, trade volume decay.
 
 // PRODUCTION: the owner's treasury takes the tax rate of the production, the rest goes into the market goods.
 static void settlement_goods_production(match_world_state& world, ui16 settlement_index)
@@ -24,6 +25,11 @@ static void settlement_goods_production(match_world_state& world, ui16 settlemen
         ui16 peasantsFillPerMille = settlement.pop_peasants * 1000 / settlement.pop_peasants_cap;
         settlement.economy.production = settlement.base_land_surplus * ia_min(peasantsFillPerMille, 1000) / 1000 + settlement.pop_peasants;
     }
+
+    // Trade bonus: up to production_bonus_percent_max more, linear in the trade volume fraction. Before tax, so it is taxed and shown in production.
+    ui64 bonusPercentMax = ia_min(GAME_PARAMETERS.trade.production_bonus_percent_max, (ui32)1000);
+    ui64 bonus = (ui64)settlement.economy.production * bonusPercentMax * settlement_trade_volume_fraction(world.entities->settlements, settlement_index) / (100ull * IA_FIXED_ONE);
+    settlement.economy.production = (ui32)ia_min((ui64)settlement.economy.production + bonus, (ui64)0xFFFFFFFF);
 
     match_player_id owner = settlement.owner;
     if (settlement.tax_rate > 0 && owner < world.player_count)
@@ -114,6 +120,12 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
         settlement.pop_change = ia_max(1, settlement.pop_change);
     }
 
+    if (settlement.urban_pop() > settlement.pop_urban_cap)
+    {
+        // Decrease pop growth due to urban overcrowding.
+        settlement.pop_change -= (settlement.urban_pop() - settlement.pop_urban_cap) / 2;
+    }
+
     if (settlement.pop_change > 0)
     {
         settlement.pop_unemployed += settlement.pop_change;
@@ -149,6 +161,17 @@ static void settlement_goods_waste(world_entity_settlements& settlements, ui32 s
     goods -= (ui32)((ui64)(goods - capacity) * ia_min(GAME_PARAMETERS.trade.overflow_waste_percent, (ui32)100) / 100);
 }
 
+// TRADE VOLUME DECAY: the volume loses max / volume_decay_days (at least 1), floored at 0. Uses the max after growth.
+static void settlement_trade_volume_decay(world_entity_settlements& settlements, ui16 settlement_index)
+{
+    ui32& volume = settlements.trade[settlement_index].trade_volume;
+    if (volume == 0) return;
+
+    ui32 decayDays = ia_max(GAME_PARAMETERS.trade.volume_decay_days, (ui32)1);
+    ui32 decay = ia_max(settlement_trade_volume_max(settlements, settlement_index) / decayDays, (ui32)1);
+    volume = volume > decay ? volume - decay : 0;
+}
+
 // Runs daily, all settlements on the same tick. Writes the settlement's economy figures (last day's).
 void world_system_economy_daily_tick(match_world_state& world)
 {
@@ -177,6 +200,7 @@ void world_system_economy_daily_tick(match_world_state& world)
         settlement_goods_sales(settlements, settlementIndex);
         settlement_apply_growth(world, settlementIndex);
         settlement_goods_waste(settlements, settlementIndex);
+        settlement_trade_volume_decay(settlements, settlementIndex);
     }
 }
 

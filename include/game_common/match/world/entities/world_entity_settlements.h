@@ -14,6 +14,9 @@ struct settlement_building_events
 
 // Building type events.
 
+void settlement_building_housing_on_added(match_world_state& world, entity_guid settlement);
+void settlement_building_housing_on_removed(match_world_state& world, entity_guid settlement);
+
 void settlement_building_barracks_on_added(match_world_state& world, entity_guid settlement);
 void settlement_building_barracks_on_removed(match_world_state& world, entity_guid settlement);
 
@@ -40,12 +43,14 @@ struct settlement_building_def
 // Settlements keep a count per row of this table.
 static constexpr settlement_building_def SETTLEMENT_BUILDING_TABLE[] =
 {
+    { "Housing", "Increases population capacity by 100.",
+        4, 50, 25, { .on_added = settlement_building_housing_on_added, .on_removed = settlement_building_housing_on_removed } },
 	{ "Barracks", "Increases Men at Arms Max and trains 1 per day.",
-        10, 100, 10, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
+        10, 100, 50, { .on_added = settlement_building_barracks_on_added, .on_removed = settlement_building_barracks_on_removed } },
     { "Caravanserai", "Increases maximum amount of active caravans. Small increase to market goods capacity.",
-        10, 100, 25, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
+        6, 100, 50, { .on_added = settlement_building_tradepost_on_added, .on_removed = settlement_building_tradepost_on_removed } },
     { "Trade Depot", "Large increase to market goods capacity.",
-        20, 150, 50, { .on_added = settlement_building_tradedepot_on_added, .on_removed = settlement_building_tradedepot_on_removed } },
+        10, 150, 50, { .on_added = settlement_building_tradedepot_on_added, .on_removed = settlement_building_tradedepot_on_removed } },
 };
 
 constexpr ui8 SETTLEMENT_BUILDING_TYPE_COUNT = sizeof(SETTLEMENT_BUILDING_TABLE) / sizeof(SETTLEMENT_BUILDING_TABLE[0]);
@@ -90,6 +95,8 @@ struct settlement_trading
     // Nothing is ever refused: the pool may exceed its capacity, which is only the reference for its fill (settlement_market_capacity).
     ui32 market_goods;
     ui32 market_capacity_buildings; // Buildings' part of the capacity, kept by their added / removed events (constants there).
+    // Trade volume: absolute, may exceed its max (settlement_trade_volume_max); only the part up to the max is effective. Decays daily.
+    ui32 trade_volume;
 };
 
 // Property arrays for a world's settlements.
@@ -111,6 +118,8 @@ struct world_entity_settlements : public world_entity_container
 
 	ui32* pop_workers; // Population assigned to construction projects, inside or outside the settlement.
 
+    ui32* pop_urban_cap; // Total capacity for non-peasant population in the settlement.
+
     // TROOPS
 
 	army_troop_count* garrison; // Soldiers at home: the local troop pool.
@@ -123,6 +132,7 @@ struct world_entity_settlements : public world_entity_container
 	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights; }
 	inline ui32 soldiers_total(ui16 index) const { return soldiers_home(index) + soldiers_raised(index); } // Everyone who is a soldier, at home or raised.
 	inline ui32 at_home(ui16 index) const { return pop_unemployed[index] + pop_peasants[index] + pop_workers[index] + soldiers_home(index); }
+    inline ui32 urban_pop(ui16 index) const { return pop_unemployed[index] + pop_workers[index] + soldiers_home(index); }
 
     // GROWTH
 
@@ -171,6 +181,8 @@ struct world_entity_settlements : public world_entity_container
 
         ui32 pop_workers; // Population assigned to construction projects, inside or outside the settlement.
 
+        ui32 pop_urban_cap; // Total capacity for non-peasant population in the settlement.
+                            
         army_troop_count garrison; // Soldiers at home: the local troop pool.
         army_troop_count raised; // Soldiers in armies raised from the settlement.
 
@@ -181,6 +193,7 @@ struct world_entity_settlements : public world_entity_container
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
+        inline ui32 urban_pop() const { return pop_unemployed + pop_workers + soldiers_home(); }
 
         i32 pop_change;
         i32 pop_growth_per_mille; // Growth rate applied to the population at home, in per mille. Negative = shrinking.
@@ -196,6 +209,7 @@ struct world_entity_settlements : public world_entity_container
 
         settlement_trading trade;
         ui32 market_capacity; // Computed (settlement_market_capacity).
+        ui32 trade_volume_max; // Computed (settlement_trade_volume_max).
 
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
@@ -219,6 +233,7 @@ struct world_entity_settlements : public world_entity_container
         ui32& pop_peasants;
         ui32& pop_peasants_cap;
         ui32& pop_workers;
+        ui32& pop_urban_cap;
 
         army_troop_count& garrison;
         army_troop_count& raised;
@@ -240,6 +255,7 @@ struct world_entity_settlements : public world_entity_container
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); }
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
+        inline ui32 urban_pop() const { return pop_unemployed + pop_workers + soldiers_home(); }
 
         void copy_from(const single& source)
         {
@@ -252,6 +268,7 @@ struct world_entity_settlements : public world_entity_container
             pop_peasants = source.pop_peasants;
             pop_peasants_cap = source.pop_peasants_cap;
             pop_workers = source.pop_workers;
+            pop_urban_cap = source.pop_urban_cap;
             garrison = source.garrison;
             raised = source.raised;
             troop_max = source.troop_max;
@@ -277,6 +294,7 @@ struct world_entity_settlements : public world_entity_container
             , pop_peasants(collection.pop_peasants[index])
             , pop_peasants_cap(collection.pop_peasants_cap[index])
             , pop_workers(collection.pop_workers[index])
+            , pop_urban_cap(collection.pop_urban_cap[index])
             , garrison(collection.garrison[index])
             , raised(collection.raised[index])
             , troop_max(collection.troop_max[index])
@@ -305,6 +323,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	pop_peasants = source.pop_peasants;
 	pop_peasants_cap = source.pop_peasants_cap;
 	pop_workers = source.pop_workers;
+    pop_urban_cap = source.pop_urban_cap;
 	garrison = source.garrison;
 	raised = source.raised;
 	troop_max = source.troop_max;
@@ -318,6 +337,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	trade = source.trade;
 	economy = source.economy;
 	market_capacity = 0;
+	trade_volume_max = 0;
 	troop_ceilings = source.troop_ceilings;
 	economy = {};
 	troop_effective_ceilings = {};
@@ -334,6 +354,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	pop_peasants = collection.pop_peasants[index];
 	pop_peasants_cap = collection.pop_peasants_cap[index];
 	pop_workers = collection.pop_workers[index];
+    pop_urban_cap = collection.pop_urban_cap[index];
 	garrison = collection.garrison[index];
 	raised = collection.raised[index];
 	troop_max = collection.troop_max[index];
@@ -347,6 +368,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	trade = collection.trade[index];
 	economy = collection.economies[index];
 	market_capacity = 0;
+	trade_volume_max = 0;
 	troop_ceilings = collection.troop_ceilings[index];
 	economy = collection.economies[index];
 	troop_effective_ceilings = collection.troop_ceilings[index];
@@ -369,6 +391,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
     GAME_DATA_PROPERTY(pop_unemployed, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(pop_peasants, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(pop_workers, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(pop_urban_cap, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY(base_land_surplus, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(tax_rate, GAME_DATA_PROP_TYPE::I8)
@@ -384,7 +407,10 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
     GAME_DATA_PROPERTY_PATH(trading_caravans_max, trade.caravan_count_max, GAME_DATA_PROP_TYPE::UI8)
     GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
 
+    GAME_DATA_PROPERTY_PATH(trading_trade_volume, trade.trade_volume, GAME_DATA_PROP_TYPE::UI32)
+
     GAME_DATA_PROPERTY(market_capacity, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(trade_volume_max, GAME_DATA_PROP_TYPE::UI32)
 
 	GAME_DATA_PROPERTY_PATH(territory_bounds_min, territory.bounds_min, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY_PATH(territory_bounds_max, territory.bounds_max, GAME_DATA_PROP_TYPE::WORLD_LOCATION)

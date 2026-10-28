@@ -27,6 +27,7 @@ const IDS = {
     consumption_delta: "settlement_panel_consumption_delta",
     market_goods: "settlement_panel_market_goods",
     market_goods_percent: "settlement_panel_market_goods_percent",
+    trade_volume: "settlement_panel_trade_volume",
     garrison: ["settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights"], // troop_type order.
     building_bar_template: "settlement_panel_building_bar_template",
     buildings: ["settlement_panel_building_barracks", "settlement_panel_building_caravanserai", "settlement_panel_building_trade_depot"], // Building table order.
@@ -34,6 +35,7 @@ const IDS = {
 
 const GARRISON_COLORS = ["#4aa3ff", "#f0b040", "#c060e0"]; // troop_type order, as in section_troops.ts.
 const MARKET_GOODS_COLOR = "#d4a93c";
+const TRADE_VOLUME_COLOR = "#4fc08d";
 
 // Population growth per day (in %) above 0 but below this is shown yellow instead of green.
 const GROWTH_CLOSE_TO_ZERO_PERCENT = 0.5;
@@ -70,6 +72,7 @@ export interface SettlementPanelState
     tax_rate_max: number;
     consumption: { sold: number, needed: number, population_change: number } | null; // Last day. Null hides the row.
     market_goods: { goods: number, capacity: number } | null; // Null hides the gauge.
+    trade_volume: { volume: number, max: number } | null; // Null hides the gauge.
     garrison: (SettlementGarrisonState | null)[]; // troop_type order. Null hides the gauge.
     buildings: (SettlementBuildingState | null)[]; // Building table order. Null hides the box.
     editable: boolean; // Tax and ceiling sliders can be moved.
@@ -181,6 +184,8 @@ let el: {
     consumption_delta: HTMLElement;
     market_goods: StaticGauge;
     market_goods_percent: HTMLElement;
+    trade_volume: StaticGauge;
+    trade_volume_tooltip: HoverTooltip;
     garrison: StaticGauge[];
     buildings: BuildingBox[];
 } | null = null;
@@ -211,6 +216,8 @@ function init(): void
         consumption_delta: get(IDS.consumption_delta),
         market_goods: new StaticGauge(get(IDS.market_goods)),
         market_goods_percent: get(IDS.market_goods_percent),
+        trade_volume: new StaticGauge(get(IDS.trade_volume)),
+        trade_volume_tooltip: new HoverTooltip(get(IDS.trade_volume)),
         garrison: IDS.garrison.map((id, troop_type) => new StaticGauge(get(id), value => emit_ceiling(troop_type, value))),
         buildings: IDS.buildings.map((id, building_type) => new BuildingBox(get(id), bar_template, () => events.emit("build", building_type))),
     };
@@ -238,6 +245,7 @@ export function submit(state: SettlementPanelState | null): void
         el.population_tooltip.hide();
         el.production_tooltip.hide();
         el.consumption_tooltip.hide();
+        el.trade_volume_tooltip.hide();
         return;
     }
 
@@ -313,6 +321,11 @@ function submit_economy(state: SettlementPanelState): void
     const market = state.market_goods;
     el.market_goods.submit(market === null ? null : { color: MARKET_GOODS_COLOR, current: market.goods, max: market.capacity, compact: true, editable: false });
     if (market !== null) set_text(el.market_goods_percent, `(${market.capacity > 0 ? Math.round(100 * market.goods / market.capacity) : 0}%)`);
+
+    const trade = state.trade_volume;
+    el.trade_volume.submit(trade === null ? null : { color: TRADE_VOLUME_COLOR, current: trade.max > 0 ? Math.min(trade.volume, trade.max) : 0, max: trade.max, compact: true, editable: false });
+    if (trade === null) el.trade_volume_tooltip.hide();
+    else el.trade_volume_tooltip.submit(["Volume of recent exports and imports in this settlement. Provides a bonus to production and to further trade profits."]);
 }
 
 function set_text(element: HTMLElement, text: string): void

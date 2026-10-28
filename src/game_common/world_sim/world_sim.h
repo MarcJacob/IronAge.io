@@ -25,12 +25,14 @@ static inline bool world_is_daily_tick(const match_world_state& world)
 // Destroys an army and returns its men to the settlement: levies become peasants, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
-// Picks a destination settlement for a caravan of the given value travelling from source (any location), excluding origin_exclude (may be INVALID_ENTITY_GUID).
-// Candidates are the other active settlements (no reachability check) except destination_exclude (optional, e.g. the destination that just failed).
-// Weight = (trade_profit x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen (not advanced without candidates).
-// Returns false if there is no destination, otherwise the destination and its tile distance from source.
-bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin_exclude, ui32 caravan_value,
-    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_path_cost, entity_guid destination_exclude = INVALID_ENTITY_GUID);
+// Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
+// Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
+// Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - pool). Sizes below min_value are not candidates.
+// Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
+// (not advanced without candidates). Returns false if there is no destination, otherwise the destination and the caravan size for it.
+bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
+    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_value,
+    const entity_guid* destination_excludes = nullptr, ui32 destination_exclude_count = 0);
 
 // Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
 // With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.

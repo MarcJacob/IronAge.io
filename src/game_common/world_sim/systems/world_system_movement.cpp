@@ -7,8 +7,7 @@
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_caravan.h"
 
-// What entities can cross. Caravans: land only. Entities move in straight segments. Other members zero-initialized.
-static const path_params CARAVAN_PATH_PARAMS = { .passable_terrain = PATH_TERRAIN_LAND, .straight_segments = true };
+// What entities can cross (caravans: CARAVAN_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
 static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
 

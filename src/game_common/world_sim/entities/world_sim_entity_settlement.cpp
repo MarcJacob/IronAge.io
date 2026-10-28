@@ -28,6 +28,7 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     {
 	    newSettlement.pop_unemployed = 100; // 100 Unemployed population if no starting population of any kind was given.
     }
+    SET_DEFAULT_VAL(newSettlement.pop_urban_cap, 100);
 	SET_DEFAULT_VAL(newSettlement.pop_total, newSettlement.at_home());
 	SET_DEFAULT_VAL(newSettlement.pop_peasants_cap, newSettlement.pop_peasants);
 	SET_DEFAULT_VAL(newSettlement.trade.market_goods, (ui32)((ui64)newSettlement.pop_total * GAME_PARAMETERS.trade.start_goods_percent / 100));
@@ -98,6 +99,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.pop_workers = memory.alloc<ui32>(count);
 	if (settlements.pop_workers == nullptr) return false;
 
+	settlements.pop_urban_cap = memory.alloc<ui32>(count);
+	if (settlements.pop_urban_cap == nullptr) return false;
+
 	settlements.garrison = memory.alloc<army_troop_count>(count);
 	if (settlements.garrison == nullptr) return false;
 
@@ -149,6 +153,7 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 
 	out_state.copy_from(settlements, index);
 	out_state.market_capacity = settlement_market_capacity(settlements, index);
+	out_state.trade_volume_max = settlement_trade_volume_max(settlements, index);
 	out_state.troop_effective_ceilings = settlement_troop_effective_ceilings(settlements.troop_max[index], settlements.troop_ceilings[index]);
 	return true;
 }
@@ -194,6 +199,22 @@ bool world_is_valid_settlement_location(const match_world_state& world, world_lo
 
 // SETTLEMENT BUILDING TYPES
 // Type-specific event functions (see SETTLEMENT_BUILDING_TABLE in world_entities.h).
+
+// HOUSING
+
+void settlement_building_housing_on_added(match_world_state& world, entity_guid settlement)
+{
+    ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+
+    ui16 settlementIndex = settlement.get_index();
+    world.entities->settlements.pop_urban_cap[settlementIndex] += GAME_PARAMETERS.housing_pop_increase;
+}
+
+void settlement_building_housing_on_removed(match_world_state& world, entity_guid settlement)
+{
+    ui16 settlementIndex = settlement.get_index();
+    world.entities->settlements.pop_urban_cap[settlementIndex] -= GAME_PARAMETERS.housing_pop_increase;
+}
 
 // BARRACKS
 
