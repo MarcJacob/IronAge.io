@@ -48,6 +48,7 @@ export class SettlementSelected extends Core.Mode
             }),
             SettlementPanelUI.on("tax_rate", tax_rate => send_to_selected("SET_SETTLEMENT_TAX_RATE", { tax_rate })),
             SettlementPanelUI.on("export_ratio", export_ratio => send_to_selected("SET_EXPORT_RATIO", { export_ratio })),
+            SettlementPanelUI.on("allow_foreign_export", allow_foreign_export => send_to_selected("SET_ALLOW_FOREIGN_EXPORT", { allow_foreign_export })),
             // Lowering a ceiling below the pool discards the excess troops (the gauge warns).
             SettlementPanelUI.on("ceiling", (troop_type, ceiling) => send_to_selected("SET_SETTLEMENT_TROOP_CEILING", { troop_type, ceiling })),
             SettlementPanelUI.on("build", building_type => send_to_selected("BUILD_SETTLEMENT_BUILDING", { building_type })),

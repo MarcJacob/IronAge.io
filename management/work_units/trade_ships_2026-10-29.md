@@ -38,4 +38,4 @@ Ships work like sea caravans: same trade logic, water pathing instead of land, s
 
 ## Next step
 
-Build, hand-test the panel and coast fix; tune speed / carry in play. Then flag [DONE].
+Hand-test the coast corner fix in play (ships and caravans turning into coastlines); tune speed / carry. Then flag [DONE]. Panel work is hand-tested.

@@ -84,6 +84,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
             population_change: prop("population_change"),
         },
         export_ratio: { ratio: prop("trading_export_ratio"), max: parameters.get_number("trade_export_ratio_max_percent") },
+        allow_foreign_export: prop("trading_allow_foreign_export") !== 0,
         market_goods: { goods: prop("trading_market_goods"), export_goods: prop("trading_export_goods"), capacity: prop("market_capacity") },
         trade_volume: { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
         // Pooled types (no levies). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).

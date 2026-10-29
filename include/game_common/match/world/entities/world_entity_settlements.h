@@ -101,6 +101,7 @@ struct settlement_trading
     ui8 ship_count; // Same for ships (caravans with IS_SHIP), counted apart.
     ui8 ship_count_max; // 0 by default, +1 per Trade Port.
     ui8 export_ratio; // Player-set % (0..export_ratio_max_percent) of all incoming goods that goes to the export pool instead of the market goods.
+    ui8 allow_foreign_export; // 0 (default) = new caravans / ships only target settlements of the same owner. Non-zero = any settlement.
     // Incoming goods (post-tax production, caravan deliveries and refunds) are split by export_ratio between these two pools (settlement_market_add).
     // Market goods (local pool): consumption (sales) comes out. Export goods: only caravans take from it, it is never consumed locally.
     // Nothing is ever refused: the pools may exceed their shared capacity (settlement_market_capacity), the excess of their sum is wasted daily.
@@ -423,6 +424,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
     GAME_DATA_PROPERTY_PATH(trading_market_goods, trade.market_goods, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trading_export_goods, trade.export_goods, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trading_export_ratio, trade.export_ratio, GAME_DATA_PROP_TYPE::UI8)
+    GAME_DATA_PROPERTY_PATH(trading_allow_foreign_export, trade.allow_foreign_export, GAME_DATA_PROP_TYPE::UI8)
 
     GAME_DATA_PROPERTY_PATH(trading_trade_volume, trade.trade_volume, GAME_DATA_PROP_TYPE::UI32)
 

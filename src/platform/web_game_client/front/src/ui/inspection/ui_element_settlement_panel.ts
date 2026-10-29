@@ -34,6 +34,7 @@ const IDS = {
     export_row: "settlement_panel_export",
     export_value: "settlement_panel_export_value",
     export_slider: "settlement_panel_export_slider",
+    foreign_export_checkbox: "settlement_panel_foreign_export_checkbox",
     consumption: "settlement_panel_consumption",
     consumption_value: "settlement_panel_consumption_value",
     consumption_delta: "settlement_panel_consumption_delta",
@@ -91,6 +92,7 @@ export interface SettlementPanelState
     tax_rate_max: number;
     consumption: { sold: number, needed: number, population_change: number } | null; // Last day. Null hides the row.
     export_ratio: { ratio: number, max: number } | null; // % of incoming goods set aside for export, and the highest settable. Null hides the slider.
+    allow_foreign_export: boolean; // Shown for any settlement, only changeable when editable.
     market_goods: { goods: number, export_goods: number, capacity: number } | null; // Local pool, export pool, capacity shared by both. Null hides the gauge.
     trade_volume: { volume: number, max: number } | null; // Null hides the gauge.
     garrison: (SettlementGarrisonState | null)[]; // troop_type order. Null hides the gauge.
@@ -101,6 +103,7 @@ export interface SettlementPanelState
 const events = new UiEvents<{
     tax_rate: (tax_rate: number) => void;
     export_ratio: (export_ratio: number) => void;
+    allow_foreign_export: (allow_foreign_export: number) => void;
     ceiling: (troop_type: number, ceiling: number) => void;
     build: (building_type: number) => void;
 }>();
@@ -214,6 +217,7 @@ let el: {
     export_row: HTMLElement;
     export_ratio: StaticSlider;
     export_tooltip: HoverTooltip;
+    foreign_export_checkbox: HTMLInputElement;
     consumption: HTMLElement;
     consumption_tooltip: HoverTooltip;
     consumption_value: HTMLElement;
@@ -258,6 +262,7 @@ function init(): void
         export_row: get(IDS.export_row),
         export_ratio: new StaticSlider(get(IDS.export_value), get(IDS.export_slider) as HTMLInputElement, value => events.emit("export_ratio", value)),
         export_tooltip: new HoverTooltip(get(IDS.export_row)),
+        foreign_export_checkbox: get(IDS.foreign_export_checkbox) as HTMLInputElement,
         consumption,
         consumption_tooltip: new HoverTooltip(consumption),
         consumption_value: get(IDS.consumption_value),
@@ -271,6 +276,13 @@ function init(): void
         buildings: [],
         building_template: get(IDS.building_template),
     };
+
+    // The browser toggles the box on click; blurring it (keys keep reaching the game) lets submit_economy resync it with the real state.
+    el.foreign_export_checkbox.addEventListener("change", () => {
+        const checkbox = el!.foreign_export_checkbox;
+        checkbox.blur();
+        events.emit("allow_foreign_export", checkbox.checked ? 1 : 0);
+    });
 }
 
 function emit_ceiling(troop_type: number, value: number): void
@@ -379,6 +391,10 @@ function submit_economy(state: SettlementPanelState): void
             "Caravans take up to 50% of it.",
         ]);
     }
+
+    // Not rewritten while focused (a click blurs it, so only between press and release). Afterwards it follows the state, so a rejected command reverts.
+    if (el.foreign_export_checkbox.checked !== state.allow_foreign_export && document.activeElement !== el.foreign_export_checkbox) el.foreign_export_checkbox.checked = state.allow_foreign_export;
+    el.foreign_export_checkbox.disabled = !state.editable;
 
     const consumption = state.consumption;
     el.consumption.hidden = consumption === null;

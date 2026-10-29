@@ -150,16 +150,61 @@ export class StaticSlider
     private pending: { value: number, time: number } | null = null; // Released, not yet in the state.
     private state: StaticSliderState | null = null;
 
-    // text: where the value is written. on_change: called with the released slider value (not while dragging).
-    constructor(private text: HTMLElement, private slider: HTMLInputElement, on_change: (value: number) => void)
+    private editor: HTMLInputElement | null = null; // Typed entry, open while the value text is clicked into.
+
+    // text: where the value is written (click it to type a value when editable). on_change: called with the released / typed value (not while dragging).
+    constructor(private text: HTMLElement, private slider: HTMLInputElement, private on_change: (value: number) => void)
     {
-        slider.addEventListener("input", () => { this.dragging = true; this.render(Number(slider.value)); });
+        slider.addEventListener("input", () => { this.dragging = true; this.pending = null; this.render(Number(slider.value)); });
         slider.addEventListener("change", () => {
             this.dragging = false;
-            this.pending = { value: Number(slider.value), time: performance.now() };
-            slider.blur(); // Keys keep moving the camera.
-            on_change(this.pending.value);
+            slider.blur(); // Keys keep moving the camera. Also lifts the focus guard of submit.
+            this.commit(Number(slider.value));
         });
+        text.addEventListener("click", () => this.open_editor());
+    }
+
+    private commit(value: number): void
+    {
+        this.pending = { value, time: performance.now() };
+        this.on_change(value);
+    }
+
+    private open_editor(): void
+    {
+        if (this.editor !== null || this.state === null || !this.state.editable) return;
+        const editor = document.createElement("input");
+        editor.type = "text";
+        editor.inputMode = "numeric";
+        editor.className = "slider_row_editor";
+        editor.value = String(Number(this.slider.value));
+        this.editor = editor;
+        this.text.hidden = true;
+        this.text.after(editor);
+
+        // Enter / blur confirm, Escape cancels. Removing the input blurs it again, hence the guard.
+        const close = (confirm: boolean) => {
+            if (this.editor !== editor) return;
+            this.editor = null;
+            const typed = Math.round(Number(editor.value));
+            editor.remove();
+            this.text.hidden = false;
+            if (confirm && editor.value.trim() !== "" && Number.isFinite(typed) && this.state !== null && this.state.editable)
+            {
+                this.commit(Math.min(this.state.max, Math.max(this.state.min, typed)));
+                this.submit(this.state);
+            }
+        };
+        editor.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") close(true);
+            else if (event.key === "Escape") close(false);
+            else return;
+            event.preventDefault();
+            editor.blur();
+        });
+        editor.addEventListener("blur", () => close(true));
+        editor.focus();
+        editor.select();
     }
 
     // Null forgets a held value (the caller hides the markup).
@@ -172,14 +217,18 @@ export class StaticSlider
             this.dragging = false;
             this.pending = null;
         }
+        if (!editable) this.editor?.blur(); // Closes an open typed entry (nothing is sent: not editable).
         if (this.slider.hidden !== (state === null)) this.slider.hidden = state === null;
         if (state === null) return;
         if (this.slider.disabled === editable) this.slider.disabled = !editable; // Not editable: shown, read-only.
 
         if (this.pending !== null && (this.pending.value === state.value || performance.now() - this.pending.time > PENDING_MS)) this.pending = null;
 
+        // Focus guard: while the range input has focus (a drag, or keys on it) the state does not move it.
+        // A change blurs it, after which it resyncs (the pending hold covers the wait for the command).
         let shown = state.value;
-        if (this.pending !== null) shown = this.pending.value;
+        if (document.activeElement === this.slider) shown = Number(this.slider.value);
+        else if (this.pending !== null) shown = this.pending.value;
         else if (this.dragging) shown = Number(this.slider.value);
 
         if (this.slider.min !== String(state.min)) this.slider.min = String(state.min);
@@ -193,7 +242,7 @@ export class StaticSlider
         const state = this.state;
         if (state === null) return;
 
-        const text = `${shown}${state.unit ?? ""}`;
+        const text = `${shown}${state.unit ?? ""}`; // (The text is hidden while the typed entry is open.)
         if (this.text.textContent !== text) this.text.textContent = text;
 
         const sign = shown < 0 ? "negative" : shown > 0 ? "positive" : "zero";

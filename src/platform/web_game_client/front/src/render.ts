@@ -251,7 +251,7 @@ const ENTITY_SQUARE_SIZE = 5;
 const SETTLEMENT_MIN_PX = ENTITY_SQUARE_SIZE;
 function settlement_screen_size(entity: Backend.RenderEntity)
 {
-    const units = entity.significance / 1000 + Math.log2(entity.significance) * 4 - 6;
+    const units = entity.significance / 500 + Math.log2(entity.significance) * 4 - 6;
     return Math.max(SETTLEMENT_MIN_PX, (1 + units * ENTITY_SCALE_UNIT) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
 

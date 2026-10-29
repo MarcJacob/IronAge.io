@@ -33,6 +33,8 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 7. [DONE] Export pool + `export_ratio` + `SET_EXPORT_RATIO` command + UI (slider next to Tax, light-blue right-to-left segment on the goods gauge).
 8. [DONE, hand-tested] Export pool cap + gauge marker + daily excess-to-local move (after growth, before waste) + waste on the sum of both pools (proportional).
 9. [DONE, hand-tested] Info visibility regardless of ownership in the inspection UI.
+10. [DONE, unbuilt] Foreign export flag. Per-settlement `allow_foreign_export`, default FALSE (zero), command `SET_ALLOW_FOREIGN_EXPORT` (owner only), checkbox next to the export ratio slider. When FALSE only same-owner settlements are trade targets (caravans and ships). AI untouched (so AI settlements will not export abroad until it gets logic). Later: a diplomacy trade agreement can override it.
+11. [DONE, hand-tested] Panel slider polish: Tax / Export label + figure above the slider, click-to-type figure (clamped, owner only), focus guard on sliders and checkbox (blur after use), fixed-width figure box (slider no longer resizes mid-drag). Step kept at 1.
 - Hand-tested by user: a trade center loop (Housing, Caravanserai, Trade Depot, falling export ratio) works; model "works much better".
 
 ## Open questions
@@ -49,4 +51,4 @@ Started: 2026-10-28. Supersedes the barter-profit model of `trade_market_goods_2
 
 ## Next step
 
-Play-test further (user). Then: travel cost (check size of `path_commitment_rewrite` / `path_store_cache`), trade stats counters, AI ratio rule. Trade must be settled before military supply (`army_supplies`, `alpha_troops_recruitment`).
+Hand-test the foreign export flag (task 10; builds pending). Play-test further (user). Then: travel cost (check size of `path_commitment_rewrite` / `path_store_cache`), trade stats counters, AI ratio rule. Trade must be settled before military supply (`army_supplies`, `alpha_troops_recruitment`).

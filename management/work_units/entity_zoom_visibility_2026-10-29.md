@@ -28,6 +28,8 @@ Entities shrink, become cheap squares, or disappear depending on zoom and signif
 - Army size uses floor(log2) (stepped); smooth log2 if wanted.
 - Dead entries left in `ENTITY_BASE_SCALE_MULTIPLIERS`.
 
+- Armies / caravans / ships have a minimum of 1 scale unit (never hidden at max zoom). 0.1 tile reaches the square size (5 px) only on a canvas >= 1250 px high, so min-size entities show as small squares on smaller windows; user accepted and is tweaking constants.
+
 ## Next step
 
-Build (wasm + TS, hard reload), hand-test zoom behaviour, tune constants.
+User tuning constants by hand; then flag [DONE].

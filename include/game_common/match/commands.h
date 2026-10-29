@@ -43,6 +43,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	SET_EXPORT_RATIO, // Sets the % of a settlement's incoming goods that goes to its export pool, within 0..export_ratio_max_percent.
 
+	SET_ALLOW_FOREIGN_EXPORT, // Sets whether a settlement may send caravans / ships to settlements of other players.
+
 	TYPE_COUNT,
 };
 
@@ -358,6 +360,24 @@ bool command_set_export_ratio_validity_check(const match_world_state& world, mat
 void command_set_export_ratio_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// SET ALLOW FOREIGN EXPORT
+struct command_data_set_allow_foreign_export
+{
+	entity_guid settlement;
+	ui8 allow_foreign_export; // 0 = only own settlements can be trade targets, anything else = all.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_allow_foreign_export)
+	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(allow_foreign_export, GAME_DATA_PROP_TYPE::UI8)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_allow_foreign_export_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_allow_foreign_export_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // Header & command size mapping definitions.
 
 // Minimal definition for a single command in a buffer.
@@ -474,6 +494,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_disband_army_validity_check, command_disband_army_apply },
 	{ "SET_EXPORT_RATIO", MATCH_COMMAND_TYPE::SET_EXPORT_RATIO, sizeof(command_data_set_export_ratio),
 		command_set_export_ratio_validity_check, command_set_export_ratio_apply },
+	{ "SET_ALLOW_FOREIGN_EXPORT", MATCH_COMMAND_TYPE::SET_ALLOW_FOREIGN_EXPORT, sizeof(command_data_set_allow_foreign_export),
+		command_set_allow_foreign_export_validity_check, command_set_allow_foreign_export_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

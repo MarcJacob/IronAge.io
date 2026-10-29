@@ -694,6 +694,32 @@ void command_set_export_ratio_apply(match_world_state& world, match_player_id pl
 	world.entities->settlements.trade[command.settlement.get_index()].export_ratio = command.export_ratio;
 }
 
+// SET ALLOW FOREIGN EXPORT
+
+bool command_set_allow_foreign_export_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_set_allow_foreign_export& command = command_header.get_command_data<command_data_set_allow_foreign_export>();
+
+	if (!world_entity_is_valid(world, command.settlement) || command.settlement.get_type() != ENTITY_TYPE::SETTLEMENT)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	if (world.entities->settlements.owners[command.settlement.get_index()] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_set_allow_foreign_export_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_set_allow_foreign_export_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_set_allow_foreign_export& command = command_header.get_command_data<command_data_set_allow_foreign_export>();
+	world.entities->settlements.trade[command.settlement.get_index()].allow_foreign_export = command.allow_foreign_export != 0 ? 1 : 0;
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS

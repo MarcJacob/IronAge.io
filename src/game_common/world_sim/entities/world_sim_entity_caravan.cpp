@@ -193,6 +193,9 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         for (ui32 i = 0; i < destination_exclude_count; i++) excluded = excluded || guid == destination_excludes[i];
         if (excluded) continue;
 
+        // At spawn, an origin that does not allow foreign export only targets settlements of its own owner (travelling caravans retarget freely).
+        if (spawning && !settlements.trade[origin.get_index()].allow_foreign_export && settlements.owners[index] != settlements.owners[origin.get_index()]) continue;
+
         // Ships only go to coastal settlements (they arrive at the dock tile).
         world_location dock;
         if (caravan_is_ship(caravan_flags) && !settlement_dock_tile(world, index, dock)) continue;
