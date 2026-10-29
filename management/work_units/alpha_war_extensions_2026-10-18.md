@@ -17,12 +17,65 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
 
 ## Tasks
 
-Not broken down yet.
+Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military_state.md`. Each phase is reviewed / hand-tested by the user before the next.
+
+- P0 Fixes: levy draw bug, remove dead `siege_defenders`.
+- P1 Garrison: levy pool (see decisions), garrison joins assault battle as a side.
+- P2a Standing orders: data + Station / Attack replacing current move / attack 1:1.
+- P2b Remaining orders: Defend territory, Raid, Go home; invalid-order fallbacks; AI switched to orders.
+- P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
+  - S0 [DONE, unbuilt] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
+  - S1 Starvation + caravan rules.
+  - S2 Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
+  - S3 LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
+  - S4 SALLY_OUT, outside-battle phase, commanders.
+  - S5 Rename battle -> engagement (after P2).
+- P3b Battle damage / defense model.
+- P3c Raiding / looting, live off the land, supplies homecoming (absorbs `army_supplies` 3-4).
+- P4 Campaign entity (+ UI).
+- P5 Campaign AI, replacing `match_ai` pseudo-campaign.
 
 ## Decisions
 
 - Conquest: the settlement is simply transferred to the victor, permanently. Building damage / wealth looting maybe later.
 - Gifting settlements between players peacefully: maybe later (see diplomacy unit).
+- Levies: garrison pool replenishing like other types; max and training speed depend only on population; no ceiling, no upkeep. Pool levies do not reduce peasants / unemployed / workers. Losing or raising a levy kills one pop (unemployed, then worker, then peasant).
+- Raising phase stays; armies raised anywhere in territory, incl. inside the settlement. Composition never changes, no reinforcement (except campaign armies).
+- Standing orders (invalid -> Station at current location; attack-settlement order -> Defend it if no longer hostile):
+  - Station: go to location, stand, attack hostiles within leash 5 / 10 tiles.
+  - Defend territory: wander randomly in territory, attack intruders; retreat into settlement if a stronger force arrives.
+  - Attack / Besiege: attack target entity, start / join battle or siege.
+  - Raid: target territory; go there, raid, attack nearby enemy / neutral caravans, flee threats.
+  - Go home: return to home settlement and disband.
+  - Current move = Station, current attack = Attack. Move / attack commands stay as wrappers.
+- Target scans: full scan of all armies (no spatial index yet).
+- Battle: per type damage and defense. Round: each side deals up to its damage count (random min-max %), spread over armies as now, then over troop types; each type reduces damage by random 0..its total defense. No retreat / morale yet.
+- Siege (revised): separate entity. Settlement is just put under siege; no battle by default. Siege owner (commander, owner of the army that started it) can Begin Assault; settlement owner can Sally Out. Battle damage only during an assault / sally; once started by either side it lasts until resolution. Settlement joins that battle directly as a side (no temp army). Siege / starvation apply whether or not an assault is ongoing: production lost, no trading, consumption halved, no pop growth.
+- Siege as engagement (supersedes "separate entity"): battle entity becomes a "Military Engagement" state machine (`kind` field / siege, `phase`), main target = army or settlement; no new entity type. Rename battle -> "engagement" (in scope, separate mechanical step).
+  - Lifted when no armies remain on the attacker side (any reason). An army can withdraw via a special action; siege commander can lift the whole siege from the engagement.
+  - Any player's armies can join either side. Defending armies cannot enter the settlement once the siege started; if they attack besiegers they join on the defender side, forcing an "outside battle" that the garrison / armies inside do NOT join unless they sally out (engagement turns back into a sally).
+  - Each side has a commander player, determined contextually: siege commander changes if another player's troops outnumber the commander's; if all armies are in a campaign, the campaign leader army's owner commands.
+  - All engagements pin involved armies until concluded or explicitly left when possible (idle siege included).
+- Siege details:
+  - Siege on a settlement with no garrison and no defender armies resolves immediately (conquest).
+  - Outside battle: an army attacking the besiegers joins the DEFENDER side; garrison / inside armies don't join. Defenders win -> siege lifted; attackers win -> siege continues. Sally / assault / outside clashes last until one side is dead / gone.
+  - Defender commander is always the settlement owner. Campaign leader commander: stub until P4.
+  - Engagement storage full: assert (never expected).
+  - Engagement fields use explicit attacker_* / defender_* names, not 2-element arrays.
+  - Caravans cannot enter a besieged settlement: origin besieged -> wait some distance away; destination besieged -> only within 30 tiles re-check, pick a new target if still besieged.
+  - Training, construction, trade decay continue during a siege. Growth: only positive growth suppressed.
+  - All engagement actions (begin assault, sally out, lift siege) live on the engagement entity; only army-specific actions (withdraw) on armies.
+  - Siege engagement located between the besieging army and settlement; selectable; significance / size equals the settlement's (TS uses the same formula).
+  - A foreign army joins the defender side only by attacking besiegers (stationing in settlements later).
+  - Rename after P2, one commit (C++ + TS + HTML); client GDO names kept until then.
+- Levy pop rules: raising a levy kills pop (becomes soldier); army levy deaths / desertion do not kill pop; garrison levy deaths do. Levy deserters and disbanded-army levies return as unemployed pop. Levy max 20% of pop, training 2%/day (min 1). Army levies pay upkeep, garrison levies don't. Garrison levies not in total_troops. Excess levies vanish on pop drop.
+- Raid: army on raid location takes up to 10% of settlement production per day, capped by 10% of its carrying capacity; excess destroyed. Loot split supplies / gold, 50% start.
+- Live off the land stance: 15% slower; supplies from tile and troop count, logistic curve exceeding consumption (1 per soldier) under 150 men, plateau above.
+- Campaign: real entity (own logic); region = territory + settlement; Defense objective only for own territory for now. Leader army = army it was started from. Valid trade target with settlement-like profit formula, but must hold gold to pay (1:1 + scarcity), no distance bonus. 75% of garrison becomes a new campaign army; settlement in one campaign at a time; campaign army refills instantly from home while in friendly territory. Vassal / overlord forced join later. Entity limits unchanged.
+- Campaign UI: tall banner on a shaft at leader army tile, large minimum screen size. Selected: name "Campaign", objectives, member army list (inspection extra data), faint white lines to members and objectives, state, each member's order.
+- Campaign AI runs in the deterministic world sim; replaces `match_ai` pseudo-campaign.
+- Movement session works on movement / pathing backend only; P2 may move / remove the army block in `movement_decision`.
+- Builders run no build / test; user tests by hand.
 
 ## Depends on
 
@@ -30,4 +83,4 @@ Not broken down yet.
 
 ## Next step
 
-Not started.
+P0 + P1 done, awaiting user hand-test / commit. Execute S0 (builder), review, then S1 ... S4, then P2a. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).

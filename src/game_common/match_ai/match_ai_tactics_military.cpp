@@ -83,7 +83,7 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 		if (settlement.peasants < AI_MIN_RAISE_PEASANTS || ai_settlement_is_raising(ctx, settlement.guid)) continue;
 
 		army_troop_count targets = {};
-		targets.levies = (ui16)ia_min(settlement.peasants * AI_RAISE_PERCENT_OF_PEASANTS / 100, 400u);
+		targets.levies = (ui16)ia_min((ui32)settlement.home_troops.levies, 400u); // Levies are a garrison pool now, not taken from the peasants.
 		targets.men_at_arms = settlement.home_troops.men_at_arms;
 
 		// Raising costs one day of the army's consumption, taken from the treasury.

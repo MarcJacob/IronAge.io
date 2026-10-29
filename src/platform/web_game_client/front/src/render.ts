@@ -744,13 +744,13 @@ function draw_battle_balance(x: number, y: number, width: number, battle_guid: n
     const battle = query_entity(battle_guid);
     if (battle === null) return;
 
-    // Men of each side: the sum of its men_side<side>_<unit type> properties.
+    // Men of each side: the sum of its <side>_men_<unit type> properties.
     let attackerMen = 0, defenderMen = 0;
     for (const property of battle.properties)
     {
         if (typeof property.value !== "number") continue;
-        if (property.name.startsWith("men_side0_")) attackerMen += property.value;
-        else if (property.name.startsWith("men_side1_")) defenderMen += property.value;
+        if (property.name.startsWith("attacker_men_")) attackerMen += property.value;
+        else if (property.name.startsWith("defender_men_")) defenderMen += property.value;
     }
 
     const total = attackerMen + defenderMen;

@@ -87,6 +87,7 @@ void world_system_armies_upkeep(match_world_state& world)
 }
 
 // Runs daily. Soldiers of the local pools are paid from the owner's treasury, as much as it holds (down to 0, no debt). An unpaid day has no consequence.
+// Garrison levies are not paid (no upkeep).
 void world_system_local_troops_pay(match_world_state& world)
 {
 	if (!world_is_daily_tick(world)) return;
@@ -101,7 +102,9 @@ void world_system_local_troops_pay(match_world_state& world)
 		if (owner >= world.player_count) continue;
 
 		world_player_state& player = world.player_states[owner];
-		ui32 paid = ia_min(army_daily_consumption(settlements.garrison[settlementIndex]), player.treasury);
+		army_troop_count paidTroops = settlements.garrison[settlementIndex];
+		paidTroops.levies = 0;
+		ui32 paid = ia_min(army_daily_consumption(paidTroops), player.treasury);
 		player.treasury -= paid;
 		player.expenses += paid;
 	}

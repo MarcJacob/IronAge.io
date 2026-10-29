@@ -1,6 +1,6 @@
 // UI module (new style): the settlement panel, inside the entity frame (ui_element_entity_frame.ts).
 // Top left: population with its daily growth, production with the tax rate (a small slider when editable), consumption (goods sold / needed with
-// the surplus / deficit), Market Goods. Top right: the garrison (one gauge per pooled troop type: home, raised, ceiling, max). Bottom: one box per
+// the surplus / deficit), Market Goods. Top right: the garrison (levies: pool and max; one gauge per other troop type: home, raised, ceiling, max). Bottom: one box per
 // building type (count, one bar per ongoing project, build button). Value rows and buildings have hover tooltips.
 // Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it.
 // Emits, on release / press: "tax_rate"(tax_rate), "export_ratio"(export_ratio),"ceiling"(troop_type, ceiling) with the raw ceiling of SET_SETTLEMENT_TROOP_CEILING
@@ -41,12 +41,12 @@ const IDS = {
     market_goods: "settlement_panel_market_goods",
     market_goods_percent: "settlement_panel_market_goods_percent",
     trade_volume: "settlement_panel_trade_volume",
-    garrison: ["settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights"], // troop_type order.
+    garrison: ["settlement_panel_levies", "settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights"], // Troop order (levies first: no ceiling).
     building_bar_template: "settlement_panel_building_bar_template",
     building_template: "settlement_panel_building_template",
 };
 
-const GARRISON_COLORS = ["#4aa3ff", "#f0b040", "#c060e0"]; // troop_type order, as in section_troops.ts.
+const GARRISON_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0"]; // Troop order, as in section_troops.ts.
 const MARKET_GOODS_COLOR = "#d4a93c";
 const TRADE_VOLUME_COLOR = "#4fc08d";
 const EXPORT_COLOR = "#7fd0ff"; // Export pool gauge segment (the export ratio slider's color is in style.css).
@@ -95,7 +95,7 @@ export interface SettlementPanelState
     allow_foreign_export: boolean; // Shown for any settlement, only changeable when editable.
     market_goods: { goods: number, export_goods: number, capacity: number } | null; // Local pool, export pool, capacity shared by both. Null hides the gauge.
     trade_volume: { volume: number, max: number } | null; // Null hides the gauge.
-    garrison: (SettlementGarrisonState | null)[]; // troop_type order. Null hides the gauge.
+    garrison: (SettlementGarrisonState | null)[]; // Troop order (levies first). Null hides the gauge.
     buildings: (SettlementBuildingState | null)[]; // Building table order. Null hides the box.
     editable: boolean; // Tax, export and ceiling sliders can be moved (tax and export show disabled otherwise).
 }
@@ -288,8 +288,8 @@ function init(): void
 function emit_ceiling(troop_type: number, value: number): void
 {
     const garrison = shown?.garrison[troop_type] ?? null;
-    if (garrison === null) return;
-    events.emit("ceiling", troop_type, value >= garrison.max ? CEILING_SATURATED : value);
+    if (garrison === null || troop_type === 0) return; // Levies have no ceiling.
+    events.emit("ceiling", troop_type - 1, value >= garrison.max ? CEILING_SATURATED : value); // The command's troop_type starts at men-at-arms.
 }
 
 export function submit(state: SettlementPanelState | null): void
@@ -318,6 +318,12 @@ export function submit(state: SettlementPanelState | null): void
     for (let i = 0; i < el.garrison.length; i++)
     {
         const garrison = state.garrison[i] ?? null;
+        // Levies (first): no ceiling, no raised count; just the pool against the max.
+        if (garrison !== null && i === 0)
+        {
+            el.garrison[i].submit({ color: GARRISON_COLORS[i], current: garrison.home, max: garrison.max, editable: false });
+            continue;
+        }
         el.garrison[i].submit(garrison === null ? null : {
             color: GARRISON_COLORS[i],
             current: garrison.home,

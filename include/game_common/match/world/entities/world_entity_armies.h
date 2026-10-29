@@ -194,19 +194,50 @@ struct world_entity_battles : public world_entity_container
 {
 	static constexpr ui8 UNIT_TYPES = 4; // Army unit types, in comp order: levies, men at arms, horsemen, knights.
 
+	// Sides of a battle. Armies point at their side with these (armies.battle_sides). The attacker is the side that started it.
+	static constexpr ui8 SIDE_ATTACKER = 0;
+	static constexpr ui8 SIDE_DEFENDER = 1;
+	static inline ui8 opposite_side(ui8 side) { return side == SIDE_ATTACKER ? SIDE_DEFENDER : SIDE_ATTACKER; }
+
+	// What the battle is.
+	static constexpr ui8 KIND_FIELD = 0; // Armies against armies.
+	static constexpr ui8 KIND_SIEGE = 1; // Armies against a settlement (main_target) and what defends it.
+
+	// Phase of the battle. A field battle is always ACTIVE. A siege goes BESIEGING (idle, no damage), then ASSAULT (started by the attacker commander)
+	// or SALLY (started by the defender commander); OUTSIDE is a clash of defending armies against the besiegers, the garrison does not take part.
+	// Damage rounds only happen in every phase but BESIEGING.
+	static constexpr ui8 PHASE_ACTIVE = 0;
+	static constexpr ui8 PHASE_BESIEGING = 1;
+	static constexpr ui8 PHASE_ASSAULT = 2;
+	static constexpr ui8 PHASE_SALLY = 3;
+	static constexpr ui8 PHASE_OUTSIDE = 4;
+
+	struct side_state
+	{
+		ui32 men[UNIT_TYPES]; // Men still fighting, per unit type.
+		ui32 damage; // Men killed this round BY this side.
+		match_player_id commander; // Player leading this side.
+	};
+
     struct view;
 
     // Single state structure should work since everything gets read battle-by-battle anyway.
 	struct state
 	{
 		world_location location;
-		ui32 men[2][UNIT_TYPES]; // Men still fighting, per side and unit type.
-		ui32 damage[2]; // Men killed this tick BY each side.
+		ui8 kind; // KIND_*.
+		ui8 phase; // PHASE_*.
+		entity_guid main_target; // Field battle: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
+		ui32 phase_tick; // World age when the current phase started.
+		side_state attacker;
+		side_state defender;
 		ui32 duration; // Rounds since the battle started (one round every BATTLE_TICK_INTERVAL ticks).
+
+		inline side_state& side(ui8 side_index) { return side_index == SIDE_ATTACKER ? attacker : defender; }
+		inline const side_state& side(ui8 side_index) const { return side_index == SIDE_ATTACKER ? attacker : defender; }
                        
-		entity_guid siege_settlement; // Settlement besieged by side 0, INVALID if this isn't a siege. Side 0 winning takes it.
-		match_player_id siege_owner; // Owner of the army that started the siege: new owner of the settlement if side 0 wins.
-		entity_guid siege_defenders; // Levy army raised by the besieged settlement. Disbanded back into it if side 1 wins.
+		// Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
+		// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
 
 		void copy_from(const view& source);
 		void copy_from(const world_entity_battles& collection, ui16 index);
@@ -218,88 +249,43 @@ struct world_entity_battles : public world_entity_container
 	// Reference view of a battle slot.
 	struct view
 	{
-		world_location& location;
-		ui32 (&men)[2][UNIT_TYPES];
-		ui32 (&damage)[2];
-		ui32& duration;
-		entity_guid& siege_settlement;
-		match_player_id& siege_owner;
-		entity_guid& siege_defenders;
+		state& data; // The whole slot: the state is plain data.
 
-		void copy_from(const single& source)
-		{
-			location = source.location;
-			for (ui8 side = 0; side < 2; side++)
-			{
-				for (ui8 unitType = 0; unitType < UNIT_TYPES; unitType++) men[side][unitType] = source.men[side][unitType];
-				damage[side] = source.damage[side];
-			}
-			duration = source.duration;
-			siege_settlement = source.siege_settlement;
-			siege_owner = source.siege_owner;
-			siege_defenders = source.siege_defenders;
-		}
+		void copy_from(const single& source) { data = source; }
 
 		view(world_entity_battles& collection, ui16 index)
-			: location(collection.states[index].location)
-			, men(collection.states[index].men)
-			, damage(collection.states[index].damage)
-			, duration(collection.states[index].duration)
-			, siege_settlement(collection.states[index].siege_settlement)
-			, siege_owner(collection.states[index].siege_owner)
-			, siege_defenders(collection.states[index].siege_defenders)
+			: data(collection.states[index])
 		{}
 	};
 };
 
-inline void world_entity_battles::state::copy_from(const world_entity_battles::view& source)
-{
-	location = source.location;
-	for (ui8 side = 0; side < 2; side++)
-	{
-		for (ui8 unitType = 0; unitType < UNIT_TYPES; unitType++) men[side][unitType] = source.men[side][unitType];
-		damage[side] = source.damage[side];
-	}
-	duration = source.duration;
-	siege_settlement = source.siege_settlement;
-	siege_owner = source.siege_owner;
-	siege_defenders = source.siege_defenders;
-}
+inline void world_entity_battles::state::copy_from(const world_entity_battles::view& source) { *this = source.data; }
 
-inline void world_entity_battles::state::copy_from(const world_entity_battles& collection, ui16 index)
-{
-	location = collection.states[index].location;
-	for (ui8 side = 0; side < 2; side++)
-	{
-		for (ui8 unitType = 0; unitType < UNIT_TYPES; unitType++) men[side][unitType] = collection.states[index].men[side][unitType];
-		 damage[side] = collection.states[index].damage[side];
-	}
-	duration = collection.states[index].duration;
-	siege_settlement = collection.states[index].siege_settlement;
-	siege_owner = collection.states[index].siege_owner;
-	siege_defenders = collection.states[index].siege_defenders;
-}
+inline void world_entity_battles::state::copy_from(const world_entity_battles& collection, ui16 index) { *this = collection.states[index]; }
 
 using world_entity_battle = world_entity_battles::single;
 using world_entity_battle_view = world_entity_battles::view;
 
-// Men per side and unit type are flattened: men_side<side>_<unit type>, unit types in the order of army comp.
+// Men per side and unit type are flattened: <side>_men_<unit type>, unit types in the order of army comp. The client sums the "attacker_men_" and "defender_men_" properties.
 GAME_DATA_OBJECT_DEF_BEGIN(world_entity_battle)
 	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
-	GAME_DATA_PROPERTY_PATH(men_side0_levies, men[0][0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_men_at_arms, men[0][1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_horsemen, men[0][2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side0_knights, men[0][3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_levies, men[1][0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_men_at_arms, men[1][1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_horsemen, men[1][2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(men_side1_knights, men[1][3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(damage_side0, damage[0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(damage_side1, damage[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(kind, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(phase, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(main_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(phase_tick, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_men_levies, attacker.men[0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_men_men_at_arms, attacker.men[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_men_horsemen, attacker.men[2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_men_knights, attacker.men[3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_damage, attacker.damage, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(attacker_commander, attacker.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(defender_men_levies, defender.men[0], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_men_men_at_arms, defender.men[1], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_men_horsemen, defender.men[2], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_men_knights, defender.men[3], GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_damage, defender.damage, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY_PATH(defender_commander, defender.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY(siege_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-	GAME_DATA_PROPERTY(siege_owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
-	GAME_DATA_PROPERTY(siege_defenders, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 GAME_DATA_OBJECT_DEF_END()
 
 bool world_entity_query_battle(const match_world_state& world, entity_guid entity, world_entity_battle& out_state);

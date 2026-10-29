@@ -15,8 +15,16 @@ entity_guid world_spawn_battle(match_world_state& world, const world_entity_batt
 
 	world_entity_battles::view newBattle { battles, freeIndex };
 	newBattle.copy_from(start_state);
+	newBattle.data.phase_tick = world.age;
 	battles.guids[freeIndex] = newID;
 	battles.active_count++;
+
+	// A siege is recorded on the besieged settlement (cleared in world_destroy_battle).
+	if (start_state.kind == world_entity_battles::KIND_SIEGE)
+	{
+		ASSERT(start_state.main_target.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, start_state.main_target));
+		world.entities->settlements.sieges[start_state.main_target.get_index()] = newID;
+	}
 
 	return newID;
 }
@@ -27,6 +35,15 @@ void world_destroy_battle(match_world_state& world, entity_guid battle)
 	world_entity_battles& battles = world.entities->battles;
 
 	ui16 index = battle.get_index();
+
+	// Clear the besieged settlement's siege (it may be gone already, or under another siege by now).
+	const world_entity_battles::state& ended = battles.states[index];
+	if (ended.kind == world_entity_battles::KIND_SIEGE && ended.main_target.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, ended.main_target))
+	{
+		entity_guid& siege = world.entities->settlements.sieges[ended.main_target.get_index()];
+		if (siege == battle) siege = INVALID_ENTITY_GUID;
+	}
+
 	world_entity_battle_view destroyedBattle { battles, index };
 	destroyedBattle.copy_from(world_entity_battle {});
 	battles.guids[index] = INVALID_ENTITY_GUID;

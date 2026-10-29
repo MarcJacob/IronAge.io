@@ -85,6 +85,13 @@ export enum ENTITY_TYPE
     CARAVAN = 5,
 };
 
+// Mirrors world_entity_battles::KIND_* (include/game_common/match/world/entities/world_entity_armies.h), the battle GDO's kind. Update here if they change.
+export enum BATTLE_KIND
+{
+    FIELD = 0,
+    SIEGE = 1,
+};
+
 // Mirrors WORK_TYPE (include/game_common/match/world/world_entities.h), the worker GDO's work_type. Update here if the enum changes.
 export enum WORK_TYPE
 {

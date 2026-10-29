@@ -80,7 +80,9 @@ struct game_parameters
     ui8 barracks_maa_max_increase = 50; // How much Men At Arms max is increased per barracks in a settlement.
 
     // MILITARY
-    ui32 raise_min_population_left = 10; // Raising levies / training troops never takes a settlement's peasants below this.
+    ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
+    ui32 levy_max_percent = 20; // Max levies of a settlement garrison, in percent of its total population. No ceiling, no upkeep.
+    ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
     
 
     // MOVEMENT
@@ -136,6 +138,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(ticks_per_day, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(levy_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(levy_training_per_mille, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(armies_workers_cross_water, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_travel_speed, GAME_DATA_PROP_TYPE::UI32)

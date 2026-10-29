@@ -135,13 +135,13 @@ struct world_entity_settlements : public world_entity_container
 
     // TROOPS
 
-	army_troop_count* garrison; // Soldiers at home: the local troop pool.
+	army_troop_count* garrison; // Soldiers at home: the local troop pool. Its levies are NOT population: soldiers_home() and at_home() leave them out.
 	army_troop_count* raised; // Soldiers in armies raised from the settlement.
 
 	army_troop_count* troop_max; // Max of each soldier type, garrison + raised.
 	settlement_troop_training (*troop_training)[4]; // Indexed by troop type (TROOP_TYPE_*).
 
-	inline ui32 soldiers_home(ui16 index) const { return (ui32)garrison[index].levies + garrison[index].men_at_arms + garrison[index].horsemen + garrison[index].knights; }
+	inline ui32 soldiers_home(ui16 index) const { return (ui32)garrison[index].men_at_arms + garrison[index].horsemen + garrison[index].knights; }
 	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights; }
 	inline ui32 soldiers_total(ui16 index) const { return soldiers_home(index) + soldiers_raised(index); } // Everyone who is a soldier, at home or raised.
 	inline ui32 at_home(ui16 index) const { return pop_unemployed[index] + pop_peasants[index] + pop_workers[index] + soldiers_home(index); }
@@ -174,6 +174,9 @@ struct world_entity_settlements : public world_entity_container
 	// Desired counts of the local troop pool.
 	army_troop_count*	troop_ceilings;
 
+	// The siege (battle entity of kind SIEGE) this settlement is under, INVALID if none. Invariant: set exactly while such a battle has this settlement as its main_target.
+	entity_guid*		sieges;
+
 	struct view;
 
 	// Consolidated representation of a single settlement for viewing purposes.
@@ -202,7 +205,7 @@ struct world_entity_settlements : public world_entity_container
         army_troop_count troop_max; // Max of each soldier type, garrison + raised.
         settlement_troop_training troop_training[4]; // Indexed by troop type (TROOP_TYPE_*).
 
-        inline ui32 soldiers_home() const { return (ui32)garrison.levies + garrison.men_at_arms + garrison.horsemen + garrison.knights; }
+        inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
@@ -226,6 +229,7 @@ struct world_entity_settlements : public world_entity_container
 
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
+		entity_guid siege; // The siege this settlement is under, INVALID if none.
 
 		void copy_from(const view& source);
 		void copy_from(const world_entity_settlements& collection, ui16 index);
@@ -263,8 +267,9 @@ struct world_entity_settlements : public world_entity_container
         settlement_economy& economy;
         territory& territory;
         army_troop_count& troop_ceilings;
+        entity_guid& siege;
 
-        inline ui32 soldiers_home() const { return (ui32)garrison.levies + garrison.men_at_arms + garrison.horsemen + garrison.knights; }
+        inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); }
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
@@ -295,6 +300,7 @@ struct world_entity_settlements : public world_entity_container
             economy = source.economy;
             territory = source.territory;
             troop_ceilings = source.troop_ceilings;
+            siege = source.siege;
         }
 
         view(world_entity_settlements& collection, ui16 index)
@@ -321,6 +327,7 @@ struct world_entity_settlements : public world_entity_container
             , economy(collection.economies[index])
             , territory(collection.territories[index])
             , troop_ceilings(collection.troop_ceilings[index])
+            , siege(collection.sieges[index])
         {
         }
 	};
@@ -352,6 +359,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	market_capacity = 0;
 	trade_volume_max = 0;
 	troop_ceilings = source.troop_ceilings;
+	siege = source.siege;
 	economy = {};
 	troop_effective_ceilings = {};
 }
@@ -383,6 +391,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	market_capacity = 0;
 	trade_volume_max = 0;
 	troop_ceilings = collection.troop_ceilings[index];
+	siege = collection.sieges[index];
 	economy = collection.economies[index];
 	troop_effective_ceilings = collection.troop_ceilings[index];
 }
@@ -440,6 +449,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(raised_horsemen, raised.horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(raised_knights, raised.knights, GAME_DATA_PROP_TYPE::UI16)
 
+	GAME_DATA_PROPERTY_PATH(troops_levies, garrison.levies, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(max_levies, troop_max.levies, GAME_DATA_PROP_TYPE::UI16)
+
 	GAME_DATA_PROPERTY_PATH(troops_men_at_arms, garrison.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(ceiling_men_at_arms, troop_effective_ceilings.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(max_men_at_arms, troop_max.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
@@ -457,6 +469,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(max_knights, troop_max.knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(training_knights_amount, troop_training[3].amount, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(training_knights_days, troop_training[3].duration_days, GAME_DATA_PROP_TYPE::UI16)
+
+	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 
 GAME_DATA_OBJECT_DEF_END()
 

@@ -249,14 +249,7 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
-	// Raising levies must leave the settlement its minimum peasants. Pooled troops are only limited when drawn, so their targets can exceed the pool.
-	ui32 populationNeeded = (ui32)command.target_levies + GAME_PARAMETERS.raise_min_population_left;
-	if (feedback != nullptr)
-	{
-		feedback->population_needed = populationNeeded;
-		feedback->population_current = settlements.pop_unemployed[settlementIndex] + settlements.pop_peasants[settlementIndex];
-	}
-	if (settlements.pop_peasants[settlementIndex] < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
+	// Every type, levies included, is drawn from the garrison pool when raising: targets can exceed what the pool holds.
 
 	if (!raise_army_can_afford(world, command, feedback) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
@@ -550,22 +543,13 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
-	// Same levy rule as RAISE_ARMY, against the home settlement's current peasants.
+	// The home settlement must still exist.
 	entity_guid home = armies.home_settlements[armyIndex];
 	if (!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
-
-	ui32 populationNeeded = (ui32)command.target_levies + GAME_PARAMETERS.raise_min_population_left;
-	ui32 populationCurrent = world.entities->settlements.pop_peasants[home.get_index()];
-	if (feedback != nullptr)
-	{
-		feedback->population_needed = populationNeeded;
-		feedback->population_current = populationCurrent;
-	}
-	if (populationCurrent < populationNeeded && command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_POPULATION)) return false;
 
 	return command_is_valid(feedback);
 }

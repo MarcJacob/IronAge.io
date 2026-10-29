@@ -50,7 +50,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
     const editable = context.edit_settlement === true;
     const prop = (name: string) => settlement.get_number(name);
 
-    // Levies have no home pool (always 0 at home), so the home soldiers are the pooled types.
+    // Garrison levies are not population, so the home soldiers (who count in the population) are the other types.
     const soldiers_home = prop("troops_men_at_arms") + prop("troops_horsemen") + prop("troops_knights");
     const raised = prop("raised_levies") + prop("raised_men_at_arms") + prop("raised_horsemen") + prop("raised_knights");
     const parameters = get_game_parameters();
@@ -87,13 +87,13 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
         allow_foreign_export: prop("trading_allow_foreign_export") !== 0,
         market_goods: { goods: prop("trading_market_goods"), export_goods: prop("trading_export_goods"), capacity: prop("market_capacity") },
         trade_volume: { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
-        // Pooled types (no levies). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
-        garrison: TROOPS.slice(1).map((troop): SettlementPanelUI.SettlementGarrisonState | null => {
+        // Troop order (levies first: max follows the population, no ceiling). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
+        garrison: TROOPS.map((troop): SettlementPanelUI.SettlementGarrisonState | null => {
             const home = prop(`troops_${troop.name}`);
             const troop_raised = prop(`raised_${troop.name}`);
             const max = prop(`max_${troop.name}`);
             if (max === 0 && home === 0 && troop_raised === 0) return null;
-            return { home, raised: troop_raised, max, ceiling: prop(`ceiling_${troop.name}`) };
+            return { home, raised: troop_raised, max, ceiling: troop.name === "levies" ? max : prop(`ceiling_${troop.name}`) };
         }),
         buildings: settlement.get_array("building_counts").map((count, building_type): SettlementPanelUI.SettlementBuildingState | null => {
             const definition = get_building_definition(building_type);
@@ -234,7 +234,7 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     case Backend.ENTITY_TYPE.ARMY: show({ title: "Army", subtitle, army: army_panel_state(view, context.edit_raise_targets === true) }); break;
     case Backend.ENTITY_TYPE.CARAVAN: show({ title: (view.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? "Ship" : "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.WORKER: show({ title: worker_title(view), subtitle, worker: worker_panel_state(view) }); break;
-    case Backend.ENTITY_TYPE.BATTLE: show({ title: "Battle", subtitle, battle: { location: view.get_location("location") } }); break;
+    case Backend.ENTITY_TYPE.BATTLE: show({ title: view.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Battle", subtitle, battle: { location: view.get_location("location") } }); break;
     default: show({ title: type_title(view), subtitle }); break;
     }
 }

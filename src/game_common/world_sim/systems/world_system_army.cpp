@@ -26,26 +26,25 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		if (settlements.owners[targetIndex] == attackerOwner) break;
 
 		// Join the siege of this settlement if there is one.
-		world_entity_battles& battles = world.entities->battles;
-		for (ui32 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+		entity_guid siege = settlements.sieges[targetIndex];
+		if (world_entity_is_valid(world, siege))
 		{
-			if (battles.guids[battleIndex].is_valid() && battles.states[battleIndex].siege_settlement == target)
-			{
-				army_battle_join(world, battles.guids[battleIndex], attacker, 0);
-				return;
-			}
+			army_battle_join(world, siege, attacker, world_entity_battles::SIDE_ATTACKER);
+			return;
 		}
 
-        // @TODO(Marc): Create temp army for garrison defending the settlement ?
-        // Adapt battle system so settlement garrisons can join directly ?
-        // For now all sieges will immediately be won by attackers.
-
+		// The settlement's garrison is the defending side, it is recounted into the battle at every round (see world_system_battles).
+		// For now a siege starts directly as an assault (the idle besieging phase comes later).
 		world_entity_battles::state start = {};
+		army_unit_counts(settlements.garrison[targetIndex], start.defender.men);
 		start.location = (armies.locations[attackerIndex] + settlements.locations[targetIndex]) / 2; // Start battle at midpoint between beligerent armies.
-		start.siege_settlement = target;
-		start.siege_owner = attackerOwner;
+		start.kind = world_entity_battles::KIND_SIEGE;
+		start.phase = world_entity_battles::PHASE_ASSAULT;
+		start.main_target = target;
+		start.attacker.commander = attackerOwner;
+		start.defender.commander = settlements.owners[targetIndex];
 		entity_guid battle = world_spawn_battle(world, start);
-		army_battle_join(world, battle, attacker, 0);
+		army_battle_join(world, battle, attacker, world_entity_battles::SIDE_ATTACKER);
 		break;
 	}
 	case ENTITY_TYPE::ARMY:
@@ -54,16 +53,21 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 		if (battle.is_valid())
 		{
 			// The target is already fighting: join its battle on the side against it.
-			army_battle_join(world, battle, attacker, armies.battle_sides[targetIndex] ^ 1);
+			army_battle_join(world, battle, attacker, world_entity_battles::opposite_side(armies.battle_sides[targetIndex]));
 		}
 		else
 		{
-			// Both armies start a new battle halfway between them, the attacker on side 0. The battle never moves afterwards.
+			// Both armies start a new battle halfway between them, the attacker on the attacker side. The battle never moves afterwards.
 			world_entity_battles::state start = {};
 			start.location = (armies.locations[attackerIndex] + armies.locations[targetIndex]) / 2;
+			start.kind = world_entity_battles::KIND_FIELD;
+			start.phase = world_entity_battles::PHASE_ACTIVE;
+			start.main_target = target;
+			start.attacker.commander = attackerOwner;
+			start.defender.commander = armies.owners[targetIndex];
 			battle = world_spawn_battle(world, start);
-			army_battle_join(world, battle, attacker, 0);
-			army_battle_join(world, battle, target, 1);
+			army_battle_join(world, battle, attacker, world_entity_battles::SIDE_ATTACKER);
+			army_battle_join(world, battle, target, world_entity_battles::SIDE_DEFENDER);
 		}
 		break;
 	}
@@ -114,7 +118,7 @@ void world_system_armies_raising(match_world_state& world)
 		army_troop_count& composition = armies.compositions[armyIndex];
 		const army_troop_count& target = armies.raised_troops[armyIndex];
 
-        // @TODO(Marc): Deduct unemployed / peasant population ?
+        // Levies come from the garrison like the others; each one raised also kills one population (settlement_raise_soldiers).
         raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_LEVIES, composition.levies, target.levies);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_HORSEMEN, composition.horsemen, target.horsemen);

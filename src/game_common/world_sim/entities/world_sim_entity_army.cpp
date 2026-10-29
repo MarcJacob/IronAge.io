@@ -92,7 +92,7 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 	entity_guid battle = armies.battles[army.get_index()];
 	if (battle.is_valid())
 	{
-		ui32& sideMen = world.entities->battles.states[battle.get_index()].men[armies.battle_sides[army.get_index()]][troop_type];
+		ui32& sideMen = world.entities->battles.states[battle.get_index()].side(armies.battle_sides[army.get_index()]).men[troop_type];
 		sideMen -= ia_min(sideMen, (ui32)deserters);
 	}
 

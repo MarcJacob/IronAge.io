@@ -194,10 +194,10 @@ static inline ui32 ai_troops_sum(const army_troop_count& troops)
 	return (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights;
 }
 
-// Troops a settlement can put against a siege: 20% of the population as levies (limited by the peasants) plus the local pool.
+// Troops a settlement can put against a siege: its garrison (levies included).
 static inline ui32 ai_estimate_defense(const ai_settlement_view& settlement)
 {
-	return ia_min(settlement.population / 5, settlement.peasants) + ai_troops_sum(settlement.home_troops);
+	return ai_troops_sum(settlement.home_troops);
 }
 
 // Strength the campaign wants before attacking a settlement.

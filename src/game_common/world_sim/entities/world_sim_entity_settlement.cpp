@@ -30,6 +30,8 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
     }
     SET_DEFAULT_VAL(newSettlement.pop_urban_cap, 100);
 	SET_DEFAULT_VAL(newSettlement.pop_total, newSettlement.at_home());
+	newSettlement.troop_max.levies = settlement_levy_max(newSettlement.pop_total);
+	newSettlement.garrison.levies = ia_min(newSettlement.garrison.levies, newSettlement.troop_max.levies);
 	SET_DEFAULT_VAL(newSettlement.pop_peasants_cap, newSettlement.pop_peasants);
 	SET_DEFAULT_VAL(newSettlement.trade.export_ratio, (ui8)ia_min(GAME_PARAMETERS.trade.start_export_ratio_percent, (ui32)100));
 	SET_DEFAULT_VAL(newSettlement.trade.caravan_count_max, (ui8)ia_min(GAME_PARAMETERS.trade.start_caravan_slots, (ui32)0xFF));
@@ -146,6 +148,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 	settlements.troop_ceilings = memory.alloc<army_troop_count>(count);
 	if (settlements.troop_ceilings == nullptr) return false;
+
+	settlements.sieges = memory.alloc<entity_guid>(count);
+	if (settlements.sieges == nullptr) return false;
 
 	return true;
 }

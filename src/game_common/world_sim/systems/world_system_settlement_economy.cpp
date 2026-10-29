@@ -70,11 +70,12 @@ static ui32 settlement_soldiers_home_die(match_world_state& world, ui16 settleme
     if (count == 0) return 0;
 
     ui32 removed = 0;
-    for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+    // Levies are not population (not in soldiers_home): they are left out.
+    for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT; troopType++)
     {
         removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)((ui64)troop_count_field(settlement.garrison, troopType) * count / settlement.soldiers_home()));
     }
-    for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT && removed < count; troopType++)
+    for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT && removed < count; troopType++)
     {
         removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(count - removed, (ui32)0xFFFF));
     }
@@ -247,7 +248,7 @@ static void train_troop(match_world_state& world, ui16 settlement_index, ui8 tro
     settlement_train_soldiers(world, settlement_index, troop_type, trained);
 }
 
-// Local troop pool growth, daily: each troop type is trained from peasants (1:1) following the settlement's training values, while home + raised is below
+// Local troop pool growth, daily: levies first (see below), then each other troop type is trained from peasants (1:1) following the settlement's training values, while home + raised is below
 // its effective ceiling. Only while peasants stay above raise_min_population_left. Never reduces counts. The total population is unchanged.
 void world_system_economy_troop_growth(match_world_state& world)
 {
@@ -258,6 +259,15 @@ void world_system_economy_troop_growth(match_world_state& world)
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.pop_total[settlementIndex] == 0) continue;
+
+        // Levies: the max follows the population (levies above it are dismissed, no population change), and the garrison fills up
+        // by a share of the population per day. They are not taken from any stratum.
+        ui32 population = settlements.pop_total[settlementIndex];
+        ui16& levies = settlements.garrison[settlementIndex].levies;
+        ui16 levyMax = settlement_levy_max(population);
+        settlements.troop_max[settlementIndex].levies = levyMax;
+        ui32 levyTrained = ia_max((ui32)1, (ui32)((ui64)population * GAME_PARAMETERS.levy_training_per_mille / 1000));
+        levies = (ui16)ia_min((ui32)levies + levyTrained, (ui32)levyMax); // Also dismisses what is above the max.
 
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 
