@@ -19,14 +19,14 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
 
 Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military_state.md`. Each phase is reviewed / hand-tested by the user before the next.
 
-- P0 Fixes: levy draw bug, remove dead `siege_defenders`.
-- P1 Garrison: levy pool (see decisions), garrison joins assault battle as a side.
+- P0 [DONE] Fixes: levy draw bug, remove dead `siege_defenders`.
+- P1 [DONE] Garrison: levy pool (see decisions), garrison joins assault battle as a side.
 - P2a Standing orders: data + Station / Attack replacing current move / attack 1:1.
 - P2b Remaining orders: Defend territory, Raid, Go home; invalid-order fallbacks; AI switched to orders.
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
-  - S0 [DONE, unbuilt] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
-  - S1 Starvation + caravan rules.
-  - S2 Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
+  - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
+  - S1 [DONE, unbuilt] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin by setting travel_speed 0 (placeholder, check path-following copes).
+  - S2 [DONE, unbuilt] Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
   - S3 LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
   - S4 SALLY_OUT, outside-battle phase, commanders.
   - S5 Rename battle -> engagement (after P2).
@@ -57,6 +57,7 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Each side has a commander player, determined contextually: siege commander changes if another player's troops outnumber the commander's; if all armies are in a campaign, the campaign leader army's owner commands.
   - All engagements pin involved armies until concluded or explicitly left when possible (idle siege included).
 - Siege details:
+  - Icons (placeholder SVG): swords for field battles and for any fighting siege phase (assault, sally, outside); catapult only while idle BESIEGING.
   - Siege on a settlement with no garrison and no defender armies resolves immediately (conquest).
   - Outside battle: an army attacking the besiegers joins the DEFENDER side; garrison / inside armies don't join. Defenders win -> siege lifted; attackers win -> siege continues. Sally / assault / outside clashes last until one side is dead / gone.
   - Defender commander is always the settlement owner. Campaign leader commander: stub until P4.
@@ -83,4 +84,4 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 ## Next step
 
-P0 + P1 done, awaiting user hand-test / commit. Execute S0 (builder), review, then S1 ... S4, then P2a. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).
+P0, P1, S0 done, tested, committed. S2 + S1 written, awaiting user build / hand-test / commit. Then S3, S4, then P2a. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).

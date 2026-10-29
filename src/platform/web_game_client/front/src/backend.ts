@@ -85,6 +85,16 @@ export enum ENTITY_TYPE
     CARAVAN = 5,
 };
 
+// Mirrors world_entity_battles::PHASE_* (same header), the battle GDO's phase.
+export enum BATTLE_PHASE
+{
+    ACTIVE = 0,
+    BESIEGING = 1,
+    ASSAULT = 2,
+    SALLY = 3,
+    OUTSIDE = 4,
+}
+
 // Mirrors world_entity_battles::KIND_* (include/game_common/match/world/entities/world_entity_armies.h), the battle GDO's kind. Update here if they change.
 export enum BATTLE_KIND
 {
@@ -556,6 +566,8 @@ export class RenderEntity
     significance: number = 0; // Settlements: population. Armies: troops. Caravans: carried value. Workers: small constant.
 }
 
+export const BATTLE_FLAG_SIEGE = 1 << 0; // Render flags of battles (game_client_render.cpp).
+export const BATTLE_FLAG_IDLE = 1 << 1; // Siege in its besieging phase: no fighting yet.
 export const CARAVAN_FLAG_IS_SHIP = 1 << 0; // Mirrors WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP.
 
 export class RenderState

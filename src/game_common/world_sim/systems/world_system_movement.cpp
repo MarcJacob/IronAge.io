@@ -11,6 +11,9 @@
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
 static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
 
+// Returning caravans whose origin is besieged stop this far from it (tiles) until the siege is over. Placeholder value.
+static constexpr float CARAVAN_SIEGE_WAIT_TILES = 10;
+
 // Divides rounding to the nearest integer (halves away from zero). den must be above 0.
 static i64 div_round_nearest(i64 num, i64 den)
 {
@@ -175,7 +178,14 @@ void world_system_entity_movement_decision(match_world_state& world)
         {
             entity_guid origin = caravans.origin_settlements[caravanIndex];
             if (origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin))
-                caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
+            {
+                // A besieged origin cannot be entered: within CARAVAN_SIEGE_WAIT_TILES of it the caravan stops and waits for the siege to end.
+                if (settlements.sieges[origin.get_index()].is_valid()
+                    && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[origin.get_index()]) <= CARAVAN_SIEGE_WAIT_TILES * CARAVAN_SIEGE_WAIT_TILES)
+                    world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+                else
+                    caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
+            }
             else
                 world_destroy_entity_caravan(world, caravan);
             continue;

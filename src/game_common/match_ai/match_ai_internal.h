@@ -122,6 +122,15 @@ struct ai_army_view
 	ui8 idle; // Not raising, not in a battle, not chasing and not walking anywhere.
 };
 
+// A siege (battle entity of kind SIEGE) still besieging, as the attacker commander sees it.
+struct ai_siege_view
+{
+	entity_guid guid;
+	match_player_id attacker_commander;
+	ui32 attacker_men, defender_men;
+	ui32 min_supply_days; // Fewest days of supplies among the armies on the attacker side (0xFFFFFFFF if none).
+};
+
 // Per other player figures gathered by the strategy scan.
 struct ai_player_scan
 {
@@ -169,6 +178,8 @@ static bool ai_world_has_room_to_found(const match_world_state& world); // Free 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out); // False if the slot is empty.
 static bool ai_view_settlement_by_guid(const match_world_state& world, entity_guid guid, ai_settlement_view& out); // False if gone.
 static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view& out);
+static ui16 ai_world_battle_slots(const match_world_state& world);
+static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out); // False if the slot is not a siege in its besieging phase.
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement); // settlement invalid = any of the player's.
 static bool ai_site_is_valid(const match_world_state& world, world_location loc, match_player_id player);
 static i32 ai_site_land_score(const match_world_state& world, world_location loc); // Compared to AI_SITE_MIN_LAND_SCORE.

@@ -27,7 +27,7 @@ struct render_entity
 
 	vec2f viewport_location; // Location of center of entity.
 	vec2<i16> fractional_offset; // Offset of the entity from the center of its tile, in thousandths of a tile (same axes as the world). Zero for entities without one.
-	ui8 flags; // Caravans: WORLD_ENTITY_CARAVAN_FLAGS (bit 0 = ship). Zero for other entities.
+	ui8 flags; // Caravans: WORLD_ENTITY_CARAVAN_FLAGS (bit 0 = ship). Battles: bit 0 = siege, bit 1 = idle besieging phase. Zero for other entities.
 	ui32 significance; // How much the entity matters, for the platform's rendering. Always 0 from the backend: each platform fills it its own way.
 };
 static_assert(sizeof(render_entity) == 24, "render_entity struct size changed. Adapt TS reading code, then this assertion.");

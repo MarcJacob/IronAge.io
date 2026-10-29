@@ -704,6 +704,38 @@ void command_set_allow_foreign_export_apply(match_world_state& world, match_play
 	world.entities->settlements.trade[command.settlement.get_index()].allow_foreign_export = command.allow_foreign_export != 0 ? 1 : 0;
 }
 
+// BEGIN ASSAULT
+
+bool command_begin_assault_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_begin_assault& command = command_header.get_command_data<command_data_begin_assault>();
+
+	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::BATTLE
+		|| world.entities->battles.states[command.engagement.get_index()].kind != world_entity_battles::KIND_SIEGE)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_battles::state& siege = world.entities->battles.states[command.engagement.get_index()];
+
+	if (siege.attacker.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (siege.phase != world_entity_battles::PHASE_BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_begin_assault_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_begin_assault_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_begin_assault& command = command_header.get_command_data<command_data_begin_assault>();
+	world_entity_battles::state& siege = world.entities->battles.states[command.engagement.get_index()];
+	siege.phase = world_entity_battles::PHASE_ASSAULT;
+	siege.phase_tick = world.age;
+}
+
 // END COMMAND FUNCTION IMPLEMENTATIONS
 
 // BEGIN CORE COMMAND HANDLING FUNCTIONS

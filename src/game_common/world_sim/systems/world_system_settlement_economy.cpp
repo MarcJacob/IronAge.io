@@ -15,6 +15,14 @@ static void settlement_goods_production(match_world_state& world, ui16 settlemen
 {
     world_entity_settlement_view settlement { world.entities->settlements, settlement_index };
 
+    // Under siege nothing is produced (so nothing is taxed either).
+    if (settlement.siege.is_valid())
+    {
+        settlement.economy.production = 0;
+        settlement.economy.production_tax = 0;
+        return;
+    }
+
     if (settlement.pop_peasants_cap == 0)
     {
         settlement.economy.production = 0;
@@ -57,6 +65,7 @@ static void settlement_goods_sales(world_entity_settlements& settlements, ui16 s
 
     settlement.economy.sellable = (ui32)((ui64)goods * ia_min(params.sellable_percent, (ui32)100) / 100);
     settlement.economy.consumption = settlement.at_home();
+    if (settlement.siege.is_valid()) settlement.economy.consumption /= 2; // Under siege: half the usual consumption.
 
     goods -= ia_min(settlement.economy.consumption, settlement.economy.sellable);
 }
@@ -124,6 +133,9 @@ static void settlement_apply_growth(match_world_state& world, ui16 settlement_in
         // Decrease pop growth due to urban overcrowding.
         settlement.pop_change -= (settlement.urban_pop() - settlement.pop_urban_cap) / 2;
     }
+
+    // Under siege: no population growth (deaths still happen).
+    if (settlement.siege.is_valid() && settlement.pop_change > 0) settlement.pop_change = 0;
 
     settlement.pop_growth_per_mille = (i64)settlement.pop_change * 1000 / (i64)settlement.pop_total;
 

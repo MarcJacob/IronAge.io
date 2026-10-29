@@ -94,9 +94,13 @@ void world_system_battles(match_world_state& world)
 		ui64 defenderMen = sideMen[world_entity_battles::SIDE_DEFENDER];
 
 		// A wiped side means the battle is over: its armies are already dead, the others are released below.
-		bool over = attackerMen == 0 || defenderMen == 0;
+		// A siege whose settlement is gone is over too (nothing left to besiege).
+		bool over = attackerMen == 0 || defenderMen == 0 || (battle.kind == world_entity_battles::KIND_SIEGE && !besiegingSettlement);
 
-		if (!over)
+		// An idle siege (besieging) only checks for a wiped side: no damage rounds until the assault begins.
+		bool fighting = !over && battle.phase != world_entity_battles::PHASE_BESIEGING;
+
+		if (fighting)
 		{
 			battle.duration++;
 			for (ui8 side = world_entity_battles::SIDE_ATTACKER; side <= world_entity_battles::SIDE_DEFENDER; side++)
@@ -116,6 +120,7 @@ void world_system_battles(match_world_state& world)
 				armies.battles[armyIndex] = INVALID_ENTITY_GUID;
 				continue;
 			}
+			if (!fighting) continue;
 
 			// Take the enemy side's damage, proportionally to this army's share of its side (rounded up).
 			ui8 side = armies.battle_sides[armyIndex];
@@ -131,7 +136,7 @@ void world_system_battles(match_world_state& world)
 		}
 
 		// The garrison takes its share of the attacker's damage, like an army (rounded up). Levy deaths kill population. Survivors stay in the garrison.
-		if (!over && garrisonIndex != 0xFFFF && garrisonMen > 0)
+		if (fighting && garrisonIndex != 0xFFFF && garrisonMen > 0)
 		{
 			ui64 taken = ((ui64)battle.attacker.damage * garrisonMen + defenderMen - 1) / defenderMen;
 			ui32 dead[world_entity_battles::UNIT_TYPES];

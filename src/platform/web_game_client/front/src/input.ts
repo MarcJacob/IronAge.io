@@ -163,6 +163,8 @@ export const COMMAND_ERROR = {
     VALUE_OUT_OF_RANGE: 1 << 10,
     NOT_IN_HOME_TERRITORY: 1 << 11,
     NOT_ENOUGH_TREASURY: 1 << 12,
+    WRONG_PHASE: 1 << 13,
+    NOT_COMMANDER: 1 << 14,
 } as const;
 
 // Values of the feedback's invalid_path_reason. Mirrors COMMAND_INVALID_PATH_REASON (commands.h) by hand.

@@ -123,7 +123,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
 			outEntity.guid = battles.guids[battleIndex];
 			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
-			outEntity.flags = 0;
+			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by BATTLE_FLAG_* in backend.ts.
+			const world_entity_battles::state& battleState = battles.states[battleIndex];
+			outEntity.flags = (battleState.kind == world_entity_battles::KIND_SIEGE ? 1 : 0) | (battleState.phase == world_entity_battles::PHASE_BESIEGING ? 2 : 0);
 			outEntity.fractional_offset = {};
 
 			visibleCount++;

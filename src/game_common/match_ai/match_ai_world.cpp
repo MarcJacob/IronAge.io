@@ -71,6 +71,35 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	return true;
 }
 
+static ui16 ai_world_battle_slots(const match_world_state& world) { return world.entities->battles.max_count; }
+
+static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out)
+{
+	const world_entity_battles& battles = world.entities->battles;
+	const world_entity_armies& armies = world.entities->armies;
+	if (slot >= battles.max_count || !battles.guids[slot].is_valid()) return false;
+
+	const world_entity_battles::state& battle = battles.states[slot];
+	if (battle.kind != world_entity_battles::KIND_SIEGE || battle.phase != world_entity_battles::PHASE_BESIEGING) return false;
+
+	out.guid = battles.guids[slot];
+	out.attacker_commander = battle.attacker.commander;
+	out.attacker_men = 0;
+	out.defender_men = 0;
+	out.min_supply_days = 0xFFFFFFFF;
+	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+	{
+		out.attacker_men += battle.attacker.men[unitType];
+		out.defender_men += battle.defender.men[unitType];
+	}
+	for (ui16 army = 0; army < armies.max_count; army++)
+	{
+		if (!armies.guids[army].is_valid() || armies.battles[army]._value != out.guid._value || armies.battle_sides[army] != world_entity_battles::SIDE_ATTACKER) continue;
+		out.min_supply_days = ia_min(out.min_supply_days, armies.supplies[army] / ia_max(army_daily_consumption(armies.compositions[army]), (ui32)1));
+	}
+	return true;
+}
+
 // Counts the work projects of a type tied to the player's settlements (or to one settlement).
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement)
 {

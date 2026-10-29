@@ -15,6 +15,9 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
     entity_guid origin = settlements.guids[settlement_index];
     settlement_trading& settlementTrade = settlements.trade[settlement_index];
 
+    // A besieged settlement trades nothing.
+    if (settlements.sieges[settlement_index].is_valid()) return;
+
     // Checked before anything is drawn: settlements without ship slots (no Trade Port) draw no random number for ships.
     if (ship ? settlementTrade.ship_count >= settlementTrade.ship_count_max : settlementTrade.caravan_count >= settlementTrade.caravan_count_max) return;
 

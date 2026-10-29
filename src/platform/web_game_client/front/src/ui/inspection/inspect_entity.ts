@@ -35,6 +35,46 @@ export interface InspectionContext
 
     // Army being raised (army panel): makes the target sliders interactive. The mode owning the panel subscribes to ArmyPanelUI "raise_targets".
     edit_raise_targets?: boolean;
+
+    // Battle panel: a line of text under the rows (e.g. why the selected action is refused).
+    battle_note?: string;
+}
+
+const BATTLE_PHASE_NAMES: { [phase: number]: string } = {
+    [Backend.BATTLE_PHASE.ACTIVE]: "Fighting",
+    [Backend.BATTLE_PHASE.BESIEGING]: "Besieging",
+    [Backend.BATTLE_PHASE.ASSAULT]: "Assault",
+    [Backend.BATTLE_PHASE.SALLY]: "Sally",
+    [Backend.BATTLE_PHASE.OUTSIDE]: "Outside clash",
+};
+
+// Battle / siege panel: kind, phase, each side's commander with its total men, and the main target.
+function battle_panel_state(battle: EntityData, note: string): BattlePanelUI.BattlePanelState
+{
+    const side = (name: string) =>
+    {
+        const men = ["levies", "men_at_arms", "horsemen", "knights"].reduce((sum, type) => sum + battle.get_number(`${name}_men_${type}`), 0);
+        return `${Backend.get_player_name(battle.get_number(`${name}_commander`))}, ${men} men`;
+    };
+
+    let target = "";
+    const targetGuid = battle.get_number("main_target");
+    const targetView = targetGuid !== 0 ? query_entity(targetGuid) : null;
+    if (targetView !== null)
+    {
+        const where = targetView.get_location("location");
+        target = `${type_title(targetView)} at (${where.x}, ${where.y})`;
+    }
+
+    return {
+        kind: battle.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Field battle",
+        phase: BATTLE_PHASE_NAMES[battle.get_number("phase")] ?? "",
+        attacker: side("attacker"),
+        defender: side("defender"),
+        target,
+        location: battle.get_location("location"),
+        note,
+    };
 }
 
 // The owner's name, for entities that have an owner property. Empty if unowned or the name is unknown.
@@ -106,6 +146,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
             const build: SettlementPanelUI.SettlementBuildingState["build"] = !editable ? null : (context.buildable?.[building_type] ?? true) ? "enabled" : "disabled";
             return { definition, count, projects, build };
         }),
+        under_siege: prop("siege") !== 0,
         editable,
     };
 }
@@ -234,7 +275,7 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     case Backend.ENTITY_TYPE.ARMY: show({ title: "Army", subtitle, army: army_panel_state(view, context.edit_raise_targets === true) }); break;
     case Backend.ENTITY_TYPE.CARAVAN: show({ title: (view.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? "Ship" : "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.WORKER: show({ title: worker_title(view), subtitle, worker: worker_panel_state(view) }); break;
-    case Backend.ENTITY_TYPE.BATTLE: show({ title: view.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Battle", subtitle, battle: { location: view.get_location("location") } }); break;
+    case Backend.ENTITY_TYPE.BATTLE: show({ title: view.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Battle", subtitle, battle: battle_panel_state(view, context.battle_note ?? "") }); break;
     default: show({ title: type_title(view), subtitle }); break;
     }
 }

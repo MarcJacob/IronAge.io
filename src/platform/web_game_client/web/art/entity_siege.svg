@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder: catapult (a siege that is only besieging). -->
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+<g stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 46 L56 46" fill="none"/>
+<path d="M14 46 L28 34 L42 46" fill="none"/>
+<path d="M28 34 L48 12" fill="none"/>
+<path d="M48 12 L58 8 L56 20 Z" fill="#000"/>
+</g>
+<circle cx="16" cy="52" r="6" fill="#000"/>
+<circle cx="44" cy="52" r="6" fill="#000"/>
+<circle cx="14" cy="20" r="5" fill="#000"/>
+</svg>

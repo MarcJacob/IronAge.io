@@ -45,6 +45,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	SET_ALLOW_FOREIGN_EXPORT, // Sets whether a settlement may send caravans / ships to settlements of other players.
 
+	BEGIN_ASSAULT, // The attacker commander of a siege that is only besieging (idle) starts the assault: damage rounds begin and last until one side is gone.
+
 	TYPE_COUNT,
 };
 
@@ -86,6 +88,8 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 10, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits).
 	COMMAND_ERROR_NOT_IN_HOME_TERRITORY = 1 << 11, // The army is not inside its home settlement's territory.
 	COMMAND_ERROR_NOT_ENOUGH_TREASURY = 1 << 12, // The command costs more than the treasury holds (e.g. the supplies of a new army).
+	COMMAND_ERROR_WRONG_PHASE = 1 << 13, // The engagement is not in a phase the command works in.
+	COMMAND_ERROR_NOT_COMMANDER = 1 << 14, // The player does not command the side of the engagement the command is for.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -342,6 +346,22 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 void command_disband_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// BEGIN ASSAULT
+struct command_data_begin_assault
+{
+	entity_guid engagement; // The siege (a battle entity of kind SIEGE in the BESIEGING phase).
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_begin_assault)
+	GAME_DATA_PROPERTY(engagement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_begin_assault_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_begin_assault_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // SET EXPORT RATIO
 struct command_data_set_export_ratio
 {
@@ -496,6 +516,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_export_ratio_validity_check, command_set_export_ratio_apply },
 	{ "SET_ALLOW_FOREIGN_EXPORT", MATCH_COMMAND_TYPE::SET_ALLOW_FOREIGN_EXPORT, sizeof(command_data_set_allow_foreign_export),
 		command_set_allow_foreign_export_validity_check, command_set_allow_foreign_export_apply },
+	{ "BEGIN_ASSAULT", MATCH_COMMAND_TYPE::BEGIN_ASSAULT, sizeof(command_data_begin_assault),
+		command_begin_assault_validity_check, command_begin_assault_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

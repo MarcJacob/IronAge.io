@@ -37,6 +37,7 @@ static void ai_decide(ai_context& ctx)
 
 	if (ai_layer_due(ctx, AI_THREAT_EVERY, 0)) ai_tactics_defend(ctx);
 	ai_tactics_campaign(ctx);
+	ai_tactics_assault(ctx);
 
 	if (ai_layer_due(ctx, AI_TACTICS_EVERY, 1))
 	{

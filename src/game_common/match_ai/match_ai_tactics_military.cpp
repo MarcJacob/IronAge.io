@@ -135,6 +135,24 @@ static void ai_tactics_campaign(ai_context& ctx)
 	}
 }
 
+constexpr ui32 AI_ASSAULT_OUTNUMBER = 3; // Begin the assault when the besiegers have this many times the defenders' men (total men)...
+constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
+
+// Sieges this player commands that are only besieging: begin the assault if the besiegers outnumber the defenders enough, or run low on supplies.
+static void ai_tactics_assault(ai_context& ctx)
+{
+	ai_siege_view siege;
+	for (ui16 slot = 0; slot < ai_world_battle_slots(ctx.world); slot++)
+	{
+		if (!ai_view_idle_siege(ctx.world, slot, siege) || siege.attacker_commander != ctx.player) continue;
+		if (siege.attacker_men < siege.defender_men * AI_ASSAULT_OUTNUMBER && siege.min_supply_days >= AI_ASSAULT_MIN_SUPPLY_DAYS) continue;
+
+		auto* assault = ai_push<command_data_begin_assault>(ctx, MATCH_COMMAND_TYPE::BEGIN_ASSAULT);
+		if (assault == nullptr) return;
+		assault->engagement = siege.guid;
+	}
+}
+
 static bool ai_is_next_to_own_settlement(const ai_context& ctx, const ai_army_view& army)
 {
 	for (ui16 index = 0; index < ctx.settlement_count; index++)

@@ -98,6 +98,8 @@ class RESOURCES_STORE
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
         CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
+        BATTLE: new RESOURCE_SPRITE("art/entity_battle.svg"), // Crossing swords: field battles, and sieges that are fighting.
+        SIEGE: new RESOURCE_SPRITE("art/entity_siege.svg"), // Catapult: sieges in their idle besieging phase.
         SHIP: new RESOURCE_SPRITE("art/entity_ship.svg"), // Caravans with the ship flag.
     };
 
@@ -279,9 +281,11 @@ function worker_screen_size(entity: Backend.RenderEntity)
     return 0.5 * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 }
 
-// Battles: unchanged, legacy formula with its pixel floor.
+// Battles: legacy formula with its pixel floor. A siege is sized like its settlement (its significance is the settlement's).
 function battle_screen_size(entity: Backend.RenderEntity)
 {
+    if ((entity.flags & Backend.BATTLE_FLAG_SIEGE) !== 0) return settlement_screen_size(entity);
+
     const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[Backend.ENTITY_TYPE.BATTLE];
     return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
@@ -703,10 +707,15 @@ export function draw(render_state: Backend.RenderState | null)
             }
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
-            // Simple red marker.
+            // Catapult while the siege is idle, crossing swords for any fighting. Not tinted (no owner).
             const center = entity_canvas_center(vx, vy);
-            ctx.fillStyle = 'red';
-            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+            const idle = (entity.flags & Backend.BATTLE_FLAG_IDLE) !== 0;
+            const sprite = idle ? RESOURCES?.ENTITY.SIEGE : RESOURCES?.ENTITY.BATTLE;
+            if (sprite !== undefined && sprite.loaded) draw_entity(sprite.img, vx, vy, size, null, null, isSelected);
+            else {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+            }
             draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
         }
     }

@@ -33,13 +33,20 @@ static void world_resolve_attack(match_world_state& world, entity_guid attacker,
 			return;
 		}
 
+		// Nobody defends it (no garrison, and no defender army can be in a new siege): taken at once.
+		if (army_total_manpower(settlements.garrison[targetIndex]) == 0)
+		{
+			world_settlement_change_owner(world, targetIndex, attackerOwner);
+			break;
+		}
+
 		// The settlement's garrison is the defending side, it is recounted into the battle at every round (see world_system_battles).
-		// For now a siege starts directly as an assault (the idle besieging phase comes later).
+		// A siege starts idle (besieging): no damage until the attacker commander begins the assault.
 		world_entity_battles::state start = {};
 		army_unit_counts(settlements.garrison[targetIndex], start.defender.men);
 		start.location = (armies.locations[attackerIndex] + settlements.locations[targetIndex]) / 2; // Start battle at midpoint between beligerent armies.
 		start.kind = world_entity_battles::KIND_SIEGE;
-		start.phase = world_entity_battles::PHASE_ASSAULT;
+		start.phase = world_entity_battles::PHASE_BESIEGING;
 		start.main_target = target;
 		start.attacker.commander = attackerOwner;
 		start.defender.commander = settlements.owners[targetIndex];

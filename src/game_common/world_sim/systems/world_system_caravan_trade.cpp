@@ -4,6 +4,9 @@
 #include "../entities/world_sim_entity_caravan.h"
 #include "../entities/world_sim_entity_settlement.h"
 
+// Caravans heading for a besieged settlement look for another destination once this close to it (tiles).
+constexpr float CARAVAN_SIEGE_RECHECK_TILES = 30;
+
 // True if the guid is a settlement that still exists (references can be stale: destroy only invalidates the slot).
 static bool caravan_settlement_is_valid(const match_world_state& world, entity_guid settlement)
 {
@@ -74,6 +77,14 @@ void world_system_caravan_trade(match_world_state& world)
         if (!caravan_settlement_is_valid(world, destination)) continue;
 
         ui16 destinationIndex = destination.get_index();
+
+        // A besieged destination cannot be entered: from CARAVAN_SIEGE_RECHECK_TILES away the caravan looks for another target (and keeps its goods).
+        if (settlements.sieges[destinationIndex].is_valid())
+        {
+            if (vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[destinationIndex]) <= CARAVAN_SIEGE_RECHECK_TILES * CARAVAN_SIEGE_RECHECK_TILES)
+                world_caravan_retarget(world, caravan);
+            continue;
+        }
         if (caravans.locations[caravanIndex] != caravan_endpoint(world, caravans.flags[caravanIndex], destinationIndex)) continue; // Still travelling (ships: until the dock tile).
 
         entity_guid origin = caravans.origin_settlements[caravanIndex];

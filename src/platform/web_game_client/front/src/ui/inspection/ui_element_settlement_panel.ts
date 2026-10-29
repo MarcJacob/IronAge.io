@@ -97,6 +97,7 @@ export interface SettlementPanelState
     trade_volume: { volume: number, max: number } | null; // Null hides the gauge.
     garrison: (SettlementGarrisonState | null)[]; // Troop order (levies first). Null hides the gauge.
     buildings: (SettlementBuildingState | null)[]; // Building table order. Null hides the box.
+    under_siege: boolean; // The settlement has a siege against it: shown next to the population.
     editable: boolean; // Tax, export and ceiling sliders can be moved (tax and export show disabled otherwise).
 }
 
@@ -357,7 +358,7 @@ function submit_economy(state: SettlementPanelState): void
     set_text(el.population_value, String(state.population));
     set_text(el.population_growth, (growth > 0 ? "+" : "") + growth.toFixed(1) + "%");
     set_class(el.population_growth, "value_row_delta " + (growth < 0 ? "negative" : growth === 0 ? "neutral" : growth < GROWTH_CLOSE_TO_ZERO_PERCENT ? "warning" : "positive"));
-    set_text(el.population_note, state.raised > 0 ? `(+ ${state.raised} Raised)` : "");
+    set_text(el.population_note, (state.raised > 0 ? `(+ ${state.raised} Raised) ` : "") + (state.under_siege ? "Under siege" : ""));
     set_text(el.peasants, `${state.peasants} / ${state.peasants_cap}`);
     set_text(el.urban, `${state.workers + state.soldiers_home + state.unemployed} / ${state.urban_cap}`);
     set_text(el.workers, String(state.workers));

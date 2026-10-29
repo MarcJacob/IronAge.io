@@ -102,6 +102,13 @@ static void fill_render_entities_significance(const client_render_state& renderS
             break;
         }
         case ENTITY_TYPE::CARAVAN: entity.significance = caravans.values[index] / 100; break;
+        case ENTITY_TYPE::BATTLE:
+        {
+            // A siege is as significant as its settlement (the TS sizes it with the settlement formula).
+            const world_entity_battles::state& battle = world.entities->battles.states[index];
+            if (battle.kind == world_entity_battles::KIND_SIEGE && world_entity_is_valid(world, battle.main_target)) entity.significance = settlements.pop_total[battle.main_target.get_index()];
+            break;
+        }
         case ENTITY_TYPE::WORKER: entity.significance = WORKER_SIGNIFICANCE; break;
         default: break;
         }
