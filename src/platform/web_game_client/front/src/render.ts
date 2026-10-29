@@ -235,13 +235,85 @@ export function world_to_viewport(worldX: number, worldY: number)
     return { x: worldX - RENDER_PARAMS.viewportBottomLeftX, y: worldY - RENDER_PARAMS.viewportBottomLeftY };
 }
 
-// Returns an entity's canvas square size from current render parameters and provided type.
-function compute_entity_canvas_size(entity_type: Backend.ENTITY_TYPE)
-{
-    if (entity_type == Backend.ENTITY_TYPE.INVALID) return 0;
+// ENTITY SCREEN SIZE. One function per entity type gives its size in canvas pixels, so each can change on its own later
+// (by view mode, significance...). Sizes are worked out in tiles, then converted with the pixels-per-tile scale.
+// entity_draw_mode() then converts that size to how the entity is drawn.
 
-    const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[entity_type];
+// Size step (tiles) of the significance-based sizes: one unit per power of 2.
+const ENTITY_SCALE_UNIT = 0.1;
+// Entities whose size rounds to this or less are not drawn at all.
+const ENTITY_HIDE_SIZE = 1;
+// Entities smaller than this (px) are drawn as a plain square instead of their sprite.
+const ENTITY_SQUARE_SIZE = 5;
+
+// Settlements: 1 tile below 128 inhabitants, then + 1 unit per power of 2 ([128, 256) +1, [256, 512) +2...). Never below SETTLEMENT_MIN_PX,
+// which must be at least ENTITY_SQUARE_SIZE so a settlement is never culled or squared, at any zoom.
+const SETTLEMENT_MIN_PX = ENTITY_SQUARE_SIZE;
+function settlement_screen_size(entity: Backend.RenderEntity)
+{
+    const units = entity.significance / 1000 + Math.log2(entity.significance) * 4 - 6;
+    return Math.max(SETTLEMENT_MIN_PX, (1 + units * ENTITY_SCALE_UNIT) * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
+}
+
+// Armies: max(1, floor(log2(troops))) units, no pixel floor.
+function army_screen_size(entity: Backend.RenderEntity)
+{
+    return Math.max(1, Math.floor(Math.log2(Math.max(1, entity.significance)))) * ENTITY_SCALE_UNIT * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+}
+
+// Caravans: max(1, floor(log2(carried value))) units, no pixel floor.
+function caravan_screen_size(entity: Backend.RenderEntity)
+{
+    return Math.max(1, Math.floor(Math.log2(Math.max(1, entity.significance)))) * ENTITY_SCALE_UNIT * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+}
+
+// Ships: same as caravans for now (kept apart to change independently).
+function ship_screen_size(entity: Backend.RenderEntity)
+{
+    return Math.max(1, Math.floor(Math.log2(Math.max(1, entity.significance)))) * ENTITY_SCALE_UNIT * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+}
+
+// Workers: fixed half a tile, no pixel floor.
+function worker_screen_size(entity: Backend.RenderEntity)
+{
+    return 0.5 * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
+}
+
+// Battles: unchanged, legacy formula with its pixel floor.
+function battle_screen_size(entity: Backend.RenderEntity)
+{
+    const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[Backend.ENTITY_TYPE.BATTLE];
     return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
+}
+
+// Canvas pixel size of an entity before the hide / square conversion.
+function entity_screen_size(entity: Backend.RenderEntity)
+{
+    switch (entity.entity_type)
+    {
+        case Backend.ENTITY_TYPE.SETTLEMENT: return settlement_screen_size(entity);
+        case Backend.ENTITY_TYPE.ARMY: return army_screen_size(entity);
+        case Backend.ENTITY_TYPE.CARAVAN: return (entity.flags & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? ship_screen_size(entity) : caravan_screen_size(entity);
+        case Backend.ENTITY_TYPE.WORKER: return worker_screen_size(entity);
+        case Backend.ENTITY_TYPE.BATTLE: return battle_screen_size(entity);
+        default: return 0;
+    }
+}
+
+// Squares take the owner tint. Set to false for black squares.
+const ENTITY_SQUARE_USE_OWNER_COLOR = true;
+// Smallest side (px) of the click area of a drawn entity.
+const ENTITY_MIN_PICK_SIZE = 6;
+
+enum ENTITY_DRAW_MODE { HIDDEN, SQUARE, SPRITE }
+
+// Selected entities are never hidden or squared: they get the sprite at least at the square threshold size.
+function entity_draw_mode(size: number, is_selected: boolean)
+{
+    if (is_selected) return ENTITY_DRAW_MODE.SPRITE;
+    if (Math.round(size) <= ENTITY_HIDE_SIZE) return ENTITY_DRAW_MODE.HIDDEN;
+    if (size < ENTITY_SQUARE_SIZE) return ENTITY_DRAW_MODE.SQUARE;
+    return ENTITY_DRAW_MODE.SPRITE;
 }
 
 // Draws the sprite in 'color' (tint overlay, alpha 0.45) with an optional outline (CSS color, null = none). Any color is accepted.
@@ -293,31 +365,31 @@ function draw_entity(entity_img: HTMLImageElement, viewport_x: number, viewport_
 }
 
 // Draws a settlement entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_settlement(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
+function draw_entity_settlement(viewport_x: number, viewport_y: number, size: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.SETTLEMENT.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.SETTLEMENT), color, outline_color, is_selected);
+    draw_entity(RESOURCES.ENTITY.SETTLEMENT.img, viewport_x, viewport_y, size, color, outline_color, is_selected);
 }
 
 // Draws an army entity icon at the given viewport location, sized 'scale' world tiles across.
-function draw_entity_army(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
+function draw_entity_army(viewport_x: number, viewport_y: number, size: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false)
 {
     if (RESOURCES == null) return;
     if (!RESOURCES.ENTITY.ARMY.loaded) return;
 
-    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY), color, outline_color, is_selected);
+    draw_entity(RESOURCES.ENTITY.ARMY.img, viewport_x, viewport_y, size, color, outline_color, is_selected);
 }
 
 // Draws a caravan entity icon at the given viewport location (a ship sprite for ships).
-function draw_entity_caravan(viewport_x: number, viewport_y: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false, is_ship: boolean = false)
+function draw_entity_caravan(viewport_x: number, viewport_y: number, size: number, color: RGB | null, outline_color: string | null, is_selected: boolean = false, is_ship: boolean = false)
 {
     if (RESOURCES == null) return;
     const sprite = is_ship ? RESOURCES.ENTITY.SHIP : RESOURCES.ENTITY.CARAVAN;
     if (!sprite.loaded) return;
 
-    draw_entity(sprite.img, viewport_x, viewport_y, compute_entity_canvas_size(Backend.ENTITY_TYPE.CARAVAN), color, outline_color, is_selected);
+    draw_entity(sprite.img, viewport_x, viewport_y, size, color, outline_color, is_selected);
 }
 
 // Draws the visible part of a world-sized tile bitmap (1 pixel per tile, row 0 = world y 0 = bottom), snapped to whole tiles.
@@ -599,20 +671,29 @@ export function draw(render_state: Backend.RenderState | null)
         const color = RENDER_CONFIG.tint_entities ? RENDER_CONFIG.entity_color(entity.owner, local) : null;
         const outline = RENDER_CONFIG.outline_entities ? RENDER_CONFIG.entity_outline_color(entity.owner, local) : null;
 
-        if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
-            draw_entity_settlement(vx, vy, color, outline, isSelected);
+        const mode = entity_draw_mode(entity_screen_size(entity), isSelected);
+        if (mode === ENTITY_DRAW_MODE.HIDDEN) continue;
+        // Selected entities are never smaller than the square threshold.
+        const size = isSelected ? Math.max(entity_screen_size(entity), ENTITY_SQUARE_SIZE) : entity_screen_size(entity);
+
+        if (mode === ENTITY_DRAW_MODE.SQUARE) {
+            const center = entity_canvas_center(vx, vy);
+            ctx.fillStyle = ENTITY_SQUARE_USE_OWNER_COLOR && color !== null ? `rgb(${color[0]}, ${color[1]}, ${color[2]})` : 'black';
+            ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
+        }
+        else if (entity.entity_type === Backend.ENTITY_TYPE.SETTLEMENT) {
+            draw_entity_settlement(vx, vy, size, color, outline, isSelected);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.ARMY) {
-            draw_entity_army(vx, vy, color, outline, isSelected);
-            draw_army_troop_count(vx, vy, entity.guid);
+            draw_entity_army(vx, vy, size, color, outline, isSelected);
+            draw_army_troop_count(vx, vy, size, entity.guid);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.CARAVAN) {
-            draw_entity_caravan(vx, vy, color, outline, isSelected, (entity.flags & Backend.CARAVAN_FLAG_IS_SHIP) !== 0);
+            draw_entity_caravan(vx, vy, size, color, outline, isSelected, (entity.flags & Backend.CARAVAN_FLAG_IS_SHIP) !== 0);
         }
         else if (entity.entity_type === Backend.ENTITY_TYPE.WORKER) {
             // Simple marker, no sprite yet: filled with the entity color (red if tinting is off).
             const center = entity_canvas_center(vx, vy);
-            const size = compute_entity_canvas_size(entity.entity_type);
             ctx.fillStyle = color !== null ? `rgb(${color[0]}, ${color[1]}, ${color[2]})` : 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
             if (isSelected) {
@@ -624,7 +705,6 @@ export function draw(render_state: Backend.RenderState | null)
         else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
             // Simple red marker.
             const center = entity_canvas_center(vx, vy);
-            const size = compute_entity_canvas_size(entity.entity_type);
             ctx.fillStyle = 'red';
             ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
             draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
@@ -646,7 +726,7 @@ function draw_label(text: string, x: number, y: number)
 }
 
 // Total troops of an army as text right below its marker. Not drawn for an army in a battle (the battle shows the totals instead).
-function draw_army_troop_count(viewport_x: number, viewport_y: number, army_guid: number)
+function draw_army_troop_count(viewport_x: number, viewport_y: number, size: number, army_guid: number)
 {
     const army = query_entity(army_guid);
     if (army === null || army.get_number("battle") !== 0) return;
@@ -654,7 +734,7 @@ function draw_army_troop_count(viewport_x: number, viewport_y: number, army_guid
     const total = army.get_number("composition_levies") + army.get_number("composition_men_at_arms")
         + army.get_number("composition_horsemen") + army.get_number("composition_knights");
     const center = entity_canvas_center(viewport_x, viewport_y);
-    draw_label(String(total), center.x, center.y + compute_entity_canvas_size(Backend.ENTITY_TYPE.ARMY) / 2 + 2);
+    draw_label(String(total), center.x, center.y + size / 2 + 2);
 }
 
 // Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
@@ -782,7 +862,10 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
         const center = entity_canvas_center(entity.viewport_x + entity.fractional_x / 1000, entity.viewport_y + entity.fractional_y / 1000);
         const dx = clickPos.x - center.x;
         const dy = clickPos.y - center.y;
-        const halfSize = compute_entity_canvas_size(entity.entity_type) / 2;
+        const size = entity_screen_size(entity);
+        const isSelected = RENDER_CONFIG.outlined_entity !== null && entity.guid === RENDER_CONFIG.outlined_entity;
+        if (entity_draw_mode(size, isSelected) === ENTITY_DRAW_MODE.HIDDEN) continue; // Hidden entities can't be clicked.
+        const halfSize = Math.max(size, ENTITY_MIN_PICK_SIZE) / 2;
         if (Math.abs(dx) > halfSize || Math.abs(dy) > halfSize) continue;
 
         hitGuids.push(entity.guid);

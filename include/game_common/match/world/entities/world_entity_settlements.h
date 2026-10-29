@@ -68,6 +68,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(settlement_building_def)
 	GAME_DATA_PROPERTY(build_days, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(cost_per_day, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(workers, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(requires_coast, GAME_DATA_PROP_TYPE::UI8) // bool, 0 or 1.
 GAME_DATA_OBJECT_DEF_END();
 // Training of one troop type in a settlement: every duration_days days, up to amount peasants become soldiers of the type.
 struct settlement_troop_training
@@ -401,6 +402,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 
     GAME_DATA_PROPERTY(pop_unemployed, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(pop_peasants, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(pop_peasants_cap, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(pop_workers, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(pop_urban_cap, GAME_DATA_PROP_TYPE::UI32)
 

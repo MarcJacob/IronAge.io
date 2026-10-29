@@ -197,6 +197,15 @@ body {
     color: #ff6b6b;
 }
 
+/* Sub-item of the row above it. */
+.text_row_indent {
+    margin-left: 1rem;
+}
+
+.text_row_indent2 {
+    margin-left: 2rem;
+}
+
 .text_row_label {
     margin-right: 0.5rem;
     color: #9aa0a6;

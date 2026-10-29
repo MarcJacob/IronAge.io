@@ -64,7 +64,13 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
         population: Math.max(0, prop("population") - raised),
         raised,
         peasants: prop("pop_peasants"),
+        peasants_cap: prop("pop_peasants_cap"),
+        urban_cap: prop("pop_urban_cap"),
+        workers: prop("pop_workers"),
         soldiers_home,
+        unemployed: prop("pop_unemployed"),
+        caravans: { active: prop("trading_caravans_active"), max: prop("trading_caravans_max") },
+        ships: { active: prop("trading_ships_active"), max: prop("trading_ships_max") },
         // Server per-mille rate (guarded against an empty settlement there).
         growth_percent: prop("population_growth_rate") / 10,
         production: prop("economy_production"),

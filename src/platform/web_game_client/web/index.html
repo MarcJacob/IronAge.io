@@ -130,9 +130,14 @@
                     <div id="game_hud_settlement_panel" hidden>
                         <div class="settlement_panel_top">
                             <div class="settlement_panel_column">
-                                <div id="settlement_panel_population" class="text_row value_row has_tooltip">
+                                <div id="settlement_panel_population" class="text_row value_row">
                                     <span class="text_row_label">Population</span><span id="settlement_panel_population_value"></span><span id="settlement_panel_population_growth" class="value_row_delta"></span><span id="settlement_panel_population_note" class="value_row_note"></span>
                                 </div>
+                                <div class="text_row text_row_indent"><span class="text_row_label">Peasants</span><span id="settlement_panel_peasants"></span></div>
+                                <div class="text_row text_row_indent"><span class="text_row_label">Urban</span><span id="settlement_panel_urban"></span></div>
+                                <div class="text_row text_row_indent2"><span class="text_row_label">Workers</span><span id="settlement_panel_workers"></span></div>
+                                <div class="text_row text_row_indent2"><span class="text_row_label">Soldiers</span><span id="settlement_panel_soldiers"></span></div>
+                                <div class="text_row text_row_indent2"><span class="text_row_label">Unemployed</span><span id="settlement_panel_unemployed"></span></div>
                                 <div class="settlement_panel_line">
                                     <div id="settlement_panel_production" class="text_row value_row has_tooltip">
                                         <span class="text_row_label">Production</span><span id="settlement_panel_production_value"></span>
@@ -156,6 +161,10 @@
                                 <div id="settlement_panel_trade_volume" class="gauge thin has_tooltip">
                                     <div class="gauge_header"><div class="gauge_text">Trade volume <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
                                     <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
+                                </div>
+                                <div class="settlement_panel_line">
+                                    <div id="settlement_panel_caravans" class="text_row"><span class="text_row_label">Caravans</span><span id="settlement_panel_caravans_value"></span></div>
+                                    <div id="settlement_panel_ships" class="text_row"><span class="text_row_label">Ships</span><span id="settlement_panel_ships_value"></span></div>
                                 </div>
                             </div>
 

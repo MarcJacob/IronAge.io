@@ -78,10 +78,45 @@ WASM_EXPORT client_render_state::viewport_state* client_render_state_get_viewpor
     return &game_client_get_render_state(*WEB_CLIENT.backend)->viewport;   
 }
 
+static constexpr ui32 WORKER_SIGNIFICANCE = 1; // Workers have no size worth reporting: the smallest non-zero value.
+
+// Fills the significance of the frame's render entities from the local world (the backend leaves it at 0).
+// Settlements: total population. Armies: troop count. Caravans / ships: carried value. Workers: WORKER_SIGNIFICANCE. Others stay 0.
+static void fill_render_entities_significance(const client_render_state& renderState, const match_world_state& world)
+{
+    const world_entity_settlements& settlements = world.entities->settlements;
+    const world_entity_armies& armies = world.entities->armies;
+    const world_entity_caravans& caravans = world.entities->caravans;
+
+    for (ui32 i = 0; i < renderState.frame.entity_count; i++)
+    {
+        render_entity& entity = renderState.frame.entity_states[i];
+        ui16 index = entity.guid.get_index();
+        switch (entity.entity_type)
+        {
+        case ENTITY_TYPE::SETTLEMENT: entity.significance = settlements.pop_total[index]; break;
+        case ENTITY_TYPE::ARMY:
+        {
+            const army_troop_count& troops = armies.compositions[index];
+            entity.significance = (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights;
+            break;
+        }
+        case ENTITY_TYPE::CARAVAN: entity.significance = caravans.values[index] / 100; break;
+        case ENTITY_TYPE::WORKER: entity.significance = WORKER_SIGNIFICANCE; break;
+        default: break;
+        }
+    }
+}
+
 WASM_EXPORT render_entity* client_render_state_get_entities()
 {
     ASSERT(WEB_CLIENT.backend != nullptr);
-    return game_client_get_render_state(*WEB_CLIENT.backend)->frame.entity_states;
+    client_render_state* renderState = game_client_get_render_state(*WEB_CLIENT.backend);
+    if (renderState->frame.entity_states != nullptr && WEB_CLIENT.backend->local_match != nullptr)
+    {
+        fill_render_entities_significance(*renderState, *WEB_CLIENT.backend->local_match->world);
+    }
+    return renderState->frame.entity_states;
 }
 
 WASM_EXPORT ui32 client_render_state_get_entity_count()

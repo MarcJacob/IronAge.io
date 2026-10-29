@@ -51,9 +51,9 @@ struct game_trade_parameters
 
     // Profit (trade volume, never goods). Scarcity rate r% of the caravan value, r linear in the destination's fill: max at 0% fill, min at 100%. Clamped to 10000.
     ui32 scarcity_value_min_percent = 25;
-    ui32 scarcity_value_max_percent = 125;
+    ui32 scarcity_value_max_percent = 150;
     // Profit scaling by (destination capacity - origin capacity) / origin capacity, in %, clamped to [-malus, +bonus]. Malus clamped to 100.
-    ui32 capacity_ratio_max_bonus_percent = 25;
+    ui32 capacity_ratio_max_bonus_percent = 100;
     ui32 capacity_ratio_max_malus_percent = 75;
     ui32 incoming_profit_bonus_percent_max = 50; // Profit bonus (%) at the destination's full volume fraction, linear. Clamped to 10000.
     ui32 profit_receiver_percent = 0; // Share (%) of the profit gained by the receiver as volume, the exporter gains the rest. Clamped to 100.
@@ -65,7 +65,7 @@ struct game_trade_parameters
     ui32 volume_decay_days = 30; // Daily decay = max / this (at least 1 while volume > 0). 0 is treated as 1.
 
     // Extra margin earned per exchanged good, per specified distance between origin and destination (in number of tiles, "as the crow flies").
-    ui16 good_val_markup_increase_dist = 512;
+    ui16 good_val_markup_increase_dist = 1024;
 };
 
 // Per mille = thousandths (20 = 2%). Ratios are per mille too (1000 = 100%).

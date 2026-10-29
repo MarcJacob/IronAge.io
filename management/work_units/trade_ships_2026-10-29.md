@@ -23,6 +23,13 @@ Ships work like sea caravans: same trade logic, water pathing instead of land, s
 3. [DONE, hand-tested] Sim (Opus). Dock helper `settlement_dock_tile`; `caravan_endpoint` for all endpoint sites; Trade Port = building row 4 with new `requires_coast` def member; entity cap check at spawn; AI unaffected. Notes: `trade_ships_survey.md` IMPLEMENTED section.
 4. [DONE, hand-tested] Client: `render_entity` flags byte (stride 20), ship sprite `web/art/entity_ship.svg`, "Ship" panel title, water path preview. Not done: ship slots row in the settlement panel (GDO `trading_ships_active/max` exist), tooltip reason on the disabled Trade Port button. Notes: `src/platform/web_game_client/.ai_imprint/ships_client_support.md`.
 
+5. Settlement panel (Sonnet): [DONE, unbuilt] Caravans / Ships slot rows (hidden at max 0), strata breakdown replacing the population tooltip (Peasants count / cap; Urban total / cap, total = workers + home soldiers + unemployed; Workers, Soldiers, Unemployed one level deeper; `pop_peasants_cap` added to settlement GDO); label stays "Population". Trade Port button tooltip "Coastal settlements only" (shown whenever a requires_coast building's button is disabled; `requires_coast` added to building def GDO and `gdo.ts`).
+6. [DONE, unbuilt] Coast corner stall fix, see `straight_line_movement` task 5d.
+
+## Decisions (later)
+
+- No per-settlement coastal GDO prop. Separate building error codes ("not now" vs "not available") planned later.
+
 ## Open questions
 
 - Ship speed / carry values: tune in play-test (ships hug coast at sea cost 7; roads make land caravans faster on roads).
@@ -31,4 +38,4 @@ Ships work like sea caravans: same trade logic, water pathing instead of land, s
 
 ## Next step
 
-Tune speed / carry in play; decide on the ship slot row and the Trade Port button tooltip. Then flag [DONE].
+Build, hand-test the panel and coast fix; tune speed / carry in play. Then flag [DONE].

@@ -18,6 +18,15 @@ const IDS = {
     population_value: "settlement_panel_population_value",
     population_growth: "settlement_panel_population_growth",
     population_note: "settlement_panel_population_note",
+    peasants: "settlement_panel_peasants",
+    urban: "settlement_panel_urban",
+    workers: "settlement_panel_workers",
+    soldiers: "settlement_panel_soldiers",
+    unemployed: "settlement_panel_unemployed",
+    caravans: "settlement_panel_caravans",
+    caravans_value: "settlement_panel_caravans_value",
+    ships: "settlement_panel_ships",
+    ships_value: "settlement_panel_ships_value",
     production: "settlement_panel_production",
     production_value: "settlement_panel_production_value",
     tax_value: "settlement_panel_tax_value",
@@ -67,7 +76,13 @@ export interface SettlementPanelState
     population: number; // Home population (without the raised troops).
     raised: number; // Troops raised into armies.
     peasants: number;
+    peasants_cap: number;
+    urban_cap: number; // Capacity for the non-peasant population (workers + home soldiers + unemployed).
+    workers: number;
     soldiers_home: number;
+    unemployed: number;
+    caravans: { active: number, max: number }; // Row hidden when max is 0.
+    ships: { active: number, max: number }; // Row hidden when max is 0.
     growth_percent: number; // Last day's change, % of the population.
     production: number; // Last day, before tax.
     tax: number; // Last day.
@@ -172,6 +187,7 @@ class BuildingBox
                 `Cost: ${definition.cost_per_day * definition.build_days} (${definition.cost_per_day} per day)`,
                 `Workers: ${definition.workers}`,
                 `Duration: ${definition.build_days} days`,
+                ...(definition.requires_coast && this.state.build === "disabled" ? ["Coastal settlements only"] : []),
             ]
             : [definition.name, definition.description, `Built: ${this.state.count}`];
         TooltipUI.submit({ lines, x: this.mouse_x, y: this.mouse_y });
@@ -180,10 +196,18 @@ class BuildingBox
 
 let el: {
     root: HTMLElement;
-    population_tooltip: HoverTooltip;
     population_value: HTMLElement;
     population_growth: HTMLElement;
     population_note: HTMLElement;
+    peasants: HTMLElement;
+    urban: HTMLElement;
+    workers: HTMLElement;
+    soldiers: HTMLElement;
+    unemployed: HTMLElement;
+    caravans: HTMLElement;
+    caravans_value: HTMLElement;
+    ships: HTMLElement;
+    ships_value: HTMLElement;
     production_tooltip: HoverTooltip;
     production_value: HTMLElement;
     tax: StaticSlider;
@@ -216,10 +240,18 @@ function init(): void
     const consumption = get(IDS.consumption);
     el = {
         root: get(IDS.root),
-        population_tooltip: new HoverTooltip(get(IDS.population)),
         population_value: get(IDS.population_value),
         population_growth: get(IDS.population_growth),
         population_note: get(IDS.population_note),
+        peasants: get(IDS.peasants),
+        urban: get(IDS.urban),
+        workers: get(IDS.workers),
+        soldiers: get(IDS.soldiers),
+        unemployed: get(IDS.unemployed),
+        caravans: get(IDS.caravans),
+        caravans_value: get(IDS.caravans_value),
+        ships: get(IDS.ships),
+        ships_value: get(IDS.ships_value),
         production_tooltip: new HoverTooltip(get(IDS.production)),
         production_value: get(IDS.production_value),
         tax: new StaticSlider(get(IDS.tax_value), get(IDS.tax_slider) as HTMLInputElement, value => events.emit("tax_rate", value)),
@@ -263,7 +295,6 @@ export function submit(state: SettlementPanelState | null): void
         el.market_goods_tooltip.hide();
         for (const gauge of el.garrison) gauge.submit(null);
         for (const box of el.buildings) box.submit(null);
-        el.population_tooltip.hide();
         el.production_tooltip.hide();
         el.consumption_tooltip.hide();
         el.trade_volume_tooltip.hide();
@@ -309,13 +340,17 @@ function submit_economy(state: SettlementPanelState): void
     set_text(el.population_growth, (growth > 0 ? "+" : "") + growth.toFixed(1) + "%");
     set_class(el.population_growth, "value_row_delta " + (growth < 0 ? "negative" : growth === 0 ? "neutral" : growth < GROWTH_CLOSE_TO_ZERO_PERCENT ? "warning" : "positive"));
     set_text(el.population_note, state.raised > 0 ? `(+ ${state.raised} Raised)` : "");
-    el.population_tooltip.submit([
-        `Home population ${state.population}`,
-        `Peasants ${state.peasants}`,
-        `Soldiers (at home) ${state.soldiers_home}`,
-        state.raised > 0 ? `Soldiers (raised) ${state.raised}` : "",
-        `Growth ${growth.toFixed(1)}% per day`,
-    ]);
+    set_text(el.peasants, `${state.peasants} / ${state.peasants_cap}`);
+    set_text(el.urban, `${state.workers + state.soldiers_home + state.unemployed} / ${state.urban_cap}`);
+    set_text(el.workers, String(state.workers));
+    set_text(el.soldiers, String(state.soldiers_home));
+    set_text(el.unemployed, String(state.unemployed));
+
+    // Slot rows (active / max), hidden when the settlement cannot have any.
+    el.caravans.hidden = state.caravans.max === 0;
+    set_text(el.caravans_value, `${state.caravans.active} / ${state.caravans.max}`);
+    el.ships.hidden = state.ships.max === 0;
+    set_text(el.ships_value, `${state.ships.active} / ${state.ships.max}`);
 
     set_text(el.production_value, `${state.production} / day`);
     el.production_tooltip.submit([

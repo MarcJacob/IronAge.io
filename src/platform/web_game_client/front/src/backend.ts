@@ -546,6 +546,7 @@ export class RenderEntity
     fractional_x: number = 0; // Offset from the tile center, in thousandths of a tile.
     fractional_y: number = 0;
     flags: number = 0; // Caravans: WORLD_ENTITY_CARAVAN_FLAGS.
+    significance: number = 0; // Settlements: population. Armies: troops. Caravans: carried value. Workers: small constant.
 }
 
 export const CARAVAN_FLAG_IS_SHIP = 1 << 0; // Mirrors WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP.
@@ -635,8 +636,9 @@ function read_render_state()
     const entityStatesDataView: DataView = new DataView(CLIENT_BACKEND.memory.buffer, entityStatesOffset);
 
     // Layout of render_entity: entity_type (ui8), owner (ui16), guid (ui32, entity_guid), viewport_location (f32 x/y), fractional_offset (i16 x/y), flags (ui8, caravans: bit 0 = ship).
-    // Packed, offsets 0 / 1 / 3 / 7 / 15 / 19, sizeof 20 (static_assert'd in game_client_backend.h).
-    const ENTITY_MEM_SIZE: number = 20;
+    // Then significance (ui32, filled by the wasm platform layer: population / troops / carried value).
+    // Packed, offsets 0 / 1 / 3 / 7 / 15 / 19 / 20, sizeof 24 (static_assert'd in game_client_backend.h).
+    const ENTITY_MEM_SIZE: number = 24;
 
     for (let i = 0; i < renderState.entity_count; i++) {
         renderState.entity_states.push(
@@ -649,6 +651,7 @@ function read_render_state()
                 fractional_x: entityStatesDataView.getInt16(ENTITY_MEM_SIZE * i + 15, true),
                 fractional_y: entityStatesDataView.getInt16(ENTITY_MEM_SIZE * i + 17, true),
                 flags: entityStatesDataView.getUint8(ENTITY_MEM_SIZE * i + 19),
+                significance: entityStatesDataView.getUint32(ENTITY_MEM_SIZE * i + 20, true),
             });
     }
 

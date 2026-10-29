@@ -87,6 +87,10 @@ Caravans get their value from taking goods from their origin settlement's goods 
 
 The goods can be taken at any time when the system sees that a good deal is currently awaiting a caravan if it would spawn. To discourage caravans starving settlements, a heavy penalty is imposed to the decision making (but NOT final profit) when goods are scarce in the origin settlement. This means that to get trade started somewhere, a good opportunity needs to exist. The trade volume bonus then ensures that the activity is worthwhile through increased production.
 
+In order to create exportable goods, a settlement sets them aside from production and imports at a choosable rate, so some settlements can be made export-oriented and others import-oriented. The intention is for small settlements to HAVE to export to get trade volume while larger settlements can export less and maintain larger populations which allows them to have available population for industries and armies.
+
+For extra control, settlements can be allowed or disallowed from exporting abroad (meaning players that do not have a free trade agreement with the settlement's owner). 
+
 ### Industries
 
 Trade Volume accumulates into a spendable resource. Cities that have strong, sustained trade volume are able to build industry buildings which create more goods without the usage of land, furthering their economic value and making them even more attractive to further trade.

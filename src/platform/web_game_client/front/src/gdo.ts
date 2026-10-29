@@ -257,6 +257,7 @@ export interface BuildingDefinition
     build_days: number;
     cost_per_day: number; // Wealth per day while under construction.
     workers: number; // Workers taken from the peasants while under construction.
+    requires_coast: boolean; // Only coastal settlements can build it.
 }
 
 // The table is constant: each type is read from the backend once, then cached. Schema (same for all rows) cached too.
@@ -280,6 +281,7 @@ export function get_building_definition(type: number): BuildingDefinition | null
         build_days: data.get_number("build_days"),
         cost_per_day: data.get_number("cost_per_day"),
         workers: data.get_number("workers"),
+        requires_coast: data.get_number("requires_coast") !== 0,
     };
     BUILDING_DEFINITIONS.set(type, definition);
     return definition;

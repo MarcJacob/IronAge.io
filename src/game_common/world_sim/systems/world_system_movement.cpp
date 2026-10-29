@@ -17,6 +17,13 @@ static i64 div_round_nearest(i64 num, i64 den)
     return num >= 0 ? (num + den / 2) / den : -((-num + den / 2) / den);
 }
 
+static bool tile_passable(const match_world_state& world, world_location tile, const path_params& params)
+{
+    ui16 regionIndex, tileIndex;
+    world_get_tile(*world.terrain, tile, regionIndex, tileIndex);
+    return world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params) != 0;
+}
+
 // Moves the entity one step in a straight line towards the center of its move target (its current waypoint).
 // Positions are absolute fractional units: tile * 1000 + fractional_loc (a tile's center is its fractional 0).
 // The step is travel_speed / cost of the tile the entity stands on (rounded to nearest, cost at least 1): travel_speed is the speed on a road.
@@ -48,11 +55,30 @@ static bool process_entity_movement(const match_world_state& world, world_entity
     i32 shiftedX = newPosX + 500, shiftedY = newPosY + 500;
     world_location newLocation = { (ui16)(shiftedX / 1000), (ui16)(shiftedY / 1000) };
 
-    if (newLocation != location)
+    if (newLocation != location && !tile_passable(world, newLocation, params))
     {
-        ui16 newRegionIndex, newTileIndex;
-        world_get_tile(*world.terrain, newLocation, newRegionIndex, newTileIndex);
-        if (world_tile_move_cost(*world.terrain, newRegionIndex, newTileIndex, params) == 0) return false;
+        // Slide along the blocked edge: keep the move on one axis and hold the other at the current tile's border.
+        // This happens when a straight line cuts a tile corner (the side tiles were never checked): the next tick can then cross the corner.
+        // Only tiles that are passable (or the current tile) are ever entered. The axis with the longer way to go is preferred.
+        world_location keepX = { newLocation.x, location.y };
+        world_location keepY = { location.x, newLocation.y };
+        bool keepXOk = keepX == location || tile_passable(world, keepX, params);
+        bool keepYOk = keepY == location || tile_passable(world, keepY, params);
+        bool xFirst = (toTargetX < 0 ? -toTargetX : toTargetX) >= (toTargetY < 0 ? -toTargetY : toTargetY);
+        if (keepXOk && (xFirst || !keepYOk))
+        {
+            if (newLocation.y != location.y) newPosY = (i32)location.y * 1000 + (newLocation.y > location.y ? 499 : -500);
+        }
+        else if (keepYOk)
+        {
+            if (newLocation.x != location.x) newPosX = (i32)location.x * 1000 + (newLocation.x > location.x ? 499 : -500);
+        }
+        else return false;
+
+        if (newPosX == posX && newPosY == posY) return false; // Nothing left to move.
+        shiftedX = newPosX + 500;
+        shiftedY = newPosY + 500;
+        newLocation = { (ui16)(shiftedX / 1000), (ui16)(shiftedY / 1000) };
     }
 
     location = newLocation;
