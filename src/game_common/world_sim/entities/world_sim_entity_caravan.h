@@ -9,19 +9,15 @@
 #include "game_common/match/world/world_state.h"
 #include "world_sim_entity_settlement.h"
 
-// What caravans can cross: land only, straight segments. Other members zero-initialized.
-static const path_params CARAVAN_PATH_PARAMS = { .passable_terrain = PATH_TERRAIN_LAND, .straight_segments = true };
-// Ships (IS_SHIP): water only.
-static const path_params SHIP_PATH_PARAMS = { .passable_terrain = PATH_TERRAIN_WATER, .straight_segments = true };
-
 static inline bool caravan_is_ship(WORLD_ENTITY_CARAVAN_FLAGS flags)
 {
     return ((ui8)flags & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP) != 0;
 }
 
-static inline const path_params& caravan_path_params(WORLD_ENTITY_CARAVAN_FLAGS flags)
+// What caravans can cross: land only. Ships (IS_SHIP): water only.
+static inline PATH_MODE caravan_path_mode(WORLD_ENTITY_CARAVAN_FLAGS flags)
 {
-    return caravan_is_ship(flags) ? SHIP_PATH_PARAMS : CARAVAN_PATH_PARAMS;
+    return caravan_is_ship(flags) ? PATH_MODE_SEA : PATH_MODE_LAND;
 }
 
 // Tile a caravan leaves from / travels to for a settlement: the settlement tile, or for ships its dock tile (settlement_dock_tile).

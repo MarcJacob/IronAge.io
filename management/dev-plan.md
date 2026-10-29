@@ -38,7 +38,7 @@ when it finishes.
 - `work_units/territory_rendering_2026-11-06.md`
 - `work_units/army_supply_redesign_2026-11-07.md`
 - `work_units/army_autonomy_2026-11-08.md`
-- `work_units/campaign_objectives_2026-11-09.md`
+- `work_units/pathing_rewrite_2026-10-29.md`
 
 Finished units are moved to `management/archive/` after a time.
 

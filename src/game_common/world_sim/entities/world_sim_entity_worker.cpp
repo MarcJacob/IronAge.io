@@ -1,4 +1,6 @@
 #include "world_sim_entity_worker.h"
+#include "game_common/match/game_parameters.h"
+#include "game_common/match/world/world_terrain.h"
 
 entity_guid world_spawn_worker(match_world_state& world, const world_entity_workers::single& start_state)
 {
@@ -28,12 +30,11 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 
 	// Every worker starts at its origin. Moving work types take it from there (start_state.position / movement are not read).
 	world_location start = world_entity_get_location(world, start_state.origin_entity);
-	workers.position[freeIndex] = start;
+	workers.location[freeIndex] = start;
 	world_entity_movement& movement = workers.movement[freeIndex];
 	movement = {};
 	movement.travel_speed = (ui16)GAME_PARAMETERS.worker_travel_speed;
 	movement.destination = start;
-	movement.move_target = start;
 	movement.path_handle = INVALID_PATH_HANDLE;
 
 	return newID;
@@ -91,8 +92,8 @@ bool world_alloc_workers(match_world_state& world, mem_arena& memory, ui32 count
 	workers.action_data = memory.alloc<world_worker_action_data>(count);
 	if (workers.action_data == nullptr) return false;
 
-	workers.position = memory.alloc<world_location>(count);
-	if (workers.position == nullptr) return false;
+	workers.location = memory.alloc<world_location>(count);
+	if (workers.location == nullptr) return false;
 
 	workers.movement = memory.alloc<world_entity_movement>(count);
 	if (workers.movement == nullptr) return false;

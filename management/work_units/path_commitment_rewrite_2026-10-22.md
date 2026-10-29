@@ -1,5 +1,7 @@
 # Path commitment / pathing rewrite
 
+> 2026-10-29: superseded by `pathing_rewrite_2026-10-29.md`. History only.
+
 Raised: 2026-10-22 (from the pathing direction investigation; see `src/game_common/world_sim/.ai_imprint/pathing_direction_investigation.md`).
 
 - Entities re-path from their current tile on every tile entered and keep only the first step; no stored path (`path_handle` always invalid).

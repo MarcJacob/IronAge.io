@@ -12,7 +12,7 @@ Unity build: *world_sim_main.cpp* includes every implementation file of this fol
 	- The header holds the internal symbols and helpers for the entity type (constants / helpers shared by several themes).
 	- The cpp implements them, plus the public functions declared under *include/* (alloc, spawn, destroy, query, commonly used functions not tied to a particular system, entity-specific logic such as caravan destination selection or settlement building events).
 - */systems/*: every system, in *world_system_<theme>.cpp* files. Declarations are in a header per category: *systems_economy.h*, *systems_war.h*, *systems_workers.h* (one function per work type), *systems_world.h* (territory and movement).
-- Files at this level: cross-entity functions and world init / tick (*world_sim_main.cpp*), terrain generation (*world_terrain.cpp*), pathfinding (*world_pathing.cpp*), movement helpers (*world_movement.h*).
+- Files at this level: cross-entity functions and world init / tick (*world_sim_main.cpp*), terrain generation (*world_terrain.cpp*), pathfinding and the world's path store (*world_pathing.cpp*, stubs: being rewritten from scratch; the store has three functions, get path / move entity / next tile, declared in *world_movement.h*), movement helpers (*world_movement.h*).
 - Helpers or constants used by one theme stay in its file.
 - Functions used by their own file only are `static`.
 - Systems are still named `world_system_<what>`; the territory and population ones keep an older `economy` in their names.

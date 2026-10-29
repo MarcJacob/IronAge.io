@@ -98,9 +98,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		{
             // Active workers who are outside their origin entity.
 			if (!workers.guids[workerIndex].is_valid()
-                    || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.position[workerIndex]) continue;
+                    || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.location[workerIndex]) continue;
 
-			vec2<float> workerLoc = workers.position[workerIndex];
+			vec2<float> workerLoc = workers.location[workerIndex];
 			if (!is_visible_in_viewport(workerLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];

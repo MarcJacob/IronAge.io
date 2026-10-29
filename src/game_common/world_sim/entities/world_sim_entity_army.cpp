@@ -33,7 +33,6 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	// Init default values if they weren't specified by start state.
 	SET_DEFAULT_VAL(newArmy.movement.travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
 	SET_DEFAULT_VAL_STRUCT(newArmy.movement.destination, start_state.location);
-	newArmy.movement.move_target = start_state.location;
 
 	// A new army stands at its destination (the default order is STATION), unless the start state gives another order.
 	if (start_state.order.type == ARMY_ORDER_STATION) newArmy.order.location = newArmy.movement.destination;

@@ -7,7 +7,7 @@
 #include "world_entity_common.h"
 
 // Small byte buffer for the data a work type keeps about its project. Its layout is entirely defined by the work type's logic.
-static constexpr ui8 WORLD_WORKER_ACTION_DATA_SIZE = 16;
+static constexpr ui8 WORLD_WORKER_ACTION_DATA_SIZE = 20;
 struct world_worker_action_data
 {
 	alignas(4) ui8 bytes[WORLD_WORKER_ACTION_DATA_SIZE]; // Aligned so work types can overlay structures on it.
@@ -31,6 +31,7 @@ struct build_road_data
     world_location destination; // Tile the road is going towards.
     ui8 funded; // 1 if the current day is paid for. The crew only walks / builds while it is.
     ui16 ticks_left; // Ticks left to build the tile the crew is on. 0 = not started on the next tile.
+    ui32 path_handle; // Path the road follows, from the path store. INVALID_PATH_HANDLE = not requested yet.
 };
 static_assert(sizeof(build_road_data) <= WORLD_WORKER_ACTION_DATA_SIZE, "Road action data doesn't fit the worker action data buffer.");
 
@@ -66,7 +67,7 @@ struct world_entity_workers : public world_entity_container
 	ui32* daily_cost; // Paid from the origin owner's treasury (spent) for every day the project advances. 0 = free.
 
 	world_worker_action_data* action_data;
-	world_location* position; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
+	world_location* location; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
 	world_entity_movement* movement; // Movement state, used by work types that travel (like armies').
 
 	struct view;
@@ -123,7 +124,7 @@ struct world_entity_workers : public world_entity_container
 			, work_progress_ratio(collection.work_progress_ratio[index])
 			, daily_cost(collection.daily_cost[index])
 			, action_data(collection.action_data[index])
-			, position(collection.position[index])
+			, position(collection.location[index])
 			, movement(collection.movement[index])
 		{}
 	};
@@ -150,7 +151,7 @@ inline void world_entity_workers::single::copy_from(const world_entity_workers& 
 	work_progress_ratio = collection.work_progress_ratio[index];
 	daily_cost = collection.daily_cost[index];
 	action_data = collection.action_data[index];
-	position = collection.position[index];
+	position = collection.location[index];
 	movement = collection.movement[index];
 	owner = INVALID_MATCH_PLAYER_ID;
 }

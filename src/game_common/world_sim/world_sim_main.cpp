@@ -84,7 +84,7 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 	case ENTITY_TYPE::ARMY:
 		return world.entities->armies.location[entity.get_index()];
 	case ENTITY_TYPE::WORKER:
-		return world.entities->workers.position[entity.get_index()];
+		return world.entities->workers.location[entity.get_index()];
 	case ENTITY_TYPE::ENGAGEMENT:
 		return world.entities->engagements.location[entity.get_index()];
 	case ENTITY_TYPE::CAMPAIGN:

@@ -1,5 +1,7 @@
 // Caravan / ship trade systems.
 
+#include "game_common/match/world/entities/world_entity_caravans.h"
+#include "game_common/match/world/world_pathing.h"
 #include "game_common/match/world/world_trade.h"
 #include "../entities/world_sim_entity_caravan.h"
 #include "../entities/world_sim_entity_settlement.h"
@@ -53,10 +55,10 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         }
 
         world_location destinationLocation = caravan_destination_tile(world, caravan.flags, destination);
-        path_result path;
-        world_request_path(world, startLocation, destinationLocation, caravan_path_params(caravan.flags), path);
+        ui32 pathHandle = world_path_store_get_path(world, startLocation, destinationLocation, 
+                caravan_is_ship(caravan.flags) ? PATH_MODE_SEA : PATH_MODE_LAND);
         // Start == destination (an army standing on the origin): the request returns no path, but there is nothing to walk.
-        if (startLocation != destinationLocation && (path.count == 0 || path.partial))
+        if (startLocation != destinationLocation && pathHandle != INVALID_PATH_HANDLE)
         {
             unreachable[attempt] = destination;
             continue;
@@ -86,8 +88,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         caravan.location = startLocation;
         caravan.movement.travel_speed = (ui16)(ship ? GAME_PARAMETERS.ship_travel_speed : GAME_PARAMETERS.caravan_travel_speed);
         caravan.movement.destination = destinationLocation;
-        caravan.movement.move_target = caravan.location;
-        caravan.movement.path_handle = INVALID_PATH_HANDLE;
+        caravan.movement.path_handle = pathHandle;
 
         world_spawn_entity_caravan(world, caravan); // Increments the origin's caravan_count (ships: ship_count).
         return;
