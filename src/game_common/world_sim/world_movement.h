@@ -30,13 +30,16 @@ static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region
     TERRAIN_TILE_TYPE type = region.terrain_types[tile_index];
 
     // Check terrain flags. If all flags are at 0, then all terrains are allowed.
-    if (params.passable_terrain != 0 && (params.passable_terrain & (1 << (ui8)type)) == 0) return 0;
+    ui8 passableTerrain = 0;
+    if (params.mode == PATH_MODE_SEA) passableTerrain = PATH_TERRAIN_WATER;
+    else if (params.mode != PATH_MODE_ANY) passableTerrain = PATH_TERRAIN_LAND;
+    if (passableTerrain != 0 && (passableTerrain & (1 << (ui8)type)) == 0) return 0;
 
     // Roads return the road travel cost no matter what.
     if (region.status[tile_index].is_road) return ROAD_TRAVEL_COST;
 
     // Stop here if we can only path on roads.
-    if (params.roads_only) return 0;
+    if (params.mode == PATH_MODE_LAND_ROADS_ONLY) return 0;
 
     // If a valid "within settlement territory" guid was given, prevent pathing through any tile that isn't in the settlement.
     if (params.within_settlement_territory.is_valid() 
@@ -50,46 +53,33 @@ static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)
 {
     movement.destination = location;
-    movement.move_target = location;
-    movement.path_destination = location;
     movement.path_handle = INVALID_PATH_HANDLE;
 }
 
-// Moves the entity one step in a straight line towards its current waypoint (move_target), at travel_speed divided by the cost of the tile it stands on.
-// It picks a new waypoint from a path when it reaches the waypoint or when its destination changed. Arrived once its tile is the destination tile.
-// Returns false when there is no path to follow (the entity stays), true otherwise (moved, or already arrived).
-// params: what the entity can cross (see world_system_movement.cpp).
-// out_partial (optional) is set to true when the path found only gets partway to the destination (the entity still follows it).
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params, bool* out_partial = nullptr);
-
-// What a path request to the world's path store gives back: enough to follow the path without holding the path itself.
-struct path_result
-{
-    world_location next_point; // First waypoint after the start: the point to move straight towards.
-    ui16 count; // Number of waypoints. 0 = nothing to do (start == end, invalid end) or no progress possible.
-    ui16 length; // Total length in tiles.
-    bool partial; // The path ends at the closest reachable tile instead of at the requested target.
-    ui32 cost; // Total path cost (see path::cost). 0 if partial or if start == end.
-    ui32 handle; // Identifies the stored path for later re-use. INVALID_PATH_HANDLE = none (the store doesn't keep paths yet).
-};
+// Moves the entity one step in a straight line towards the center of the given target tile, at travel_speed divided by the cost of the tile it stands on.
+// Returns false, without moving, if the step would enter a tile that is impassable for params (see world_system_movement.cpp).
+bool world_entity_step_towards(const match_world_state& world, world_entity_movement& movement, world_location& location, world_location target, const path_params& params);
 
 // Size of the store's search memory. Fixed, as it limits how far a search goes and so must be the same on every machine.
 static constexpr ui64 WORLD_PATH_STORE_SCRATCH_SIZE = KiB(256);
-static constexpr ui16 WORLD_PATH_STORE_MAX_WAYPOINTS = 256;
 
-// The world's path store: for now only holds the last path calculated, which each request overwrites.
+// The world's path store. SKELETON: only the search memory for now. The three functions below are the only ones the rest of the simulation uses.
 struct world_path_store
 {
-    mem_arena scratch; // Search memory, cleared by every request.
-    world_location points[WORLD_PATH_STORE_MAX_WAYPOINTS]; // Waypoints of the last path.
-    path last; // The last path, its points being the array above.
+    mem_arena scratch; // Search memory.
 };
 
 // Allocates and initializes a path store from the given memory. Returns nullptr if there isn't enough.
 world_path_store* world_path_store_init(mem_arena& memory);
 
-// Requests a path from the world's path store, which may compute it or re-use a stored one. Simulation code only.
-// out_result.count is 0 if there is nothing to follow.
-void world_request_path(match_world_state& world, world_location start, world_location end, const path_params& params, path_result& out_result);
+// (a) Gets a path from start to end for the given mode. Returns a handle to it, INVALID_PATH_HANDLE if there is none.
+ui32 world_path_store_get_path(match_world_state& world, world_location start, world_location end, PATH_MODE mode);
+
+// (b) Entity movement: moves the entity along its path (movement.path_handle) towards movement.destination, updating its tile and sub-tile location.
+// Returns true while it is moving / has a path, false when movement is over (arrived) or impossible.
+bool world_path_store_move_entity(match_world_state& world, world_entity_movement& movement, world_location& location);
+
+// (c) Returns the tile following "from" on the path path_handle towards destination, or "from" if there is none. Used by road construction.
+world_location world_path_store_next_tile(match_world_state& world, ui32 path_handle, world_location from, world_location destination);
 
 #endif // WORLD_MOVEMENT_INCLUDED

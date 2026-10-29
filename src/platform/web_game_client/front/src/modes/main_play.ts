@@ -98,7 +98,7 @@ export class MainPlay extends Core.Mode
         const destination = caravan.get_location("movement_destination");
         if (start.x === destination.x && start.y === destination.y) return;
 
-        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination, 0, false, (caravan.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0), valid: true, color: CARAVAN_PATH_COLOR };
+        Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination, 0, (caravan.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? Backend.PATH_MODE_SEA : Backend.PATH_MODE_LAND), valid: true, color: CARAVAN_PATH_COLOR };
     }
 
     // Debug panel toggle.

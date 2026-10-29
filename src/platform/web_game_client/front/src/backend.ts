@@ -182,7 +182,7 @@ interface ClientExports extends WebAssembly.Exports
     // Path query
 
     client_get_path_buffer_offset(): number;
-    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number, territory_guid: number, path_flags: number): number; // path_flags: bit 0 tile mode, bit 1 water. Point count written to the path buffer.
+    client_query_path(start_x: number, start_y: number, end_x: number, end_y: number, territory_guid: number, path_mode: number): number; // path_mode: PATH_MODE. Tile count written to the path buffer.
 }
 
 let CLIENT_BACKEND: ClientExports;
@@ -520,15 +520,20 @@ export function get_memory_bytes(): Uint8Array<ArrayBuffer>
     return new Uint8Array(CLIENT_BACKEND.memory.buffer);
 }
 
-// Asks the backend for a land path between two world tiles. Returns its waypoints in order, start tile excluded:
-// move in a straight line from the start to the first waypoint, then to the second, and so on. Empty if there is nothing to follow.
+// Mirrors PATH_MODE (world_pathing.h).
+export const PATH_MODE_ANY = 0;
+export const PATH_MODE_LAND = 1;
+export const PATH_MODE_LAND_ROADS_ONLY = 2;
+export const PATH_MODE_LAND_PREFER_ROADS = 3;
+export const PATH_MODE_SEA = 4;
+
+// Asks the backend for a path between two world tiles. Returns its tiles in order, start tile excluded. Empty if there is nothing to follow.
 // If territory_guid is a settlement's guid, the path is limited to that settlement's territory.
-// If tile_mode is true, returns instead the tiles covered by the path's segments, in order, start excluded (for tile-bound uses such as roads).
-// If water is true, the path crosses water instead of land (ships).
+// mode: a PATH_MODE_* above.
 // The path buffer holds (x, y) ui16 pairs (see web_game_client_query.cpp).
-export function query_path(start: { x: number, y: number }, end: { x: number, y: number }, territory_guid: number = 0, tile_mode: boolean = false, water: boolean = false): { x: number, y: number }[]
+export function query_path(start: { x: number, y: number }, end: { x: number, y: number }, territory_guid: number = 0, mode: number = PATH_MODE_LAND): { x: number, y: number }[]
 {
-    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y, territory_guid, (tile_mode ? 1 : 0) | (water ? 2 : 0));
+    const count = CLIENT_BACKEND.client_query_path(start.x, start.y, end.x, end.y, territory_guid, mode);
     const view = new DataView(CLIENT_BACKEND.memory.buffer, CLIENT_BACKEND.client_get_path_buffer_offset(), count * 4);
 
     const points: { x: number, y: number }[] = [];

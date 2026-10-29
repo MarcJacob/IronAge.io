@@ -54,8 +54,9 @@ when it finishes.
 - `work_units/territory_economy_redesign_2026-10-27.md`
 - `work_units/trade_network_redesign_2026-10-28.md`
 - `work_units/ai_road_network_2026-10-28.md` [DONE]
-- `work_units/trade_ships_2026-10-29.md`
+- `work_units/trade_ships_2026-10-29.md` [DONE]
 - `work_units/entity_zoom_visibility_2026-10-29.md`
+- `work_units/pathing_rewrite_2026-10-29.md`
 
 Finished units are moved to `management/archive/` after a time.
 

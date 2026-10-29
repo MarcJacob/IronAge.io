@@ -51,8 +51,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     if (!data.funded) return false; // Stalled until a day can be paid.
 
     path_params params = {};
-    params.passable_terrain = PATH_TERRAIN_LAND;
-    params.require_complete = true; // Same route from either end, and no partial road: an unreachable destination ends the project (count 0 below).
+    params.mode = PATH_MODE_LAND;
 
     // Find the next tile to build, skipping the ones that are already roads.
     world_location next;
@@ -61,12 +60,15 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     {
         if (data.head == data.destination) return true;
 
-        // Recalculated every tick, like movement. To be replaced by the path cache.
-        path_result result;
-        world_request_path(world, data.head, data.destination, params, result);
-        if (result.count == 0) return true;
+        // The path is requested once and kept. No path (an unreachable destination) ends the project.
+        if (data.path_handle == INVALID_PATH_HANDLE)
+        {
+            data.path_handle = world_path_store_get_path(world, data.head, data.destination, params.mode);
+            if (data.path_handle == INVALID_PATH_HANDLE) return true;
+        }
 
-        next = world_path_next_tile(data.head, result.next_point);
+        next = world_path_store_next_tile(world, data.path_handle, data.head, data.destination);
+        if (next == data.head) return true; // No progress possible.
         world_get_tile(*world.terrain, next, regionIndex, tileIndex);
         if (!world.terrain->regions[regionIndex].status[tileIndex].is_road) break;
 

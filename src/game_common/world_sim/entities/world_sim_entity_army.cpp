@@ -26,7 +26,6 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	// Init default values if they weren't specified by start state.
 	SET_DEFAULT_VAL(newArmy.movement.travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
 	SET_DEFAULT_VAL_STRUCT(newArmy.movement.destination, start_state.location);
-	newArmy.movement.move_target = start_state.location;
 
 	armies.guids[freeIndex] = newID;
 	armies.active_count++;

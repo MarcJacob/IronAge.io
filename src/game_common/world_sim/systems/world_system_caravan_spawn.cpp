@@ -47,9 +47,8 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         }
 
         world_location destinationLocation = caravan_endpoint(world, caravan.flags, destination.get_index());
-        path_result path;
-        world_request_path(world, startLocation, destinationLocation, caravan_path_params(caravan.flags), path);
-        if (path.count == 0 || path.partial)
+        ui32 pathHandle = world_path_store_get_path(world, startLocation, destinationLocation, caravan_path_mode(caravan.flags));
+        if (pathHandle == INVALID_PATH_HANDLE)
         {
             unreachable[attempt] = destination;
             continue;
@@ -64,8 +63,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         caravan.location = startLocation;
         caravan.movement.travel_speed = (ui16)(ship ? GAME_PARAMETERS.ship_travel_speed : GAME_PARAMETERS.caravan_travel_speed);
         caravan.movement.destination = destinationLocation;
-        caravan.movement.move_target = caravan.location;
-        caravan.movement.path_handle = INVALID_PATH_HANDLE;
+        caravan.movement.path_handle = pathHandle;
 
         world_spawn_entity_caravan(world, caravan); // Increments the origin's caravan_count (ships: ship_count).
         return;

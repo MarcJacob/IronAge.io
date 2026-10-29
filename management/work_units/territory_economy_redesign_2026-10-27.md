@@ -28,7 +28,7 @@ Rewrite land production, population strata and territory claiming / borders. Bui
 
 - Counter plumbing: two ui32 counters on `match_world_state` + read-and-reset accessor the server logs every N ticks (suggested) vs log function pointer.
 - Rebuild sweeps repeat until stable: may be slow on very large bounds.
-- Levies: raising draws the garrison (always 0), so raising never ends; which groups can be levied; RAISE_ARMY feedback counts different groups than the check.
+- Levies: removed by user pending the military rework.
 - Growth scales on pop at home (worker's choice) vs total.
 - Unemployed not shown in settlement panel.
 - `world_destroy_settlement` does not unclaim tiles (no caller yet).

@@ -171,13 +171,17 @@ static bool ai_tile_owned_by(const match_world_state& world, world_location loc,
 alignas(8) static ui8 AI_PATH_SCRATCH[AI_PATH_SCRATCH_SIZE];
 static world_location AI_PATH_POINTS[AI_PATH_MAX_WAYPOINTS];
 
-static path ai_path_find(const match_world_state& world, world_location start, world_location end, const path_params& params)
+static path ai_path_find(const match_world_state& world, world_location start, world_location end, PATH_MODE mode)
 {
 	mem_arena scratch = mem_arena_create(AI_PATH_SCRATCH, sizeof(AI_PATH_SCRATCH));
 	path found = {};
 	found.points = AI_PATH_POINTS;
 	found.points_capacity = AI_PATH_MAX_WAYPOINTS;
-	world_path_find(*world.terrain, start, end, params, scratch, found);
+	path_params params = {};
+	params.start = start;
+	params.end = end;
+	params.mode = mode;
+	world_path_find(*world.terrain, params, scratch, found);
 	return found;
 }
 
@@ -185,20 +189,14 @@ static bool ai_road_connected(const match_world_state& world, world_location a, 
 {
 	if (a == b) return true;
 
-	path_params params = {};
-	params.passable_terrain = PATH_TERRAIN_LAND;
-	params.roads_only = true;
-	path found = ai_path_find(world, a, b, params);
+	path found = ai_path_find(world, a, b, PATH_MODE_LAND_ROADS_ONLY);
 	return found.count > 0 && !found.partial;
 }
 
 static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b)
 {
-	// The road crews' params (world_system_worker_construction.cpp): same route, and a route the crews can't find fails here too.
-	path_params params = {};
-	params.passable_terrain = PATH_TERRAIN_LAND;
-	params.require_complete = true;
-	path found = ai_path_find(world, a, b, params);
+	// The road crews' mode (world_system_worker_construction.cpp).
+	path found = ai_path_find(world, a, b, PATH_MODE_LAND);
 	return found.count > 0 ? found.cost : 0;
 }
 

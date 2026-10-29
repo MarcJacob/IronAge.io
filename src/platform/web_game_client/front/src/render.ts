@@ -42,7 +42,7 @@ export const RENDER_CONFIG =
     // Entity outline color (CSS). Hook for diplomatic status: owner and local_player are given for that purpose.
     entity_outline_color: ((owner: number, local_player: number): string => default_outline_color),
     outlined_entity: null as number | null, // GUID of the entity drawn with a selection outline.
-    // If set, draws the path from start through points (waypoints, as returned by Backend.query_path). Drawn red if not valid, or in color if given.
+    // If set, draws the path from start through points (tiles, as returned by Backend.query_path). Drawn red if not valid, or in color if given.
     path_preview: null as { start: { x: number, y: number }, points: { x: number, y: number }[], valid: boolean, color?: string } | null,
     overlay_dots: [] as OverlayDot[],
 };

@@ -158,13 +158,11 @@ world_player_state game_client_query_controlled_player_state(game_client& backen
 
 // PATH QUERY
 
-// Computes a land path (water path if water is set, for ships) between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
+// Computes a path of the given mode between two tiles of the local match's world into out_path, whose points and points_capacity the caller must set.
 // Leaves out_path empty (count 0) if there is no local match or a location is outside the world. See world_path_find for the rest.
 // If within_settlement_territory is a settlement, the path is limited to its territory.
-// If tile_mode is set, out_path.points holds the tiles of the path's segments (see world_path_expand_tiles, start excluded) instead of its waypoints,
-// the way a tile-bound use such as road building covers them, and out_path.count their number (limited by points_capacity).
 void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path,
-	entity_guid within_settlement_territory = INVALID_ENTITY_GUID, bool tile_mode = false, bool water = false);
+	entity_guid within_settlement_territory = INVALID_ENTITY_GUID, PATH_MODE mode = PATH_MODE_LAND);
 
 // COMMAND VALIDITY QUERY
 

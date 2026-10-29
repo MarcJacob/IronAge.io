@@ -157,8 +157,8 @@ WASM_EXPORT ui8* client_get_player_state_gdo_offset()
 	return PLAYER_STATE_GDO_BUFFER;
 }
 
-// Path query: JS calls client_query_path, which returns how many waypoints it wrote, then reads that many (x, y) ui16 pairs
-// at the offset given by client_get_path_buffer_offset. The start tile is not part of the waypoints, see struct path.
+// Path query: JS calls client_query_path, which returns how many tiles it wrote, then reads that many (x, y) ui16 pairs
+// at the offset given by client_get_path_buffer_offset. The start tile is not part of the path, see struct path.
 // A plain ui16 array rather than world_location on purpose: see the global constructor note in web_game_client.h.
 static constexpr ui16 PATH_BUFFER_CAPACITY = 1024; // In waypoints.
 static ui16 PATH_BUFFER[PATH_BUFFER_CAPACITY * 2];
@@ -169,10 +169,10 @@ WASM_EXPORT ui8* client_get_path_buffer_offset()
 	return (ui8*)PATH_BUFFER;
 }
 
-// Returns the number of waypoints written to the path buffer (0 if there is no path to follow).
+// Returns the number of tiles written to the path buffer (0 if there is no path to follow).
 // territory_guid: a settlement's guid to limit the path to its territory, or 0 for no limit.
-// path_flags: bit 0 writes the tiles of the path's segments instead of the waypoints (straight lines) (see game_client_query_path), bit 1 paths over water instead of land.
-WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 end_y, ui32 territory_guid, ui32 path_flags)
+// path_mode: a PATH_MODE (see world_pathing.h). Out of range = PATH_MODE_LAND.
+WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 end_y, ui32 territory_guid, ui32 path_mode)
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
 
@@ -180,6 +180,6 @@ WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 
 	result.points = (world_location*)PATH_BUFFER;
 	result.points_capacity = PATH_BUFFER_CAPACITY;
 
-	game_client_query_path(*WEB_CLIENT.backend, { (ui16)start_x, (ui16)start_y }, { (ui16)end_x, (ui16)end_y }, result, entity_guid{ territory_guid }, (path_flags & 1) != 0, (path_flags & 2) != 0);
+	game_client_query_path(*WEB_CLIENT.backend, { (ui16)start_x, (ui16)start_y }, { (ui16)end_x, (ui16)end_y }, result, entity_guid{ territory_guid }, path_mode < PATH_MODE_COUNT ? (PATH_MODE)path_mode : PATH_MODE_LAND);
 	return result.count;
 }

@@ -7,10 +7,6 @@
 #include "../entities/world_sim_entity_battle.h"
 #include "../entities/world_sim_entity_caravan.h"
 
-// What entities can cross (caravans: CARAVAN_PATH_PARAMS, ships: SHIP_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
-// TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
-static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
-
 // Divides rounding to the nearest integer (halves away from zero). den must be above 0.
 static i64 div_round_nearest(i64 num, i64 den)
 {
@@ -24,11 +20,11 @@ static bool tile_passable(const match_world_state& world, world_location tile, c
     return world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params) != 0;
 }
 
-// Moves the entity one step in a straight line towards the center of its move target (its current waypoint).
+// Moves the entity one step in a straight line towards the center of the target tile.
 // Positions are absolute fractional units: tile * 1000 + fractional_loc (a tile's center is its fractional 0).
 // The step is travel_speed / cost of the tile the entity stands on (rounded to nearest, cost at least 1): travel_speed is the speed on a road.
 // Returns false, without moving, if the step would enter a tile that is impassable for params.
-static bool process_entity_movement(const match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params)
+bool world_entity_step_towards(const match_world_state& world, world_entity_movement& movement, world_location& location, world_location target, const path_params& params)
 {
     ui16 regionIndex, tileIndex;
     world_get_tile(*world.terrain, location, regionIndex, tileIndex);
@@ -37,13 +33,13 @@ static bool process_entity_movement(const match_world_state& world, world_entity
 
     i32 posX = (i32)location.x * 1000 + movement.fractional_loc.x;
     i32 posY = (i32)location.y * 1000 + movement.fractional_loc.y;
-    i32 toTargetX = (i32)movement.move_target.x * 1000 - posX;
-    i32 toTargetY = (i32)movement.move_target.y * 1000 - posY;
+    i32 toTargetX = (i32)target.x * 1000 - posX;
+    i32 toTargetY = (i32)target.y * 1000 - posY;
 
     // Distance rounded down by the integer square root. A step reaching it lands exactly on the waypoint's center.
     ui32 dist = ia_isqrt((ui64)((i64)toTargetX * toTargetX + (i64)toTargetY * toTargetY));
-    i32 newPosX = (i32)movement.move_target.x * 1000;
-    i32 newPosY = (i32)movement.move_target.y * 1000;
+    i32 newPosX = (i32)target.x * 1000;
+    i32 newPosY = (i32)target.y * 1000;
     if ((ui32)step < dist)
     {
         newPosX = posX + (i32)div_round_nearest((i64)toTargetX * step, dist);
@@ -83,43 +79,6 @@ static bool process_entity_movement(const match_world_state& world, world_entity
 
     location = newLocation;
     movement.fractional_loc = { (i16)(shiftedX % 1000 - 500), (i16)(shiftedY % 1000 - 500) };
-    return true;
-}
-
-// Asks for a path from the entity's tile to its destination and makes the path's first waypoint the move target.
-// Returns false if there is nothing to follow (the destination is unreachable even partially), leaving the entity as it is.
-static bool request_next_waypoint(match_world_state& world, world_entity_movement& movement, world_location location, const path_params& params, bool* out_partial)
-{
-    // The path handle is always invalid for now, so the path is recalculated from the current tile every time it is requested.
-    path_result result;
-    world_request_path(world, location, movement.destination, params, result);
-    movement.path_handle = result.handle;
-    if (out_partial != nullptr) *out_partial = result.partial;
-
-    // TODO(Marc): Nothing to follow, which means the destination is unreachable (even partially). For now the entity stays and asks again next tick.
-    if (result.count == 0) return false;
-
-    movement.move_target = result.next_point;
-    movement.path_destination = movement.destination;
-    return true;
-}
-
-bool world_entity_follow_path(match_world_state& world, world_entity_movement& movement, world_location& location, const path_params& params, bool* out_partial)
-{
-    if (location == movement.destination) return true; // Arrived.
-
-    // A new path is needed when the entity stands on its waypoint (also true for an entity that never had one) or when its destination changed.
-    bool onWaypoint = location == movement.move_target && movement.fractional_loc.x == 0 && movement.fractional_loc.y == 0;
-    if (onWaypoint || movement.destination != movement.path_destination)
-    {
-        if (!request_next_waypoint(world, movement, location, params, out_partial)) return false;
-    }
-
-    // The step would enter a tile that became impassable: path again from here instead.
-    if (!process_entity_movement(world, movement, location, params))
-    {
-        if (!request_next_waypoint(world, movement, location, params, out_partial)) return false;
-    }
     return true;
 }
 
@@ -199,14 +158,14 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
+		world_path_store_move_entity(world, armies.movements[armyIndex], armies.locations[armyIndex]);
 	}
 
     world_entity_workers& workers = world.entities->workers;
     for (ui32 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
     {
         if (!workers.guids[workerIndex].is_valid()) continue;
-        world_entity_follow_path(world, workers.movements[workerIndex], workers.locations[workerIndex], ARMY_WORKER_PATH_PARAMS);
+        world_path_store_move_entity(world, workers.movements[workerIndex], workers.locations[workerIndex]);
     }
 
     world_entity_caravans& caravans = world.entities->caravans;
@@ -214,15 +173,7 @@ void world_system_entity_movement(match_world_state& world)
     {
         if (!caravans.guids[caravanIndex].is_valid()) continue;
 
-        bool partial = false;
-        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], caravan_path_params(caravans.flags[caravanIndex]), &partial);
-
-        // No (or only a partial) path means the destination is unreachable: pick another one.
-        // Returning caravans are left alone: they keep asking for a path home.
-        bool returning = ((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0;
-        if ((!hasPath || partial) && !returning)
-        {
-            world_caravan_retarget(world, caravans.guids[caravanIndex]);
-        }
+        // The result (false = arrived or impossible) is not used yet: no unreachable-destination handling for now.
+        world_path_store_move_entity(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
     }
 }

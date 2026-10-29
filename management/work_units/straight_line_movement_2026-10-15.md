@@ -2,6 +2,8 @@
 
 Input date: 2026-10-15. Started: 2026-10-18 (moved from backlog; first remainder of `road_construction_2026-10-03.md` task 3).
 
+> 2026-10-29: pathing / movement tasks below are superseded by `pathing_rewrite_2026-10-29.md` (code torn down to a stub skeleton). Kept as history.
+
 ## Goal
 
 Movement that is not limited to the 8 grid directions and that actually uses travel cost, plus a direct-movement order.

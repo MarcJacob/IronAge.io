@@ -90,9 +90,7 @@ struct world_entity_movement
 	ui16 travel_speed; // Speed in thousandths of a tile per tick (fractional units per tick), along an axis. Diagonal moves split it between the axes.
 	vec2<i16> fractional_loc; // "In-tile location" of the entity, centered on 0, in thousandths of a tile (range [-500, 500]). Affects movement.
 	world_location destination; // Tile the entity wants to reach. Set by orders and decisions.
-	world_location move_target; // Current waypoint: the tile whose center the entity is moving straight towards. Only set by the movement system.
 	ui32 path_handle; // Path the entity is following, INVALID_PATH_HANDLE if none.
-	world_location path_destination; // The destination move_target was computed for: a different destination means a new path is needed. Not exposed.
 };
 
 // Contains a count of all troop types.
