@@ -84,7 +84,7 @@ export class MainPlay extends Core.Mode
         if (selected === null) show_entity(null);
         else if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
         else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
-        else if (selected.entity_type === Backend.ENTITY_TYPE.BATTLE) Core.push_mode(new EngagementSelected(selected.guid), this);
+        else if (selected.entity_type === Backend.ENTITY_TYPE.ENGAGEMENT) Core.push_mode(new EngagementSelected(selected.guid), this);
         // Anything else (enemy or other entity types): read-only properties, no callbacks.
         else
         {

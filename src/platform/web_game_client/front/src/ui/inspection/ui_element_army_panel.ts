@@ -12,6 +12,9 @@ import { supplies_color } from "./section_supplies.js"
 const IDS = {
     root: "game_hud_army_panel",
     origin: "army_panel_origin",
+    order: "army_panel_order",
+    gold: "army_panel_gold",
+    note: "army_panel_note",
     troops: ["army_panel_levies", "army_panel_men_at_arms", "army_panel_horsemen", "army_panel_knights"], // Troop order.
     supplies: "army_panel_supplies",
     consumption: "army_panel_consumption",
@@ -41,12 +44,15 @@ export interface ArmyTroopState
 export interface ArmyPanelState
 {
     origin: string; // Home settlement, as text.
+    order: string; // Current standing order and its target, as text.
     raising: boolean; // Raise gauges (compact, target marker) instead of the count gauges.
     troops: (ArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights). Null hides the gauge.
     targets_editable: boolean; // While raising: the target sliders can be moved (emits raise_targets).
     supplies: number;
     supplies_capacity: number;
     supplies_consumption: number; // Per day.
+    gold: number; // Gold the army carries.
+    note: string; // Line of text under the rows (e.g. why an order is refused). Empty = nothing.
     desertions: number; // Soldiers deserted last day.
 }
 
@@ -58,6 +64,9 @@ export const on = events.on.bind(events);
 let el: {
     root: HTMLElement;
     origin: HTMLElement;
+    order: HTMLElement;
+    gold: HTMLElement;
+    note: HTMLElement;
     troops: StaticGauge[];
     supplies: StaticGauge;
     consumption_tooltip: HoverTooltip;
@@ -80,6 +89,9 @@ function init(): void
     el = {
         root: get(IDS.root),
         origin: get(IDS.origin),
+        order: get(IDS.order),
+        gold: get(IDS.gold),
+        note: get(IDS.note),
         troops: IDS.troops.map((id, i) => new StaticGauge(get(id), value => emit_targets(i, value))),
         supplies: new StaticGauge(get(IDS.supplies)),
         consumption_tooltip: new HoverTooltip(get(IDS.consumption)),
@@ -113,6 +125,9 @@ export function submit(state: ArmyPanelState | null): void
     }
 
     set_text(el.origin, state.origin);
+    set_text(el.order, state.order);
+    set_text(el.gold, String(state.gold));
+    set_text(el.note, state.note);
 
     for (let i = 0; i < el.troops.length; i++)
     {

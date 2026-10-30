@@ -53,6 +53,7 @@
 
                     <div id="game_hud_army_panel" hidden>
                         <div class="text_row"><span class="text_row_label">Origin</span><span id="army_panel_origin"></span></div>
+                        <div class="text_row"><span class="text_row_label">Order</span><span id="army_panel_order"></span></div>
                         <div id="army_panel_levies" class="gauge">
                             <div class="gauge_header"><div class="gauge_text">Levies <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
                             <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
@@ -77,12 +78,14 @@
                             <div class="gauge_header"><div class="gauge_text">Supplies <span class="gauge_values"></span></div><div class="gauge_max"></div></div>
                             <div class="gauge_bar"><div class="gauge_fill"></div><div class="gauge_marker"></div></div>
                         </div>
+                        <div class="text_row"><span class="text_row_label">Gold</span><span id="army_panel_gold"></span></div>
                         <div id="army_panel_consumption" class="text_row value_row has_tooltip">
                             <span class="text_row_label">Consumption</span><span id="army_panel_consumption_value"></span><span class="value_row_delta"></span><span id="army_panel_consumption_note" class="value_row_note"></span>
                         </div>
                         <div id="army_panel_warning" class="text_row" hidden>
                             <span id="army_panel_warning_label" class="text_row_label"></span><span id="army_panel_warning_text" class="warn"></span>
                         </div>
+                        <div class="text_row"><span id="army_panel_note"></span></div>
                     </div>
 
                     <div id="game_hud_worker_panel" hidden>
@@ -90,14 +93,14 @@
                         <div class="text_row"><span class="text_row_label">Location</span><span id="worker_panel_location"></span></div>
                     </div>
 
-                    <div id="game_hud_battle_panel" hidden>
-                        <div class="text_row"><span class="text_row_label">Kind</span><span id="battle_panel_kind"></span></div>
-                        <div class="text_row"><span class="text_row_label">Phase</span><span id="battle_panel_phase"></span></div>
-                        <div class="text_row"><span class="text_row_label">Attacker</span><span id="battle_panel_attacker"></span></div>
-                        <div class="text_row"><span class="text_row_label">Defender</span><span id="battle_panel_defender"></span></div>
-                        <div class="text_row"><span class="text_row_label">Target</span><span id="battle_panel_target"></span></div>
-                        <div class="text_row"><span class="text_row_label">Location</span><span id="battle_panel_location"></span></div>
-                        <div class="text_row"><span id="battle_panel_note"></span></div>
+                    <div id="game_hud_engagement_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">Kind</span><span id="engagement_panel_kind"></span></div>
+                        <div class="text_row"><span class="text_row_label">Phase</span><span id="engagement_panel_phase"></span></div>
+                        <div class="text_row"><span class="text_row_label">Attacker</span><span id="engagement_panel_attacker"></span></div>
+                        <div class="text_row"><span class="text_row_label">Defender</span><span id="engagement_panel_defender"></span></div>
+                        <div class="text_row"><span class="text_row_label">Target</span><span id="engagement_panel_target"></span></div>
+                        <div class="text_row"><span class="text_row_label">Location</span><span id="engagement_panel_location"></span></div>
+                        <div class="text_row"><span id="engagement_panel_note"></span></div>
                     </div>
 
                     <!-- Settlement "Raise army" panel (ui/inspection/ui_element_raise_army_panel.ts), shown by the Raise army mode. -->

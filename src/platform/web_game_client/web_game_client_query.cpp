@@ -29,7 +29,7 @@ GAME_DATA_OBJECT_DEF_END();
 static_assert(sizeof(gdo_world_entity_settlement) + sizeof(gdo_entity_inspection_extra_settlement) <= entity_inspection_context::BUFFER_SIZE, "Settlement inspection data does not fit the inspection buffer.");
 static_assert(sizeof(gdo_world_entity_army) <= entity_inspection_context::BUFFER_SIZE, "Army GDO does not fit the inspection buffer.");
 static_assert(sizeof(gdo_world_entity_worker) <= entity_inspection_context::BUFFER_SIZE, "Worker GDO does not fit the inspection buffer.");
-static_assert(sizeof(gdo_world_entity_battle) <= entity_inspection_context::BUFFER_SIZE, "Battle GDO does not fit the inspection buffer.");
+static_assert(sizeof(gdo_world_entity_engagement) <= entity_inspection_context::BUFFER_SIZE, "Engagement GDO does not fit the inspection buffer.");
 
 // Writes the extra GDO of a settlement at out_buffer (buffer_size bytes free): its ongoing BUILD_SETTLEMENT_BUILDING projects.
 // The web client is a unity build with the client backend, so the local world is read directly. Returns the byte size written, 0 if nothing was written.

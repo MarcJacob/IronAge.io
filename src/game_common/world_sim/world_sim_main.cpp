@@ -13,7 +13,7 @@
 // Entities.
 #include "entities/world_sim_entity_settlement.cpp"
 #include "entities/world_sim_entity_army.cpp"
-#include "entities/world_sim_entity_battle.cpp"
+#include "entities/world_sim_entity_engagement.cpp"
 #include "entities/world_sim_entity_worker.cpp"
 #include "entities/world_sim_entity_caravan.cpp"
 
@@ -22,7 +22,8 @@
 #include "systems/world_system_settlement_economy.cpp"
 #include "systems/world_system_army.cpp"
 #include "systems/world_system_army_economy.cpp"
-#include "systems/world_system_battle.cpp"
+#include "systems/world_system_standing_orders.cpp"
+#include "systems/world_system_engagement.cpp"
 #include "systems/world_system_worker_construction.cpp"
 #include "systems/world_system_caravan_spawn.cpp"
 #include "systems/world_system_caravan_trade.cpp"
@@ -49,8 +50,8 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::WORKER:
 		container = &world.entities->workers;
 		break;
-	case ENTITY_TYPE::BATTLE:
-		container = &world.entities->battles;
+	case ENTITY_TYPE::ENGAGEMENT:
+		container = &world.entities->engagements;
 		break;
     case ENTITY_TYPE::CARAVAN:
         container = &world.entities->caravans;
@@ -76,8 +77,8 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 		return world.entities->armies.locations[entity.get_index()];
 	case ENTITY_TYPE::WORKER:
 		return world.entities->workers.locations[entity.get_index()];
-	case ENTITY_TYPE::BATTLE:
-		return world.entities->battles.states[entity.get_index()].location;
+	case ENTITY_TYPE::ENGAGEMENT:
+		return world.entities->engagements.states[entity.get_index()].location;
     case ENTITY_TYPE::CARAVAN:
         return world.entities->caravans.locations[entity.get_index()];
 	default:
@@ -155,7 +156,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_settlements(*newWorld, memory, settlement_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_armies(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_workers(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
-		if (!world_alloc_battles(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_engagements(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
         if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
@@ -220,13 +221,14 @@ void world_state_tick(match_world_state& world)
     world_system_settlement_territory_distance_recalc(world);
     world_system_settlement_territory_takeover(world); // After the distance recalc: decides from settled distances.
 
+    world_system_army_orders(world); // Before movement: sets each army's destination from its engagement or standing order.
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
     world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 
-    world_system_armies_target_reached(world);
+    world_system_army_orders_arrival(world); // After movement: attacking armies close enough to their target resolve the attack.
     world_system_armies_raising(world);
-    world_system_battles(world);
+    world_system_engagements(world);
 
     world_update_player_stats(world);
 

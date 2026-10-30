@@ -1,20 +1,20 @@
-// UI module (new style): the battle panel, inside the entity frame (ui_element_entity_frame.ts). Kind, phase, commanders with their men, main target, location,
+// UI module (new style): the engagement panel, inside the entity frame (ui_element_entity_frame.ts). Kind, phase, commanders with their men, main target, location,
 // and an optional note (e.g. why the assault cannot begin).
 // Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it. Emits nothing.
 
 // Every DOM id this module uses (index.html).
 const IDS = {
-    root: "game_hud_battle_panel",
-    kind: "battle_panel_kind",
-    phase: "battle_panel_phase",
-    attacker: "battle_panel_attacker",
-    defender: "battle_panel_defender",
-    target: "battle_panel_target",
-    location: "battle_panel_location",
-    note: "battle_panel_note",
+    root: "game_hud_engagement_panel",
+    kind: "engagement_panel_kind",
+    phase: "engagement_panel_phase",
+    attacker: "engagement_panel_attacker",
+    defender: "engagement_panel_defender",
+    target: "engagement_panel_target",
+    location: "engagement_panel_location",
+    note: "engagement_panel_note",
 };
 
-export interface BattlePanelState
+export interface EngagementPanelState
 {
     kind: string;
     phase: string;
@@ -56,7 +56,7 @@ function set_text(element: HTMLElement, text: string): void
     if (element.textContent !== text) element.textContent = text;
 }
 
-export function submit(state: BattlePanelState | null): void
+export function submit(state: EngagementPanelState | null): void
 {
     if (el === null) return;
 

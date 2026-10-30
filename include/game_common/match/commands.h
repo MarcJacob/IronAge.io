@@ -47,6 +47,14 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	BEGIN_ASSAULT, // The attacker commander of a siege that is only besieging (idle) starts the assault: damage rounds begin and last until one side is gone.
 
+	LIFT_SIEGE, // The attacker commander of a siege that is only besieging (idle) ends it: its armies are released.
+
+	WITHDRAW_ARMY, // An own army in a siege that is only besieging (idle) leaves it. A siege left without attacking armies ends.
+
+	SALLY_OUT, // The defender commander (the settlement's owner) of a siege that is besieging or in an outside clash sends out the garrison: the fight becomes a sally.
+
+	SET_ARMY_ORDER, // Gives an own, raised army a standing order (ARMY_ORDER_TYPE) with its target / location.
+
 	TYPE_COUNT,
 };
 
@@ -90,6 +98,7 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_NOT_ENOUGH_TREASURY = 1 << 12, // The command costs more than the treasury holds (e.g. the supplies of a new army).
 	COMMAND_ERROR_WRONG_PHASE = 1 << 13, // The engagement is not in a phase the command works in.
 	COMMAND_ERROR_NOT_COMMANDER = 1 << 14, // The player does not command the side of the engagement the command is for.
+	COMMAND_ERROR_NOT_IN_HOSTILE_TERRITORY = 1 << 15, // The army does not stand in the territory of a settlement of another player.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -195,6 +204,15 @@ struct command_data_raise_army
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
+	ui8 start_order; // Order the army gets once its raising ends: RAISE_START_ORDER_*.
+};
+
+// Values of command_data_raise_army::start_order.
+enum RAISE_START_ORDER : ui8
+{
+	RAISE_START_ORDER_DEFEND = 0, // Default: DEFEND_TERRITORY of the raising settlement.
+	RAISE_START_ORDER_STATION = 1, // STATION at the raise location.
+	RAISE_START_ORDER_COUNT,
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
@@ -204,6 +222,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(start_order, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
@@ -349,7 +368,7 @@ void command_disband_army_apply(match_world_state& world, match_player_id player
 // BEGIN ASSAULT
 struct command_data_begin_assault
 {
-	entity_guid engagement; // The siege (a battle entity of kind SIEGE in the BESIEGING phase).
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING phase).
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_begin_assault)
@@ -360,6 +379,76 @@ bool command_begin_assault_validity_check(const match_world_state& world, match_
 	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
 void command_begin_assault_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SET ARMY ORDER
+struct command_data_set_army_order
+{
+	entity_guid army;
+	ui8 order_type; // ARMY_ORDER_TYPE.
+	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY: an own settlement. Unused otherwise (RAID: the target is the settlement owning the territory the army stands on).
+	world_location location; // STATION: where to stand. Unused otherwise.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_army_order)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(order_type, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_army_order_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_army_order_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SALLY OUT
+struct command_data_sally_out
+{
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING or OUTSIDE phase).
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_sally_out)
+	GAME_DATA_PROPERTY(engagement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_sally_out_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_sally_out_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// LIFT SIEGE
+struct command_data_lift_siege
+{
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING phase).
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_lift_siege)
+	GAME_DATA_PROPERTY(engagement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_lift_siege_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_lift_siege_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// WITHDRAW ARMY
+struct command_data_withdraw_army
+{
+	entity_guid army; // An own army inside a siege in the BESIEGING phase.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_withdraw_army)
+	GAME_DATA_PROPERTY(army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_withdraw_army_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_withdraw_army_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
 // SET EXPORT RATIO
@@ -518,6 +607,14 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_allow_foreign_export_validity_check, command_set_allow_foreign_export_apply },
 	{ "BEGIN_ASSAULT", MATCH_COMMAND_TYPE::BEGIN_ASSAULT, sizeof(command_data_begin_assault),
 		command_begin_assault_validity_check, command_begin_assault_apply },
+	{ "LIFT_SIEGE", MATCH_COMMAND_TYPE::LIFT_SIEGE, sizeof(command_data_lift_siege),
+		command_lift_siege_validity_check, command_lift_siege_apply },
+	{ "WITHDRAW_ARMY", MATCH_COMMAND_TYPE::WITHDRAW_ARMY, sizeof(command_data_withdraw_army),
+		command_withdraw_army_validity_check, command_withdraw_army_apply },
+	{ "SALLY_OUT", MATCH_COMMAND_TYPE::SALLY_OUT, sizeof(command_data_sally_out),
+		command_sally_out_validity_check, command_sally_out_apply },
+	{ "SET_ARMY_ORDER", MATCH_COMMAND_TYPE::SET_ARMY_ORDER, sizeof(command_data_set_army_order),
+		command_set_army_order_validity_check, command_set_army_order_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

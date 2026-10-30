@@ -4,9 +4,9 @@
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid } from "../input.js"
+import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
-import { get_local_player_id, is_own_army } from "../main.js"
+import { get_local_player_id, is_own_army, is_own_settlement } from "../main.js"
 import * as ActionBarUI from "../ui/ui_element_action_bar.js"
 import * as ArmyPanelUI from "../ui/inspection/ui_element_army_panel.js"
 import { show_entity } from "../ui/inspection/inspect_entity.js"
@@ -28,6 +28,14 @@ export class ArmySelected extends Core.Mode
     // Disband is refused (greyed out) unless the army is in its home settlement's territory.
     private disband_item: ActionBarUI.ActionBarItem = { id: "disband", name: "Disband", state: 'unselectable' };
 
+    private can_withdraw: boolean | null = null; // Whether the bar currently shows Withdraw (army in a siege that is only besieging).
+    private withdraw_item: ActionBarUI.ActionBarItem = { id: "withdraw", name: "Withdraw", state: 'selectable' };
+
+    // Go home: walk to the home settlement and disband. Raid: raid the territory the army stands on (enabled inside another player's territory only).
+    private go_home_item: ActionBarUI.ActionBarItem = { id: "go_home", name: "Go home", state: 'selectable' };
+    private raid_item: ActionBarUI.ActionBarItem = { id: "raid", name: "Raid", state: 'unselectable' };
+    private can_raid: boolean | null = null;
+
     private unsubscribe: (() => void)[] = [];
 
     on_entry(): void
@@ -36,6 +44,9 @@ export class ArmySelected extends Core.Mode
             ActionBarUI.on("action", id => {
                 if (id === this.stop_item.id) send_command("STOP_RAISING_ARMY", { army: this.army_guid });
                 else if (id === this.disband_item.id) send_command("DISBAND_ARMY", { army: this.army_guid });
+                else if (id === this.withdraw_item.id) send_command("WITHDRAW_ARMY", { army: this.army_guid });
+                else if (id === this.go_home_item.id) send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.GO_HOME });
+                else if (id === this.raid_item.id) send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.RAID });
             }),
             ArmyPanelUI.on("raise_targets", targets => send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) })),
         ];
@@ -69,15 +80,28 @@ export class ArmySelected extends Core.Mode
     {
         const raising = army.get_number("raising") === 1;
         const canDisband = is_command_valid("DISBAND_ARMY", { army: this.army_guid });
-        if (raising !== this.raising || canDisband !== this.can_disband)
+        const canWithdraw = is_command_valid("WITHDRAW_ARMY", { army: this.army_guid });
+
+        // Raid targets the territory the army stands on: refused outside the territory of another player.
+        const raidFeedback = get_command_feedback("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.RAID });
+        const canRaid = raidFeedback.valid;
+        const raidRefused = ((raidFeedback.values.error_flags ?? 0) & COMMAND_ERROR.NOT_IN_HOSTILE_TERRITORY) !== 0;
+        const raidNote = !raising && raidRefused ? "Raid: the army must stand in the territory of another player." : "";
+
+        if (raising !== this.raising || canDisband !== this.can_disband || canWithdraw !== this.can_withdraw || canRaid !== this.can_raid)
         {
             this.raising = raising;
             this.can_disband = canDisband;
+            this.can_withdraw = canWithdraw;
+            this.can_raid = canRaid;
             this.disband_item.state = canDisband ? 'selectable' : 'unselectable';
-            ActionBarUI.submit({ items: raising ? [this.stop_item, this.disband_item] : [this.disband_item] });
+            this.raid_item.state = canRaid ? 'selectable' : 'unselectable';
+            const items = raising ? [this.stop_item, this.disband_item] : [this.go_home_item, this.raid_item, this.disband_item];
+            if (canWithdraw) items.push(this.withdraw_item);
+            ActionBarUI.submit({ items });
         }
 
-        show_entity(army, { edit_raise_targets: true });
+        show_entity(army, { edit_raise_targets: true, army_note: raidNote });
     }
 
     on_escape(): boolean
@@ -89,7 +113,8 @@ export class ArmySelected extends Core.Mode
 
     // Left clicks fall through to main play (selection).
 
-    // Right click: attack the entity not owned by the local player under the cursor if there is one, otherwise move to the clicked tile.
+    // Right click: on an entity not owned by the local player: attack it. On an own settlement: defend its territory.
+    // Otherwise move (station) to the clicked tile.
     on_context_menu(event: MouseEvent): boolean
     {
         const localPlayerId = get_local_player_id();
@@ -99,6 +124,13 @@ export class ArmySelected extends Core.Mode
         if (targetGuid !== null)
         {
             send_command("SET_ENTITY_ATTACK_TARGET", { attacker_entity: this.army_guid, target_entity: targetGuid });
+            return true;
+        }
+
+        const ownGuid = Render.pick_entity_at(event.clientX, event.clientY, null, null);
+        if (ownGuid !== null && is_own_settlement(query_entity(ownGuid)))
+        {
+            send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.DEFEND_TERRITORY, target: ownGuid });
             return true;
         }
 
@@ -120,7 +152,7 @@ export class ArmySelected extends Core.Mode
         const destination = army.get_location("movement_destination");
         if (start.x === destination.x && start.y === destination.y) return;
 
-        const attacking = army.get_number("action_target") !== 0;
+        const attacking = army.get_number("order_type") === Backend.ARMY_ORDER.ATTACK;
         Render.RENDER_CONFIG.path_preview = { start, points: Backend.query_path(start, destination), valid: true, color: attacking ? ARMY_PATH_COLOR_ATTACK : ARMY_PATH_COLOR_MOVE };
     }
 

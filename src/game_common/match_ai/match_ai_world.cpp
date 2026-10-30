@@ -66,35 +66,35 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	out.raising = armies.raising[slot];
 	out.troops_target = out.raising ? ia_max(out.troops, ai_troops_sum(armies.raised_troops[slot])) : out.troops;
 	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.compositions[slot]), (ui32)1);
-	out.idle = !out.raising && !armies.battles[slot].is_valid() && !armies.action_targets[slot].is_valid()
+	out.idle = !out.raising && !armies.engagements[slot].is_valid() && armies.orders[slot].type != ARMY_ORDER_ATTACK
 		&& armies.locations[slot] == armies.movements[slot].destination;
 	return true;
 }
 
-static ui16 ai_world_battle_slots(const match_world_state& world) { return world.entities->battles.max_count; }
+static ui16 ai_world_engagement_slots(const match_world_state& world) { return world.entities->engagements.max_count; }
 
 static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out)
 {
-	const world_entity_battles& battles = world.entities->battles;
+	const world_entity_engagements& engagements = world.entities->engagements;
 	const world_entity_armies& armies = world.entities->armies;
-	if (slot >= battles.max_count || !battles.guids[slot].is_valid()) return false;
+	if (slot >= engagements.max_count || !engagements.guids[slot].is_valid()) return false;
 
-	const world_entity_battles::state& battle = battles.states[slot];
-	if (battle.kind != world_entity_battles::KIND_SIEGE || battle.phase != world_entity_battles::PHASE_BESIEGING) return false;
+	const world_entity_engagements::state& engagement = engagements.states[slot];
+	if (engagement.kind != world_entity_engagements::KIND_SIEGE || engagement.phase != world_entity_engagements::PHASE_BESIEGING) return false;
 
-	out.guid = battles.guids[slot];
-	out.attacker_commander = battle.attacker.commander;
+	out.guid = engagements.guids[slot];
+	out.attacker_commander = engagement.attacker.commander;
 	out.attacker_men = 0;
 	out.defender_men = 0;
 	out.min_supply_days = 0xFFFFFFFF;
-	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
 	{
-		out.attacker_men += battle.attacker.men[unitType];
-		out.defender_men += battle.defender.men[unitType];
+		out.attacker_men += engagement.attacker.men[unitType];
+		out.defender_men += engagement.defender.men[unitType];
 	}
 	for (ui16 army = 0; army < armies.max_count; army++)
 	{
-		if (!armies.guids[army].is_valid() || armies.battles[army]._value != out.guid._value || armies.battle_sides[army] != world_entity_battles::SIDE_ATTACKER) continue;
+		if (!armies.guids[army].is_valid() || armies.engagements[army]._value != out.guid._value || armies.engagement_sides[army] != world_entity_engagements::SIDE_ATTACKER) continue;
 		out.min_supply_days = ia_min(out.min_supply_days, armies.supplies[army] / ia_max(army_daily_consumption(armies.compositions[army]), (ui32)1));
 	}
 	return true;

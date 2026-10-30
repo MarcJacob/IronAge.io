@@ -29,7 +29,7 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.SETTLEMENT]: true,
         [Backend.ENTITY_TYPE.ARMY]: true,
         [Backend.ENTITY_TYPE.WORKER]: true,
-        [Backend.ENTITY_TYPE.BATTLE]: true,
+        [Backend.ENTITY_TYPE.ENGAGEMENT]: true,
         [Backend.ENTITY_TYPE.CARAVAN]: true,
     } as Record<number, boolean>,
 
@@ -98,7 +98,7 @@ class RESOURCES_STORE
         SETTLEMENT: new RESOURCE_SPRITE("art/entity_settlement.svg"),
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
         CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
-        BATTLE: new RESOURCE_SPRITE("art/entity_battle.svg"), // Crossing swords: field battles, and sieges that are fighting.
+        ENGAGEMENT: new RESOURCE_SPRITE("art/entity_engagement.svg"), // Crossing swords: field engagements, and sieges that are fighting.
         SIEGE: new RESOURCE_SPRITE("art/entity_siege.svg"), // Catapult: sieges in their idle besieging phase.
         SHIP: new RESOURCE_SPRITE("art/entity_ship.svg"), // Caravans with the ship flag.
     };
@@ -123,7 +123,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.SETTLEMENT]: 5,
     [Backend.ENTITY_TYPE.ARMY]: 2,
     [Backend.ENTITY_TYPE.WORKER]: 1, // Only the workers walking on the map are sent by the backend.
-    [Backend.ENTITY_TYPE.BATTLE]: 3,
+    [Backend.ENTITY_TYPE.ENGAGEMENT]: 3,
     [Backend.ENTITY_TYPE.CARAVAN]: 2,
 }
 
@@ -281,12 +281,12 @@ function worker_screen_size(entity: Backend.RenderEntity)
     return 0.5 * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE;
 }
 
-// Battles: legacy formula with its pixel floor. A siege is sized like its settlement (its significance is the settlement's).
-function battle_screen_size(entity: Backend.RenderEntity)
+// Engagements: legacy formula with its pixel floor. A siege is sized like its settlement (its significance is the settlement's).
+function engagement_screen_size(entity: Backend.RenderEntity)
 {
-    if ((entity.flags & Backend.BATTLE_FLAG_SIEGE) !== 0) return settlement_screen_size(entity);
+    if ((entity.flags & Backend.ENGAGEMENT_FLAG_SIEGE) !== 0) return settlement_screen_size(entity);
 
-    const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[Backend.ENTITY_TYPE.BATTLE];
+    const scale_mult = ENTITY_BASE_SCALE_MULTIPLIERS[Backend.ENTITY_TYPE.ENGAGEMENT];
     return Math.max(scale_mult * ENTITY_MIN_VIEW_SIZE, scale_mult * ENTITY_TILE_SCALE * RENDER_PARAMS.VIEWPORT_TO_CANVAS_SCALE);
 }
 
@@ -299,7 +299,7 @@ function entity_screen_size(entity: Backend.RenderEntity)
         case Backend.ENTITY_TYPE.ARMY: return army_screen_size(entity);
         case Backend.ENTITY_TYPE.CARAVAN: return (entity.flags & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? ship_screen_size(entity) : caravan_screen_size(entity);
         case Backend.ENTITY_TYPE.WORKER: return worker_screen_size(entity);
-        case Backend.ENTITY_TYPE.BATTLE: return battle_screen_size(entity);
+        case Backend.ENTITY_TYPE.ENGAGEMENT: return engagement_screen_size(entity);
         default: return 0;
     }
 }
@@ -706,17 +706,17 @@ export function draw(render_state: Backend.RenderState | null)
                 ctx.strokeRect(center.x - size / 2 - 4, center.y - size / 2 - 4, size + 8, size + 8);
             }
         }
-        else if (entity.entity_type === Backend.ENTITY_TYPE.BATTLE) {
+        else if (entity.entity_type === Backend.ENTITY_TYPE.ENGAGEMENT) {
             // Catapult while the siege is idle, crossing swords for any fighting. Not tinted (no owner).
             const center = entity_canvas_center(vx, vy);
-            const idle = (entity.flags & Backend.BATTLE_FLAG_IDLE) !== 0;
-            const sprite = idle ? RESOURCES?.ENTITY.SIEGE : RESOURCES?.ENTITY.BATTLE;
+            const idle = (entity.flags & Backend.ENGAGEMENT_FLAG_IDLE) !== 0;
+            const sprite = idle ? RESOURCES?.ENTITY.SIEGE : RESOURCES?.ENTITY.ENGAGEMENT;
             if (sprite !== undefined && sprite.loaded) draw_entity(sprite.img, vx, vy, size, null, null, isSelected);
             else {
                 ctx.fillStyle = 'red';
                 ctx.fillRect(center.x - size / 2, center.y - size / 2, size, size);
             }
-            draw_battle_balance(center.x, center.y - size, size * 3, entity.guid);
+            draw_engagement_balance(center.x, center.y - size, size * 3, entity.guid);
         }
     }
 }
@@ -734,11 +734,11 @@ function draw_label(text: string, x: number, y: number)
     ctx.fillText(text, x, y);
 }
 
-// Total troops of an army as text right below its marker. Not drawn for an army in a battle (the battle shows the totals instead).
+// Total troops of an army as text right below its marker. Not drawn for an army in a engagement (the engagement shows the totals instead).
 function draw_army_troop_count(viewport_x: number, viewport_y: number, size: number, army_guid: number)
 {
     const army = query_entity(army_guid);
-    if (army === null || army.get_number("battle") !== 0) return;
+    if (army === null || army.get_number("engagement") !== 0) return;
 
     const total = army.get_number("composition_levies") + army.get_number("composition_men_at_arms")
         + army.get_number("composition_horsemen") + army.get_number("composition_knights");
@@ -746,16 +746,16 @@ function draw_army_troop_count(viewport_x: number, viewport_y: number, size: num
     draw_label(String(total), center.x, center.y + size / 2 + 2);
 }
 
-// Bar above a battle marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
+// Bar above a engagement marker: attackers' share in red on the left, defenders' in blue on the right. Replaceable by an image.
 // "N vs N" total men text right above the bar.
-function draw_battle_balance(x: number, y: number, width: number, battle_guid: number)
+function draw_engagement_balance(x: number, y: number, width: number, engagement_guid: number)
 {
-    const battle = query_entity(battle_guid);
-    if (battle === null) return;
+    const engagement = query_entity(engagement_guid);
+    if (engagement === null) return;
 
     // Men of each side: the sum of its <side>_men_<unit type> properties.
     let attackerMen = 0, defenderMen = 0;
-    for (const property of battle.properties)
+    for (const property of engagement.properties)
     {
         if (typeof property.value !== "number") continue;
         if (property.name.startsWith("attacker_men_")) attackerMen += property.value;

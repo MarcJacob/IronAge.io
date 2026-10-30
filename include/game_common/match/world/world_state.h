@@ -42,7 +42,7 @@ struct world_entities
     world_entity_caravans caravans;
     world_entity_armies armies;
     world_entity_workers workers;
-    world_entity_battles battles;
+    world_entity_engagements engagements;
 };
 
 // Contains the match's world state, namely its active entities, and static elements such as tiles.

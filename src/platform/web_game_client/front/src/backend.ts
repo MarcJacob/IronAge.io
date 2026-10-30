@@ -81,12 +81,22 @@ export enum ENTITY_TYPE
     SETTLEMENT = 1,
     ARMY = 2,
     WORKER = 3,
-    BATTLE = 4,
+    ENGAGEMENT = 4,
     CARAVAN = 5,
 };
 
-// Mirrors world_entity_battles::PHASE_* (same header), the battle GDO's phase.
-export enum BATTLE_PHASE
+// Mirrors ARMY_ORDER_TYPE (include/game_common/match/world/entities/world_entity_armies.h), the army GDO's order_type. Update here if it changes.
+export enum ARMY_ORDER
+{
+    STATION = 0,
+    ATTACK = 1,
+    DEFEND_TERRITORY = 2,
+    RAID = 3,
+    GO_HOME = 4,
+}
+
+// Mirrors world_entity_engagements::PHASE_* (same header), the engagement GDO's phase.
+export enum ENGAGEMENT_PHASE
 {
     ACTIVE = 0,
     BESIEGING = 1,
@@ -95,8 +105,8 @@ export enum BATTLE_PHASE
     OUTSIDE = 4,
 }
 
-// Mirrors world_entity_battles::KIND_* (include/game_common/match/world/entities/world_entity_armies.h), the battle GDO's kind. Update here if they change.
-export enum BATTLE_KIND
+// Mirrors world_entity_engagements::KIND_* (include/game_common/match/world/entities/world_entity_armies.h), the engagement GDO's kind. Update here if they change.
+export enum ENGAGEMENT_KIND
 {
     FIELD = 0,
     SIEGE = 1,
@@ -566,8 +576,8 @@ export class RenderEntity
     significance: number = 0; // Settlements: population. Armies: troops. Caravans: carried value. Workers: small constant.
 }
 
-export const BATTLE_FLAG_SIEGE = 1 << 0; // Render flags of battles (game_client_render.cpp).
-export const BATTLE_FLAG_IDLE = 1 << 1; // Siege in its besieging phase: no fighting yet.
+export const ENGAGEMENT_FLAG_SIEGE = 1 << 0; // Render flags of engagements (game_client_render.cpp).
+export const ENGAGEMENT_FLAG_IDLE = 1 << 1; // Siege in its besieging phase: no fighting yet.
 export const CARAVAN_FLAG_IS_SHIP = 1 << 0; // Mirrors WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP.
 
 export class RenderState

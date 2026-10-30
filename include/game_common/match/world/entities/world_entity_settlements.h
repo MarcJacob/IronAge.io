@@ -174,7 +174,7 @@ struct world_entity_settlements : public world_entity_container
 	// Desired counts of the local troop pool.
 	army_troop_count*	troop_ceilings;
 
-	// The siege (battle entity of kind SIEGE) this settlement is under, INVALID if none. Invariant: set exactly while such a battle has this settlement as its main_target.
+	// The siege (engagement entity of kind SIEGE) this settlement is under, INVALID if none. Invariant: set exactly while such a engagement has this settlement as its main_target.
 	entity_guid*		sieges;
 
 	struct view;

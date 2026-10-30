@@ -25,8 +25,8 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 - P2b Remaining orders: Defend territory, Raid, Go home; invalid-order fallbacks; AI switched to orders.
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
   - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
-  - S1 [DONE, unbuilt] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin by setting travel_speed 0 (placeholder, check path-following copes).
-  - S2 [DONE, unbuilt] Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
+  - S1 [DONE] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin via world_movement_stop in movement_decision.
+  - S2 [DONE] Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
   - S3 LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
   - S4 SALLY_OUT, outside-battle phase, commanders.
   - S5 Rename battle -> engagement (after P2).
@@ -56,6 +56,8 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Any player's armies can join either side. Defending armies cannot enter the settlement once the siege started; if they attack besiegers they join on the defender side, forcing an "outside battle" that the garrison / armies inside do NOT join unless they sally out (engagement turns back into a sally).
   - Each side has a commander player, determined contextually: siege commander changes if another player's troops outnumber the commander's; if all armies are in a campaign, the campaign leader army's owner commands.
   - All engagements pin involved armies until concluded or explicitly left when possible (idle siege included).
+- Caravan attack: an army that attacks a caravan takes half its value into supplies and half into gold. Stationed / raiding armies attack hostile / neutral caravans (P3c).
+- Raid input: army is switched to raiding (button) and raids the territory it stands on; only allowed in territory not owned by the army's owner. Armies carry a gold stock (shown in UI); loot fills it in P3c; added to treasury on homecoming.
 - Siege details:
   - Icons (placeholder SVG): swords for field battles and for any fighting siege phase (assault, sally, outside); catapult only while idle BESIEGING.
   - Siege on a settlement with no garrison and no defender armies resolves immediately (conquest).
@@ -84,4 +86,4 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 ## Next step
 
-P0, P1, S0 done, tested, committed. S2 + S1 written, awaiting user build / hand-test / commit. Then S3, S4, then P2a. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).
+P0, P1, S0 done, tested, committed. S0-S2 done, tested, committed. S3, S4, P2a, P2b written (unbuilt, untested); P2b amendments applied (Raid = switch on current non-owned territory, army gold stock + UI). S5 rename written (unbuilt; stale refs left in human imprints / docs: include_match.imprint.md, game_mechanics.imprint.md, military_design.md etc.), P3b in progress, then P3c (loot, live off the land, caravan attacks, supplies homecoming; army carrying capacity value to propose). User authorized chaining all phases until the campaign (P4, exclusive): S3, S4, P2a, P2b, S5 rename, P3b, P3c, one at a time, reported after each. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).

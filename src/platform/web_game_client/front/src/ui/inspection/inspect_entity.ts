@@ -16,7 +16,7 @@ import * as SettlementPanelUI from "./ui_element_settlement_panel.js"
 import * as ArmyPanelUI from "./ui_element_army_panel.js"
 import * as CaravanPanelUI from "./ui_element_caravan_panel.js"
 import * as WorkerPanelUI from "./ui_element_worker_panel.js"
-import * as BattlePanelUI from "./ui_element_battle_panel.js"
+import * as EngagementPanelUI from "./ui_element_engagement_panel.js"
 import * as RaiseArmyPanelUI from "./ui_element_raise_army_panel.js"
 import * as FoundSettlementPanelUI from "./ui_element_found_settlement_panel.js"
 import { raise_available, TROOPS, MAX_COUNT } from "./section_troops.js"
@@ -36,29 +36,33 @@ export interface InspectionContext
     // Army being raised (army panel): makes the target sliders interactive. The mode owning the panel subscribes to ArmyPanelUI "raise_targets".
     edit_raise_targets?: boolean;
 
-    // Battle panel: a line of text under the rows (e.g. why the selected action is refused).
-    battle_note?: string;
+    // Army panel: a line of text under the rows (e.g. why the Raid order is refused).
+    army_note?: string;
+
+    // Engagement panel: a line of text under the rows (e.g. why the selected action is refused).
+    engagement_note?: string;
 }
 
-const BATTLE_PHASE_NAMES: { [phase: number]: string } = {
-    [Backend.BATTLE_PHASE.ACTIVE]: "Fighting",
-    [Backend.BATTLE_PHASE.BESIEGING]: "Besieging",
-    [Backend.BATTLE_PHASE.ASSAULT]: "Assault",
-    [Backend.BATTLE_PHASE.SALLY]: "Sally",
-    [Backend.BATTLE_PHASE.OUTSIDE]: "Outside clash",
+const ENGAGEMENT_PHASE_NAMES: { [phase: number]: string } = {
+    [Backend.ENGAGEMENT_PHASE.ACTIVE]: "Fighting",
+    [Backend.ENGAGEMENT_PHASE.BESIEGING]: "Besieging",
+    [Backend.ENGAGEMENT_PHASE.ASSAULT]: "Assault",
+    [Backend.ENGAGEMENT_PHASE.SALLY]: "Sally",
+    [Backend.ENGAGEMENT_PHASE.OUTSIDE]: "Outside clash",
 };
 
-// Battle / siege panel: kind, phase, each side's commander with its total men, and the main target.
-function battle_panel_state(battle: EntityData, note: string): BattlePanelUI.BattlePanelState
+// Engagement / siege panel: kind, phase, each side's commander with its total men, and the main target.
+function engagement_panel_state(engagement: EntityData, note: string): EngagementPanelUI.EngagementPanelState
 {
     const side = (name: string) =>
     {
-        const men = ["levies", "men_at_arms", "horsemen", "knights"].reduce((sum, type) => sum + battle.get_number(`${name}_men_${type}`), 0);
-        return `${Backend.get_player_name(battle.get_number(`${name}_commander`))}, ${men} men`;
+        const perType = ["levies", "men_at_arms", "horsemen", "knights"].map(type => engagement.get_number(`${name}_men_${type}`));
+        const men = perType.reduce((sum, count) => sum + count, 0);
+        return `${Backend.get_player_name(engagement.get_number(`${name}_commander`))}, ${men} men (levies ${perType[0]}, men at arms ${perType[1]}, horsemen ${perType[2]}, knights ${perType[3]})`;
     };
 
     let target = "";
-    const targetGuid = battle.get_number("main_target");
+    const targetGuid = engagement.get_number("main_target");
     const targetView = targetGuid !== 0 ? query_entity(targetGuid) : null;
     if (targetView !== null)
     {
@@ -67,12 +71,12 @@ function battle_panel_state(battle: EntityData, note: string): BattlePanelUI.Bat
     }
 
     return {
-        kind: battle.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Field battle",
-        phase: BATTLE_PHASE_NAMES[battle.get_number("phase")] ?? "",
+        kind: engagement.get_number("kind") === Backend.ENGAGEMENT_KIND.SIEGE ? "Siege" : "Field battle",
+        phase: ENGAGEMENT_PHASE_NAMES[engagement.get_number("phase")] ?? "",
         attacker: side("attacker"),
         defender: side("defender"),
         target,
-        location: battle.get_location("location"),
+        location: engagement.get_location("location"),
         note,
     };
 }
@@ -152,7 +156,31 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
 }
 
 // Army panel: count gauges against the original counts, or while raising the target sliders against what the home settlement can give now.
-function army_panel_state(army: EntityData, edit_raise_targets: boolean): ArmyPanelUI.ArmyPanelState
+// The army's standing order as text: its name, and its target (attack) or location (station).
+function army_order_text(army: EntityData): string
+{
+    switch (army.get_number("order_type"))
+    {
+    case Backend.ARMY_ORDER.STATION:
+    {
+        const location = army.get_location("order_location");
+        return `Station (${location.x}, ${location.y})`;
+    }
+    case Backend.ARMY_ORDER.ATTACK:
+    {
+        const target = query_entity(army.get_number("order_target"));
+        if (target === null) return "Attack";
+        const location = target.get_location("location");
+        return `Attack ${type_title(target).toLowerCase()} (${location.x}, ${location.y})`;
+    }
+    case Backend.ARMY_ORDER.DEFEND_TERRITORY: return `Defend territory of ${settlement_text(army.get_number("order_target"), "a lost settlement").toLowerCase()}`;
+    case Backend.ARMY_ORDER.RAID: return `Raid ${settlement_text(army.get_number("order_target"), "a lost settlement").toLowerCase()}`;
+    case Backend.ARMY_ORDER.GO_HOME: return "Go home";
+    default: return "Unknown";
+    }
+}
+
+function army_panel_state(army: EntityData, edit_raise_targets: boolean, note: string): ArmyPanelUI.ArmyPanelState
 {
     const raising = army.get_number("raising") === 1;
     const home_guid = army.get_number("home_settlement");
@@ -171,12 +199,15 @@ function army_panel_state(army: EntityData, edit_raise_targets: boolean): ArmyPa
 
     return {
         origin: settlement_text(home_guid, "Lost"),
+        order: army_order_text(army),
         raising,
         troops,
         targets_editable: edit_raise_targets,
         supplies: army.get_number("supplies"),
         supplies_capacity: army.get_number("supplies_capacity"),
         supplies_consumption: army.get_number("supplies_consumption"),
+        gold: army.get_number("gold"),
+        note,
         desertions: army.get_number("desertions"),
     };
 }
@@ -241,7 +272,7 @@ interface Shown
     army?: ArmyPanelUI.ArmyPanelState;
     caravan?: CaravanPanelUI.CaravanPanelState;
     worker?: WorkerPanelUI.WorkerPanelState;
-    battle?: BattlePanelUI.BattlePanelState;
+    engagement?: EngagementPanelUI.EngagementPanelState;
     raise_army?: RaiseArmyPanelUI.RaiseArmyPanelState;
     found_settlement?: FoundSettlementPanelUI.FoundSettlementPanelState;
 }
@@ -254,7 +285,7 @@ function show(shown: Shown | null): void
     ArmyPanelUI.submit(shown?.army ?? null);
     CaravanPanelUI.submit(shown?.caravan ?? null);
     WorkerPanelUI.submit(shown?.worker ?? null);
-    BattlePanelUI.submit(shown?.battle ?? null);
+    EngagementPanelUI.submit(shown?.engagement ?? null);
     RaiseArmyPanelUI.submit(shown?.raise_army ?? null);
     FoundSettlementPanelUI.submit(shown?.found_settlement ?? null);
 }
@@ -272,10 +303,10 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     switch (view.entity_type)
     {
     case Backend.ENTITY_TYPE.SETTLEMENT: show({ title: "Settlement", subtitle, settlement: settlement_panel_state(view, context) }); break;
-    case Backend.ENTITY_TYPE.ARMY: show({ title: "Army", subtitle, army: army_panel_state(view, context.edit_raise_targets === true) }); break;
+    case Backend.ENTITY_TYPE.ARMY: show({ title: "Army", subtitle, army: army_panel_state(view, context.edit_raise_targets === true, context.army_note ?? "") }); break;
     case Backend.ENTITY_TYPE.CARAVAN: show({ title: (view.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? "Ship" : "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.WORKER: show({ title: worker_title(view), subtitle, worker: worker_panel_state(view) }); break;
-    case Backend.ENTITY_TYPE.BATTLE: show({ title: view.get_number("kind") === Backend.BATTLE_KIND.SIEGE ? "Siege" : "Battle", subtitle, battle: battle_panel_state(view, context.battle_note ?? "") }); break;
+    case Backend.ENTITY_TYPE.ENGAGEMENT: show({ title: view.get_number("kind") === Backend.ENGAGEMENT_KIND.SIEGE ? "Siege" : "Battle", subtitle, engagement: engagement_panel_state(view, context.engagement_note ?? "") }); break;
     default: show({ title: type_title(view), subtitle }); break;
     }
 }

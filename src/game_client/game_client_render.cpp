@@ -35,7 +35,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	const world_entity_settlements& settlements = world.entities->settlements;
 	const world_entity_armies& armies = world.entities->armies;
 	const world_entity_workers& workers = world.entities->workers;
-	const world_entity_battles& battles = world.entities->battles;
+	const world_entity_engagements& engagements = world.entities->engagements;
 	const world_entity_caravans& caravans = world.entities->caravans;
 
 	render_state.frame.entity_count = 0;
@@ -47,7 +47,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	ui32 totalEntityCount = settlements.active_count
 		+ armies.active_count
 		+ workers.active_count
-		+ battles.active_count
+		+ engagements.active_count
 		+ caravans.active_count;
 
 	if (totalEntityCount > 0)
@@ -112,20 +112,20 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			visibleCount++;
 		}
 
-		// BATTLES
-		for (ui16 battleIndex = 0; battleIndex < battles.max_count; battleIndex++)
+		// ENGAGEMENTS
+		for (ui16 engagementIndex = 0; engagementIndex < engagements.max_count; engagementIndex++)
 		{
-			vec2<float> battleLoc = battles.states[battleIndex].location;
-			if (!battles.guids[battleIndex].is_valid() || !is_visible_in_viewport(battleLoc, render_state.viewport)) continue;
+			vec2<float> engagementLoc = engagements.states[engagementIndex].location;
+			if (!engagements.guids[engagementIndex].is_valid() || !is_visible_in_viewport(engagementLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
-			outEntity.entity_type = ENTITY_TYPE::BATTLE;
+			outEntity.entity_type = ENTITY_TYPE::ENGAGEMENT;
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
-			outEntity.guid = battles.guids[battleIndex];
-			outEntity.viewport_location = battleLoc - render_state.viewport.bottom_left;
-			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by BATTLE_FLAG_* in backend.ts.
-			const world_entity_battles::state& battleState = battles.states[battleIndex];
-			outEntity.flags = (battleState.kind == world_entity_battles::KIND_SIEGE ? 1 : 0) | (battleState.phase == world_entity_battles::PHASE_BESIEGING ? 2 : 0);
+			outEntity.guid = engagements.guids[engagementIndex];
+			outEntity.viewport_location = engagementLoc - render_state.viewport.bottom_left;
+			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
+			const world_entity_engagements::state& engagementState = engagements.states[engagementIndex];
+			outEntity.flags = (engagementState.kind == world_entity_engagements::KIND_SIEGE ? 1 : 0) | (engagementState.phase == world_entity_engagements::PHASE_BESIEGING ? 2 : 0);
 			outEntity.fractional_offset = {};
 
 			visibleCount++;

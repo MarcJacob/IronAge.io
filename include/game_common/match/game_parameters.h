@@ -83,7 +83,24 @@ struct game_parameters
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
     ui32 levy_max_percent = 20; // Max levies of a settlement garrison, in percent of its total population. No ceiling, no upkeep.
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
-    
+
+    // ENGAGEMENT DAMAGE. Per round a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it over its men by type; each type
+    // reduces the damage aimed at it by a random 0 .. (men of that type x defense); what is left kills one man per health point set (a remainder kills one more at random, proportionally).
+    ui32 engagement_damage_min_percent = 50;
+    ui32 engagement_damage_max_percent = 100;
+    ui32 damage_levy = 2;
+    ui32 damage_men_at_arms = 4;
+    ui32 damage_horseman = 6;
+    ui32 damage_knight = 9;
+    ui32 defense_levy = 1;
+    ui32 defense_men_at_arms = 3;
+    ui32 defense_horseman = 4;
+    ui32 defense_knight = 7;
+    ui32 health_levy = 20; // Damage points to kill one man. At least 1.
+    ui32 health_men_at_arms = 30;
+    ui32 health_horseman = 40;
+    ui32 health_knight = 60;
+
 
     // MOVEMENT
     // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only, ships water only.
@@ -140,6 +157,21 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_training_per_mille, GAME_DATA_PROP_TYPE::UI32)
+
+    GAME_DATA_PROPERTY(engagement_damage_min_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(engagement_damage_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(damage_levy, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(damage_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(damage_horseman, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(damage_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(defense_levy, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(defense_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(defense_horseman, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(defense_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(health_levy, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(health_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(health_horseman, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(health_knight, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(armies_workers_cross_water, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_travel_speed, GAME_DATA_PROP_TYPE::UI32)

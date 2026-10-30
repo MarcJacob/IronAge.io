@@ -388,14 +388,12 @@ static inline ui16 settlement_levy_max(ui32 population_total)
 	return (ui16)ia_min((ui64)population_total * GAME_PARAMETERS.levy_max_percent / 100, (ui64)0xFFFF);
 }
 
-// Casualties of the garrison (all four types, cheapest first, levies kill population). Takes up to amount men, returns the dead per type.
-static inline void settlement_garrison_take_casualties(match_world_state& world, ui16 settlement_index, ui64 amount, ui32 out_dead[TROOP_TYPE_COUNT])
+// Casualties of the garrison (levies kill population). Takes up to kills[type] men of each type, returns the dead per type.
+static inline void settlement_garrison_take_casualties(match_world_state& world, ui16 settlement_index, const ui32 kills[TROOP_TYPE_COUNT], ui32 out_dead[TROOP_TYPE_COUNT])
 {
-	ui64 remaining = amount;
 	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
 	{
-		out_dead[troopType] = settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(remaining, (ui64)0xFFFF));
-		remaining -= out_dead[troopType];
+		out_dead[troopType] = settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(kills[troopType], (ui32)0xFFFF));
 	}
 }
 

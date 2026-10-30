@@ -4,7 +4,7 @@
 #include "../world_sim.h"
 #include "../world_movement.h"
 
-#include "../entities/world_sim_entity_battle.h"
+#include "../entities/world_sim_entity_engagement.h"
 #include "../entities/world_sim_entity_caravan.h"
 
 // What entities can cross (caravans: CARAVAN_PATH_PARAMS, ships: SHIP_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
@@ -130,40 +130,7 @@ void world_system_entity_movement_decision(match_world_state& world)
 {
     const world_entity_settlements settlements = world.entities->settlements;
 
-    world_entity_armies& armies = world.entities->armies;
-
-	// Armies committed to an attack chase their target's current location. They stop if the target no longer exists.
-	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
-	{
-		if (!armies.guids[armyIndex].is_valid()) continue;
-
-		// Armies in a battle walk to the battle location, and are pinned once close enough.
-		if (armies.battles[armyIndex].is_valid())
-		{
-			world_location battleLoc = world.entities->battles.states[armies.battles[armyIndex].get_index()].location;
-			if (vec2_dist_squared(armies.locations[armyIndex], battleLoc) <= BATTLE_ARMY_DISTANCE * BATTLE_ARMY_DISTANCE) continue;
-			armies.movements[armyIndex].destination = battleLoc;
-            continue;
-		}
-
-        // Otherwise move to action target entity.
-        // @TODO(Marc): Merge battle guid into action target.
-		if (world_entity_is_valid(world, armies.action_targets[armyIndex]))
-		{
-			armies.movements[armyIndex].destination = world_entity_get_location(world, armies.action_targets[armyIndex]);
-		}
-		else
-		{
-            if (armies.action_targets[armyIndex]._value != INVALID_ENTITY_GUID._value)
-            {
-                // Target existed but was invalidated. Stop any movement.
-                armies.action_targets[armyIndex] = INVALID_ENTITY_GUID;
-                world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
-            }
-            // ... Otherwise do nothing as we don't want to overwrite a destination set by itself.
-		}
-	}
-
+    // Army destinations (engagement walking, standing orders) are set earlier in the tick, see world_system_army_orders.
 
     world_entity_caravans& caravans = world.entities->caravans;
     

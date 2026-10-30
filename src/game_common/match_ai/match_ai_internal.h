@@ -119,10 +119,10 @@ struct ai_army_view
 	ui32 troops_target; // Raise targets while raising, else troops.
 	ui32 supply_days; // Days of its own consumption the army carries.
 	ui8 raising;
-	ui8 idle; // Not raising, not in a battle, not chasing and not walking anywhere.
+	ui8 idle; // Not raising, not in a engagement, not chasing and not walking anywhere.
 };
 
-// A siege (battle entity of kind SIEGE) still besieging, as the attacker commander sees it.
+// A siege (engagement entity of kind SIEGE) still besieging, as the attacker commander sees it.
 struct ai_siege_view
 {
 	entity_guid guid;
@@ -178,7 +178,7 @@ static bool ai_world_has_room_to_found(const match_world_state& world); // Free 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out); // False if the slot is empty.
 static bool ai_view_settlement_by_guid(const match_world_state& world, entity_guid guid, ai_settlement_view& out); // False if gone.
 static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view& out);
-static ui16 ai_world_battle_slots(const match_world_state& world);
+static ui16 ai_world_engagement_slots(const match_world_state& world);
 static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out); // False if the slot is not a siege in its besieging phase.
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement); // settlement invalid = any of the player's.
 static bool ai_site_is_valid(const match_world_state& world, world_location loc, match_player_id player);

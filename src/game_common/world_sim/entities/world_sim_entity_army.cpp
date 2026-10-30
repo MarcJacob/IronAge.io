@@ -1,6 +1,7 @@
 #include "world_sim_entity_army.h"
 #include "../world_sim.h"
 #include "world_sim_entity_settlement.h"
+#include "world_sim_entity_engagement.h"
 #include "game_common/match/world/world.h"
 
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state)
@@ -20,13 +21,16 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 
 	world_entity_armies::view newArmy { armies, freeIndex };
 	newArmy.copy_from(start_state);
-	newArmy.battle = INVALID_ENTITY_GUID;
+	newArmy.engagement = INVALID_ENTITY_GUID;
 	newArmy.desertions = 0;
 
 	// Init default values if they weren't specified by start state.
 	SET_DEFAULT_VAL(newArmy.movement.travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
 	SET_DEFAULT_VAL_STRUCT(newArmy.movement.destination, start_state.location);
 	newArmy.movement.move_target = start_state.location;
+
+	// A new army stands at its destination (the default order is STATION), unless the start state gives another order.
+	if (start_state.order.type == ARMY_ORDER_STATION) newArmy.order.location = newArmy.movement.destination;
 
 	armies.guids[freeIndex] = newID;
 	armies.active_count++;
@@ -40,10 +44,14 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	world_entity_armies& armies = world.entities->armies;
 
 	ui16 index = army.get_index();
+	entity_guid engagement = armies.engagements[index];
 	world_entity_army_view destroyedArmy { armies, index };
 	destroyedArmy.copy_from(world_entity_army {});
 	armies.guids[index] = INVALID_ENTITY_GUID;
 	armies.active_count--;
+
+	// A siege whose last attacking army is gone ends with it.
+	if (engagement.is_valid()) world_engagement_army_left(world, engagement);
 }
 
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
@@ -56,19 +64,20 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	{
 		settlement_release_raised(world, settlement.get_index(), troopType, troop_count_field(men, troopType));
 	}
+
+	// The gold the army carries goes to its owner's treasury (always 0 until looting exists).
+	world.player_states[world.entities->armies.owners[army.get_index()]].treasury += world.entities->armies.gold[army.get_index()];
+
 	world_destroy_army(world, army);
 }
 
-void world_army_take_casualties(match_world_state& world, entity_guid army, ui64 amount, ui32 out_dead[world_entity_battles::UNIT_TYPES])
+void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES])
 {
 	world_entity_armies& armies = world.entities->armies;
 
-	// Cheapest units first.
-	ui64 remaining = amount;
-	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
 	{
-		out_dead[unitType] = army_remove_troops(world, army.get_index(), unitType, (ui16)ia_min(remaining, (ui64)0xFFFF));
-		remaining -= out_dead[unitType];
+		out_dead[unitType] = army_remove_troops(world, army.get_index(), unitType, (ui16)ia_min(kills[unitType], (ui32)0xFFFF));
 	}
 
 	// The dead also leave their home settlement (raised counts and total population). Skipped if the home is gone.
@@ -76,7 +85,7 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, ui64
 	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)
             || world.entities->settlements.owners[home.get_index()] != armies.owners[army.get_index()]) return;
 
-	for (ui8 unitType = 0; unitType < world_entity_battles::UNIT_TYPES; unitType++)
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
 	{
 		settlement_remove_soldiers_raised(world, home.get_index(), unitType, (ui16)out_dead[unitType]);
 	}
@@ -88,11 +97,11 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 	ui16 deserters = army_remove_troops(world, army.get_index(), troop_type, count);
 	if (deserters == 0) return 0;
 
-	// An army in a battle no longer counts them among its side's men.
-	entity_guid battle = armies.battles[army.get_index()];
-	if (battle.is_valid())
+	// An army in a engagement no longer counts them among its side's men.
+	entity_guid engagement = armies.engagements[army.get_index()];
+	if (engagement.is_valid())
 	{
-		ui32& sideMen = world.entities->battles.states[battle.get_index()].side(armies.battle_sides[army.get_index()]).men[troop_type];
+		ui32& sideMen = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[army.get_index()]).men[troop_type];
 		sideMen -= ia_min(sideMen, (ui32)deserters);
 	}
 
@@ -145,11 +154,11 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.compositions = memory.alloc<army_troop_count>(count);
 	if (armies.compositions == nullptr) return false;
 
-	armies.battles = memory.alloc<entity_guid>(count);
-	if (armies.battles == nullptr) return false;
+	armies.engagements = memory.alloc<entity_guid>(count);
+	if (armies.engagements == nullptr) return false;
 
-	armies.battle_sides = memory.alloc<ui8>(count);
-	if (armies.battle_sides == nullptr) return false;
+	armies.engagement_sides = memory.alloc<ui8>(count);
+	if (armies.engagement_sides == nullptr) return false;
 
 	armies.raised_troops = memory.alloc<army_troop_count>(count);
 	if (armies.raised_troops == nullptr) return false;
@@ -160,8 +169,11 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.home_settlements = memory.alloc<entity_guid>(count);
 	if (armies.home_settlements == nullptr) return false;
 
-	armies.action_targets = memory.alloc<entity_guid>(count);
-	if (armies.action_targets == nullptr) return false;
+	armies.orders = memory.alloc<army_order>(count);
+	if (armies.orders == nullptr) return false;
+
+	armies.gold = memory.alloc<ui32>(count);
+	if (armies.gold == nullptr) return false;
 
 	armies.supplies = memory.alloc<ui32>(count);
 	if (armies.supplies == nullptr) return false;

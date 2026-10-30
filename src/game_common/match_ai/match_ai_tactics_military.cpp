@@ -94,6 +94,7 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 		if (raise == nullptr) return;
 		raise->settlement = settlement.guid;
 		raise->raise_location = settlement.location;
+		raise->start_order = RAISE_START_ORDER_STATION; // The AI moves its armies itself: they stand where raised (P5 replaces this with orders).
 		raise->target_levies = targets.levies;
 		raise->target_men_at_arms = targets.men_at_arms;
 		treasury -= cost;
@@ -142,7 +143,7 @@ constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besiegin
 static void ai_tactics_assault(ai_context& ctx)
 {
 	ai_siege_view siege;
-	for (ui16 slot = 0; slot < ai_world_battle_slots(ctx.world); slot++)
+	for (ui16 slot = 0; slot < ai_world_engagement_slots(ctx.world); slot++)
 	{
 		if (!ai_view_idle_siege(ctx.world, slot, siege) || siege.attacker_commander != ctx.player) continue;
 		if (siege.attacker_men < siege.defender_men * AI_ASSAULT_OUTNUMBER && siege.min_supply_days >= AI_ASSAULT_MIN_SUPPLY_DAYS) continue;
@@ -162,7 +163,7 @@ static bool ai_is_next_to_own_settlement(const ai_context& ctx, const ai_army_vi
 	return false;
 }
 
-// Idle remnants of battles standing next to their home settlement are disbanded into it (a few per run). In EXPAND every idle army
+// Idle remnants of engagements standing next to their home settlement are disbanded into it (a few per run). In EXPAND every idle army
 // at home is: its levies go back to work the land and it stops costing supplies.
 static void ai_tactics_disband_remnants(ai_context& ctx)
 {

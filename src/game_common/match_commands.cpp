@@ -8,6 +8,9 @@
 
 #include "world_sim/entities/world_sim_entity_worker.h"
 #include "world_sim/entities/world_sim_entity_settlement.h"
+#include "world_sim/entities/world_sim_entity_engagement.h"
+#include "world_sim/entities/world_sim_entity_army.h"
+#include "world_sim/world_movement.h"
 
 // BEGIN COMMAND FUNCTION IMPLEMENTATIONS
 
@@ -119,8 +122,8 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 	case ENTITY_TYPE::ARMY:
 		if (world.entities->armies.raising[command.entity.get_index()]) break;
 		world.entities->armies.movements[command.entity.get_index()].destination = command.move_target;
-		// A new move order overrides any attack the army was committed to.
-		world.entities->armies.action_targets[command.entity.get_index()] = INVALID_ENTITY_GUID;
+		// A STATION order at the target (replaces any attack the army was committed to).
+		army_order_station(world.entities->armies, command.entity.get_index(), command.move_target);
 		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -249,6 +252,8 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
+	if (command.start_order >= RAISE_START_ORDER_COUNT && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+
 	// Every type, levies included, is drawn from the garrison pool when raising: targets can exceed what the pool holds.
 
 	if (!raise_army_can_afford(world, command, feedback) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
@@ -286,6 +291,19 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
 	newArmy.supplies = raise_army_cost(command);
+
+	// The order the army follows once it is raised (raising armies ignore their order, see world_system_army_orders).
+	if (command.start_order == RAISE_START_ORDER_STATION)
+	{
+		newArmy.order.type = ARMY_ORDER_STATION;
+		newArmy.order.location = command.raise_location;
+	}
+	else
+	{
+		newArmy.order.type = ARMY_ORDER_DEFEND_TERRITORY;
+		newArmy.order.target = command.settlement;
+		newArmy.order.location = command.raise_location;
+	}
 
 	world_spawn_army(world, newArmy);
 	raise_army_charge(world, command);
@@ -325,7 +343,7 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
-	world.entities->armies.action_targets[command.attacker_entity.get_index()] = command.target_entity;
+	army_order_attack(world.entities->armies, command.attacker_entity.get_index(), command.target_entity);
 }
 
 // BUILD ROAD
@@ -566,7 +584,7 @@ void command_set_army_raise_targets_apply(match_world_state& world, match_player
 
 // STOP RAISING ARMY
 
-// Deliberately independent of the army's position and battle state: an army stuck unable to reach its raise location must still be stoppable.
+// Deliberately independent of the army's position and engagement state: an army stuck unable to reach its raise location must still be stoppable.
 bool command_stop_raising_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
 	match_command_validity_feedback* feedback)
 {
@@ -622,8 +640,8 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	// An army in a battle is counted in it: no dedicated error, reported as unspecified.
-	if (armies.battles[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+	// An army in a engagement is counted in it: no dedicated error, reported as unspecified.
+	if (armies.engagements[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
 	// The men go back to the home settlement, which must still exist.
 	entity_guid home = armies.home_settlements[armyIndex];
@@ -711,17 +729,17 @@ bool command_begin_assault_validity_check(const match_world_state& world, match_
 {
 	const command_data_begin_assault& command = command_header.get_command_data<command_data_begin_assault>();
 
-	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::BATTLE
-		|| world.entities->battles.states[command.engagement.get_index()].kind != world_entity_battles::KIND_SIEGE)
+	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
+		|| world.entities->engagements.states[command.engagement.get_index()].kind != world_entity_engagements::KIND_SIEGE)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
 
-	const world_entity_battles::state& siege = world.entities->battles.states[command.engagement.get_index()];
+	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
 
 	if (siege.attacker.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
-	if (siege.phase != world_entity_battles::PHASE_BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+	if (siege.phase != world_entity_engagements::PHASE_BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -731,9 +749,230 @@ void command_begin_assault_apply(match_world_state& world, match_player_id playe
 	if (!command_begin_assault_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_begin_assault& command = command_header.get_command_data<command_data_begin_assault>();
-	world_entity_battles::state& siege = world.entities->battles.states[command.engagement.get_index()];
-	siege.phase = world_entity_battles::PHASE_ASSAULT;
+	world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+	siege.phase = world_entity_engagements::PHASE_ASSAULT;
 	siege.phase_tick = world.age;
+}
+
+// SET ARMY ORDER
+
+// The settlement owning the territory at the location if it belongs to another player than the given one, otherwise an invalid guid.
+static entity_guid command_raid_target(const match_world_state& world, world_location location, match_player_id player)
+{
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, location, regionIndex, tileIndex);
+	ui16 owner = world.terrain->regions[regionIndex].owners[tileIndex];
+
+	const world_entity_settlements& settlements = world.entities->settlements;
+	if (owner == world_terrain::UNOWNED_TILE || owner >= settlements.max_count || !settlements.guids[owner].is_valid() || settlements.owners[owner] == player) return INVALID_ENTITY_GUID;
+	return settlements.guids[owner];
+}
+
+bool command_set_army_order_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_set_army_order& command = command_header.get_command_data<command_data_set_army_order>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entities& entities = *world.entities;
+	ui16 armyIndex = command.army.get_index();
+
+	if (entities.armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+	if (entities.armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING)) return false;
+
+	bool targetIsSettlement = world_entity_is_valid(world, command.target) && command.target.get_type() == ENTITY_TYPE::SETTLEMENT;
+
+	switch (command.order_type)
+	{
+	case ARMY_ORDER_STATION:
+		if ((command.location.x >= world.terrain->size_tiles.x || command.location.y >= world.terrain->size_tiles.y)
+			&& command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
+		break;
+	case ARMY_ORDER_ATTACK:
+		// Same targets as SET_ENTITY_ATTACK_TARGET: settlements and armies of other players.
+		if (world_entity_is_valid(world, command.target) && command.target.get_type() == ENTITY_TYPE::ARMY)
+		{
+			if (entities.armies.owners[command.target.get_index()] == player && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
+		}
+		else if (!targetIsSettlement || entities.settlements.owners[command.target.get_index()] == player)
+		{
+			if (command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
+		}
+		break;
+	case ARMY_ORDER_DEFEND_TERRITORY:
+		if ((!targetIsSettlement || entities.settlements.owners[command.target.get_index()] != player) && command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
+		break;
+	case ARMY_ORDER_RAID:
+		// The raided settlement is the owner of the territory the army stands on, which must be another player's.
+		if (command_raid_target(world, entities.armies.locations[armyIndex], player).get_type() != ENTITY_TYPE::SETTLEMENT
+			&& command_add_error(feedback, COMMAND_ERROR_NOT_IN_HOSTILE_TERRITORY)) return false;
+		break;
+	case ARMY_ORDER_GO_HOME:
+	{
+		// The home settlement must still be the army's owner's.
+		entity_guid home = entities.armies.home_settlements[armyIndex];
+		if ((!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT || entities.settlements.owners[home.get_index()] != player)
+			&& command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
+		break;
+	}
+	default:
+		if (command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+		break;
+	}
+
+	return command_is_valid(feedback);
+}
+
+void command_set_army_order_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	// Checked again: earlier commands in the same tick may have destroyed the army or the target.
+	if (!command_set_army_order_validity_check(world, player, command_header, nullptr)) return;
+
+	const command_data_set_army_order& command = command_header.get_command_data<command_data_set_army_order>();
+	world_entity_armies& armies = world.entities->armies;
+	ui16 armyIndex = command.army.get_index();
+
+	armies.orders[armyIndex] = {};
+	armies.orders[armyIndex].type = command.order_type;
+	switch (command.order_type)
+	{
+	case ARMY_ORDER_STATION:
+		armies.orders[armyIndex].location = command.location;
+		armies.movements[armyIndex].destination = command.location;
+		break;
+	case ARMY_ORDER_ATTACK:
+	case ARMY_ORDER_DEFEND_TERRITORY:
+		armies.orders[armyIndex].target = command.target;
+		armies.orders[armyIndex].location = armies.locations[armyIndex]; // First point the order walks to (DEFEND picks its own).
+		break;
+	case ARMY_ORDER_RAID:
+		armies.orders[armyIndex].target = command_raid_target(world, armies.locations[armyIndex], player);
+		armies.orders[armyIndex].location = armies.locations[armyIndex];
+		break;
+	default: // GO_HOME: the home settlement is read from the army.
+		break;
+	}
+}
+
+// SALLY OUT
+
+bool command_sally_out_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_sally_out& command = command_header.get_command_data<command_data_sally_out>();
+
+	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
+		|| world.entities->engagements.states[command.engagement.get_index()].kind != world_entity_engagements::KIND_SIEGE)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+
+	if (siege.defender.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (siege.phase != world_entity_engagements::PHASE_BESIEGING && siege.phase != world_entity_engagements::PHASE_OUTSIDE && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_sally_out_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_sally_out_validity_check(world, player, command_header, nullptr)) return;
+
+	// The garrison joins the defender side at the next round (the siege recounts its sides then).
+	world_entity_engagements::state& siege = world.entities->engagements.states[command_header.get_command_data<command_data_sally_out>().engagement.get_index()];
+	siege.phase = world_entity_engagements::PHASE_SALLY;
+	siege.phase_tick = world.age;
+}
+
+// LIFT SIEGE
+
+bool command_lift_siege_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_lift_siege& command = command_header.get_command_data<command_data_lift_siege>();
+
+	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
+		|| world.entities->engagements.states[command.engagement.get_index()].kind != world_entity_engagements::KIND_SIEGE)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+
+	if (siege.attacker.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (siege.phase != world_entity_engagements::PHASE_BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_lift_siege_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_lift_siege_validity_check(world, player, command_header, nullptr)) return;
+
+	world_engagement_end(world, command_header.get_command_data<command_data_lift_siege>().engagement);
+}
+
+// WITHDRAW ARMY
+
+bool command_withdraw_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_withdraw_army& command = command_header.get_command_data<command_data_withdraw_army>();
+
+	if (!world_entity_is_valid(world, command.army) || command.army.get_type() != ENTITY_TYPE::ARMY)
+	{
+		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
+		return false;
+	}
+
+	const world_entity_armies& armies = world.entities->armies;
+	ui16 armyIndex = command.army.get_index();
+
+	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// The army must be in a siege that is only besieging (any side). Field engagements and fighting sieges are refused.
+	entity_guid engagement = armies.engagements[armyIndex];
+	bool besieging = engagement.is_valid() && world_entity_is_valid(world, engagement);
+	if (besieging)
+	{
+		const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+		besieging = state.kind == world_entity_engagements::KIND_SIEGE && state.phase == world_entity_engagements::PHASE_BESIEGING;
+	}
+	if (!besieging && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+
+	return command_is_valid(feedback);
+}
+
+void command_withdraw_army_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_withdraw_army_validity_check(world, player, command_header, nullptr)) return;
+
+	world_entity_armies& armies = world.entities->armies;
+	entity_guid army = command_header.get_command_data<command_data_withdraw_army>().army;
+	ui16 armyIndex = army.get_index();
+	entity_guid engagement = armies.engagements[armyIndex];
+
+	// Its men leave their side now (the siege recounts its sides every round anyway).
+	world_entity_engagements::side_state& side = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[armyIndex]);
+	ui32 counts[world_entity_engagements::UNIT_TYPES];
+	army_unit_counts(armies.compositions[armyIndex], counts);
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++) side.men[unitType] -= ia_min(counts[unitType], side.men[unitType]);
+
+	armies.engagements[armyIndex] = INVALID_ENTITY_GUID;
+	armies.engagement_sides[armyIndex] = 0;
+	army_order_station(armies, armyIndex, armies.locations[armyIndex]);
+	world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+
+	// Last attacking army gone: the siege is lifted. Otherwise the commanders are recomputed.
+	world_engagement_army_left(world, engagement);
 }
 
 // END COMMAND FUNCTION IMPLEMENTATIONS
