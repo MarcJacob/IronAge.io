@@ -201,8 +201,13 @@ const army_troop_count& army_supply_basis(const match_world_state& world, ui16 a
 	return armies.raising[army_index] ? armies.raised_troops[army_index] : armies.compositions[army_index];
 }
 
-// Supplies the army refills up to: army_supply_capacity_days of the consumption of its supply basis.
+// What the army carries at most, in each of its two pools (supplies, gold): sum of count x per-type carry capacity of its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
 {
-	return (ui32)ia_min((ui64)army_daily_consumption(army_supply_basis(world, army_index)) * GAME_PARAMETERS.army_supply_capacity_days, (ui64)0xFFFFFFFF);
+	const army_troop_count& troops = army_supply_basis(world, army_index);
+	ui64 capacity = (ui64)troops.levies * GAME_PARAMETERS.carry_levy
+		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.carry_men_at_arms
+		+ (ui64)troops.horsemen * GAME_PARAMETERS.carry_horseman
+		+ (ui64)troops.knights * GAME_PARAMETERS.carry_knight;
+	return (ui32)ia_min(capacity, (ui64)0xFFFFFFFF);
 }

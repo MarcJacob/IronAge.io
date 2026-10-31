@@ -152,6 +152,9 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.sieges = memory.alloc<entity_guid>(count);
 	if (settlements.sieges == nullptr) return false;
 
+	settlements.raids = memory.alloc<settlement_raid>(count);
+	if (settlements.raids == nullptr) return false;
+
 	return true;
 }
 

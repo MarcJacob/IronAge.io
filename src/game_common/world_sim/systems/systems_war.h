@@ -12,6 +12,9 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 // the second runs after movement and handles arrivals (an attacking army close enough to its target resolves the attack).
 void world_system_army_orders(match_world_state& world);
 
+// Daily, before the settlement economy: resets the settlements' raided totals, then raiding armies loot the settlement they raid (gold, supplies, peasants killed).
+void world_system_raid_loot(match_world_state& world);
+
 // Raising armies standing on their destination (and not in a engagement) draw men from their home settlement.
 void world_system_armies_raising(match_world_state& world);
 

@@ -50,7 +50,10 @@ static void settlement_goods_production(match_world_state& world, ui16 settlemen
         settlement.economy.production_tax = 0;
     }
 
-    settlement_market_add(world.entities->settlements, settlement_index, settlement.economy.production - settlement.economy.production_tax);
+    // Production the raiders took today (world_system_raid_loot, runs just before) is not credited. The production figure itself stays whole.
+    ui32 credit = settlement.economy.production - settlement.economy.production_tax;
+    credit -= ia_min(credit, settlement.raid.production_gold + settlement.raid.production_supplies);
+    settlement_market_add(world.entities->settlements, settlement_index, credit);
 }
 
 // SALES: sellable_percent of the market goods can be consumed today. Soldiers at home, then workers, are offered their share of it; what a stratum leaves

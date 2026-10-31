@@ -222,6 +222,7 @@ void world_state_tick(match_world_state& world)
     // @TODO(Marc): Figure out an appropriate abstraction for systems 
     // that allows a more granular production of such systems in a way that makes them easier to multithread.
 
+    world_system_raid_loot(world); // Before the daily economy: loots last day's production figure, and what it takes is not credited by the economy tick.
     world_system_economy_daily_tick(world);
     world_system_economy_troop_growth(world); // After the daily tick's growth.
     world_system_settlement_buildings_daily_tick(world); // After everything else of the economy is resolved.

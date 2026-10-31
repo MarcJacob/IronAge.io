@@ -129,7 +129,17 @@ struct game_parameters
     ui32 upkeep_men_at_arms = 2;
     ui32 upkeep_horseman = 10;
     ui32 upkeep_knight = 30;
-    ui32 army_supply_capacity_days = 10; // An army refills its supplies (from the treasury, inside its owner's territory) up to this many days of its own consumption.
+    // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
+    // Supplies refill (from the treasury, inside its owner's territory) up to it.
+    ui32 carry_levy = 10;
+    ui32 carry_men_at_arms = 6;
+    ui32 carry_horseman = 20;
+    ui32 carry_knight = 10;
+    // RAID LOOT (temporary, until tile-based raiding). Most a settlement can lose to raiders per day, all armies together.
+    ui32 raid_production_percent = 10; // Of its production.
+    ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies).
+    ui32 raid_peasants_percent = 10; // Of its peasants, killed (1 gold each).
+    ui32 raid_goods_percent = 20; // Of its local + export goods (become supplies 1:1).
     ui32 army_supply_refill_days = 2; // Days of its own consumption an army refills per day inside its owner's territory (it consumes 1, so the net gain is refill - 1 days per day).
 
     // CONSTRUCTION
@@ -195,7 +205,14 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(army_supply_capacity_days, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(carry_levy, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(carry_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(carry_horseman, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(carry_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(raid_production_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(raid_production_gold_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(raid_peasants_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(raid_goods_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_supply_refill_days, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)

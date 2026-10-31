@@ -1,6 +1,6 @@
 // Army economy systems: soldiers consume wealth every day, and the owner's treasury pays for it.
 // Armies carry their own supplies. Their soldiers consume them daily (per-type upkeep rates), so consumption is a sink of the economy.
-// Inside territory its owner owns, an army refills its supplies from the treasury (a couple of days' worth per day), up to a number of days of its own consumption.
+// Inside territory its owner owns, an army refills its supplies from the treasury (a couple of days' worth per day), up to its carry capacity.
 // Consumption that supplies cannot cover makes troops desert, in which case they go back home. A raising army stops raising instead.
 // Outside of the owner's territory armies are not supplied: they must be back regularly, or find *alternative* means of financing themselves (later).
 // Soldiers waiting in a settlement (local pool) are paid from the treasury instead.

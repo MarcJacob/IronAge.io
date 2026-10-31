@@ -62,7 +62,7 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* home_settlements; // Settlement this army was raised from.
 	army_order* orders; // Standing order (see ARMY_ORDER_TYPE).
 
-	ui32* gold; // Gold the army carries (loot). Nothing fills it yet. Added to the owner's treasury when the army disbands.
+	ui32* gold; // Gold the army carries (raid loot, see world_system_raid_loot). Added to the owner's treasury when the army disbands.
 	ui32* supplies; // Wealth the army carries. Consumed daily by its soldiers, refilled from the owner's treasury inside the owner's territory. See world_system_armies_upkeep.
 	ui16* desertions; // Men who deserted at the last daily tick (reset by every daily tick).
 
@@ -87,7 +87,7 @@ struct world_entity_armies : public world_entity_container
 		ui32 gold;
 		ui32 supplies;
 		ui32 supplies_consumption; // Computed by the query: what the army's soldiers consume per day. Not stored.
-		ui32 supplies_capacity; // Computed by the query: what the army refills its supplies up to (army_supply_capacity). Not stored.
+		ui32 supplies_capacity; // Computed by the query: what the army carries at most in its supplies and in its gold (army_supply_capacity). Not stored.
 		ui16 desertions;
 
 		void copy_from(const view& source);
@@ -233,7 +233,7 @@ ui32 army_daily_consumption(const army_troop_count& troops);
 // The troops supplies are sized for: the raise targets while the army is raising, its composition after that.
 const army_troop_count& army_supply_basis(const match_world_state& world, ui16 army_index);
 
-// Supplies the army refills up to: army_supply_capacity_days of the consumption of its supply basis.
+// What the army carries at most in each pool (supplies and gold, separate): its men x per-type carry capacity (GAME_PARAMETERS.carry_*), on its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index);
 
 // A engagement between two sides of armies. A engagement is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.

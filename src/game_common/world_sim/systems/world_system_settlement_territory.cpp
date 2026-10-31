@@ -485,7 +485,8 @@ void world_system_settlement_territory(match_world_state& world)
         ui32& peasants = world.entities->settlements.pop_peasants[settlementIndex];
         ui32& unemployed = world.entities->settlements.pop_unemployed[settlementIndex];
         ui32 peasantsCap = world.entities->settlements.pop_peasants_cap[settlementIndex];
-        if (peasants < peasantsCap && unemployed > 0)
+        bool raided = world.entities->settlements.raids[settlementIndex].raided != 0; // Raided: nobody takes up a plot.
+        if (!raided && peasants < peasantsCap && unemployed > 0)
         {
             ui32 employCount = ia_min(unemployed, peasantsCap - peasants);
             peasants += employCount;
@@ -505,7 +506,7 @@ void world_system_settlement_territory(match_world_state& world)
         world_location newBoundsMin = world.entities->settlements.locations[settlementIndex];
         world_location newBoundsMax = world.entities->settlements.locations[settlementIndex];
 
-        i32 pressure = settlementView.pop_unemployed; // Unemployed population seeks to go find themselves a plot of land to farm on, marry and adopt a dog + 2 kitten.
+        i32 pressure = settlementView.raid.raided ? 0 : settlementView.pop_unemployed; // Raided settlements do not expand. // Unemployed population seeks to go find themselves a plot of land to farm on, marry and adopt a dog + 2 kitten.
 
         // Low pressure doesn't unclaim territory. The bounds are still rescanned.
 
@@ -587,7 +588,7 @@ static bool world_influence_takeover_scan(const match_world_state& world, ui16 s
 
                 ui16 neighbourOwner = terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex];
                 if (neighbourOwner == world_terrain::UNOWNED_TILE || neighbourOwner == settlement_index) continue;
-                if (settlements.pop_unemployed[neighbourOwner] == 0) continue; // Only settlements with unemployed left can take land.
+                if (settlements.pop_unemployed[neighbourOwner] == 0 || settlements.raids[neighbourOwner].raided) continue; // Only settlements with unemployed left (and not raided) can take land.
 
                 ui16 distance = world_influence_candidate_distance(world, regionIndex, tileIndex, neighbourOwner);
                 if (distance < bestDistance || (distance == bestDistance && distance != TERRITORY_NO_DISTANCE && neighbourOwner < bestTaker))

@@ -151,6 +151,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
             return { definition, count, projects, build };
         }),
         under_siege: prop("siege") !== 0,
+        raided: prop("raided") !== 0,
         editable,
     };
 }

@@ -126,7 +126,7 @@ export function submit(state: ArmyPanelState | null): void
 
     set_text(el.origin, state.origin);
     set_text(el.order, state.order);
-    set_text(el.gold, String(state.gold));
+    set_text(el.gold, `${state.gold} / ${state.supplies_capacity}`); // Same capacity as the supplies.
     set_text(el.note, state.note);
 
     for (let i = 0; i < el.troops.length; i++)

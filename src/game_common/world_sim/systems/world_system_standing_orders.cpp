@@ -352,8 +352,94 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 	}
 	order.state = order_wander(world, army_index, targetIndex) ? ARMY_ORDER_STATE_RAID_RAIDING : ARMY_ORDER_STATE_RAID_MOVING;
 
-	// @TODO(Marc): P3c: daily loot hook. Loot runs each day tick while in RAID_RAIDING or RAID_MOVING (call it here, gated on the day tick).
+	// Looting is world_system_raid_loot (daily).
 	// @TODO(Marc): Enemy / neutral caravans close by should be attacked too. There is no caravan attack resolution yet.
+}
+
+// RAID LOOT (temporary: becomes tile-based raiding later)
+
+// What is left of a settlement's daily share: day_max is the share of the amount the settlement had before today's looting, taken is what was already taken today.
+static ui32 raid_budget_left(ui64 day_max, ui32 taken)
+{
+	return day_max > taken ? (ui32)(day_max - taken) : 0;
+}
+
+// One army loots the settlement it raids: production (gold and supplies), peasants killed (gold), goods (supplies). Each is the min of the daily potential left on the
+// settlement and the room left in the army's gold / supplies pool (capacity: army_supply_capacity). What is taken leaves the settlement; nothing else is destroyed.
+static void army_loot_settlement(match_world_state& world, ui16 army_index, ui16 settlement_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+	world_entity_settlements& settlements = world.entities->settlements;
+	settlement_raid& raid = settlements.raids[settlement_index];
+	settlement_trading& trade = settlements.trade[settlement_index];
+	const game_parameters& params = GAME_PARAMETERS;
+
+	raid.raided = 1;
+	raid.looted_today = 1;
+
+	ui32 capacity = army_supply_capacity(world, army_index);
+	ui32& gold = armies.gold[army_index];
+	ui32& supplies = armies.supplies[army_index];
+	ui32 goldRoom = capacity > gold ? capacity - gold : 0;
+	ui32 suppliesRoom = capacity > supplies ? capacity - supplies : 0;
+
+	// Production (last day's figure, the economy tick runs right after and does not credit what is taken).
+	ui64 productionMax = (ui64)settlements.economies[settlement_index].production * ia_min(params.raid_production_percent, (ui32)100) / 100;
+	ui64 goldMax = productionMax * ia_min(params.raid_production_gold_percent, (ui32)100) / 100;
+	ui32 takenGold = ia_min(raid_budget_left(goldMax, raid.production_gold), goldRoom);
+	ui32 takenSupplies = ia_min(raid_budget_left(productionMax - goldMax, raid.production_supplies), suppliesRoom);
+	raid.production_gold += takenGold;
+	raid.production_supplies += takenSupplies;
+	gold += takenGold;
+	supplies += takenSupplies;
+	goldRoom -= takenGold;
+	suppliesRoom -= takenSupplies;
+
+	// Peasants killed, 1 gold each.
+	ui64 killedMax = ((ui64)settlements.pop_peasants[settlement_index] + raid.peasants_killed) * ia_min(params.raid_peasants_percent, (ui32)100) / 100;
+	ui32 killed = settlement_remove_peasants(world, settlement_index, ia_min(raid_budget_left(killedMax, raid.peasants_killed), goldRoom));
+	raid.peasants_killed += killed;
+	gold += killed;
+
+	// Goods, local pool first, 1 supply each.
+	ui64 goodsStock = (ui64)trade.market_goods + trade.export_goods;
+	ui64 goodsMax = (goodsStock + raid.goods_taken) * ia_min(params.raid_goods_percent, (ui32)100) / 100;
+	ui32 goods = (ui32)ia_min(ia_min((ui64)raid_budget_left(goodsMax, raid.goods_taken), (ui64)suppliesRoom), goodsStock);
+	ui32 fromLocal = ia_min(goods, trade.market_goods);
+	trade.market_goods -= fromLocal;
+	trade.export_goods -= goods - fromLocal;
+	raid.goods_taken += goods;
+	supplies += goods;
+}
+
+// Runs daily, before the settlement economy. Resets the settlements' daily raided totals (raided = looted yesterday), then every army raiding (RAID_RAIDING or RAID_MOVING,
+// not fleeing / travelling / raising / in an engagement) loots its target. Armies go in index order from a random start so none has a standing advantage on a shared target.
+void world_system_raid_loot(match_world_state& world)
+{
+	if (!world_is_daily_tick(world)) return;
+
+	world_entity_armies& armies = world.entities->armies;
+	world_entity_settlements& settlements = world.entities->settlements;
+
+	for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		settlement_raid& raid = settlements.raids[settlementIndex];
+		raid = { .raided = raid.looted_today };
+	}
+
+	if (armies.max_count == 0) return;
+	ui32 start = world.rand_gen.next_range<ui32>(0, armies.max_count);
+	for (ui32 step = 0; step < armies.max_count; step++)
+	{
+		ui16 armyIndex = (ui16)((start + step) % armies.max_count);
+		if (!armies.guids[armyIndex].is_valid() || armies.raising[armyIndex] || armies.engagements[armyIndex].is_valid()) continue;
+
+		const army_order& order = armies.orders[armyIndex];
+		if (order.type != ARMY_ORDER_RAID || (order.state != ARMY_ORDER_STATE_RAID_RAIDING && order.state != ARMY_ORDER_STATE_RAID_MOVING)) continue;
+		if (!world_entity_is_valid(world, order.target) || order.target.get_type() != ENTITY_TYPE::SETTLEMENT) continue;
+
+		army_loot_settlement(world, armyIndex, order.target.get_index());
+	}
 }
 
 // GO_HOME

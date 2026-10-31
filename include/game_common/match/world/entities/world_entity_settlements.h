@@ -112,6 +112,17 @@ struct settlement_trading
     ui32 trade_volume;
 };
 
+// Raiding of a settlement by armies (temporary system, see world_system_raid_loot). Zero is a valid (not raided) value.
+struct settlement_raid
+{
+    ui8 raided; // Set the day a non-fleeing army loots the settlement, cleared after a day without looting. While set: no new peasants, no territory taken.
+    ui8 looted_today; // Set by any looting today. Becomes `raided` at the next daily reset.
+    // Taken today by all armies together. Reset by the daily tick.
+    ui32 production_gold, production_supplies; // Parts of the production taken. Deducted from the production credited to the market goods.
+    ui32 peasants_killed;
+    ui32 goods_taken;
+};
+
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
@@ -177,6 +188,8 @@ struct world_entity_settlements : public world_entity_container
 	// The siege (engagement entity of kind SIEGE) this settlement is under, INVALID if none. Invariant: set exactly while such a engagement has this settlement as its main_target.
 	entity_guid*		sieges;
 
+	settlement_raid*	raids;
+
 	struct view;
 
 	// Consolidated representation of a single settlement for viewing purposes.
@@ -230,6 +243,7 @@ struct world_entity_settlements : public world_entity_container
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
 		entity_guid siege; // The siege this settlement is under, INVALID if none.
+		settlement_raid raid;
 
 		void copy_from(const view& source);
 		void copy_from(const world_entity_settlements& collection, ui16 index);
@@ -268,6 +282,7 @@ struct world_entity_settlements : public world_entity_container
         territory& territory;
         army_troop_count& troop_ceilings;
         entity_guid& siege;
+        settlement_raid& raid;
 
         inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
         inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
@@ -301,6 +316,7 @@ struct world_entity_settlements : public world_entity_container
             territory = source.territory;
             troop_ceilings = source.troop_ceilings;
             siege = source.siege;
+            raid = source.raid;
         }
 
         view(world_entity_settlements& collection, ui16 index)
@@ -328,6 +344,7 @@ struct world_entity_settlements : public world_entity_container
             , territory(collection.territories[index])
             , troop_ceilings(collection.troop_ceilings[index])
             , siege(collection.sieges[index])
+            , raid(collection.raids[index])
         {
         }
 	};
@@ -360,6 +377,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	trade_volume_max = 0;
 	troop_ceilings = source.troop_ceilings;
 	siege = source.siege;
+	raid = source.raid;
 	economy = {};
 	troop_effective_ceilings = {};
 }
@@ -392,6 +410,7 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	trade_volume_max = 0;
 	troop_ceilings = collection.troop_ceilings[index];
 	siege = collection.sieges[index];
+	raid = collection.raids[index];
 	economy = collection.economies[index];
 	troop_effective_ceilings = collection.troop_ceilings[index];
 }
@@ -471,6 +490,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(training_knights_days, troop_training[3].duration_days, GAME_DATA_PROP_TYPE::UI16)
 
 	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY_PATH(raided, raid.raided, GAME_DATA_PROP_TYPE::UI8)
 
 GAME_DATA_OBJECT_DEF_END()
 
