@@ -91,7 +91,7 @@ struct game_parameters
     ui32 order_defend_wander_radius = 12; // DEFEND_TERRITORY: the army walks to random points within this many tiles of its settlement.
     ui32 order_defend_wander_chance = 40; // Each tick it stands on its point, it picks a new one with a chance of 1 in this. At least 1.
     ui32 order_defend_threat_radius = 20; // Hostile armies in the territory or this close to the settlement count in the threat the army weighs itself against.
-    ui32 order_raid_point_radius = 8; // RAID: the army stands on a point within this many tiles of the target settlement.
+    ui32 order_raid_moving_speed_percent = 50; // RAID_MOVING: the army moves at this percent of its normal speed.
     ui32 order_raid_flee_radius = 15; // Stronger hostile armies this close make the raiding army flee...
     ui32 order_raid_return_radius = 25; // ... until none is within this radius.
     ui32 order_go_home_disband_tiles = 2; // GO_HOME: the army disbands once this close to its home settlement.

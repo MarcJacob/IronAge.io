@@ -176,7 +176,13 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
+		// A raiding army walking inside the territory is slowed (the speed is restored right after the step).
+		world_entity_movement& movement = armies.movements[armyIndex];
+		ui16 normalSpeed = movement.travel_speed;
+		if (armies.orders[armyIndex].type == ARMY_ORDER_RAID && armies.orders[armyIndex].state == ARMY_ORDER_STATE_RAID_MOVING)
+			movement.travel_speed = (ui16)((ui32)normalSpeed * GAME_PARAMETERS.order_raid_moving_speed_percent / 100);
+		world_entity_follow_path(world, movement, armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
+		movement.travel_speed = normalSpeed;
 	}
 
     world_entity_workers& workers = world.entities->workers;

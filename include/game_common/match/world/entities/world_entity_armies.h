@@ -25,8 +25,9 @@ enum ARMY_ORDER_STATE : ui8
 	ARMY_ORDER_STATE_TRAVELLING = 0, // Common: going to the order's objective area before running the order-specific logic (never movement inside it).
 	ARMY_ORDER_STATE_DEFEND_PATROL = 1, // Inside the territory, wandering and attacking intruders.
 	ARMY_ORDER_STATE_DEFEND_RETREATED = 2, // Stands on the settlement tile, fights what comes close.
-	ARMY_ORDER_STATE_RAID_RAIDING = 1, // Standing on its raid point in the target's territory.
+	ARMY_ORDER_STATE_RAID_RAIDING = 1, // Inside the target's territory, standing (raiding).
 	ARMY_ORDER_STATE_RAID_FLEEING = 2, // Running to the home settlement from stronger forces.
+	ARMY_ORDER_STATE_RAID_MOVING = 3, // Inside the target's territory, walking to a random point (raiding, slowed).
 };
 
 // An army's standing order: its type and a small fixed data buffer interpreted by the type (not every field is used by every type).
@@ -36,7 +37,7 @@ struct army_order
 	ARMY_ORDER_STATE state; // Sub-state of the type, zero when the order is given.
 	ui16 radius; // Tiles, for orders working on an area. Unused for now.
 	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY / RAID: the settlement.
-	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: the point the army is walking to.
+	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: the random point the army is wandering to inside the territory.
 	entity_guid engaged; // STATION / DEFEND_TERRITORY: the hostile entity the army is currently chasing, if any.
 	ui32 reserved;
 };

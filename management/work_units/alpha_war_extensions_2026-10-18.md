@@ -28,6 +28,7 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Order sub-states as proper enums; leash / wander radius / other tunables become game parameters.
   - Public `include/` hostility helper (world, entity guid, reference player index): hostile = owned by a different player; caravans: origin and destination entities must both be hostile.
   - Written (unbuilt, untested), awaiting user review. `order_*` params in `game_parameters.h`; `world_entity_is_hostile` in `world_entity_common.h`; `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared); `_logic` functions call `order_travel` helper. Arrival now resolves at the start of the next tick (one-tick delay).
+- P3c-A [WIP] Raid states: RAID_MOVING, territory-entry trigger, slow-move param (builder, Sonnet). Chain, user away, commits allowed (no push): A, then B (loot, carry-capacity params, daily cap, raided flag, supplies cap replaced, UI gold / supplies stock), then C (gold pool full -> auto go home + disband, homecoming deposit per `army_supplies` task 3; design doc: loot goes to treasury + home goods pool).
 - P2d AI moved to standing orders (later: campaign system). After P2c, separate builder (Sonnet).
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
   - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.

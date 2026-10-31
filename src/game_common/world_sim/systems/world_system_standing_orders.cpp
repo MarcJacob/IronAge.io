@@ -128,6 +128,28 @@ static bool order_travel(match_world_state& world, ui16 army_index, world_locati
 	return order_within_tiles(armies.locations[army_index], location, arrive_tiles);
 }
 
+// Wander inside a settlement's territory (DEFEND_TERRITORY patrol, RAID): walk to order.location. A new point (within order_defend_wander_radius of the settlement)
+// is picked at random while standing on the current one, or at once if it is not a point of the territory. Returns whether the army stands on its point.
+static bool order_wander(match_world_state& world, ui16 army_index, ui16 settlement_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+	army_order& order = armies.orders[army_index];
+	world_location settlementLocation = world.entities->settlements.locations[settlement_index];
+
+	bool pointValid = order_tile_owned_by(world, order.location, settlement_index);
+	if (!pointValid)
+	{
+		order.location = order_pick_point(world, settlement_index, settlementLocation, (i32)GAME_PARAMETERS.order_defend_wander_radius);
+	}
+	bool onPoint = order_travel(world, army_index, order.location, 0);
+	if (pointValid && onPoint && world.rand_gen.next<ui32>() % ia_max(GAME_PARAMETERS.order_defend_wander_chance, 1u) == 0)
+	{
+		order.location = order_pick_point(world, settlement_index, settlementLocation, (i32)GAME_PARAMETERS.order_defend_wander_radius);
+		onPoint = order_travel(world, army_index, order.location, 0);
+	}
+	return onPoint;
+}
+
 // STATION
 
 // Go to the order's location. Hostile armies that come within the acquire radius are chased, as long as they stay within the leash of the station point.
@@ -276,23 +298,13 @@ static void army_order_defend_logic(match_world_state& world, ui16 army_index)
 		return;
 	}
 
-	// No intruder: wander. A new point is picked at random while standing on the current one, or at once if it is not a point of the territory.
-	bool pointValid = order_tile_owned_by(world, order.location, settlementIndex);
-	if (!pointValid)
-	{
-		order.location = order_pick_point(world, settlementIndex, settlementLocation, (i32)GAME_PARAMETERS.order_defend_wander_radius);
-	}
-	bool onPoint = order_travel(world, army_index, order.location, 0);
-	if (pointValid && onPoint && world.rand_gen.next<ui32>() % ia_max(GAME_PARAMETERS.order_defend_wander_chance, 1u) == 0)
-	{
-		order.location = order_pick_point(world, settlementIndex, settlementLocation, (i32)GAME_PARAMETERS.order_defend_wander_radius);
-		order_travel(world, army_index, order.location, 0);
-	}
+	// No intruder: wander.
+	order_wander(world, army_index, settlementIndex);
 }
 
 // RAID (target = a hostile settlement)
 
-// Go to a point inside the target's territory and stay there. Flees stronger hostile armies close by (towards the home settlement) and comes back when none is near.
+// Go to the target's territory, then raid it while wandering inside. Flees stronger hostile armies close by (towards the home settlement) and comes back when none is near.
 static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 {
 	world_entity_armies& armies = world.entities->armies;
@@ -311,13 +323,13 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 	world_location targetLocation = world.entities->settlements.locations[targetIndex];
 	ui64 mine = army_total_manpower(armies.compositions[army_index]);
 
-	// TRAVELLING (walking to its raid point) flees like RAIDING does.
+	// Flees in every state but FLEEING.
 	if (order.state != ARMY_ORDER_STATE_RAID_FLEEING
 		&& order_hostile_men(world, army_index, armies.locations[army_index], (float)GAME_PARAMETERS.order_raid_flee_radius, 0xFFFF) > mine)
 		order.state = ARMY_ORDER_STATE_RAID_FLEEING;
 	else if (order.state == ARMY_ORDER_STATE_RAID_FLEEING
 		&& order_hostile_men(world, army_index, armies.locations[army_index], (float)GAME_PARAMETERS.order_raid_return_radius, 0xFFFF) == 0)
-		order.state = ARMY_ORDER_STATE_TRAVELLING; // Back to its raid point.
+		order.state = ARMY_ORDER_STATE_TRAVELLING; // Resolved below: walks back in, or resumes raiding if inside the territory.
 
 	if (order.state == ARMY_ORDER_STATE_RAID_FLEEING)
 	{
@@ -330,16 +342,18 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 		return;
 	}
 
-	// Travel to a point of the territory, then raid from it.
-	if (!order_tile_owned_by(world, order.location, targetIndex))
-		order.location = order_pick_point(world, targetIndex, targetLocation, (i32)GAME_PARAMETERS.order_raid_point_radius);
-	order.state = order_travel(world, army_index, order.location, 0) ? ARMY_ORDER_STATE_RAID_RAIDING : ARMY_ORDER_STATE_TRAVELLING;
-
-	if (order.state == ARMY_ORDER_STATE_RAID_RAIDING)
+	// Outside the territory: travel to the settlement until inside it. Inside: raiding starts, wandering the territory like a defending army does
+	// (RAID_MOVING while walking to its point, RAID_RAIDING while standing on it).
+	if (!order_tile_owned_by(world, armies.locations[army_index], targetIndex))
 	{
-		// @TODO(Marc): P3c: raid loot hook. The army standing in the target's territory takes its share of the settlement's production here.
-		// @TODO(Marc): Enemy / neutral caravans close by should be attacked too. There is no caravan attack resolution yet.
+		order.state = ARMY_ORDER_STATE_TRAVELLING;
+		order_travel(world, army_index, targetLocation, 0);
+		return;
 	}
+	order.state = order_wander(world, army_index, targetIndex) ? ARMY_ORDER_STATE_RAID_RAIDING : ARMY_ORDER_STATE_RAID_MOVING;
+
+	// @TODO(Marc): P3c: daily loot hook. Loot runs each day tick while in RAID_RAIDING or RAID_MOVING (call it here, gated on the day tick).
+	// @TODO(Marc): Enemy / neutral caravans close by should be attacked too. There is no caravan attack resolution yet.
 }
 
 // GO_HOME
