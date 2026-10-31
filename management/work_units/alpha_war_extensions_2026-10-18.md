@@ -21,15 +21,21 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 - P0 [DONE] Fixes: levy draw bug, remove dead `siege_defenders`.
 - P1 [DONE] Garrison: levy pool (see decisions), garrison joins assault battle as a side.
-- P2a Standing orders: data + Station / Attack replacing current move / attack 1:1.
-- P2b Remaining orders: Defend territory, Raid, Go home; invalid-order fallbacks; AI switched to orders.
+- P2a [DONE] Standing orders: data + Station / Attack replacing current move / attack 1:1.
+- P2b [DONE] Remaining orders: Defend territory, Raid (stub), Go home; invalid-order fallbacks; AI switched to orders.
+- P2c Orders cleanup (after survey):
+  - Single `decide` function per order type (drop separate arrive); movement boilerplate accepted.
+  - Order sub-states as proper enums; leash / wander radius / other tunables become game parameters.
+  - Public `include/` hostility helper (world, entity guid, reference player index): hostile = owned by a different player; caravans: origin and destination entities must both be hostile.
+  - Written (unbuilt, untested), awaiting user review. `order_*` params in `game_parameters.h`; `world_entity_is_hostile` in `world_entity_common.h`; `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared); `_logic` functions call `order_travel` helper. Arrival now resolves at the start of the next tick (one-tick delay).
+- P2d AI moved to standing orders (later: campaign system). After P2c, separate builder (Sonnet).
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
   - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
   - S1 [DONE] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin via world_movement_stop in movement_decision.
   - S2 [DONE] Idle BESIEGING phase, BEGIN_ASSAULT, AI assault rule, engagement client mode / panel / render (selectable, settlement-sized).
-  - S3 LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
-  - S4 SALLY_OUT, outside-battle phase, commanders.
-  - S5 Rename battle -> engagement (after P2).
+  - S3 [DONE] LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
+  - S4 [DONE] SALLY_OUT, outside-battle phase, commanders.
+  - S5 [DONE] Rename battle -> engagement.
 - P3b Battle damage / defense model.
 - P3c Raiding / looting, live off the land, supplies homecoming (absorbs `army_supplies` 3-4).
 - P4 Campaign entity (+ UI).
@@ -48,6 +54,7 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Raid: target territory; go there, raid, attack nearby enemy / neutral caravans, flee threats.
   - Go home: return to home settlement and disband.
   - Current move = Station, current attack = Attack. Move / attack commands stay as wrappers.
+- STATION / DEFEND chasing an army in a siege (joining defender side) is intended, within leash for STATION; DEFEND opposes hostile sieges of its settlement.
 - Target scans: full scan of all armies (no spatial index yet).
 - Battle: per type damage and defense. Round: each side deals up to its damage count (random min-max %), spread over armies as now, then over troop types; each type reduces damage by random 0..its total defense. No retreat / morale yet.
 - Siege (revised): separate entity. Settlement is just put under siege; no battle by default. Siege owner (commander, owner of the army that started it) can Begin Assault; settlement owner can Sally Out. Battle damage only during an assault / sally; once started by either side it lasts until resolution. Settlement joins that battle directly as a side (no temp army). Siege / starvation apply whether or not an assault is ongoing: production lost, no trading, consumption halved, no pop growth.
@@ -72,7 +79,15 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - A foreign army joins the defender side only by attacking besiegers (stationing in settlements later).
   - Rename after P2, one commit (C++ + TS + HTML); client GDO names kept until then.
 - Levy pop rules: raising a levy kills pop (becomes soldier); army levy deaths / desertion do not kill pop; garrison levy deaths do. Levy deserters and disbanded-army levies return as unemployed pop. Levy max 20% of pop, training 2%/day (min 1). Army levies pay upkeep, garrison levies don't. Garrison levies not in total_troops. Excess levies vanish on pop drop.
-- Raid: army on raid location takes up to 10% of settlement production per day, capped by 10% of its carrying capacity; excess destroyed. Loot split supplies / gold, 50% start.
+- Raid (revised, simple; likely replaced later by per-tile raiding):
+  - States: TRAVELLING = reaching raided area (initially / after fleeing); RAIDING (stationary) and RAIDING_MOVING (random moves inside raided area, same selection as Defend, slower) begin the moment the area is entered; FLEEING.
+  - Loot runs each day tick in any raiding state except FLEEING. Max potential: 1/10 production (half gold, half supplies), 1/10 peasants killed (-> gold), 1/5 stored local / export goods (-> supplies).
+  - Effective loot gated by army carrying capacity AND a per-settlement daily raided total (reset on daily tick; patchy, temporary until tile-based raiding).
+  - Carrying: separate gold and supplies pools, same size, from per-troop-type carry capacity parameters (per man: levies 10, men-at-arms 6, horsemen 20, knights 10). Replaces `army_supply_capacity_days` as the supplies capacity.
+  - RAIDING_MOVING speed multiplier is a parameter (50%). Random moves: same as Defend, in the raided settlement's territory.
+  - Several armies on one settlement: processed in army index order (small randomness factor for fairness); no queue. Not an intended case.
+  - Peasants killed -> 1 gold each. Goods -> supplies, no economic value conversion.
+  - Raided flag set on any day a non-fleeing army loots; cleared after a day without looting.
 - Live off the land stance: 15% slower; supplies from tile and troop count, logistic curve exceeding consumption (1 per soldier) under 150 men, plateau above.
 - Campaign: real entity (own logic); region = territory + settlement; Defense objective only for own territory for now. Leader army = army it was started from. Valid trade target with settlement-like profit formula, but must hold gold to pay (1:1 + scarcity), no distance bonus. 75% of garrison becomes a new campaign army; settlement in one campaign at a time; campaign army refills instantly from home while in friendly territory. Vassal / overlord forced join later. Entity limits unchanged.
 - Campaign UI: tall banner on a shaft at leader army tile, large minimum screen size. Selected: name "Campaign", objectives, member army list (inspection extra data), faint white lines to members and objectives, state, each member's order.
@@ -86,4 +101,4 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 ## Next step
 
-P0, P1, S0 done, tested, committed. S0-S2 done, tested, committed. S3, S4, P2a, P2b written (unbuilt, untested); P2b amendments applied (Raid = switch on current non-owned territory, army gold stock + UI). S5 rename written (unbuilt; stale refs left in human imprints / docs: include_match.imprint.md, game_mechanics.imprint.md, military_design.md etc.), P3b in progress, then P3c (loot, live off the land, caravan attacks, supplies homecoming; army carrying capacity value to propose). User authorized chaining all phases until the campaign (P4, exclusive): S3, S4, P2a, P2b, S5 rename, P3b, P3c, one at a time, reported after each. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).
+P0-P2b, S0-S5 done, tested, committed (stale refs to "battle" left in human imprints / docs: include_match.imprint.md, game_mechanics.imprint.md, military_design.md etc.). P3b: confirm remaining scope, then P3c (loot, live off the land, caravan attacks, supplies homecoming; army carrying capacity value to propose). User authorized chaining all phases until the campaign (P4, exclusive): S3, S4, P2a, P2b, S5 rename, P3b, P3c, one at a time, reported after each. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).

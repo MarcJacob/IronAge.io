@@ -13,7 +13,9 @@ The shape of fighting over the course of the game is this:
 
 #Projection: The military system seeks to make it difficult to send armies far away from owned / friendly territory past a certain scale. Small armies can live off the land or through raiding, while larger armies cannot only sustain themselves that way and must resupply through other means, usually by spending some of their carried gold (or a lot of raiding).
 
-#Decentralization: While it is possible to control armies directly, doing so is made intentionally tedious and prevents the use of some powerful mechanics like the Campaign system. Furthermore, groups of players are advantaged against individual players if both are of equal overall power, through hard limitations like one player = one Campaign, and one settlement = one campaign participation.
+#Decentralization: While it is possible to control armies directly, doing so is made intentionally tedious and encourages the use of some powerful mechanics like the Campaign system. Furthermore, groups of players are advantaged against individual players if both are of equal overall power, through hard limitations like one player = one Campaign, and one settlement = one campaign participation.
+
+#Indirectness: Related to #Decentralization, the precise control of armies is made intentionally difficult or even impossible for some specific operations. The point is for players to very quickly understand that micro management is not the point, but rather general positioning and playing around all the other aspects of war. When two opposing armies approach eachother, both players can be relatively certain a battle will happen unless *both* players decide to stand their ground or retreat. Furthermore, army groups / Campaigns are voluntarily made non-player-controlled in their low-level decision-making, as to give them somewhat predictable behavior both for the target players, as well as any counter-campaign(s) started in reaction.
 
 #Economic_ties: The military system is intrinsically linked to the economy and vice versa. The military is an overall weight on the world's economy, but can be used to enrich local economies through the ability to bring back loot both in the owner's treasury and the army's origin settlement goods pool.
 
@@ -35,9 +37,7 @@ The Standing Order and its parameters then determine / influence the Army's beha
 
 Any settlement can raise any number of armies. Those armies are considered to be "lone operators" and must be directed by the player. Envisioned common practice is to use this to raise a militia that defends the settlement, and small armies used for specific missions like small scale raids, or quick intervention forces.
 
-When raising an army, the player is prompted to choose the army's composition ([# Troop Types]), and optionally a start standing order (with the default being to defend the settlement and its territory). The troops are taken from the garrison.
-
-Armies can change their composition at any time while inside the settlement.
+When raising an army, the player is prompted to choose the army's composition ([# Troop Types]). The troops are taken from the garrison.
 
 ## Garrison
 
@@ -91,3 +91,26 @@ Possible objectives:
 
 It does so by assigning standing orders to armies participating in the campaign.
 
+# Raiding & Looting
+
+Raiding & Looting is one of the main ways the military directly influences the economy.
+
+In order to establish economic dominance in an area, or simply kick-start one's own economy further away, wealth can be stolen from other players, damaging them in the process and slowing down their growth.
+
+Further, any hostile activity will add a malus to the attractivity of the area for trade.
+
+In the early game, some players may wish to attempt early raiding as a source of income and as a way to slow down the growth of their immediate neighbours, while later longer-reaching expeditions can be sent to raid distant places by boat.
+
+Larger armies may also use those mechanics as a way to decrease their reliance on supply lines.
+
+## Raids
+
+Armies can be sent to Raid specific territories as a standing order. They will travel to the target, and enter a Raiding state during which they will both steal and destroy goods & gold from the local territory, as well as kill some of its peasant population, proportionate to the number of raiders and how much the surrounding tiles have been raided already (and how many are in range + their productivity). Once their carrying capacity is reached for gold, they will automatically journey home and disband, putting the goods and gold back into the economy.
+
+## Banditry
+
+Armies will, when possible and if their standing order allows it, attack enemy caravans and worker groups. Doing so they will destroy the caravan or worker entity, and get some gold and supply from it. Caravans are considered valid targets according to their origin, meaning an army might attack and despoil a caravan that was heading for the player's own territory.
+
+## Looting
+
+When conquering an enemy settlement, some proportion (based on number of attackers and some cap) of its goods, population and buildings will be taken / killed / destroyed, turning into supplies and gold (respectively), with the goods shared between victorious armies depending on their respective numbers.

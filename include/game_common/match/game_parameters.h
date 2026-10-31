@@ -84,6 +84,18 @@ struct game_parameters
     ui32 levy_max_percent = 20; // Max levies of a settlement garrison, in percent of its total population. No ceiling, no upkeep.
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
 
+    // ARMY STANDING ORDERS (distances in tiles). See world_system_standing_orders.cpp.
+    ui32 order_attack_reach_tiles = 5; // An army resolves its attack (or chase) on a target within this many tiles.
+    ui32 order_station_acquire_radius = 5; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked...
+    ui32 order_station_leash = 10; // ... as long as they are at most this far from the station point (the army returns to it afterwards).
+    ui32 order_defend_wander_radius = 12; // DEFEND_TERRITORY: the army walks to random points within this many tiles of its settlement.
+    ui32 order_defend_wander_chance = 40; // Each tick it stands on its point, it picks a new one with a chance of 1 in this. At least 1.
+    ui32 order_defend_threat_radius = 20; // Hostile armies in the territory or this close to the settlement count in the threat the army weighs itself against.
+    ui32 order_raid_point_radius = 8; // RAID: the army stands on a point within this many tiles of the target settlement.
+    ui32 order_raid_flee_radius = 15; // Stronger hostile armies this close make the raiding army flee...
+    ui32 order_raid_return_radius = 25; // ... until none is within this radius.
+    ui32 order_go_home_disband_tiles = 2; // GO_HOME: the army disbands once this close to its home settlement.
+
     // ENGAGEMENT DAMAGE. Per round a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it over its men by type; each type
     // reduces the damage aimed at it by a random 0 .. (men of that type x defense); what is left kills one man per health point set (a remainder kills one more at random, proportionally).
     ui32 engagement_damage_min_percent = 50;

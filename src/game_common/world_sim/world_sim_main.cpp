@@ -107,6 +107,19 @@ match_player_id world_entity_get_owner(const match_world_state& world, entity_gu
 	}
 }
 
+bool world_entity_is_hostile(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	if (!world_entity_is_valid(world, entity)) return false;
+
+	if (entity.get_type() == ENTITY_TYPE::CARAVAN)
+	{
+		const world_entity_caravans& caravans = world.entities->caravans;
+		return world_entity_is_hostile(world, caravans.origin_settlements[entity.get_index()], player)
+			&& world_entity_is_hostile(world, caravans.destination_settlements[entity.get_index()], player);
+	}
+	return world_entity_get_owner(world, entity) != player;
+}
+
 // MAIN LIFECYCLE FUNCTIONS
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)
@@ -221,12 +234,11 @@ void world_state_tick(match_world_state& world)
     world_system_settlement_territory_distance_recalc(world);
     world_system_settlement_territory_takeover(world); // After the distance recalc: decides from settled distances.
 
-    world_system_army_orders(world); // Before movement: sets each army's destination from its engagement or standing order.
+    world_system_army_orders(world); // Before movement: sets each army's destination from its engagement or standing order, and resolves arrivals.
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
     world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 
-    world_system_army_orders_arrival(world); // After movement: attacking armies close enough to their target resolve the attack.
     world_system_armies_raising(world);
     world_system_engagements(world);
 

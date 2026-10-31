@@ -107,5 +107,7 @@ struct army_troop_count
 bool            world_entity_is_valid(const match_world_state& world, entity_guid entity);
 world_location  world_entity_get_location(const match_world_state& world, entity_guid entity);
 match_player_id world_entity_get_owner(const match_world_state& world, entity_guid entity);
+// Whether the entity is hostile to the player. False for an invalid entity.
+bool            world_entity_is_hostile(const match_world_state& world, entity_guid entity, match_player_id player);
 
 #endif // WORLD_ENTITIES_INCLUDED

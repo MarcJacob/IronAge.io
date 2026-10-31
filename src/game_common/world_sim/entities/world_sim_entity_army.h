@@ -6,9 +6,6 @@
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_state.h"
 
-// An army reaches its attack target when within this many tiles of it.
-constexpr i32 ATTACK_REACH_TILES = 5;
-
 // Gives the army a STATION order at the location (the order system then walks it there). Does not touch its movement.
 static inline void army_order_station(world_entity_armies& armies, ui16 index, world_location location)
 {
