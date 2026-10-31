@@ -28,7 +28,7 @@ extern struct _ASSERTION_HANDLER
 #endif
 
 #else
-#define _assert_break() *((void*)NULL) = 0
+#define _assert_break() *((int*)0) = 0
 #define _assert_break_verbose(msg) _assert_break()
 #endif
 

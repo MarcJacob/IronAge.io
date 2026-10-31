@@ -15,7 +15,7 @@ typedef int i32;
 typedef short i16;
 typedef char i8;
 
-#if _WIN64
+#if _WIN64 || __LP64__
 typedef ui64 iptr;
 typedef ui64 mem_size; // Size of a memory region, in bytes.
 #else
