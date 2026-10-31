@@ -39,6 +39,8 @@ export const RENDER_CONFIG =
     // A mode may replace them (e.g. to paint all territories gray but one). Defaults: see player_color and default_outline_color.
     entity_color: ((owner: number, local_player: number): RGB => player_color(owner, local_player)),
     territory_color: ((owner: number, local_player: number, settlement_slot: number): RGB => player_color(owner, local_player)),
+    // Territory tint alpha (0..1) per settlement slot. hovered: the mouse is over that settlement's territory.
+    territory_alpha: ((owner: number, local_player: number, settlement_slot: number, hovered: boolean): number => hovered ? HOVERED_TERRITORY_ALPHA : OWNED_TERRITORY_ALPHA),
     // Entity outline color (CSS). Hook for diplomatic status: owner and local_player are given for that purpose.
     entity_outline_color: ((owner: number, local_player: number): string => default_outline_color),
     outlined_entity: null as number | null, // GUID of the entity drawn with a selection outline.
@@ -53,6 +55,8 @@ export type RGB = [number, number, number];
 const OWN_COLOR: RGB = [0, 250, 0];
 const UNKNOWN_OWNER_COLOR: RGB = [128, 128, 128];
 const default_outline_color = '#000';
+const OWNED_TERRITORY_ALPHA = 0.15;
+const HOVERED_TERRITORY_ALPHA = 0.35;
 // Color per player, indexed by player index modulo table length. No bright green: too close to OWN_COLOR.
 const PLAYER_COLORS: RGB[] = [
     [230, 25, 75], [0, 130, 200], [245, 130, 48], [145, 30, 180],
@@ -468,17 +472,21 @@ function draw_territory(render_state: Backend.RenderState)
         }
     }
 
-    // Build explicit RGBA bytes. Owned tiles use the territory color policy's color for their settlement at OWNED_ALPHA,
-    // unowned tiles remain transparent over the terrain. Tiles of the hovered settlement use HOVERED_ALPHA instead.
-    const OWNED_ALPHA = 0.15;
-    const HOVERED_ALPHA = 0.35;
+    // Alpha per settlement slot, from the territory alpha policy.
+    const slotAlphas: number[] = [];
+    for (let slot = 0; slot < settlementOwners.length; slot++)
+    {
+        slotAlphas.push(RENDER_CONFIG.territory_alpha(settlementOwners[slot], render_state.controlled_player_id, slot, slot === hoveredSettlement));
+    }
 
+    // Build explicit RGBA bytes. Owned tiles use the territory policies' color and alpha for their settlement,
+    // unowned tiles remain transparent over the terrain.
     const drawBytes = new Uint8ClampedArray(tileCount * 4);
     for (let i = 0; i < tileCount; i++)
     {
         const isOwned = (flagBytes[i] & TILE_FLAG_OWNED) !== 0;
         const ownerColor = isOwned ? slotColors[ownerSettlementBytes[i]] : UNKNOWN_OWNER_COLOR;
-        const ownedAlpha = isOwned && ownerSettlementBytes[i] === hoveredSettlement ? HOVERED_ALPHA : OWNED_ALPHA;
+        const ownedAlpha = isOwned ? slotAlphas[ownerSettlementBytes[i]] : 0;
         const pixelOffset = i * 4;
 
         drawBytes[pixelOffset] = ownerColor[0];

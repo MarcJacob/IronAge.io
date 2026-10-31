@@ -21,6 +21,9 @@ export interface TargetingPreset
 const COLOR_VALID: Render.RGB = [60, 200, 70];
 const COLOR_INVALID: Render.RGB = [130, 130, 130];
 const COLOR_HOVERED: Render.RGB = [240, 220, 40];
+const ALPHA_VALID = 0.5;
+const ALPHA_INVALID = 0.1;
+const ALPHA_HOVERED = 0.75; // Hovered valid territory only.
 
 export class TerritoryTargeting extends Core.Mode
 {
@@ -29,10 +32,16 @@ export class TerritoryTargeting extends Core.Mode
 
     private hovered_slot = -1; // Settlement slot owning the hovered tile (-1: none).
     private saved_territory_color = Render.RENDER_CONFIG.territory_color;
+    private saved_territory_alpha = Render.RENDER_CONFIG.territory_alpha;
 
     on_entry(): void
     {
         this.saved_territory_color = Render.RENDER_CONFIG.territory_color;
+        this.saved_territory_alpha = Render.RENDER_CONFIG.territory_alpha;
+        Render.RENDER_CONFIG.territory_alpha = (owner, local_player, slot) => {
+            if (!this.is_valid_owner(owner, local_player)) return ALPHA_INVALID;
+            return slot === this.hovered_slot ? ALPHA_HOVERED : ALPHA_VALID;
+        };
         Render.RENDER_CONFIG.territory_color = (owner, local_player, slot) => {
             if (!this.is_valid_owner(owner, local_player)) return COLOR_INVALID;
             return slot === this.hovered_slot ? COLOR_HOVERED : COLOR_VALID;
@@ -42,6 +51,7 @@ export class TerritoryTargeting extends Core.Mode
     on_exit(): void
     {
         Render.RENDER_CONFIG.territory_color = this.saved_territory_color;
+        Render.RENDER_CONFIG.territory_alpha = this.saved_territory_alpha;
     }
 
     on_frame_update(delta_time_s: number): void
