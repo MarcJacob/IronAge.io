@@ -76,5 +76,5 @@ Entities are built by composition in the match's *world state* structure using r
 Their logic depends both on their properties and their specific type. The match code follows a specific update loop which has the responsibility of applying
 deterministic behavior on all entities according to their current state.
 
-Note that the scope of entities can be much larger than "things" in the world, they can also be concepts or events: battles, area effects...
+Note that the scope of entities can be much larger than "things" in the world, they can also be concepts or events: engagements, area effects...
 Their only common denominator is that they are separate from the static state of the world, and interactive / relevant to the match simulation.

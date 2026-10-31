@@ -13,6 +13,10 @@ How the TypeScript of the web client is organized. See *../front.imprint.md* for
 - *core.ts* holds the shared basics: frame loop, match joined / ended callbacks, message sending, and the Mode system (below).
 - *modes/* decides what the player sees and can do at any moment. See below.
 - *render.ts* draws the match from the backend's render state and a configuration object. It never decides what to show.
+  It orchestrates the entity modules: loops, visibility, hit-testing, army grouping and draw order stay in it.
+- *entities/* holds one leaf module per entity type (settlement, army, caravan, worker, engagement). Each gives a *<TYPE>_RENDER_CONFIG* where it has tunables,
+  a *<type>_screen_size* and a *draw_<type>* for ONE entity, from the shared *EntityRenderEnv* (*entities/entity_render_env.ts*).
+  They never import *render.ts* at runtime (types only), and they never loop over entities: *render.ts* decides what to draw and when.
 - *ui/* holds the interface, one module per major element (*ui_element_<name>.ts*). Static markup lives in *web/index.html* (one page for the whole flow: login, lobby list, lobby, match).
   A module is the bridge between its own static DOM elements, found once when it initializes, and the logic of the modes. Nothing is generic or data-driven:
   every field is a static element the module shows, hides and fills. Only genuine lists are built in code, from a template element.
@@ -71,6 +75,7 @@ frame update, click, context menu, key down, escape, net message.
 *RENDER_CONFIG* in *render.ts* is a plain object modes mutate: which layers and entity types are drawn, ownership tint,
 the outlined entity, the path preview, overlay dots. Defaults draw the full game view. Add a field there when a mode needs a new way to
 change the picture, instead of letting *render.ts* read mode or input state.
+Per-type defaults live in each *entities/* module and are spread into *RENDER_CONFIG*.
 
 ## Practical notes
 

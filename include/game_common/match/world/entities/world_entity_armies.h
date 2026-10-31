@@ -12,7 +12,8 @@
 enum ARMY_ORDER_TYPE : ui8
 {
 	ARMY_ORDER_STATION = 0, // Go to the order's location and stand there.
-	ARMY_ORDER_ATTACK, // Chase the order's target entity, then start / join an engagement (a siege for a settlement) once close enough.
+	ARMY_ORDER_ATTACK, // Chase the order's target entity (settlement, army or engagement), then start / join an engagement (a siege for a settlement) once close enough. The order goes on after the engagement.
+	                   // A target army inside an engagement stands for that engagement (the order's location is then the engagement's); a neutral one is not joined, the army waits next to it.
 	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: wander in its territory, attack intruders, retreat to the settlement from stronger forces.
 	ARMY_ORDER_RAID, // Target = a hostile settlement: go to its territory, stay there, flee stronger forces.
 	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
@@ -236,7 +237,7 @@ const army_troop_count& army_supply_basis(const match_world_state& world, ui16 a
 // What the army carries at most in each pool (supplies and gold, separate): its men x per-type carry capacity (GAME_PARAMETERS.carry_*), on its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index);
 
-// A engagement between two sides of armies. A engagement is never targeted: armies join by targeting an army (or a besieged settlement). Fixed size: it doesn't know which armies are in it, armies point to it instead.
+// A engagement between two sides of armies. Free armies close enough join it by themselves (engagement_join_radius), or by an ATTACK order targeting it, a member army or the besieged settlement. Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_engagements : public world_entity_container
 {
 	static constexpr ui8 UNIT_TYPES = 4; // Army unit types, in comp order: levies, men at arms, horsemen, knights.
@@ -279,6 +280,8 @@ struct world_entity_engagements : public world_entity_container
 		side_state attacker;
 		side_state defender;
 		ui32 duration; // Rounds since the engagement started (one round every ENGAGEMENT_TICK_INTERVAL ticks).
+		ui8 join_radius; // Tiles. Not stored in the world: filled by world_entity_query_engagement (engagement_join_radius) for viewers.
+		ui8 viewer_status; // PLAYER_DIPLOMATIC_STATUS of the engagement for the viewing player (engagement_diplomatic_status). Not stored either: filled by the query.
 
 		inline side_state& side(ui8 side_index) { return side_index == SIDE_ATTACKER ? attacker : defender; }
 		inline const side_state& side(ui8 side_index) const { return side_index == SIDE_ATTACKER ? attacker : defender; }
@@ -333,8 +336,11 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_engagement)
 	GAME_DATA_PROPERTY_PATH(defender_damage, defender.damage, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY_PATH(defender_commander, defender.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
 	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(join_radius, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(viewer_status, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
-bool world_entity_query_engagement(const match_world_state& world, entity_guid entity, world_entity_engagement& out_state);
+// viewer: the player looking at the engagement (fills viewer_status).
+bool world_entity_query_engagement(const match_world_state& world, entity_guid entity, match_player_id viewer, world_entity_engagement& out_state);
 
 #endif // WORLD_ENTITY_ARMIES_INCLUDED

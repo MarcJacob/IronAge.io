@@ -112,6 +112,14 @@ export enum ENGAGEMENT_KIND
     SIEGE = 1,
 };
 
+// Mirrors PLAYER_DIPLOMATIC_STATUS (include/game_common/match/world/entities/world_entity_common.h), the engagement GDO's viewer_status. Update here if it changes.
+export enum DIPLOMATIC_STATUS
+{
+    NEUTRAL = 0,
+    FRIENDLY = 1,
+    HOSTILE = 2,
+}
+
 // Mirrors WORK_TYPE (include/game_common/match/world/world_entities.h), the worker GDO's work_type. Update here if the enum changes.
 export enum WORK_TYPE
 {

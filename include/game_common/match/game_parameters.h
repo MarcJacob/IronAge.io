@@ -96,6 +96,11 @@ struct game_parameters
     ui32 order_raid_return_radius = 25; // ... until none is within this radius.
     ui32 order_go_home_disband_tiles = 2; // GO_HOME: the army disbands once this close to its home settlement.
 
+    // ENGAGEMENT JOINING. An army not in an engagement within the join radius of one that is not neutral to its owner joins it (see engagement_join_radius).
+    // Radius = base tiles + 1 per power of 2 of the troops involved above the threshold (threshold x 2 -> +1, x 4 -> +2...). Sieges do not count the men inside the settlement.
+    ui32 engagement_join_base_tiles = 2;
+    ui32 engagement_join_troops_threshold = 256; // At least 1.
+
     // ENGAGEMENT DAMAGE. Per round a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it over its men by type; each type
     // reduces the damage aimed at it by a random 0 .. (men of that type x defense); what is left kills one man per health point set (a remainder kills one more at random, proportionally).
     ui32 engagement_damage_min_percent = 50;
@@ -181,6 +186,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(levy_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_training_per_mille, GAME_DATA_PROP_TYPE::UI32)
 
+    GAME_DATA_PROPERTY(engagement_join_base_tiles, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(engagement_join_troops_threshold, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(engagement_damage_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(engagement_damage_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(damage_levy, GAME_DATA_PROP_TYPE::UI32)

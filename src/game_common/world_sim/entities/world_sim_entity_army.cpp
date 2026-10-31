@@ -59,7 +59,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 	army_troop_count men = world.entities->armies.compositions[army.get_index()];
 
-	// Levies become peasants again, the other types rejoin the local troops (home).
+	// Levies return as unemployed population (settlement_release_raised), the other types rejoin the local troops (home).
 	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
 	{
 		settlement_release_raised(world, settlement.get_index(), troopType, troop_count_field(men, troopType));

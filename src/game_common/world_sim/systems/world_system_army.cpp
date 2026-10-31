@@ -25,11 +25,11 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 	{
 		if (settlements.owners[targetIndex] == attackerOwner) break;
 
-		// Join the siege of this settlement if there is one.
+		// Join the siege of this settlement if there is one (and it is joinable for the attacker, see army_engagement_try_join).
 		entity_guid siege = settlements.sieges[targetIndex];
 		if (world_entity_is_valid(world, siege))
 		{
-			army_engagement_join(world, siege, attacker, world_entity_engagements::SIDE_ATTACKER);
+			army_engagement_try_join(world, siege, attacker);
 			return;
 		}
 
@@ -59,16 +59,8 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 		entity_guid engagement = armies.engagements[targetIndex];
 		if (engagement.is_valid())
 		{
-			// The target is already fighting: join its engagement on the side against it.
-			army_engagement_join(world, engagement, attacker, world_entity_engagements::opposite_side(armies.engagement_sides[targetIndex]));
-
-			// Attacking the besiegers of an idle siege from outside turns it into an outside clash (the attacker just joined the defender side).
-			world_entity_engagements::state& joined = world.entities->engagements.states[engagement.get_index()];
-			if (joined.kind == world_entity_engagements::KIND_SIEGE && joined.phase == world_entity_engagements::PHASE_BESIEGING)
-			{
-				joined.phase = world_entity_engagements::PHASE_OUTSIDE;
-				joined.phase_tick = world.age;
-			}
+			// The target is part of an engagement: same as reaching the engagement (joined if joinable, on the attacker's own side, see army_engagement_try_join).
+			army_engagement_try_join(world, engagement, attacker);
 		}
 		else
 		{
@@ -86,6 +78,9 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 		}
 		break;
 	}
+	case ENTITY_TYPE::ENGAGEMENT:
+		army_engagement_try_join(world, target, attacker);
+		break;
 	default:
 		break;
 	}

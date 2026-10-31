@@ -107,29 +107,27 @@ match_player_id world_entity_get_owner(const match_world_state& world, entity_gu
 	}
 }
 
-bool world_entity_is_hostile(const match_world_state& world, entity_guid entity, match_player_id player)
+// Stub until diplomacy: friendly = the same player, hostile = any other, neutral = never.
+PLAYER_DIPLOMATIC_STATUS world_player_get_diplomatic_status(const match_world_state& world, match_player_id player, match_player_id other_player)
 {
-	if (!world_entity_is_valid(world, entity)) return false;
+	return other_player == player ? PLAYER_DIPLOMATIC_STATUS_FRIENDLY : PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+}
+
+PLAYER_DIPLOMATIC_STATUS world_entity_get_diplomatic_status(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	if (!world_entity_is_valid(world, entity)) return PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
 
 	if (entity.get_type() == ENTITY_TYPE::CARAVAN)
 	{
+		// Hostile only if both ends are. Otherwise the origin's status, except a hostile origin with a non-hostile destination: neutral (not hostile, not friendly).
 		const world_entity_caravans& caravans = world.entities->caravans;
-		return world_entity_is_hostile(world, caravans.origin_settlements[entity.get_index()], player)
-			&& world_entity_is_hostile(world, caravans.destination_settlements[entity.get_index()], player);
+		PLAYER_DIPLOMATIC_STATUS origin = world_entity_get_diplomatic_status(world, caravans.origin_settlements[entity.get_index()], player);
+		if (origin != PLAYER_DIPLOMATIC_STATUS_HOSTILE) return origin;
+		bool destinationHostile = world_entity_get_diplomatic_status(world, caravans.destination_settlements[entity.get_index()], player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+		return destinationHostile ? PLAYER_DIPLOMATIC_STATUS_HOSTILE : PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
 	}
-	return world_entity_get_owner(world, entity) != player;
-}
-
-// Stub: friendly = owned by the same player (no alliances yet).
-bool world_entity_is_friendly(const match_world_state& world, entity_guid entity, match_player_id player)
-{
-	return world_entity_is_valid(world, entity) && world_entity_get_owner(world, entity) == player;
-}
-
-// Stub: there is no neutral concept yet.
-bool world_entity_is_neutral(const match_world_state& world, entity_guid entity)
-{
-	return false;
+	if (entity.get_type() == ENTITY_TYPE::ENGAGEMENT) return engagement_diplomatic_status(world, entity, player);
+	return world_player_get_diplomatic_status(world, player, world_entity_get_owner(world, entity));
 }
 
 // MAIN LIFECYCLE FUNCTIONS
@@ -253,6 +251,7 @@ void world_state_tick(match_world_state& world)
     world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 
     world_system_armies_raising(world);
+    world_system_engagement_auto_join(world); // After movement: armies close enough to an engagement join it.
     world_system_engagements(world);
 
     world_update_player_stats(world);

@@ -760,7 +760,7 @@ void command_begin_assault_apply(match_world_state& world, match_player_id playe
 static bool command_is_military_target(const match_world_state& world, entity_guid target, match_player_id player)
 {
 	return world_entity_is_valid(world, target) && target.get_type() == ENTITY_TYPE::SETTLEMENT
-		&& (world_entity_is_hostile(world, target, player) || world_entity_is_neutral(world, target));
+		&& (world_entity_is_hostile(world, target, player) || world_entity_is_neutral(world, target, player));
 }
 
 bool command_set_army_order_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
@@ -789,8 +789,12 @@ bool command_set_army_order_validity_check(const match_world_state& world, match
 			&& command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
 		break;
 	case ARMY_ORDER_ATTACK:
-		// Same targets as SET_ENTITY_ATTACK_TARGET: settlements and armies of other players.
-		if (world_entity_is_valid(world, command.target) && command.target.get_type() == ENTITY_TYPE::ARMY)
+		// Settlements (hostile or neutral), armies of other players, and engagements (any: a neutral one is not joined, the army waits next to it).
+		if (world_entity_is_valid(world, command.target) && command.target.get_type() == ENTITY_TYPE::ENGAGEMENT)
+		{
+			// Valid whatever its relation to the player.
+		}
+		else if (world_entity_is_valid(world, command.target) && command.target.get_type() == ENTITY_TYPE::ARMY)
 		{
 			if (entities.armies.owners[command.target.get_index()] == player && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 		}
@@ -927,6 +931,10 @@ bool command_withdraw_army_validity_check(const match_world_state& world, match_
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
+	// Withdrawing is disabled for now (a withdrawn army would rejoin by proximity): refused for any army in an engagement, and so for every army below.
+	// @TODO: re-enable together with a way for a withdrawn army not to rejoin at once. The checks below are kept for that.
+	if (armies.engagements[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	// The army must be in a siege that is only besieging (any side). Field engagements and fighting sieges are refused.
 	entity_guid engagement = armies.engagements[armyIndex];

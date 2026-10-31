@@ -169,6 +169,14 @@ export class ArmySelected extends Core.Mode
         const localPlayerId = get_local_player_id();
         if (localPlayerId === null) return true;
 
+        // An engagement under the cursor: attack it (the army joins it if it can, or waits next to it).
+        const ownGuid = Render.pick_entity_at(event.clientX, event.clientY, null, null);
+        if (ownGuid !== null && (ownGuid & 0xFF) === Backend.ENTITY_TYPE.ENGAGEMENT)
+        {
+            send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.ATTACK, target: ownGuid });
+            return true;
+        }
+
         const targetGuid = Render.pick_entity_at(event.clientX, event.clientY, this.army_guid, localPlayerId);
         if (targetGuid !== null)
         {
@@ -176,7 +184,6 @@ export class ArmySelected extends Core.Mode
             return true;
         }
 
-        const ownGuid = Render.pick_entity_at(event.clientX, event.clientY, null, null);
         if (ownGuid !== null && is_own_settlement(query_entity(ownGuid)))
         {
             send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.DEFEND_TERRITORY, target: ownGuid });

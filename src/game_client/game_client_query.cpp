@@ -95,9 +95,9 @@ world_player_state game_client_query_controlled_player_state(game_client& backen
 
 // Fills a GDO of the given type from the entity's single state (read by the given query function) and copies it into the buffer.
 // Returns the size written, or 0 if the query failed or the GDO does not fit.
-template<typename GdoType>
-static ui32 fill_entity_gdo(const match_world_state& world, entity_guid entity,
-	bool (*query_state)(const match_world_state&, entity_guid, decltype(GdoType::_data)&), ui8* out_buffer, ui32 buffer_size)
+// query_state is any callable (world, entity, out state): a plain query function, or a lambda binding extra inputs such as the viewing player.
+template<typename GdoType, typename QueryFn>
+static ui32 fill_entity_gdo(const match_world_state& world, entity_guid entity, QueryFn query_state, ui8* out_buffer, ui32 buffer_size)
 {
 	if (sizeof(GdoType) > buffer_size) return 0;
 
@@ -123,7 +123,13 @@ ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8*
 	case ENTITY_TYPE::ARMY: return fill_entity_gdo<gdo_world_entity_army>(world, entity, world_entity_query_army, out_buffer, buffer_size);
 	case ENTITY_TYPE::WORKER: return fill_entity_gdo<gdo_world_entity_worker>(world, entity, world_entity_query_worker, out_buffer, buffer_size);
 	case ENTITY_TYPE::CARAVAN: return fill_entity_gdo<gdo_world_entity_caravan>(world, entity, world_entity_query_caravan, out_buffer, buffer_size);
-	case ENTITY_TYPE::ENGAGEMENT: return fill_entity_gdo<gdo_world_entity_engagement>(world, entity, world_entity_query_engagement, out_buffer, buffer_size);
+	case ENTITY_TYPE::ENGAGEMENT:
+	{
+		// The engagement's diplomatic status is relative to the controlled player.
+		match_player_id viewer = backend.controlled_player_id;
+		auto query = [viewer](const match_world_state& w, entity_guid e, world_entity_engagement& out) { return world_entity_query_engagement(w, e, viewer, out); };
+		return fill_entity_gdo<gdo_world_entity_engagement>(world, entity, query, out_buffer, buffer_size);
+	}
 	default: return 0;
 	}
 }

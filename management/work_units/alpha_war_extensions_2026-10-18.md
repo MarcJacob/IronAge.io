@@ -26,16 +26,16 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 - P2c Orders cleanup (after survey):
   - Single `decide` function per order type (drop separate arrive); movement boilerplate accepted.
   - Order sub-states as proper enums; leash / wander radius / other tunables become game parameters.
-  - Public `include/` hostility helper (world, entity guid, reference player index): hostile = owned by a different player; caravans: origin and destination entities must both be hostile.
-  - Written (unbuilt, untested), awaiting user review. `order_*` params in `game_parameters.h`; `world_entity_is_hostile` in `world_entity_common.h`; `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared); `_logic` functions call `order_travel` helper. Arrival now resolves at the start of the next tick (one-tick delay).
+  - Diplomatic status helpers (see P3d for the final API): hostile = owned by a different player; caravans: origin and destination must both be hostile.
+  - Written (unbuilt, untested), awaiting user review. `order_*` params in `game_parameters.h`; `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared); `_logic` functions call `order_travel` helper. Arrival now resolves at the start of the next tick (one-tick delay).
 - P3c Raiding (user away, chained, commits allowed, no push; all unbuilt / untested until user returns):
   - A [DONE, f4e6942] Raid states: RAID_MOVING, territory-entry trigger, slow-move param.
   - B [DONE, 2419fb8] Loot, carry-capacity params (replace supplies days cap), daily cap on settlement, raided flag, UI stock. Loot runs before economy daily tick on last day's production.
   - C [DONE] Gold pool full (checked after the daily loot) -> auto GO_HOME + disband; deposit in `world_disband_army` (all callers): gold to treasury, supplies split by `homecoming_settlement_goods_percent` (50, placeholder) between home market goods and treasury. Replaces `army_supplies` task 3 (army-to-army looting still open). Manual disband now also deposits supplies.
-  - D [WIP] Targeted orders (user played, raid works): Raid takes a target settlement from the command (army anywhere). One client territory-targeting mode with presets Defend / Attack / Raid: territories green (valid) / grey / yellow (hovered), mode left only by hotkey again, right click or Escape; numeric hotkeys. Defend valid = friendly territories; Attack / Raid valid = hostile or neutral. Station and non-settlement attacks stay contextual (right click); Go home keeps its button. Stub helpers `world_entity_is_friendly` / `world_entity_is_neutral` next to `world_entity_is_hostile`.
+  - D [DONE, unbuilt / untested] Targeted orders (user played, raid works): Raid takes a target settlement from the command (army anywhere). One client territory-targeting mode with presets Defend / Attack / Raid: territories green (valid) / grey / yellow (hovered), mode left only by hotkey again, right click or Escape; numeric hotkeys. Defend valid = friendly territories; Attack / Raid valid = hostile or neutral. Station and non-settlement attacks stay contextual (right click); Go home keeps its button. Friendly / neutral are stubs behind the diplomatic status helpers.
   - Not in chain: caravan attacks, conquest looting, trade malus, army-to-army looting.
-  - Check on return: supplies capacity per man is now 20 / 3 / 2 / 1/3 days of own consumption (user expected 10 / 2 / 5 / 1 days): upkeep rates differ from the numbers assumed; knights-only armies outside territory starve within a day. `game_mechanics.imprint.md` line 64 still mentions `army_supply_capacity_days` (human imprint, stale).
-- P2d AI moved to standing orders (later: campaign system). After P2c, separate builder (Sonnet).
+  - Check on return: supplies capacity per man is now 20 / 3 / 2 / 1/3 days of own consumption (user expected 10 / 2 / 5 / 1 days): upkeep rates differ from the numbers assumed; knights-only armies outside territory starve within a day. Tune carry values or upkeep if needed.
+- P2d [DONE, unbuilt / untested] AI moved to standing orders (later: campaign system). After P2c, separate builder (Sonnet).
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
   - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
   - S1 [DONE] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin via world_movement_stop in movement_decision.
@@ -45,6 +45,30 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - S5 [DONE] Rename battle -> engagement.
 - P3b Battle damage / defense model.
 - P3c Raiding / looting, live off the land, supplies homecoming (absorbs `army_supplies` 3-4).
+- P3d Stacked armies (AI campaigns pile armies on one tile: hidden, only one engages). Not designed in detail yet; multi-file architecture changes, flag before building:
+  - Render grouping: entities (armies first, maybe all) too close to each other join a render "group", drawn as a whole with members shown separately (row) and their own numbers.
+  - Engagement joining rework:
+    - Joining is automatic: an army standing too close to an engagement joins it (joining = going there). No more willing join by attacking a member army.
+    - Armies cannot target armies that are part of an engagement; the engagement itself is the target.
+    - Engagement relation to a player: friendly (attackers are on my side), hostile (attackers hostile to me), neutral (attackers and defenders both neutral / hostile to me). Armies auto-join the correct side when friendly / hostile; never join a neutral one (for now).
+    - Also fixes groups of small armies being hard to stop.
+    - Join radius: 2 tiles minimum, +1 tile per power of 2 of total troops involved above 256 (512 -> +1, 1024 -> +2...). Sieges: count only troops not inside the settlement (for now: everything but the garrison).
+    - Joining keeps the army's standing order and resumes it afterwards.
+    - Render grouping starts with armies only; design so other entity types can use it.
+    - Plan: builder A = sim (engagement joining rework), then builder B = client render grouping.
+    - A [written, unbuilt / untested]: auto-join system, params `engagement_join_base_tiles` / `engagement_join_troops_threshold`, hostility helpers accept engagements, ATTACK targets engagements (neutral engagement = wait at radius edge), right click on engagement.
+      - Relation: `PLAYER_DIPLOMATIC_STATUS` (NEUTRAL = 0, FRIENDLY, HOSTILE). `world_player_get_diplomatic_status` (stub diplomacy), `world_entity_get_diplomatic_status`, `engagement_diplomatic_status`; bool entity helpers are inline wrappers. Engagement: better side (friendly > neutral > hostile) joined; equal sides = NEUTRAL, not joined; FRIENDLY = join attackers, HOSTILE = join defenders (side inferred from status).
+      - WITHDRAW_ARMY disabled for engaged armies (WRONG_PHASE; button gone); re-add properly later. `left_engagement` removed. LIFT_SIEGE stays.
+      - Open: `SET_ENTITY_ATTACK_TARGET` wrapper still refuses engagements.
+    - B [written, unbuilt / untested]: client army render grouping in `render.ts` (`group_by_proximity` helper, `RENDER_CONFIG.army_group_radius` 2 tiles, row layout, per-army count, hit-test at displayed position). Engaged and hidden armies not grouped; path preview / highlights use true positions.
+    - Disband: levies return as unemployed pop, not peasants (code comment in `world_disband_army` says peasants: check / fix).
+- P3e Engagement rendering (client):
+  - Now: join radius circle [DONE, unbuilt]; icon colored by status to the local player (red hostile, gray neutral, blue friendly), icon scaled to match the circle; engagement rendering isolated in its own client module to prepare the rest.
+  - Client entity rendering modularized: one module per entity type in `front/src/entities/` (engagement first, then army, settlement, caravan, worker...). `render.ts` stays the orchestrator (army grouping stays there and spawns per-army rendering as needed), modules draw one entity each. Written, unbuilt / untested: engagement, settlement, army, caravan (+ ship), worker modules and shared `EntityRenderEnv`; layout note in `front/src/.ai_imprint/entities_folder.md`. Delete stub `front/src/render_engagement.ts` (user). Suggested lines for `front_src.imprint.md` (human) pending.
+  - Vision (not planned yet): armies inside shown moving around playing a fighting animation, decorrelated from their map location (which is set to the engagement's location). Real information lives on the engagement only:
+    - Symbol + join circle (current).
+    - Top bar: strength breakdown of the two sides, colored by status to the player (no longer fixed red attackers / blue defenders).
+    - Left side bar: attacker armies and their individual statuses; right side bar: same for defenders; bottom: armies physically inside but not involved / withdrawing.
 - P4 Campaign entity (+ UI).
 - P5 Campaign AI, replacing `match_ai` pseudo-campaign.
 

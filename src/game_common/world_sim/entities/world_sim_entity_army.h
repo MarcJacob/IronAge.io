@@ -101,5 +101,7 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES]);
 
 void army_engagement_join(match_world_state& world, entity_guid engagement, entity_guid army, ui8 side);
+// Joins the army to the engagement on its owner's side if the engagement is joinable for them (not neutral). Returns whether it joined. Same outcome for the proximity join and attacks.
+bool army_engagement_try_join(match_world_state& world, entity_guid engagement, entity_guid army);
 
 #endif // WORLD_SIM_ARMY_INCLUDED

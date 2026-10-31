@@ -26,12 +26,63 @@ void army_engagement_join(match_world_state& world, entity_guid engagement, enti
 
 	armies.engagements[armyIndex] = engagement;
 	armies.engagement_sides[armyIndex] = side;
-	// The army's order goes on after the engagement (it is not worked on while pinned). An attack is over: the army stays at the engagement.
+	// The army's order is kept and goes on after the engagement (it is not worked on while pinned).
 	armies.orders[armyIndex].engaged = INVALID_ENTITY_GUID;
-	if (armies.orders[armyIndex].type == ARMY_ORDER_ATTACK)
-		army_order_station(armies, armyIndex, world.entities->engagements.states[engagement.get_index()].location);
 	world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
 	world_engagement_update_commanders(world, engagement);
+}
+
+// Joins the army to the engagement if it is joinable for its owner: not neutral to them, on the better side for them (see engagement_diplomatic_status).
+// Used by the proximity join and by attack resolution against an engagement or one of its members. Returns whether the army joined.
+// In a siege, armies standing on the settlement tile (inside) stay out of the defender side. A besieging siege joined by its defenders from outside becomes an outside clash.
+bool army_engagement_try_join(match_world_state& world, entity_guid engagement, entity_guid army)
+{
+	world_entity_armies& armies = world.entities->armies;
+	ui16 armyIndex = army.get_index();
+	if (!world_entity_is_valid(world, engagement) || engagement.get_type() != ENTITY_TYPE::ENGAGEMENT) return false;
+	if (armies.engagements[armyIndex].is_valid() || armies.raising[armyIndex] || army_total_manpower(armies.compositions[armyIndex]) == 0) return false;
+
+	match_player_id owner = armies.owners[armyIndex];
+	PLAYER_DIPLOMATIC_STATUS status = engagement_diplomatic_status(world, engagement, owner);
+	if (status == PLAYER_DIPLOMATIC_STATUS_NEUTRAL) return false;
+
+	world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	// Friendly = join the attackers, hostile = join the defenders.
+	ui8 side = status == PLAYER_DIPLOMATIC_STATUS_FRIENDLY ? world_entity_engagements::SIDE_ATTACKER : world_entity_engagements::SIDE_DEFENDER;
+
+	bool siege = state.kind == world_entity_engagements::KIND_SIEGE;
+	if (siege && side == world_entity_engagements::SIDE_DEFENDER && world_entity_is_valid(world, state.main_target)
+		&& armies.locations[armyIndex] == world.entities->settlements.locations[state.main_target.get_index()]) return false;
+
+	army_engagement_join(world, engagement, army, side);
+	if (siege && side == world_entity_engagements::SIDE_DEFENDER && state.phase == world_entity_engagements::PHASE_BESIEGING)
+	{
+		state.phase = world_entity_engagements::PHASE_OUTSIDE;
+		state.phase_tick = world.age;
+	}
+	return true;
+}
+
+// Every tick: armies that are free (not in an engagement, not raising) within the join radius of an engagement join it, if it is joinable for them.
+void world_system_engagement_auto_join(match_world_state& world)
+{
+	world_entity_engagements& engagements = world.entities->engagements;
+	world_entity_armies& armies = world.entities->armies;
+
+	for (ui32 engagementIndex = 0; engagementIndex < engagements.max_count; engagementIndex++)
+	{
+		entity_guid engagement = engagements.guids[engagementIndex];
+		if (!engagement.is_valid()) continue;
+
+		float radius = (float)engagement_join_radius(world, engagement);
+		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+		{
+			if (!armies.guids[armyIndex].is_valid() || armies.engagements[armyIndex].is_valid()) continue;
+			if (vec2_dist_squared(armies.locations[armyIndex], engagements.states[engagementIndex].location) > radius * radius) continue;
+
+			army_engagement_try_join(world, engagement, armies.guids[armyIndex]);
+		}
+	}
 }
 
 // Engagements resolve one round every this many world ticks (1 = every tick). Engagement duration counts rounds.

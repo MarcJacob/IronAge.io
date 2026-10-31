@@ -107,10 +107,31 @@ struct army_troop_count
 bool            world_entity_is_valid(const match_world_state& world, entity_guid entity);
 world_location  world_entity_get_location(const match_world_state& world, entity_guid entity);
 match_player_id world_entity_get_owner(const match_world_state& world, entity_guid entity);
-// Whether the entity is hostile to the player. False for an invalid entity.
-bool            world_entity_is_hostile(const match_world_state& world, entity_guid entity, match_player_id player);
-// Stubs for now: friendly = owned by the same player, neutral = never.
-bool            world_entity_is_friendly(const match_world_state& world, entity_guid entity, match_player_id player);
-bool            world_entity_is_neutral(const match_world_state& world, entity_guid entity);
+// Diplomatic status of something relative to a player. Zero (NEUTRAL) is the default / "no relation known".
+enum PLAYER_DIPLOMATIC_STATUS : ui8
+{
+	PLAYER_DIPLOMATIC_STATUS_NEUTRAL = 0,
+	PLAYER_DIPLOMATIC_STATUS_FRIENDLY,
+	PLAYER_DIPLOMATIC_STATUS_HOSTILE,
+};
+
+// Status of other_player relative to player. The one place diplomacy will change: stub for now, friendly = the same player, hostile = any other, neutral = never.
+PLAYER_DIPLOMATIC_STATUS world_player_get_diplomatic_status(const match_world_state& world, match_player_id player, match_player_id other_player);
+// Status of an entity relative to a player. NEUTRAL for an invalid entity. An entity's status is its owner's (unowned = hostile), except:
+// a caravan is hostile only if both its origin and destination are; for an ENGAGEMENT see engagement_diplomatic_status.
+PLAYER_DIPLOMATIC_STATUS world_entity_get_diplomatic_status(const match_world_state& world, entity_guid entity, match_player_id player);
+// Bool wrappers over the status. All false for an invalid entity.
+inline bool     world_entity_is_hostile(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	return world_entity_is_valid(world, entity) && world_entity_get_diplomatic_status(world, entity, player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+}
+inline bool     world_entity_is_friendly(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	return world_entity_is_valid(world, entity) && world_entity_get_diplomatic_status(world, entity, player) == PLAYER_DIPLOMATIC_STATUS_FRIENDLY;
+}
+inline bool     world_entity_is_neutral(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	return world_entity_is_valid(world, entity) && world_entity_get_diplomatic_status(world, entity, player) == PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
+}
 
 #endif // WORLD_ENTITIES_INCLUDED

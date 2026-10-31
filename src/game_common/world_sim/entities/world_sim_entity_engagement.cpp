@@ -125,13 +125,50 @@ void world_engagement_army_left(match_world_state& world, entity_guid engagement
 	world_engagement_update_commanders(world, engagement); // Does nothing if the engagement just ended.
 }
 
-bool world_entity_query_engagement(const match_world_state& world, entity_guid entity, world_entity_engagements::single& out_state)
+PLAYER_DIPLOMATIC_STATUS engagement_diplomatic_status(const match_world_state& world, entity_guid engagement, match_player_id player)
+{
+	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+
+	// Rating of each side for the player: 2 friendly, 1 neutral, 0 hostile.
+	ui8 rating[2];
+	for (ui8 side = world_entity_engagements::SIDE_ATTACKER; side <= world_entity_engagements::SIDE_DEFENDER; side++)
+	{
+		PLAYER_DIPLOMATIC_STATUS commanderStatus = world_player_get_diplomatic_status(world, player, state.side(side).commander);
+		rating[side] = commanderStatus == PLAYER_DIPLOMATIC_STATUS_FRIENDLY ? 2 : (commanderStatus == PLAYER_DIPLOMATIC_STATUS_HOSTILE ? 0 : 1);
+	}
+
+	if (rating[world_entity_engagements::SIDE_ATTACKER] == rating[world_entity_engagements::SIDE_DEFENDER]) return PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
+	return rating[world_entity_engagements::SIDE_ATTACKER] > rating[world_entity_engagements::SIDE_DEFENDER] ? PLAYER_DIPLOMATIC_STATUS_FRIENDLY : PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+}
+
+ui32 engagement_join_radius(const match_world_state& world, entity_guid engagement)
+{
+	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+
+	ui64 troops = 0;
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++) troops += (ui64)state.attacker.men[unitType] + state.defender.men[unitType];
+
+	// A siege's defender side holds the garrison (inside the settlement) unless it is an outside clash, or the settlement is the attackers' already: not counted.
+	if (state.kind == world_entity_engagements::KIND_SIEGE && state.phase != world_entity_engagements::PHASE_OUTSIDE && world_entity_is_valid(world, state.main_target)
+		&& world.entities->settlements.owners[state.main_target.get_index()] != state.attacker.commander)
+	{
+		troops -= ia_min((ui64)army_total_manpower(world.entities->settlements.garrison[state.main_target.get_index()]), troops);
+	}
+
+	ui64 threshold = ia_max(GAME_PARAMETERS.engagement_join_troops_threshold, (ui32)1);
+	ui32 powersAbove = troops >= 2 * threshold ? ia_log2_q8(troops / threshold) / 256 : 0; // Integer part of log2.
+	return GAME_PARAMETERS.engagement_join_base_tiles + powersAbove;
+}
+
+bool world_entity_query_engagement(const match_world_state& world, entity_guid entity, match_player_id viewer, world_entity_engagements::single& out_state)
 {
 	if (entity.get_type() != ENTITY_TYPE::ENGAGEMENT || !world_entity_is_valid(world, entity)) return false;
 
 	const world_entity_engagements& engagements = world.entities->engagements;
 	ui16 index = entity.get_index();
 	out_state.copy_from(engagements, index);
+	out_state.join_radius = (ui8)ia_min(engagement_join_radius(world, entity), (ui32)255);
+	out_state.viewer_status = (ui8)engagement_diplomatic_status(world, entity, viewer);
 	return true;
 }
 

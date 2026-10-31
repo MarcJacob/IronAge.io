@@ -78,6 +78,8 @@ static entity_guid order_find_hostile_army(match_world_state& world, ui16 army_i
 	for (ui32 other = 0; other < armies.max_count; other++)
 	{
 		if (!order_is_hostile_army(world, army_index, (ui16)other)) continue;
+		// An army in an engagement stands for it: not chased (nor joined) if the engagement is neutral to this army's owner. Otherwise the chase ends in the join.
+		if (armies.engagements[other].is_valid() && world_entity_is_neutral(world, armies.engagements[other], armies.owners[army_index])) continue;
 
 		float dist = vec2_dist_squared(center, armies.locations[other]);
 		if (dist > radius * radius) continue;
@@ -193,7 +195,40 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 
 // ATTACK
 
-// Chase the target's current location. Close enough to it, the attack is resolved (a siege or engagement starts or is joined, which ends the chase: STATION).
+// The engagement the target stands for: the target itself, the engagement a target army is in, or the siege of a target settlement. Invalid if none.
+static entity_guid order_attack_engagement(const match_world_state& world, entity_guid target)
+{
+	entity_guid engagement = INVALID_ENTITY_GUID;
+	switch (target.get_type())
+	{
+	case ENTITY_TYPE::ENGAGEMENT: engagement = target; break;
+	case ENTITY_TYPE::ARMY: engagement = world.entities->armies.engagements[target.get_index()]; break;
+	case ENTITY_TYPE::SETTLEMENT: engagement = world.entities->settlements.sieges[target.get_index()]; break;
+	default: break;
+	}
+	return world_entity_is_valid(world, engagement) ? engagement : INVALID_ENTITY_GUID;
+}
+
+// Walks to the point at distance radius + 1 tiles of the center, on the line from the center through the army: just outside the join radius.
+static void order_wait_outside(match_world_state& world, ui16 army_index, world_location center, ui32 radius)
+{
+	world_entity_armies& armies = world.entities->armies;
+	const world_dimensions& size = world.terrain->size_tiles;
+
+	i32 dx = (i32)armies.locations[army_index].x - (i32)center.x;
+	i32 dy = (i32)armies.locations[army_index].y - (i32)center.y;
+	i32 dist = (i32)ia_isqrt((ui64)(dx * dx + dy * dy));
+	i32 edge = (i32)radius + 1;
+	i32 x = dist == 0 ? (i32)center.x + edge : (i32)center.x + dx * edge / dist;
+	i32 y = dist == 0 ? (i32)center.y : (i32)center.y + dy * edge / dist;
+	x = ia_clamped(x, (i32)0, (i32)size.x - 1);
+	y = ia_clamped(y, (i32)0, (i32)size.y - 1);
+	armies.movements[army_index].destination = { (ui16)x, (ui16)y };
+}
+
+// Chase the target's current location. Close enough to it, the attack is resolved (a siege or engagement starts or is joined, which pins the army: the order goes on afterwards).
+// The target stands for an engagement if it is one, is in one, or is a besieged settlement: the army goes to it (order location = the engagement's) and joins it if it is
+// joinable (resolve, or the proximity join); if it is neutral to the owner the army waits just outside its join radius, order kept.
 // The order ends (STATION) if the target is gone. A settlement that is not hostile anymore is defended instead.
 static void army_order_attack_logic(match_world_state& world, ui16 army_index)
 {
@@ -212,10 +247,28 @@ static void army_order_attack_logic(match_world_state& world, ui16 army_index)
 		return; // Worked on from the next tick.
 	}
 
-	// Always travelling: arriving ends the order.
+	entity_guid engagement = order_attack_engagement(world, target);
+	if (engagement.is_valid())
+	{
+		world_location engagementLocation = world.entities->engagements.states[engagement.get_index()].location;
+		armies.orders[army_index].location = engagementLocation;
+		if (world_entity_is_neutral(world, engagement, armies.owners[army_index]))
+		{
+			order_wait_outside(world, army_index, engagementLocation, engagement_join_radius(world, engagement));
+			return;
+		}
+		if (order_travel(world, army_index, engagementLocation, GAME_PARAMETERS.order_attack_reach_tiles))
+		{
+			world_movement_stop(armies.movements[army_index], armies.locations[army_index]);
+			world_resolve_attack(world, armies.guids[army_index], engagement);
+		}
+		return;
+	}
+
+	// Arriving resolves the attack (which engages the army, or conquers an undefended settlement). The order stays.
 	if (order_travel(world, army_index, world_entity_get_location(world, target), GAME_PARAMETERS.order_attack_reach_tiles))
 	{
-		army_order_fall_back_to_station(world, army_index);
+		world_movement_stop(armies.movements[army_index], armies.locations[army_index]);
 		world_resolve_attack(world, armies.guids[army_index], target);
 	}
 }

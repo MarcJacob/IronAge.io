@@ -26,6 +26,15 @@ void world_engagement_army_left(match_world_state& world, entity_guid engagement
 // Ends the engagement if it is a siege with no army left on the attacker side. Call after an army left a engagement or was destroyed. Does nothing for other engagements or invalid guids.
 void world_siege_check_attackers(match_world_state& world, entity_guid engagement);
 
+// Diplomatic status of an engagement for a player (the only place it is computed: world_entity_get_diplomatic_status and army_engagement_try_join use it).
+// Each side is rated by the player's status towards its commander (friendly > neutral > hostile). The player would join the better side, and the status says which:
+// FRIENDLY = the attackers are the better side (join the attackers), HOSTILE = the defenders are (join the defenders), NEUTRAL = equal sides, not joinable.
+PLAYER_DIPLOMATIC_STATUS engagement_diplomatic_status(const match_world_state& world, entity_guid engagement, match_player_id player);
+
+// Tiles around an engagement's location within which a free army joins it (see engagement_join_* in the game parameters): base + 1 per power of 2 of the troops
+// involved above the threshold. Troops: both sides' men; for a siege, minus the garrison counted in the defender side (the men inside the settlement).
+ui32 engagement_join_radius(const match_world_state& world, entity_guid engagement);
+
 // Allocates the engagements' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_engagements(match_world_state& world, mem_arena& memory, ui32 count);
 

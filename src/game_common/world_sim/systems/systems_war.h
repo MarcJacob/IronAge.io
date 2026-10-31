@@ -18,6 +18,9 @@ void world_system_raid_loot(match_world_state& world);
 // Raising armies standing on their destination (and not in a engagement) draw men from their home settlement.
 void world_system_armies_raising(match_world_state& world);
 
+// Every tick, after movement: free armies within the join radius of a joinable engagement join it.
+void world_system_engagement_auto_join(match_world_state& world);
+
 void world_system_engagements(match_world_state& world);
 
 #endif // WORLD_SYSTEMS_WAR_INCLUDED
