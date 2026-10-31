@@ -140,6 +140,7 @@ struct game_parameters
     ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies).
     ui32 raid_peasants_percent = 10; // Of its peasants, killed (1 gold each).
     ui32 raid_goods_percent = 20; // Of its local + export goods (become supplies 1:1).
+    ui32 homecoming_settlement_goods_percent = 50; // Disbanding army: share of its supplies that joins the settlement's local goods (placeholder). The rest goes to the treasury as gold.
     ui32 army_supply_refill_days = 2; // Days of its own consumption an army refills per day inside its owner's territory (it consumes 1, so the net gain is refill - 1 days per day).
 
     // CONSTRUCTION
@@ -213,6 +214,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raid_production_gold_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_peasants_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_goods_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(homecoming_settlement_goods_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_supply_refill_days, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)

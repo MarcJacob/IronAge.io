@@ -439,6 +439,14 @@ void world_system_raid_loot(match_world_state& world)
 		if (!world_entity_is_valid(world, order.target) || order.target.get_type() != ENTITY_TYPE::SETTLEMENT) continue;
 
 		army_loot_settlement(world, armyIndex, order.target.get_index());
+
+		// Gold pool full: head home (GO_HOME disbands at home, or falls back to station if there is no valid home).
+		ui32 capacity = army_supply_capacity(world, armyIndex);
+		if (capacity > 0 && armies.gold[armyIndex] >= capacity)
+		{
+			armies.orders[armyIndex] = {};
+			armies.orders[armyIndex].type = ARMY_ORDER_GO_HOME;
+		}
 	}
 }
 
