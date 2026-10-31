@@ -756,16 +756,11 @@ void command_begin_assault_apply(match_world_state& world, match_player_id playe
 
 // SET ARMY ORDER
 
-// The settlement owning the territory at the location if it belongs to another player than the given one, otherwise an invalid guid.
-static entity_guid command_raid_target(const match_world_state& world, world_location location, match_player_id player)
+// A settlement is a valid military target (attack / raid) if hostile or neutral to the player.
+static bool command_is_military_target(const match_world_state& world, entity_guid target, match_player_id player)
 {
-	ui16 regionIndex, tileIndex;
-	world_get_tile(*world.terrain, location, regionIndex, tileIndex);
-	ui16 owner = world.terrain->regions[regionIndex].owners[tileIndex];
-
-	const world_entity_settlements& settlements = world.entities->settlements;
-	if (owner == world_terrain::UNOWNED_TILE || owner >= settlements.max_count || !settlements.guids[owner].is_valid() || settlements.owners[owner] == player) return INVALID_ENTITY_GUID;
-	return settlements.guids[owner];
+	return world_entity_is_valid(world, target) && target.get_type() == ENTITY_TYPE::SETTLEMENT
+		&& (world_entity_is_hostile(world, target, player) || world_entity_is_neutral(world, target));
 }
 
 bool command_set_army_order_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
@@ -799,18 +794,16 @@ bool command_set_army_order_validity_check(const match_world_state& world, match
 		{
 			if (entities.armies.owners[command.target.get_index()] == player && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 		}
-		else if (!targetIsSettlement || entities.settlements.owners[command.target.get_index()] == player)
+		else if (!command_is_military_target(world, command.target, player))
 		{
 			if (command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
 		}
 		break;
 	case ARMY_ORDER_DEFEND_TERRITORY:
-		if ((!targetIsSettlement || entities.settlements.owners[command.target.get_index()] != player) && command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
+		if ((!targetIsSettlement || !world_entity_is_friendly(world, command.target, player)) && command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
 		break;
 	case ARMY_ORDER_RAID:
-		// The raided settlement is the owner of the territory the army stands on, which must be another player's.
-		if (command_raid_target(world, entities.armies.locations[armyIndex], player).get_type() != ENTITY_TYPE::SETTLEMENT
-			&& command_add_error(feedback, COMMAND_ERROR_NOT_IN_HOSTILE_TERRITORY)) return false;
+		if (!command_is_military_target(world, command.target, player) && command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
 		break;
 	case ARMY_ORDER_GO_HOME:
 	{
@@ -847,12 +840,9 @@ void command_set_army_order_apply(match_world_state& world, match_player_id play
 		break;
 	case ARMY_ORDER_ATTACK:
 	case ARMY_ORDER_DEFEND_TERRITORY:
+	case ARMY_ORDER_RAID:
 		armies.orders[armyIndex].target = command.target;
 		armies.orders[armyIndex].location = armies.locations[armyIndex]; // First point the order walks to (DEFEND picks its own).
-		break;
-	case ARMY_ORDER_RAID:
-		armies.orders[armyIndex].target = command_raid_target(world, armies.locations[armyIndex], player);
-		armies.orders[armyIndex].location = armies.locations[armyIndex];
 		break;
 	default: // GO_HOME: the home settlement is read from the army.
 		break;

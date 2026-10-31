@@ -98,7 +98,6 @@ enum COMMAND_ERROR : ui32
 	COMMAND_ERROR_NOT_ENOUGH_TREASURY = 1 << 12, // The command costs more than the treasury holds (e.g. the supplies of a new army).
 	COMMAND_ERROR_WRONG_PHASE = 1 << 13, // The engagement is not in a phase the command works in.
 	COMMAND_ERROR_NOT_COMMANDER = 1 << 14, // The player does not command the side of the engagement the command is for.
-	COMMAND_ERROR_NOT_IN_HOSTILE_TERRITORY = 1 << 15, // The army does not stand in the territory of a settlement of another player.
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.

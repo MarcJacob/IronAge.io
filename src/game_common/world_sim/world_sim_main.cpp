@@ -120,6 +120,18 @@ bool world_entity_is_hostile(const match_world_state& world, entity_guid entity,
 	return world_entity_get_owner(world, entity) != player;
 }
 
+// Stub: friendly = owned by the same player (no alliances yet).
+bool world_entity_is_friendly(const match_world_state& world, entity_guid entity, match_player_id player)
+{
+	return world_entity_is_valid(world, entity) && world_entity_get_owner(world, entity) == player;
+}
+
+// Stub: there is no neutral concept yet.
+bool world_entity_is_neutral(const match_world_state& world, entity_guid entity)
+{
+	return false;
+}
+
 // MAIN LIFECYCLE FUNCTIONS
 
 match_world_state* world_state_init(mem_arena& memory, const game_match_start_params& start_params)

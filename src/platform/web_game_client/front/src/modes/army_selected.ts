@@ -1,16 +1,17 @@
-// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (stop raising while raising, disband; no hotkeys).
+// An own army is selected: play goes on as usual, and a bottom bar offers what the army can do (stop raising while raising, disband, the targeted orders Defend / Attack / Raid on hotkeys 1-3).
 // Leaves when the selection stops being an own army. Escape clears the selection.
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
 import * as Render from "../render.js"
-import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid, get_command_feedback, COMMAND_ERROR } from "../input.js"
+import { get_selected_entity_guid, clear_selected_entity, send_command, is_command_valid } from "../input.js"
 import { query_entity, type EntityData } from "../gdo.js"
 import { get_local_player_id, is_own_army, is_own_settlement } from "../main.js"
 import * as ActionBarUI from "../ui/ui_element_action_bar.js"
 import * as ArmyPanelUI from "../ui/inspection/ui_element_army_panel.js"
 import { show_entity } from "../ui/inspection/inspect_entity.js"
 import { raise_target_props } from "./army_raising.js"
+import { TerritoryTargeting, type TargetingPreset } from "./territory_targeting.js"
 
 const ARMY_PATH_COLOR_MOVE = 'rgba(40, 220, 60, 0.9)';
 const ARMY_PATH_COLOR_ATTACK = 'rgba(255, 40, 40, 0.9)';
@@ -31,10 +32,18 @@ export class ArmySelected extends Core.Mode
     private can_withdraw: boolean | null = null; // Whether the bar currently shows Withdraw (army in a siege that is only besieging).
     private withdraw_item: ActionBarUI.ActionBarItem = { id: "withdraw", name: "Withdraw", state: 'selectable' };
 
-    // Go home: walk to the home settlement and disband. Raid: raid the territory the army stands on (enabled inside another player's territory only).
+    // Go home: walk to the home settlement and disband.
     private go_home_item: ActionBarUI.ActionBarItem = { id: "go_home", name: "Go home", state: 'selectable' };
-    private raid_item: ActionBarUI.ActionBarItem = { id: "raid", name: "Raid", state: 'unselectable' };
-    private can_raid: boolean | null = null;
+
+    // Targeted orders: each enters the territory targeting mode with its preset (shown selected while it is the active one).
+    private targeted_items: { item: ActionBarUI.ActionBarItem, preset: TargetingPreset }[] = [
+        { item: { id: "defend", name: "Defend", hotkey: 'Digit1', state: 'selectable' },
+          preset: { order_type: Backend.ARMY_ORDER.DEFEND_TERRITORY, friendly: true, note: "Defend: click one of your territories." } },
+        { item: { id: "attack", name: "Attack", hotkey: 'Digit2', state: 'selectable' },
+          preset: { order_type: Backend.ARMY_ORDER.ATTACK, friendly: false, note: "Attack: click a territory of another player." } },
+        { item: { id: "raid", name: "Raid", hotkey: 'Digit3', state: 'selectable' },
+          preset: { order_type: Backend.ARMY_ORDER.RAID, friendly: false, note: "Raid: click a territory of another player." } },
+    ];
 
     private unsubscribe: (() => void)[] = [];
 
@@ -46,7 +55,11 @@ export class ArmySelected extends Core.Mode
                 else if (id === this.disband_item.id) send_command("DISBAND_ARMY", { army: this.army_guid });
                 else if (id === this.withdraw_item.id) send_command("WITHDRAW_ARMY", { army: this.army_guid });
                 else if (id === this.go_home_item.id) send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.GO_HOME });
-                else if (id === this.raid_item.id) send_command("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.RAID });
+                else
+                {
+                    const targeted = this.targeted_items.find(candidate => candidate.item.id === id);
+                    if (targeted !== undefined) this.activate(targeted);
+                }
             }),
             ArmyPanelUI.on("raise_targets", targets => send_command("SET_ARMY_RAISE_TARGETS", { army: this.army_guid, ...raise_target_props(targets) })),
         ];
@@ -58,6 +71,13 @@ export class ArmySelected extends Core.Mode
         this.unsubscribe = [];
         ActionBarUI.submit(null);
         show_entity(null);
+    }
+
+    // The targeting mode was left: no order is active.
+    on_resumed(): void
+    {
+        for (const targeted of this.targeted_items) targeted.item.state = 'selectable';
+        this.raising = null; // Bar rebuilt by the next update.
     }
 
     on_frame_update(delta_time_s: number): void
@@ -82,26 +102,50 @@ export class ArmySelected extends Core.Mode
         const canDisband = is_command_valid("DISBAND_ARMY", { army: this.army_guid });
         const canWithdraw = is_command_valid("WITHDRAW_ARMY", { army: this.army_guid });
 
-        // Raid targets the territory the army stands on: refused outside the territory of another player.
-        const raidFeedback = get_command_feedback("SET_ARMY_ORDER", { army: this.army_guid, order_type: Backend.ARMY_ORDER.RAID });
-        const canRaid = raidFeedback.valid;
-        const raidRefused = ((raidFeedback.values.error_flags ?? 0) & COMMAND_ERROR.NOT_IN_HOSTILE_TERRITORY) !== 0;
-        const raidNote = !raising && raidRefused ? "Raid: the army must stand in the territory of another player." : "";
-
-        if (raising !== this.raising || canDisband !== this.can_disband || canWithdraw !== this.can_withdraw || canRaid !== this.can_raid)
+        if (raising !== this.raising || canDisband !== this.can_disband || canWithdraw !== this.can_withdraw)
         {
             this.raising = raising;
             this.can_disband = canDisband;
             this.can_withdraw = canWithdraw;
-            this.can_raid = canRaid;
             this.disband_item.state = canDisband ? 'selectable' : 'unselectable';
-            this.raid_item.state = canRaid ? 'selectable' : 'unselectable';
-            const items = raising ? [this.stop_item, this.disband_item] : [this.go_home_item, this.raid_item, this.disband_item];
-            if (canWithdraw) items.push(this.withdraw_item);
-            ActionBarUI.submit({ items });
+            this.submit_bar();
         }
 
-        show_entity(army, { edit_raise_targets: true, army_note: raidNote });
+        show_entity(army, { edit_raise_targets: true });
+    }
+
+    // The bar: stop raising / disband while raising, otherwise the targeted orders, go home, disband, and withdraw when possible.
+    private submit_bar(): void
+    {
+        const items = this.raising ? [this.stop_item, this.disband_item] : [...this.targeted_items.map(targeted => targeted.item), this.go_home_item, this.disband_item];
+        if (this.can_withdraw) items.push(this.withdraw_item);
+        ActionBarUI.submit({ items });
+    }
+
+    // Enters the targeting mode with the preset (replacing the mode of another preset). Its own hotkey / button leaves the mode.
+    private activate(targeted: { item: ActionBarUI.ActionBarItem, preset: TargetingPreset }): void
+    {
+        if (this.raising) return;
+
+        if (targeted.item.state === 'selected')
+        {
+            Core.pop_mode();
+            return;
+        }
+
+        Core.push_mode(new TerritoryTargeting(this.army_guid, targeted.preset, targeted.item.hotkey!), this);
+        for (const other of this.targeted_items) other.item.state = other === targeted ? 'selected' : 'selectable';
+        this.submit_bar();
+    }
+
+    // Hotkeys of the targeted orders run the same action as their button.
+    on_key_down(event: KeyboardEvent): boolean
+    {
+        const targeted = this.targeted_items.find(candidate => candidate.item.hotkey === event.code);
+        if (targeted === undefined || this.raising) return false;
+
+        if (!event.repeat) this.activate(targeted);
+        return true;
     }
 
     on_escape(): boolean
