@@ -66,7 +66,9 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	out.raising = armies.raising[slot];
 	out.troops_target = out.raising ? ia_max(out.troops, ai_troops_sum(armies.raised_troops[slot])) : out.troops;
 	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.compositions[slot]), (ui32)1);
-	out.idle = !out.raising && !armies.engagements[slot].is_valid() && armies.orders[slot].type != ARMY_ORDER_ATTACK
+	// Available: standing (STATION) or defending, not engaged, and arrived. ATTACK / RAID / GO_HOME are busy.
+	const ui8 orderType = armies.orders[slot].type;
+	out.idle = !out.raising && !armies.engagements[slot].is_valid() && (orderType == ARMY_ORDER_STATION || orderType == ARMY_ORDER_DEFEND_TERRITORY)
 		&& armies.locations[slot] == armies.movements[slot].destination;
 	return true;
 }

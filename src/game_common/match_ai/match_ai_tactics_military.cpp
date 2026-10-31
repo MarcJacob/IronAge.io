@@ -27,10 +27,11 @@ static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat)
 
 static bool ai_push_attack(ai_context& ctx, entity_guid attacker, entity_guid target)
 {
-	auto* attack = ai_push<command_data_set_entity_attack_target>(ctx, MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET);
-	if (attack == nullptr) return false;
-	attack->attacker_entity = attacker;
-	attack->target_entity = target;
+	auto* order = ai_push<command_data_set_army_order>(ctx, MATCH_COMMAND_TYPE::SET_ARMY_ORDER);
+	if (order == nullptr) return false;
+	order->army = attacker;
+	order->order_type = ARMY_ORDER_ATTACK;
+	order->target = target;
 	return true;
 }
 
@@ -94,7 +95,7 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 		if (raise == nullptr) return;
 		raise->settlement = settlement.guid;
 		raise->raise_location = settlement.location;
-		raise->start_order = RAISE_START_ORDER_STATION; // The AI moves its armies itself: they stand where raised (P5 replaces this with orders).
+		raise->start_order = RAISE_START_ORDER_STATION; // The AI moves its armies itself: they stand where raised until the campaign orders them.
 		raise->target_levies = targets.levies;
 		raise->target_men_at_arms = targets.men_at_arms;
 		treasury -= cost;
@@ -119,10 +120,11 @@ static void ai_tactics_campaign(ai_context& ctx)
 
 		if (ai_dist_sq(army.location, rally.location) <= AI_RALLY_RADIUS * AI_RALLY_RADIUS) { gathered += army.troops; continue; }
 
-		auto* move = ai_push<command_data_set_entity_move_target>(ctx, MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET);
-		if (move == nullptr) return;
-		move->entity = army.guid;
-		move->move_target = rally.location;
+		auto* order = ai_push<command_data_set_army_order>(ctx, MATCH_COMMAND_TYPE::SET_ARMY_ORDER);
+		if (order == nullptr) return;
+		order->army = army.guid;
+		order->order_type = ARMY_ORDER_STATION;
+		order->location = rally.location;
 		orders++;
 	}
 	if (gathered < ai_attack_need(target)) return;
