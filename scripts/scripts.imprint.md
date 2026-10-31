@@ -41,4 +41,4 @@ It reuses *win32_build_all.cmd*, zips *build/Win32_Game_Server/* and publishes t
 
 ## Linux distros
 
-@TODO
+SCRIPTS BUILT USING THE MINT DISTRO.
