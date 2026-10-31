@@ -82,7 +82,12 @@ export class ArmySelected extends Core.Mode
 
     on_frame_update(delta_time_s: number): void
     {
-        if (!this.is_top) return;
+        // A child mode (targeting) is on top: only keep the path preview showing.
+        if (!this.is_top)
+        {
+            this.update_path_preview();
+            return;
+        }
 
         const army = query_entity(this.army_guid);
         if (army === null || !is_own_army(army) || get_selected_entity_guid() !== this.army_guid)

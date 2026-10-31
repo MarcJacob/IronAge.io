@@ -31,6 +31,7 @@ export class TerritoryTargeting extends Core.Mode
     constructor(private army_guid: number, private preset: TargetingPreset, private exit_key: string) { super(); }
 
     private hovered_slot = -1; // Settlement slot owning the hovered tile (-1: none).
+    private chosen_slot = -1; // Settlement slot targeted by the army's current order (-1: none). Shown like a hovered valid one.
     private saved_territory_color = Render.RENDER_CONFIG.territory_color;
     private saved_territory_alpha = Render.RENDER_CONFIG.territory_alpha;
 
@@ -40,11 +41,11 @@ export class TerritoryTargeting extends Core.Mode
         this.saved_territory_alpha = Render.RENDER_CONFIG.territory_alpha;
         Render.RENDER_CONFIG.territory_alpha = (owner, local_player, slot) => {
             if (!this.is_valid_owner(owner, local_player)) return ALPHA_INVALID;
-            return slot === this.hovered_slot ? ALPHA_HOVERED : ALPHA_VALID;
+            return slot === this.hovered_slot || slot === this.chosen_slot ? ALPHA_HOVERED : ALPHA_VALID;
         };
         Render.RENDER_CONFIG.territory_color = (owner, local_player, slot) => {
             if (!this.is_valid_owner(owner, local_player)) return COLOR_INVALID;
-            return slot === this.hovered_slot ? COLOR_HOVERED : COLOR_VALID;
+            return slot === this.hovered_slot || slot === this.chosen_slot ? COLOR_HOVERED : COLOR_VALID;
         };
     }
 
@@ -64,7 +65,17 @@ export class TerritoryTargeting extends Core.Mode
         }
 
         this.hovered_slot = this.slot_at(Render.get_hovered_tile());
+        this.chosen_slot = this.chosen_slot_of(army.get_number("order_type"), army.get_number("order_target"));
         show_entity(army, { army_note: this.preset.note });
+    }
+
+    // Slot of the settlement targeted by the army's current order (any preset), or -1. An attack target that is not a visible settlement gives -1.
+    private chosen_slot_of(order_type: number, target_guid: number): number
+    {
+        if (order_type !== Backend.ARMY_ORDER.ATTACK && order_type !== Backend.ARMY_ORDER.DEFEND_TERRITORY && order_type !== Backend.ARMY_ORDER.RAID) return -1;
+
+        const slot = (target_guid >>> 8) & 0xFFF;
+        return this.settlement_of_slot(slot)?.guid === target_guid ? slot : -1;
     }
 
     // Local mirror of the sim's friendly / hostile check (world_entity_is_friendly / _is_hostile): same owner or not. Unknown owner (< 0) is never valid.
