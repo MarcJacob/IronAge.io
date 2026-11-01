@@ -146,7 +146,7 @@ struct world_entity_settlements : public world_entity_container
 
     // TROOPS
 
-	army_troop_count* garrison; // Soldiers at home: the local troop pool. Its levies are NOT population: soldiers_home() and at_home() leave them out.
+	army_troop_count* garrison; // Soldiers at home: the local troop pool. Its levies are working pop (unemployed / peasants / workers), so soldiers_home() leaves them out.
 	army_troop_count* raised; // Soldiers in armies raised from the settlement.
 
 	army_troop_count* troop_max; // Max of each soldier type, garrison + raised.

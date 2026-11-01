@@ -59,7 +59,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
 	army_troop_count men = world.entities->armies.compositions[army.get_index()];
 
-	// Levies return as unemployed population (settlement_release_raised), the other types rejoin the local troops (home).
+	// Levies return as unemployed population (settlement_release_raised), the other types rejoin the local troops (garrison).
 	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
 	{
 		settlement_release_raised(world, settlement.get_index(), troopType, troop_count_field(men, troopType));
@@ -90,10 +90,9 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, cons
 		out_dead[unitType] = army_remove_troops(world, army.get_index(), unitType, (ui16)ia_min(kills[unitType], (ui32)0xFFFF));
 	}
 
-	// The dead also leave their home settlement (raised counts and total population). Skipped if the home is gone.
+	// The dead also leave their home settlement (raised counts and total population), even if it changed owner. Skipped if the home is gone.
 	entity_guid home = armies.home_settlements[army.get_index()];
-	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)
-            || world.entities->settlements.owners[home.get_index()] != armies.owners[army.get_index()]) return;
+	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
 
 	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
 	{
@@ -115,12 +114,11 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 		sideMen -= ia_min(sideMen, (ui32)deserters);
 	}
 
-	// They only count at home if the home settlement still is the owner's. Otherwise they are gone (like casualties).
+	// They go back to the home settlement, even if it changed owner. Gone if the home no longer exists.
 	entity_guid home = armies.home_settlements[army.get_index()];
-	if (home.is_valid() && home.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, home)
-		&& world.entities->settlements.owners[home.get_index()] == armies.owners[army.get_index()])
+	if (home.is_valid() && home.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, home))
 	{
-		// Those the settlement cannot take back (full pool) are lost.
+		// Those the settlement cannot take back (raised count too low) are lost.
 		ui16 returned = settlement_release_raised(world, home.get_index(), troop_type, deserters);
 		settlement_remove_soldiers_raised(world, home.get_index(), troop_type, deserters - returned);
 	}

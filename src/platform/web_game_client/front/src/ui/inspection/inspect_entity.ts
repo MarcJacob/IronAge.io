@@ -94,7 +94,8 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
     const editable = context.edit_settlement === true;
     const prop = (name: string) => settlement.get_number(name);
 
-    // Garrison levies are not population, so the home soldiers (who count in the population) are the other types.
+    // Garrison levies are working pop (already in the strata), so the home soldiers shown apart from them are the other types.
+    // Raised troops of every type, levies included, are in "population" and shown apart from it.
     const soldiers_home = prop("troops_men_at_arms") + prop("troops_horsemen") + prop("troops_knights");
     const raised = prop("raised_levies") + prop("raised_men_at_arms") + prop("raised_horsemen") + prop("raised_knights");
     const parameters = get_game_parameters();
@@ -131,7 +132,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
         allow_foreign_export: prop("trading_allow_foreign_export") !== 0,
         market_goods: { goods: prop("trading_market_goods"), export_goods: prop("trading_export_goods"), capacity: prop("market_capacity") },
         trade_volume: { volume: prop("trading_trade_volume"), max: prop("trade_volume_max") },
-        // Troop order (levies first: max follows the population, no ceiling). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
+        // Troop order (levies first: max, garrison + raised, follows the population; no ceiling). A type with no max, nobody at home and nobody raised is left out (nothing to show or set yet).
         garrison: TROOPS.map((troop): SettlementPanelUI.SettlementGarrisonState | null => {
             const home = prop(`troops_${troop.name}`);
             const troop_raised = prop(`raised_${troop.name}`);

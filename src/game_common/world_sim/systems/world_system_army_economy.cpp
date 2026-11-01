@@ -24,6 +24,27 @@ static bool army_in_owned_territory(const match_world_state& world, ui16 army_in
 	return tileOwner != world_terrain::UNOWNED_TILE && world.entities->settlements.owners[tileOwner] == armies.owners[army_index];
 }
 
+// Men of an army whose home settlement now belongs to someone else desert: army_wrong_origin_owner_desertion_percent of each type per day, rounded up.
+// They return to the home settlement. Returns false if the army was destroyed (its last man left).
+static bool army_wrong_origin_desertion(match_world_state& world, ui16 army_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+	entity_guid home = armies.home_settlements[army_index];
+	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)
+		|| world.entities->settlements.owners[home.get_index()] == armies.owners[army_index]) return true;
+
+	entity_guid army = armies.guids[army_index];
+	army_troop_count troops = armies.compositions[army_index];
+	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+	{
+		ui16 deserters = (ui16)(((ui64)troop_count_field(troops, troopType) * ia_min(GAME_PARAMETERS.army_wrong_origin_owner_desertion_percent, (ui32)100) + 99) / 100);
+		ui16 left = world_army_desertion(world, army, troopType, deserters);
+		if (!world_entity_is_valid(world, army)) return false;
+		armies.desertions[army_index] += left;
+	}
+	return true;
+}
+
 // Runs daily. Refills the supplies of the armies inside their owner's territory (the treasury pays as much as it can: never below 0, no debt),
 // then every army consumes. What supplies could not cover is the share of the army that deserts.
 void world_system_armies_upkeep(match_world_state& world)
@@ -42,6 +63,7 @@ void world_system_armies_upkeep(match_world_state& world)
 		world_player_state& player = world.player_states[owner];
 		ui32& supplies = armies.supplies[armyIndex];
 		armies.desertions[armyIndex] = 0; // Counts the last day only.
+			if (!army_wrong_origin_desertion(world, (ui16)armyIndex)) continue; // Destroyed by its last deserter.
 
 		// Refill, before consuming so the day's consumption is covered. It adds army_supply_refill_days of the supply basis's consumption at most,
 		// and leaves room for the day's consumption above the capacity, so the army ends the day at the capacity (not below it) if it can.

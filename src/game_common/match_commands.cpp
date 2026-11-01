@@ -677,6 +677,9 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 		return false;
 	}
 
+	// The home settlement must still belong to the army's owner (otherwise the men would join another player's garrison).
+	if (world.entities->settlements.owners[home.get_index()] != armies.owners[armyIndex] && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
+
 	// The army must stand on a tile of its home settlement's territory.
 	ui16 regionIndex, tileIndex;
 	world_get_tile(*world.terrain, armies.locations[armyIndex], regionIndex, tileIndex);

@@ -320,10 +320,10 @@ export function submit(state: SettlementPanelState | null): void
     for (let i = 0; i < el.garrison.length; i++)
     {
         const garrison = state.garrison[i] ?? null;
-        // Levies (first): no ceiling, no raised count; just the pool against the max.
+        // Levies (first): no ceiling; the pool and the raised levies against the max (garrison + raised).
         if (garrison !== null && i === 0)
         {
-            el.garrison[i].submit({ color: GARRISON_COLORS[i], current: garrison.home, max: garrison.max, editable: false });
+            el.garrison[i].submit({ color: GARRISON_COLORS[i], current: garrison.home, raised: garrison.raised, max: garrison.max, editable: false });
             continue;
         }
         el.garrison[i].submit(garrison === null ? null : {

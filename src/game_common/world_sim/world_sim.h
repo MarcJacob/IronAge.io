@@ -22,7 +22,7 @@ static inline bool world_is_daily_tick(const match_world_state& world)
 
 // ENTITIES
 
-// Destroys an army and returns its men to the settlement: levies become peasants, the other types rejoin the local troops (raised count down, home count up).
+// Destroys an army and returns its men to the settlement: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 // Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).

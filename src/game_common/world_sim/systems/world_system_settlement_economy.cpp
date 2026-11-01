@@ -275,14 +275,15 @@ void world_system_economy_troop_growth(match_world_state& world)
     {
         if (!settlements.guids[settlementIndex].is_valid() || settlements.pop_total[settlementIndex] == 0) continue;
 
-        // Levies: the max follows the population (levies above it are dismissed, no population change), and the garrison fills up
+        // Levies: the max (garrison + raised) follows the population (garrison levies above it are dismissed, no population change), and the garrison fills up
         // by a share of the population per day. They are not taken from any stratum.
         ui32 population = settlements.pop_total[settlementIndex];
         ui16& levies = settlements.garrison[settlementIndex].levies;
         ui16 levyMax = settlement_levy_max(population);
         settlements.troop_max[settlementIndex].levies = levyMax;
+        ui32 levyRoom = levyMax > settlements.raised[settlementIndex].levies ? levyMax - settlements.raised[settlementIndex].levies : 0;
         ui32 levyTrained = ia_max((ui32)1, (ui32)((ui64)population * GAME_PARAMETERS.levy_training_per_mille / 1000));
-        levies = (ui16)ia_min((ui32)levies + levyTrained, (ui32)levyMax); // Also dismisses what is above the max.
+        levies = (ui16)ia_min((ui32)levies + levyTrained, levyRoom); // Also dismisses what is above the room.
 
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 

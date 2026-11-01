@@ -81,7 +81,8 @@ struct game_parameters
 
     // MILITARY
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
-    ui32 levy_max_percent = 20; // Max levies of a settlement garrison, in percent of its total population. No ceiling, no upkeep.
+    ui32 levy_max_percent = 20; // Max levies of a settlement (garrison + raised), in percent of its total population. No ceiling.
+    ui32 army_wrong_origin_owner_desertion_percent = 2; // Per day, share of the men of an army whose home settlement now has another owner that deserts (rounded up).
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
 
     // ARMY STANDING ORDERS (distances in tiles). See world_system_standing_orders.cpp.
@@ -184,6 +185,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
 
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_wrong_origin_owner_desertion_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_training_per_mille, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(engagement_join_base_tiles, GAME_DATA_PROP_TYPE::UI32)

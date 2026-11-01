@@ -92,12 +92,12 @@ static inline void army_unit_counts(const army_troop_count& composition, ui32 ou
 	out_counts[3] = composition.knights;
 }
 
-// Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as peasants, the others in the local pool),
-// or vanish if the home is invalid, changed hands, or has no room in its pool. Returns how many left the army.
+// Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as unemployed pop, the others in the local pool), even if it changed owner,
+// or vanish if the home is invalid. Returns how many left the army.
 // @TODO(Marc): The further from home the army is, the less likely deserters should be to make it back.
 ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_type, ui16 count);
 
-// Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid or changed hands).
+// Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid).
 void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES]);
 
 // Can the army leave its engagement right now? True only in an idle siege (BESIEGING): nothing fights there, so it just walks out (army_exit_engagement).

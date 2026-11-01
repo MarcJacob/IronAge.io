@@ -23,9 +23,9 @@ void world_settlement_change_owner(match_world_state& world, ui16 settlement_ind
 
 // SETTLEMENT POPULATION PRIMITIVES
 // Every change to a settlement's peasants / home / raised counts and population_total goes through these (taking the settlement's index).
-// They keep population_total = peasants + home + raised, never underflow (they return what was actually moved) and do not touch the player stats.
+// They keep pop_total = unemployed + peasants + workers + garrison (men at arms, horsemen, knights) + raised (all types), never underflow (they return what was actually moved) and do not touch the player stats.
 // Troop types are the TROOP_TYPE_* of world_sim_army.h.
-// Levies are special: the garrison's levies are NOT population (no stratum, not in at_home / soldiers_home), `raised.levies` stays 0, and raising or losing a levy kills one population (settlement_kill_population).
+// Garrison levies are not a separate group: they are part of the unemployed / peasants / workers (and not in soldiers_home). Raising one moves a person from those strata to raised.levies; releasing one makes him unemployed.
 
 // Deaths. Removes up to count peasants, returns how many were removed.
 static inline ui32 settlement_remove_peasants(match_world_state& world, ui16 settlement_index, ui32 count)
@@ -50,9 +50,9 @@ static inline ui32 settlement_colonist_goods(const match_world_state& world, ui1
 	return (ui32)(goods * ia_min(colonists, total) / total);
 }
 
-// Deaths of people, whatever their job. Removes up to count population: unemployed first, then workers, then peasants. Returns how many were removed.
+// Takes up to count people out of their stratum: unemployed first, then workers, then peasants. Returns how many were taken. pop_total is unchanged.
 // Projects holding workers are not told (they re-check their crew).
-static inline ui32 settlement_kill_population(match_world_state& world, ui16 settlement_index, ui32 count)
+static inline ui32 settlement_take_population(match_world_state& world, ui16 settlement_index, ui32 count)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
 
@@ -69,18 +69,21 @@ static inline ui32 settlement_kill_population(match_world_state& world, ui16 set
 	settlements.pop_peasants[settlement_index] -= fromPeasants;
 	killed += fromPeasants;
 
+	return killed;
+}
+
+// Deaths of people, whatever their job. Removes up to count population (same order as settlement_take_population). Returns how many were removed.
+static inline ui32 settlement_kill_population(match_world_state& world, ui16 settlement_index, ui32 count)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	ui32 killed = settlement_take_population(world, settlement_index, count);
 	settlements.pop_total[settlement_index] -= ia_min(killed, settlements.pop_total[settlement_index]);
 	return killed;
 }
 
 // Deaths of raised soldiers. Removes up to count raised soldiers of a type, returns how many were removed.
-// Levies are not counted as raised, and their population was already paid when they were raised: losing them changes nothing here (returns count).
 static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	if (troop_type == TROOP_TYPE_LEVIES)
-	{
-		return count;
-	}
 	auto& raisedSoldiers = world.entities->settlements.raised[settlement_index];
 	ui16& raised = troop_count_field(raisedSoldiers, troop_type);
 	ui16 removed = ia_min(count, raised);
@@ -128,22 +131,14 @@ static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 
 }
 
 // Raising from the garrison. Moves up to count home soldiers of a type to raised. Returns how many were moved.
-// Levies leave the garrison and kill that much population instead of being counted as raised.
+// Each levy raised also leaves a stratum (unemployed, then workers, then peasants), so pop_total is unchanged.
 static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	if (troop_type == TROOP_TYPE_LEVIES)
-	{
-		ui16& levies = world.entities->settlements.garrison[settlement_index].levies;
-		ui16 taken = ia_min(count, levies);
-		levies -= taken;
-		settlement_kill_population(world, settlement_index, taken);
-		return taken;
-	}
-
 	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
 	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
 
 	ui16 moved = ia_min(count, garrisonTroops);
+	if (troop_type == TROOP_TYPE_LEVIES) moved = (ui16)settlement_take_population(world, settlement_index, moved);
 
 	garrisonTroops -= moved;
 	raised += moved;
@@ -151,24 +146,17 @@ static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 sett
 	return moved;
 }
 
-// Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison.
-// Returns how many were moved.
-// Levies come back as unemployed population (all of count), not to the garrison.
+// Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison. Returns how many were moved.
+// Levies come back as unemployed population instead (the daily training refills the pool).
 static inline ui16 settlement_release_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
 {
-	if (troop_type == TROOP_TYPE_LEVIES)
-	{
-		world.entities->settlements.pop_unemployed[settlement_index] += count;
-		world.entities->settlements.pop_total[settlement_index] += count;
-		return count;
-	}
-
 	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
 	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
 
 	ui16 moved = ia_min(count, raised);
 
-	garrisonTroops += moved;
+	if (troop_type == TROOP_TYPE_LEVIES) world.entities->settlements.pop_unemployed[settlement_index] += moved;
+	else garrisonTroops += moved;
 	raised -= moved;
 
 	return moved;
@@ -382,7 +370,7 @@ static inline army_troop_count settlement_troop_effective_ceilings(const army_tr
 	};
 }
 
-// Max levies of a garrison: a percentage of the total population (levy_max_percent).
+// Max levies of a settlement, garrison + raised: a percentage of the total population (levy_max_percent).
 static inline ui16 settlement_levy_max(ui32 population_total)
 {
 	return (ui16)ia_min((ui64)population_total * GAME_PARAMETERS.levy_max_percent / 100, (ui64)0xFFFF);
