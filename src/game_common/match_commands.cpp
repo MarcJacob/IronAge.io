@@ -122,8 +122,10 @@ void command_set_entity_move_target_apply(match_world_state& world, match_player
 	case ENTITY_TYPE::ARMY:
 		if (world.entities->armies.raising[command.entity.get_index()]) break;
 		world.entities->armies.movements[command.entity.get_index()].destination = command.move_target;
-		// A STATION order at the target (replaces any attack the army was committed to).
+		// A STATION order at the target (replaces any attack the army was committed to). An engaged army executes it once the engagement is over.
 		army_order_station(world.entities->armies, command.entity.get_index(), command.move_target);
+		// A move order does not keep an army in its engagement: it leaves an idle siege at once (a fighting engagement pins it until concluded).
+		if (army_can_exit_current_engagement(world, command.entity.get_index())) army_exit_engagement(world, command.entity.get_index());
 		break;
 	default:
 		// Command invalid: entity can't move or can't be ordered to move somewhere.
@@ -321,15 +323,19 @@ bool command_set_entity_attack_target_validity_check(const match_world_state& wo
 	if (world.entities->armies.owners[command.attacker_entity.get_index()] != player) return false;
 	if (world.entities->armies.raising[command.attacker_entity.get_index()]) { command_add_error(feedback, COMMAND_ERROR_ARMY_RAISING); return false; }
 
-	// Targets owned by the sender can't be attacked (see match_caravan_is_owned_by for caravans).
 	ui16 targetIndex = command.target_entity.get_index();
 	const world_entities& entities = *world.entities;
+
+	// Targets owned by the sender can't be attacked (see match_caravan_is_owned_by for caravans).
 	switch (command.target_entity.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
 		return entities.settlements.owners[targetIndex] != player;
 	case ENTITY_TYPE::ARMY:
 		return entities.armies.owners[targetIndex] != player;
+	case ENTITY_TYPE::ENGAGEMENT:
+		// Valid whatever its relation to the player (like the ATTACK order: a neutral one is not joined, the army waits next to it).
+		return world_entity_is_valid(world, command.target_entity);
 	default:
 		return false;
 	}
@@ -343,7 +349,27 @@ void command_set_entity_attack_target_apply(match_world_state& world, match_play
 
 	const command_data_set_entity_attack_target& command = command_header.get_command_data<command_data_set_entity_attack_target>();
 
-	army_order_attack(world.entities->armies, command.attacker_entity.get_index(), command.target_entity);
+	world_entity_armies& armies = world.entities->armies;
+	ui16 attackerIndex = command.attacker_entity.get_index();
+	ui16 targetIndex = command.target_entity.get_index();
+	entity_guid engagement = armies.engagements[attackerIndex];
+
+	army_order_attack(armies, attackerIndex, command.target_entity);
+
+	// Attacking anything but its own engagement (the engagement, an army inside it, its besieged settlement) takes an army out of its idle siege at once.
+	// In a fighting engagement the army stays pinned and executes the order once it is over.
+	if (engagement.is_valid() && army_can_exit_current_engagement(world, attackerIndex))
+	{
+		bool keepsEngagement = false;
+		switch (command.target_entity.get_type())
+		{
+		case ENTITY_TYPE::ENGAGEMENT: keepsEngagement = command.target_entity == engagement; break;
+		case ENTITY_TYPE::ARMY: keepsEngagement = armies.engagements[targetIndex] == engagement; break;
+		case ENTITY_TYPE::SETTLEMENT: keepsEngagement = world.entities->settlements.sieges[targetIndex] == engagement; break;
+		default: break;
+		}
+		if (!keepsEngagement) army_exit_engagement(world, attackerIndex);
+	}
 }
 
 // BUILD ROAD
@@ -834,6 +860,8 @@ void command_set_army_order_apply(match_world_state& world, match_player_id play
 	world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = command.army.get_index();
 
+	entity_guid engagement = armies.engagements[armyIndex];
+
 	armies.orders[armyIndex] = {};
 	armies.orders[armyIndex].type = command.order_type;
 	switch (command.order_type)
@@ -850,6 +878,28 @@ void command_set_army_order_apply(match_world_state& world, match_player_id play
 		break;
 	default: // GO_HOME: the home settlement is read from the army.
 		break;
+	}
+
+	// An army in an idle siege leaves it unless the order wants it there. In a fighting engagement it stays pinned and executes the order once it is over.
+	if (engagement.is_valid() && army_can_exit_current_engagement(world, armyIndex))
+	{
+		bool keepsEngagement = false;
+		if (command.order_type == ARMY_ORDER_ATTACK && world_entity_is_valid(world, command.target))
+		{
+			switch (command.target.get_type())
+			{
+			case ENTITY_TYPE::ENGAGEMENT: keepsEngagement = command.target == engagement; break;
+			case ENTITY_TYPE::ARMY: keepsEngagement = armies.engagements[command.target.get_index()] == engagement; break;
+			case ENTITY_TYPE::SETTLEMENT: keepsEngagement = world.entities->settlements.sieges[command.target.get_index()] == engagement; break;
+			default: break;
+			}
+		}
+		else if (command.order_type == ARMY_ORDER_DEFEND_TERRITORY)
+		{
+			const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+			keepsEngagement = state.kind == world_entity_engagements::KIND_SIEGE && state.main_target == command.target && armies.engagement_sides[armyIndex] == world_entity_engagements::SIDE_DEFENDER;
+		}
+		if (!keepsEngagement) army_exit_engagement(world, armyIndex);
 	}
 }
 
@@ -911,7 +961,19 @@ void command_lift_siege_apply(match_world_state& world, match_player_id player, 
 {
 	if (!command_lift_siege_validity_check(world, player, command_header, nullptr)) return;
 
-	world_engagement_end(world, command_header.get_command_data<command_data_lift_siege>().engagement);
+	entity_guid siege = command_header.get_command_data<command_data_lift_siege>().engagement;
+
+	// Every army freed stands where it is (its order would otherwise take it straight back into a new siege).
+	world_entity_armies& armies = world.entities->armies;
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == siege)) continue;
+
+		army_order_station(armies, (ui16)armyIndex, armies.locations[armyIndex]);
+		world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
+	}
+
+	world_engagement_end(world, siege);
 }
 
 // WITHDRAW ARMY
@@ -932,19 +994,8 @@ bool command_withdraw_army_validity_check(const match_world_state& world, match_
 
 	if (armies.owners[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	// Withdrawing is disabled for now (a withdrawn army would rejoin by proximity): refused for any army in an engagement, and so for every army below.
-	// @TODO: re-enable together with a way for a withdrawn army not to rejoin at once. The checks below are kept for that.
-	if (armies.engagements[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
-
-	// The army must be in a siege that is only besieging (any side). Field engagements and fighting sieges are refused.
-	entity_guid engagement = armies.engagements[armyIndex];
-	bool besieging = engagement.is_valid() && world_entity_is_valid(world, engagement);
-	if (besieging)
-	{
-		const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
-		besieging = state.kind == world_entity_engagements::KIND_SIEGE && state.phase == world_entity_engagements::PHASE_BESIEGING;
-	}
-	if (!besieging && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+	// The army must be in an engagement it can leave: an idle siege (fighting engagements pin their armies until concluded).
+	if (!army_can_exit_current_engagement(world, armyIndex) && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -953,24 +1004,11 @@ void command_withdraw_army_apply(match_world_state& world, match_player_id playe
 {
 	if (!command_withdraw_army_validity_check(world, player, command_header, nullptr)) return;
 
-	world_entity_armies& armies = world.entities->armies;
-	entity_guid army = command_header.get_command_data<command_data_withdraw_army>().army;
-	ui16 armyIndex = army.get_index();
-	entity_guid engagement = armies.engagements[armyIndex];
+	ui16 armyIndex = command_header.get_command_data<command_data_withdraw_army>().army.get_index();
 
-	// Its men leave their side now (the siege recounts its sides every round anyway).
-	world_entity_engagements::side_state& side = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[armyIndex]);
-	ui32 counts[world_entity_engagements::UNIT_TYPES];
-	army_unit_counts(armies.compositions[armyIndex], counts);
-	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++) side.men[unitType] -= ia_min(counts[unitType], side.men[unitType]);
-
-	armies.engagements[armyIndex] = INVALID_ENTITY_GUID;
-	armies.engagement_sides[armyIndex] = 0;
-	army_order_station(armies, armyIndex, armies.locations[armyIndex]);
-	world_movement_stop(armies.movements[armyIndex], armies.locations[armyIndex]);
-
-	// Last attacking army gone: the siege is lifted. Otherwise the commanders are recomputed.
-	world_engagement_army_left(world, engagement);
+	// The army leaves its idle siege and goes to the nearest friendly settlement.
+	army_order_station_nearest_friendly_settlement(world, armyIndex);
+	army_exit_engagement(world, armyIndex);
 }
 
 // END COMMAND FUNCTION IMPLEMENTATIONS

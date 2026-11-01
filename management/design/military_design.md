@@ -37,17 +37,82 @@ The Standing Order and its parameters then determine / influence the Army's beha
 
 Any settlement can raise any number of armies. Those armies are considered to be "lone operators" and must be directed by the player. Envisioned common practice is to use this to raise a militia that defends the settlement, and small armies used for specific missions like small scale raids, or quick intervention forces.
 
-When raising an army, the player is prompted to choose the army's composition ([# Troop Types]). The troops are taken from the garrison.
+When raising an army, the player is prompted to choose the army's composition ([## Troop Types]). The troops are taken from the garrison.
 
 ## Garrison
 
 By default, every settlement has a single army within it that has special treatment: the Garrison. The Garrison is not a normal army, in the sense that it is not a separate entity from the settlement itself.
 
-When the garrison lacks troops, it uses the settlement's facilities to train more.
+When the garrison lacks troops, it uses the settlement's facilities to train more. Those facilities also determine how many can be trained at the maximum, counting existing troops both in the garrison still and raised in an army.
 
-Levies remain part of the working population unless the settlement is under siege or *On Campaign*.
+Levies in garrison remain part of the working population.
 
-The maximum size of the garrison over each troop type (including levies) is a settlement value affected primarily by buildings.
+# Battles
+
+When two armies hostile to one another meet on the field, they start a Battle.
+
+Battles "capture" all involveable armies in the area, with the size of the battle increasing the more men are involved.
+
+While inside a battle, an army's normal supply mechanics are frozen (*intention: I don't want supplies to matter as a mechanic when battle is engaged, nor should battles last long enough for it to matter, unless the battle lasts so long that the army will probably be out of action anyway*).
+
+Battles end when an entire side has died or withdrawn.
+
+## Battle Rounds
+
+Every N ticks once a battle has begun, a "battle round" runs during which armies on either side inflict damage on the other.
+
+The damage is spread uniformly between the armies according to their troop count (IE if two armies are on one side of a battle that takes 10 damage, one army with 80 men, the other with 20, then the former will take 8 damage while the other takes the other 2).
+
+Damage is then spread between each troop type, also by their numbers in the army. The formula goes like this:
+
+    Casualties = (Incoming damage - rand(0, Incoming damage / troop type defense skill)) / rand(1, troop type armor). Both defense values are always at least 1.
+
+    - Defense skill represents the troop's ability to deflect damage actively and "make it harmless". At high values, the effective damage inflicted is often low.
+    - Armor represents the troop's resistance to damage that has connected with it, effectively the number of damage required per casualty. At high values, few troops will die even with high inflicted damage.
+
+Various bonuses / maluses can apply as additive percentages.
+Examples of bonuses include:
+- Defending in a siege on a settlement that has fortification buildings.
+- Bonus damage against specific troop types (modelled as more total damage inflicted upon the enemy).
+- Malus to damage for cavalry in hills / mountains.
+- ect...
+
+The intention behind this system is to keep it relatively simple - sheer mass of units will work for winning a battle reliably, but high quality troops in a good defense location can be deceptively difficult to kill, not to mention that fewer troops means higher speed. Higher quality troops thus get much greater survivability unless they get overwhelmed.
+
+The combat stats of various unit types also combine with their economic / out-of-battle characteristics: speed, carry capacity and so on.
+
+## Troop types
+
+- Levies: Weak against everything. Good carry capacity. Medium speed.
+    - Damage: 2
+    - Defense skill: 1
+    - Armor: 1
+    - Upkeep: 1 good / day
+    - Carry capacity: 10 goods
+- Men at arms: Good all-rounder. +50% Bonus damage against horsemen. Medium speed.
+    - Damage: 6
+    - Defense skill: 4
+    - Armor: 4
+    - Upkeep: 3 goods / day
+    - Carry capacity: 10 goods
+- Horsemen: Particularly effective on their own for maneuvering. High speed. +50% bonus against levies.
+    - Damage: 4
+    - Defense skill: 4
+    - Armor: 2
+    - Upkeep: 4 goods / day.
+    - Carry capacity: 16 goods
+- Knights: Good against everything. Expensive. High speed. Reliant on other units to carry supplies.
+    - Damage: 12
+    - Defense skill: 6
+    - Armor: 10
+    - Upkeep: 15 goods / day
+    - Carry capacity: 15 goods
+- Wagons: Ineffective in combat but difficult to kill. Slow speed. Necessary for larger armies to carry enough goods for prolonged sieges / campaigns.
+    - Damage: 0
+    - Defense skill: 0
+    - Armor: 30
+    - Upkeep: 1 good / day
+    - Carry capacity: 100 goods
 
 # Campaigns
 
@@ -114,3 +179,15 @@ Armies will, when possible and if their standing order allows it, attack enemy c
 ## Looting
 
 When conquering an enemy settlement, some proportion (based on number of attackers and some cap) of its goods, population and buildings will be taken / killed / destroyed, turning into supplies and gold (respectively), with the goods shared between victorious armies depending on their respective numbers.
+
+# Supply system
+
+Armies require a certain amount of goods to maintain themselves. They get goods directly by raiding / looting, and indirectly through caravans reaching them to sell.
+
+Armies carry gold. That gold is obtained either through standard pay (when standing in friendly territory and set to be paid, and of course when the owner has the required funds) daily (the army's daily consumption worth of it) or though raiding and looting.
+
+Gold carried by an army can be used in two ways: bringing it back home in the form of goods upon disbanding (some of it going directly to the owner's treasury), or buying supplies from incoming caravans, or the settlement the army is stationned in.
+
+In both cases, goods are taken from the settlement, adding to its trade volume, and added to the army. In exchange, each good is paid for for a specific amount of gold per good, some proportion of it going straight to the settlement's owner's treasury. This is a way a local economy can benefit or suffer from the presence of an army: selling goods to armies creates less profit than selling to settlements, but it still does create some. However, if a settlement is already struggling for goods, feeding an army may put it over the edge: sending a caravan to an army does not get a malus from local goods scarcity, meaning a settlement close to starvation may still send a caravan out.
+
+Otherwise, armies work as trade targets much the same way settlements do, with the exception that the profit to be gotten from them does not increase with distance to origin, meaning faraway settlements will pretty much never send a caravan towards an army directly. However, consuming goods in a specific area will increase how attractive that area is to trade, creating dynamic supply lines.

@@ -100,6 +100,16 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 // Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid or changed hands).
 void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES]);
 
+// Can the army leave its engagement right now? True only in an idle siege (BESIEGING): nothing fights there, so it just walks out (army_exit_engagement).
+// Fighting engagements pin their armies until concluded.
+bool army_can_exit_current_engagement(const match_world_state& world, ui16 army_index);
+
+// The army leaves its engagement at once (its men leave the side's men). May end a siege left without attackers.
+void army_exit_engagement(match_world_state& world, ui16 army_index);
+
+// Gives the army a STATION order at the nearest friendly settlement (at its own location if there is none).
+void army_order_station_nearest_friendly_settlement(match_world_state& world, ui16 army_index);
+
 void army_engagement_join(match_world_state& world, entity_guid engagement, entity_guid army, ui8 side);
 // Joins the army to the engagement on its owner's side if the engagement is joinable for them (not neutral). Returns whether it joined. Same outcome for the proximity join and attacks.
 bool army_engagement_try_join(match_world_state& world, entity_guid engagement, entity_guid army);

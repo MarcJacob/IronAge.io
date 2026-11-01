@@ -85,7 +85,7 @@ struct game_parameters
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
 
     // ARMY STANDING ORDERS (distances in tiles). See world_system_standing_orders.cpp.
-    ui32 order_attack_reach_tiles = 5; // An army resolves its attack (or chase) on a target within this many tiles.
+    ui32 order_attack_reach_tiles = 2; // An army resolves its attack (or chase) on a target within this many tiles.
     ui32 order_station_acquire_radius = 5; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked...
     ui32 order_station_leash = 10; // ... as long as they are at most this far from the station point (the army returns to it afterwards).
     ui32 order_defend_wander_radius = 12; // DEFEND_TERRITORY: the army walks to random points within this many tiles of its settlement.

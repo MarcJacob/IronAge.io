@@ -14,6 +14,13 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
 - Design: user is writing it into `management/design_doc.md`; then break into tasks here, then break into tasks here.
 - May absorb / reorder: `army_supplies` tasks 3-4, `trade_market_goods` phases 2-3, backlog army items (stance / retreat, standing orders, combining, detection index).
 - Multi-file architecture change.
+- Design now in `management/design/military_design.md` (troop stats, wagons, battle formula, supply system, conquest looting). Tasks (each reviewed by user before the next):
+  - R0 [DONE, tested, uncommitted] Small fixes: attack-target wrapper vs engagements, siege exit by order, lift siege fix, reach 2 tiles, stale comments / imprint lines. Field withdrawal removed (see decisions).
+  - R1 Pop model: all soldiers (garrison + armies, all types) count in origin settlement's soldier pop and use pool slots; no local goods consumption by them.
+  - R2 Troop stats, Wagons, new battle formula, counter bonuses.
+  - R3 Army gold, pay, supply purchases (caravans / stationed settlement), armies + campaigns as trade targets. Replaces `army_supplies` tasks 3-4.
+  - R4 Conquest looting, banditry, army-to-army looting.
+  - R5 P4 campaign / P5 campaign AI (shared supply pool).
 
 ## Tasks
 
@@ -23,19 +30,15 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 - P1 [DONE] Garrison: levy pool (see decisions), garrison joins assault battle as a side.
 - P2a [DONE] Standing orders: data + Station / Attack replacing current move / attack 1:1.
 - P2b [DONE] Remaining orders: Defend territory, Raid (stub), Go home; invalid-order fallbacks; AI switched to orders.
-- P2c Orders cleanup (after survey):
-  - Single `decide` function per order type (drop separate arrive); movement boilerplate accepted.
-  - Order sub-states as proper enums; leash / wander radius / other tunables become game parameters.
-  - Diplomatic status helpers (see P3d for the final API): hostile = owned by a different player; caravans: origin and destination must both be hostile.
-  - Written (unbuilt, untested), awaiting user review. `order_*` params in `game_parameters.h`; `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared); `_logic` functions call `order_travel` helper. Arrival now resolves at the start of the next tick (one-tick delay).
-- P3c Raiding (user away, chained, commits allowed, no push; all unbuilt / untested until user returns):
+- P2c [DONE, tested] Orders cleanup: one `_logic` function per order type (`order_travel` helper), `ARMY_ORDER_STATE` enum (TRAVELLING = 0, shared), `order_*` game parameters, diplomatic status helpers (final API under P3d). Arrival resolves at the start of the next tick.
+- P3c [DONE, tested] Raiding:
   - A [DONE, f4e6942] Raid states: RAID_MOVING, territory-entry trigger, slow-move param.
   - B [DONE, 2419fb8] Loot, carry-capacity params (replace supplies days cap), daily cap on settlement, raided flag, UI stock. Loot runs before economy daily tick on last day's production.
   - C [DONE] Gold pool full (checked after the daily loot) -> auto GO_HOME + disband; deposit in `world_disband_army` (all callers): gold to treasury, supplies split by `homecoming_settlement_goods_percent` (50, placeholder) between home market goods and treasury. Replaces `army_supplies` task 3 (army-to-army looting still open). Manual disband now also deposits supplies.
-  - D [DONE, unbuilt / untested] Targeted orders (user played, raid works): Raid takes a target settlement from the command (army anywhere). One client territory-targeting mode with presets Defend / Attack / Raid: territories green (valid) / grey / yellow (hovered), mode left only by hotkey again, right click or Escape; numeric hotkeys. Defend valid = friendly territories; Attack / Raid valid = hostile or neutral. Station and non-settlement attacks stay contextual (right click); Go home keeps its button. Friendly / neutral are stubs behind the diplomatic status helpers.
-  - Not in chain: caravan attacks, conquest looting, trade malus, army-to-army looting.
-  - Check on return: supplies capacity per man is now 20 / 3 / 2 / 1/3 days of own consumption (user expected 10 / 2 / 5 / 1 days): upkeep rates differ from the numbers assumed; knights-only armies outside territory starve within a day. Tune carry values or upkeep if needed.
-- P2d [DONE, unbuilt / untested] AI moved to standing orders (later: campaign system). After P2c, separate builder (Sonnet).
+  - D [DONE, tested] Targeted orders: Raid takes a target settlement from the command (army anywhere). One client territory-targeting mode with presets Defend / Attack / Raid: territories green (valid) / grey / yellow (hovered), mode left only by hotkey again, right click or Escape; numeric hotkeys. Defend valid = friendly territories; Attack / Raid valid = hostile or neutral. Station and non-settlement attacks stay contextual (right click); Go home keeps its button. Friendly / neutral are stubs behind the diplomatic status helpers.
+  - Still open: caravan attacks (banditry), conquest looting, trade attractiveness malus, army-to-army looting, live off the land.
+  - Tuning: supplies capacity per man is 20 / 3 / 2 / 1/3 days of own consumption (user expected 10 / 2 / 5 / 1): upkeep rates differ from those assumed; knights-only armies outside territory starve within a day. Tune carry values or upkeep if needed.
+- P2d [DONE, tested] AI moved to standing orders (later: campaign system).
 - P3a Siege as engagement (supersedes P1 siege-as-battle-side), plan done:
   - S0 [DONE] Data model (kind, phase, main_target, commanders, settlement.siege, attacker / defender side_state), no behaviour change. Siege starts directly in ASSAULT.
   - S1 [DONE] Starvation + caravan rules. Returning caravans stop 10 tiles from a besieged origin via world_movement_stop in movement_decision.
@@ -43,9 +46,8 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - S3 [DONE] LIFT_SIEGE, WITHDRAW_ARMY, lifted-when-empty.
   - S4 [DONE] SALLY_OUT, outside-battle phase, commanders.
   - S5 [DONE] Rename battle -> engagement.
-- P3b Battle damage / defense model.
-- P3c Raiding / looting, live off the land, supplies homecoming (absorbs `army_supplies` 3-4).
-- P3d Stacked armies (AI campaigns pile armies on one tile: hidden, only one engages). Not designed in detail yet; multi-file architecture changes, flag before building:
+- P3b Battle damage / defense model: per-type damage / defense in battle exists; confirm remaining scope with user.
+- P3d [DONE, tested] Stacked armies (AI campaigns piled armies on one tile: hidden, only one engaged):
   - Render grouping: entities (armies first, maybe all) too close to each other join a render "group", drawn as a whole with members shown separately (row) and their own numbers.
   - Engagement joining rework:
     - Joining is automatic: an army standing too close to an engagement joins it (joining = going there). No more willing join by attacking a member army.
@@ -56,15 +58,15 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
     - Joining keeps the army's standing order and resumes it afterwards.
     - Render grouping starts with armies only; design so other entity types can use it.
     - Plan: builder A = sim (engagement joining rework), then builder B = client render grouping.
-    - A [written, unbuilt / untested]: auto-join system, params `engagement_join_base_tiles` / `engagement_join_troops_threshold`, hostility helpers accept engagements, ATTACK targets engagements (neutral engagement = wait at radius edge), right click on engagement.
+    - A [DONE]: auto-join system, params `engagement_join_base_tiles` / `engagement_join_troops_threshold`, hostility helpers accept engagements, ATTACK targets engagements (neutral engagement = wait at radius edge), right click on engagement.
       - Relation: `PLAYER_DIPLOMATIC_STATUS` (NEUTRAL = 0, FRIENDLY, HOSTILE). `world_player_get_diplomatic_status` (stub diplomacy), `world_entity_get_diplomatic_status`, `engagement_diplomatic_status`; bool entity helpers are inline wrappers. Engagement: better side (friendly > neutral > hostile) joined; equal sides = NEUTRAL, not joined; FRIENDLY = join attackers, HOSTILE = join defenders (side inferred from status).
       - WITHDRAW_ARMY disabled for engaged armies (WRONG_PHASE; button gone); re-add properly later. `left_engagement` removed. LIFT_SIEGE stays.
       - Open: `SET_ENTITY_ATTACK_TARGET` wrapper still refuses engagements.
-    - B [written, unbuilt / untested]: client army render grouping in `render.ts` (`group_by_proximity` helper, `RENDER_CONFIG.army_group_radius` 2 tiles, row layout, per-army count, hit-test at displayed position). Engaged and hidden armies not grouped; path preview / highlights use true positions.
-    - Disband: levies return as unemployed pop, not peasants (code comment in `world_disband_army` says peasants: check / fix).
+    - B [DONE]: client army render grouping in `render.ts` (`group_by_proximity` helper, `RENDER_CONFIG.army_group_radius` 2 tiles, row layout, per-army count, hit-test at displayed position). Engaged and hidden armies not grouped; path preview / highlights use true positions.
+    - Disband: levies return as unemployed pop, not peasants (already the case).
 - P3e Engagement rendering (client):
-  - Now: join radius circle [DONE, unbuilt]; icon colored by status to the local player (red hostile, gray neutral, blue friendly), icon scaled to match the circle; engagement rendering isolated in its own client module to prepare the rest.
-  - Client entity rendering modularized: one module per entity type in `front/src/entities/` (engagement first, then army, settlement, caravan, worker...). `render.ts` stays the orchestrator (army grouping stays there and spawns per-army rendering as needed), modules draw one entity each. Written, unbuilt / untested: engagement, settlement, army, caravan (+ ship), worker modules and shared `EntityRenderEnv`; layout note in `front/src/.ai_imprint/entities_folder.md`. Delete stub `front/src/render_engagement.ts` (user). Suggested lines for `front_src.imprint.md` (human) pending.
+  - [DONE, tested] Join radius circle; icon tinted by status to the local player (red hostile, gray neutral, blue friendly; `viewer_status` from the sim query), icon scaled to the circle.
+  - [DONE, tested] Client entity rendering modularized: one leaf module per entity type in `front/src/entities/` (engagement, settlement, army, caravan + ship, worker), shared `EntityRenderEnv` (with `resources` store). `render.ts` stays the orchestrator (loops, visibility, army grouping, hit-testing). Layout note in `front/src/.ai_imprint/entities_folder.md`; `front_src.imprint.md` updated.
   - Vision (not planned yet): armies inside shown moving around playing a fighting animation, decorrelated from their map location (which is set to the engagement's location). Real information lives on the engagement only:
     - Symbol + join circle (current).
     - Top bar: strength breakdown of the two sides, colored by status to the player (no longer fixed red attackers / blue defenders).
@@ -109,7 +111,10 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Siege engagement located between the besieging army and settlement; selectable; significance / size equals the settlement's (TS uses the same formula).
   - A foreign army joins the defender side only by attacking besiegers (stationing in settlements later).
   - Rename after P2, one commit (C++ + TS + HTML); client GDO names kept until then.
-- Levy pop rules: raising a levy kills pop (becomes soldier); army levy deaths / desertion do not kill pop; garrison levy deaths do. Levy deserters and disbanded-army levies return as unemployed pop. Levy max 20% of pop, training 2%/day (min 1). Army levies pay upkeep, garrison levies don't. Garrison levies not in total_troops. Excess levies vanish on pop drop.
+- Pop (supersedes the levy pop rules below): every soldier stays in its origin settlement's soldier pop, in garrison or army; raising does not kill pop; army deaths / desertion reduce origin pop; disbanding returns soldiers to the garrison pool, except levies who return as unemployed pop (which refills the levy pool anyway). Garrison soldiers consume local goods like the rest of the pop; raised soldiers don't (they have army upkeep) but remain a demographic weight. If the origin is conquered, soldiers keep counting but attrit without replacement until retaken.
+- Engagement exit: field withdrawal system was tried and REMOVED (user to redesign later; ideas: WITHDRAWING state taking damage / no damage dealt, 5-round gate, exit by destination, auto-rejoin problem on far-side destinations; morale -> WITHDRAWING_SHATTERED). Now: fighting engagements pin armies (new orders are accepted and stored, executed after the engagement if the army survives); an army in an idle BESIEGING siege given an order that doesn't want it there leaves at once (WITHDRAW_ARMY = that exit, STATION at nearest friendly settlement). "Wants it there" = ATTACK on own engagement / army in it / besieged settlement, DEFEND of the besieged settlement from the defender side. LIFT_SIEGE destroys the engagement, every freed army gets STATION. Attack / pursuit reach = 2 tiles (`order_attack_reach_tiles`).
+- Battle formula (per troop type, defense and armor min 1): `Casualties = (dmg / rand(1, defense_skill)) / rand(1, armor)`; both random (design doc line 68 still shows the old form, user to update). Counter bonuses (men-at-arms vs horsemen, horsemen vs levies) = +50% damage dealt to the whole opposing army for now; later maybe per-source-type damage so countered types die faster.
+- Levy pop rules (OLD, superseded by Pop above): raising a levy kills pop (becomes soldier); army levy deaths / desertion do not kill pop; garrison levy deaths do. Levy deserters and disbanded-army levies return as unemployed pop. Levy max 20% of pop, training 2%/day (min 1). Army levies pay upkeep, garrison levies don't. Garrison levies not in total_troops. Excess levies vanish on pop drop.
 - Raid (revised, simple; likely replaced later by per-tile raiding):
   - States: TRAVELLING = reaching raided area (initially / after fleeing); RAIDING (stationary) and RAIDING_MOVING (random moves inside raided area, same selection as Defend, slower) begin the moment the area is entered; FLEEING.
   - Loot runs each day tick in any raiding state except FLEEING. Max potential: 1/10 production (half gold, half supplies), 1/10 peasants killed (-> gold), 1/5 stored local / export goods (-> supplies).
@@ -123,6 +128,7 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 - Campaign: real entity (own logic); region = territory + settlement; Defense objective only for own territory for now. Leader army = army it was started from. Valid trade target with settlement-like profit formula, but must hold gold to pay (1:1 + scarcity), no distance bonus. 75% of garrison becomes a new campaign army; settlement in one campaign at a time; campaign army refills instantly from home while in friendly territory. Vassal / overlord forced join later. Entity limits unchanged.
 - Campaign UI: tall banner on a shaft at leader army tile, large minimum screen size. Selected: name "Campaign", objectives, member army list (inspection extra data), faint white lines to members and objectives, state, each member's order.
 - Campaign AI runs in the deterministic world sim; replaces `match_ai` pseudo-campaign.
+- Army supply idea (user, to be written into design doc): armies are always trade targets for caravans (unattractive if small enough to live off the land / raid); they must pay gold for supplies; payment split between caravan owner and origin settlement, so armies weigh on the local economy and can starve the populace if numerous / long-staying. Likely replaces `army_supplies` tasks 3-4 / ties to `trade_market_goods`.
 - Movement session works on movement / pathing backend only; P2 may move / remove the army block in `movement_decision`.
 - Builders run no build / test; user tests by hand.
 
@@ -132,4 +138,6 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 ## Next step
 
-P0-P2b, S0-S5 done, tested, committed (stale refs to "battle" left in human imprints / docs: include_match.imprint.md, game_mechanics.imprint.md, military_design.md etc.). P3b: confirm remaining scope, then P3c (loot, live off the land, caravan attacks, supplies homecoming; army carrying capacity value to propose). User authorized chaining all phases until the campaign (P4, exclusive): S3, S4, P2a, P2b, S5 rename, P3b, P3c, one at a time, reported after each. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Raiding & Looting, Standing Orders (decisions above stand in for now; user may write them in).
+Everything through P3e is tested and committed (0031653).
+Order agreed: (1) one builder for the small fixes (attack-target wrapper vs engagements, re-add withdraw, stale comments / imprint lines); (2) user writes missing military design sections incl. the army supply system; (3) P4 campaign (needs plan first; multi-file).
+Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

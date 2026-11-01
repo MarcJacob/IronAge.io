@@ -130,6 +130,55 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 	return deserters;
 }
 
+bool army_can_exit_current_engagement(const match_world_state& world, ui16 army_index)
+{
+	const world_entity_armies& armies = world.entities->armies;
+	entity_guid engagement = armies.engagements[army_index];
+	if (!engagement.is_valid()) return false;
+
+	// Only an idle siege has no fighting: its armies just walk out of it.
+	return world.entities->engagements.states[engagement.get_index()].phase == world_entity_engagements::PHASE_BESIEGING;
+}
+
+void army_exit_engagement(match_world_state& world, ui16 army_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+	entity_guid engagement = armies.engagements[army_index];
+	if (!engagement.is_valid()) return;
+
+	// Its men leave their side (a siege recounts its sides every round anyway).
+	world_entity_engagements::side_state& side = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[army_index]);
+	ui32 counts[world_entity_engagements::UNIT_TYPES];
+	army_unit_counts(armies.compositions[army_index], counts);
+	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++) side.men[unitType] -= ia_min(counts[unitType], side.men[unitType]);
+
+	armies.engagements[army_index] = INVALID_ENTITY_GUID;
+	world_engagement_army_left(world, engagement); // May end a siege left without attackers.
+}
+
+void army_order_station_nearest_friendly_settlement(match_world_state& world, ui16 army_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+
+	const world_entity_settlements& settlements = world.entities->settlements;
+	ui32 nearest = settlements.max_count;
+	float nearestDist = 0;
+	for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid() || !world_entity_is_friendly(world, settlements.guids[settlementIndex], armies.owners[army_index])) continue;
+
+		float dist = vec2_dist_squared(armies.locations[army_index], settlements.locations[settlementIndex]);
+		if (nearest == settlements.max_count || dist < nearestDist)
+		{
+			nearest = settlementIndex;
+			nearestDist = dist;
+		}
+	}
+	// None left: it stands where it leaves the engagement.
+	if (nearest < settlements.max_count) army_order_station(armies, army_index, settlements.locations[nearest]);
+	else army_order_station(armies, army_index, armies.locations[army_index]);
+}
+
 bool world_entity_query_army(const match_world_state& world, entity_guid entity, world_entity_armies::single& out_state)
 {
 	if (entity.get_type() != ENTITY_TYPE::ARMY || !world_entity_is_valid(world, entity)) return false;

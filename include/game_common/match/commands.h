@@ -49,7 +49,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	LIFT_SIEGE, // The attacker commander of a siege that is only besieging (idle) ends it: its armies are released.
 
-	WITHDRAW_ARMY, // An own army in a siege that is only besieging (idle) leaves it. A siege left without attacking armies ends.
+	WITHDRAW_ARMY, // An own army in a siege that is only besieging (idle) leaves it and goes to the nearest friendly settlement. A siege left without attacking armies ends.
 
 	SALLY_OUT, // The defender commander (the settlement's owner) of a siege that is besieging or in an outside clash sends out the garrison: the fight becomes a sally.
 
@@ -385,7 +385,7 @@ struct command_data_set_army_order
 {
 	entity_guid army;
 	ui8 order_type; // ARMY_ORDER_TYPE.
-	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY: an own settlement. Unused otherwise (RAID: the target is the settlement owning the territory the army stands on).
+	entity_guid target; // ATTACK: the entity to attack (settlement, army or engagement). DEFEND_TERRITORY: an own settlement. RAID: a hostile or neutral settlement. Unused otherwise.
 	world_location location; // STATION: where to stand. Unused otherwise.
 };
 
