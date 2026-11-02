@@ -11,9 +11,6 @@
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
 static const path_params ARMY_WORKER_PATH_PARAMS = { .passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0)), .straight_segments = true };
 
-// Returning caravans whose origin is besieged stop this far from it (tiles) until the siege is over. Placeholder value.
-static constexpr float CARAVAN_SIEGE_WAIT_TILES = 10;
-
 // Divides rounding to the nearest integer (halves away from zero). den must be above 0.
 static i64 div_round_nearest(i64 num, i64 den)
 {
@@ -146,9 +143,10 @@ void world_system_entity_movement_decision(match_world_state& world)
             entity_guid origin = caravans.origin_settlements[caravanIndex];
             if (origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin))
             {
-                // A besieged origin cannot be entered: within CARAVAN_SIEGE_WAIT_TILES of it the caravan stops and waits for the siege to end.
-                if (settlements.sieges[origin.get_index()].is_valid()
-                    && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[origin.get_index()]) <= CARAVAN_SIEGE_WAIT_TILES * CARAVAN_SIEGE_WAIT_TILES)
+                // A besieged origin cannot be entered: within caravan_siege_wait_tiles of it the caravan stops and waits for the siege to end.
+                float waitTiles = (float)GAME_PARAMETERS.caravan_siege_wait_tiles;
+                if (settlement_is_besieged(world, origin.get_index())
+                    && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[origin.get_index()]) <= waitTiles * waitTiles)
                     world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
                 else
                     caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
@@ -161,6 +159,14 @@ void world_system_entity_movement_decision(match_world_state& world)
         entity_guid destination = caravans.destination_settlements[caravanIndex];
         if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
         {
+            // A besieged destination cannot be entered: from caravan_siege_recheck_tiles away the caravan looks for another target (and keeps its goods).
+            float recheckTiles = (float)GAME_PARAMETERS.caravan_siege_recheck_tiles;
+            if (settlement_is_besieged(world, destination.get_index())
+                && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[destination.get_index()]) <= recheckTiles * recheckTiles)
+            {
+                world_caravan_retarget(world, caravan);
+                continue;
+            }
             caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], destination.get_index());
         }
         else
@@ -176,13 +182,7 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-		// A raiding army walking inside the territory is slowed (the speed is restored right after the step).
-		world_entity_movement& movement = armies.movements[armyIndex];
-		ui16 normalSpeed = movement.travel_speed;
-		if (armies.orders[armyIndex].type == ARMY_ORDER_RAID && armies.orders[armyIndex].state == ARMY_ORDER_STATE_RAID_MOVING)
-			movement.travel_speed = (ui16)((ui32)normalSpeed * GAME_PARAMETERS.order_raid_moving_speed_percent / 100);
-		world_entity_follow_path(world, movement, armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
-		movement.travel_speed = normalSpeed;
+		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
 	}
 
     world_entity_workers& workers = world.entities->workers;

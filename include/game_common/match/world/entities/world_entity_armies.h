@@ -1,20 +1,21 @@
-// Army & Engagement entity symbols.
+// Army entity symbols. The engagements armies fight in are in world_entity_engagements.h.
 
 #ifndef WORLD_ENTITY_ARMIES_INCLUDED
 #define WORLD_ENTITY_ARMIES_INCLUDED
 
 #include "core.h"
 #include "world_entity_common.h"
-#include "game_common/match/game_parameters.h"
+#include "world_entity_engagements.h"
+#include "../troop_types.h"
 
-// Standing orders of an army: what it does by itself while it is not pinned in an engagement (engagement walking wins over the order).
+// Standing orders of an army: what it does by itself. An army in an engagement it cannot leave (or that its order wants) is pinned there instead, see the order logic.
 // Zero = STATION, a functional default. The logic of each type is in world_system_standing_orders.cpp.
 enum ARMY_ORDER_TYPE : ui8
 {
 	ARMY_ORDER_STATION = 0, // Go to the order's location and stand there.
 	ARMY_ORDER_ATTACK, // Chase the order's target entity (settlement, army or engagement), then start / join an engagement (a siege for a settlement) once close enough. The order goes on after the engagement.
 	                   // A target army inside an engagement stands for that engagement (the order's location is then the engagement's); a neutral one is not joined, the army waits next to it.
-	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: wander in its territory, attack intruders, retreat to the settlement from stronger forces.
+	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: stand on it (no patrolling for now), attack intruders in its territory, retreat to the settlement from stronger forces.
 	ARMY_ORDER_RAID, // Target = a hostile settlement: go to its territory, stay there, flee stronger forces.
 	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
 	ARMY_ORDER_TYPE_COUNT,
@@ -24,11 +25,10 @@ enum ARMY_ORDER_TYPE : ui8
 enum ARMY_ORDER_STATE : ui8
 {
 	ARMY_ORDER_STATE_TRAVELLING = 0, // Common: going to the order's objective area before running the order-specific logic (never movement inside it).
-	ARMY_ORDER_STATE_DEFEND_PATROL = 1, // Inside the territory, wandering and attacking intruders.
+	ARMY_ORDER_STATE_DEFEND_PATROL = 1, // Inside the territory, attacking intruders.
 	ARMY_ORDER_STATE_DEFEND_RETREATED = 2, // Stands on the settlement tile, fights what comes close.
 	ARMY_ORDER_STATE_RAID_RAIDING = 1, // Inside the target's territory, standing (raiding).
 	ARMY_ORDER_STATE_RAID_FLEEING = 2, // Running to the home settlement from stronger forces.
-	ARMY_ORDER_STATE_RAID_MOVING = 3, // Inside the target's territory, walking to a random point (raiding, slowed).
 };
 
 // An army's standing order: its type and a small fixed data buffer interpreted by the type (not every field is used by every type).
@@ -36,10 +36,12 @@ struct army_order
 {
 	ui8 type; // ARMY_ORDER_TYPE.
 	ARMY_ORDER_STATE state; // Sub-state of the type, zero when the order is given.
+
 	ui16 radius; // Tiles, for orders working on an area. Unused for now.
 	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY / RAID: the settlement.
-	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: the random point the army is wandering to inside the territory.
+	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: unused.
 	entity_guid engaged; // STATION / DEFEND_TERRITORY: the hostile entity the army is currently chasing, if any.
+
 	ui32 reserved;
 };
 static_assert(sizeof(army_order) == 20, "army_order size changed.");
@@ -55,7 +57,7 @@ struct world_entity_armies : public world_entity_container
     army_troop_count *compositions;
 
 	entity_guid* engagements; // Engagement this army is fighting in, if any.
-	ui8* engagement_sides; // Side (0 = Attackers or 1 = Defenders) of the engagement the army is on.
+	ENGAGEMENT_SIDE* engagement_sides; // Side of the engagement the army is on.
 
 	army_troop_count* raised_troops; // Raise target when raising, "Original" / "Max" counts after that.
 	ui8* raising; // 1 while the army is raising.
@@ -83,7 +85,7 @@ struct world_entity_armies : public world_entity_container
 		entity_guid home_settlement;
 		army_order order;
 		entity_guid engagement;
-        ui8 engagement_side;
+        ENGAGEMENT_SIDE engagement_side;
 
 		ui32 gold;
 		ui32 supplies;
@@ -107,7 +109,7 @@ struct world_entity_armies : public world_entity_container
 		entity_guid& home_settlement;
 		army_order& order;
 		entity_guid& engagement;
-		ui8& engagement_side;
+		ENGAGEMENT_SIDE& engagement_side;
 		ui32& gold;
 		ui32& supplies;
 		ui16& desertions;
@@ -236,111 +238,5 @@ const army_troop_count& army_supply_basis(const match_world_state& world, ui16 a
 
 // What the army carries at most in each pool (supplies and gold, separate): its men x per-type carry capacity (GAME_PARAMETERS.carry_*), on its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index);
-
-// A engagement between two sides of armies. Free armies close enough join it by themselves (engagement_join_radius), or by an ATTACK order targeting it, a member army or the besieged settlement. Fixed size: it doesn't know which armies are in it, armies point to it instead.
-struct world_entity_engagements : public world_entity_container
-{
-	static constexpr ui8 UNIT_TYPES = 4; // Army unit types, in comp order: levies, men at arms, horsemen, knights.
-
-	// Sides of a engagement. Armies point at their side with these (armies.engagement_sides). The attacker is the side that started it.
-	static constexpr ui8 SIDE_ATTACKER = 0;
-	static constexpr ui8 SIDE_DEFENDER = 1;
-	static inline ui8 opposite_side(ui8 side) { return side == SIDE_ATTACKER ? SIDE_DEFENDER : SIDE_ATTACKER; }
-
-	// What the engagement is.
-	static constexpr ui8 KIND_FIELD = 0; // Armies against armies.
-	static constexpr ui8 KIND_SIEGE = 1; // Armies against a settlement (main_target) and what defends it.
-
-	// Phase of the engagement. A field engagement is always ACTIVE. A siege goes BESIEGING (idle, no damage), then ASSAULT (started by the attacker commander)
-	// or SALLY (started by the defender commander); OUTSIDE is a clash of defending armies against the besiegers, the garrison does not take part.
-	// Damage rounds only happen in every phase but BESIEGING.
-	static constexpr ui8 PHASE_ACTIVE = 0;
-	static constexpr ui8 PHASE_BESIEGING = 1;
-	static constexpr ui8 PHASE_ASSAULT = 2;
-	static constexpr ui8 PHASE_SALLY = 3;
-	static constexpr ui8 PHASE_OUTSIDE = 4;
-
-	struct side_state
-	{
-		ui32 men[UNIT_TYPES]; // Men still fighting, per unit type.
-		ui32 damage; // Damage points dealt this round BY this side, before the defences of the other side.
-		match_player_id commander; // Player leading this side.
-	};
-
-    struct view;
-
-    // Single state structure should work since everything gets read engagement-by-engagement anyway.
-	struct state
-	{
-		world_location location;
-		ui8 kind; // KIND_*.
-		ui8 phase; // PHASE_*.
-		entity_guid main_target; // Field engagement: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
-		ui32 phase_tick; // World age when the current phase started.
-		side_state attacker;
-		side_state defender;
-		ui32 duration; // Rounds since the engagement started (one round every ENGAGEMENT_TICK_INTERVAL ticks).
-		ui8 join_radius; // Tiles. Not stored in the world: filled by world_entity_query_engagement (engagement_join_radius) for viewers.
-		ui8 viewer_status; // PLAYER_DIPLOMATIC_STATUS of the engagement for the viewing player (engagement_diplomatic_status). Not stored either: filled by the query.
-
-		inline side_state& side(ui8 side_index) { return side_index == SIDE_ATTACKER ? attacker : defender; }
-		inline const side_state& side(ui8 side_index) const { return side_index == SIDE_ATTACKER ? attacker : defender; }
-                       
-		// Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
-		// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
-
-		void copy_from(const view& source);
-		void copy_from(const world_entity_engagements& collection, ui16 index);
-
-	} *states;
-
-	using single = state; // Consolidated representation of a single engagement for viewing purposes.
-
-	// Reference view of a engagement slot.
-	struct view
-	{
-		state& data; // The whole slot: the state is plain data.
-
-		void copy_from(const single& source) { data = source; }
-
-		view(world_entity_engagements& collection, ui16 index)
-			: data(collection.states[index])
-		{}
-	};
-};
-
-inline void world_entity_engagements::state::copy_from(const world_entity_engagements::view& source) { *this = source.data; }
-
-inline void world_entity_engagements::state::copy_from(const world_entity_engagements& collection, ui16 index) { *this = collection.states[index]; }
-
-using world_entity_engagement = world_entity_engagements::single;
-using world_entity_engagement_view = world_entity_engagements::view;
-
-// Men per side and unit type are flattened: <side>_men_<unit type>, unit types in the order of army comp. The client sums the "attacker_men_" and "defender_men_" properties.
-GAME_DATA_OBJECT_DEF_BEGIN(world_entity_engagement)
-	GAME_DATA_PROPERTY(location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
-	GAME_DATA_PROPERTY(kind, GAME_DATA_PROP_TYPE::UI8)
-	GAME_DATA_PROPERTY(phase, GAME_DATA_PROP_TYPE::UI8)
-	GAME_DATA_PROPERTY(main_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-	GAME_DATA_PROPERTY(phase_tick, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_men_levies, attacker.men[0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_men_men_at_arms, attacker.men[1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_men_horsemen, attacker.men[2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_men_knights, attacker.men[3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_damage, attacker.damage, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_commander, attacker.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
-	GAME_DATA_PROPERTY_PATH(defender_men_levies, defender.men[0], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_men_men_at_arms, defender.men[1], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_men_horsemen, defender.men[2], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_men_knights, defender.men[3], GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_damage, defender.damage, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_commander, defender.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
-	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY(join_radius, GAME_DATA_PROP_TYPE::UI8)
-	GAME_DATA_PROPERTY(viewer_status, GAME_DATA_PROP_TYPE::UI8)
-GAME_DATA_OBJECT_DEF_END()
-
-// viewer: the player looking at the engagement (fills viewer_status).
-bool world_entity_query_engagement(const match_world_state& world, entity_guid entity, match_player_id viewer, world_entity_engagement& out_state);
 
 #endif // WORLD_ENTITY_ARMIES_INCLUDED

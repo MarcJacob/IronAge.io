@@ -9,8 +9,9 @@
 
 #include "../world_movement.h"
 
-// Resolves an attack of an army that reached its target (called by the ATTACK order, see world_system_standing_orders.cpp).
-void world_resolve_attack(match_world_state& world, entity_guid attacker, entity_guid target)
+// Resolves an attack of an army that reached its target entity (called by the order logic, see world_system_standing_orders.cpp): starts or joins a siege / engagement,
+// or takes an undefended settlement.
+void world_army_attack_entity(match_world_state& world, entity_guid attacker, entity_guid target)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
 	world_entity_armies& armies = world.entities->armies;
@@ -19,17 +20,20 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 	ui16 targetIndex = target.get_index();
 	match_player_id attackerOwner = armies.owners[attackerIndex];
 
+	// Joining engagements requires a free army with men (see world_army_join_engagement).
+	if (armies.engagements[attackerIndex].is_valid() || army_total_manpower(armies.compositions[attackerIndex]) == 0) return;
+
 	switch (target.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
 	{
 		if (settlements.owners[targetIndex] == attackerOwner) break;
 
-		// Join the siege of this settlement if there is one (and it is joinable for the attacker, see army_engagement_try_join).
+		// Join the siege of this settlement if there is one (and it is joinable for the attacker, see world_army_join_engagement).
 		entity_guid siege = settlements.sieges[targetIndex];
 		if (world_entity_is_valid(world, siege))
 		{
-			army_engagement_try_join(world, siege, attacker);
+			world_army_join_engagement(world, attacker, siege);
 			return;
 		}
 
@@ -40,18 +44,7 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 			break;
 		}
 
-		// The settlement's garrison is the defending side, it is recounted into the engagement at every round (see world_system_engagements).
-		// A siege starts idle (besieging): no damage until the attacker commander begins the assault.
-		world_entity_engagements::state start = {};
-		army_unit_counts(settlements.garrison[targetIndex], start.defender.men);
-		start.location = (armies.locations[attackerIndex] + settlements.locations[targetIndex]) / 2; // Start engagement at midpoint between beligerent armies.
-		start.kind = world_entity_engagements::KIND_SIEGE;
-		start.phase = world_entity_engagements::PHASE_BESIEGING;
-		start.main_target = target;
-		start.attacker.commander = attackerOwner;
-		start.defender.commander = settlements.owners[targetIndex];
-		entity_guid engagement = world_spawn_engagement(world, start);
-		army_engagement_join(world, engagement, attacker, world_entity_engagements::SIDE_ATTACKER);
+		world_engagement_start_siege(world, attacker, target);
 		break;
 	}
 	case ENTITY_TYPE::ARMY:
@@ -59,44 +52,29 @@ void world_resolve_attack(match_world_state& world, entity_guid attacker, entity
 		entity_guid engagement = armies.engagements[targetIndex];
 		if (engagement.is_valid())
 		{
-			// The target is part of an engagement: same as reaching the engagement (joined if joinable, on the attacker's own side, see army_engagement_try_join).
-			army_engagement_try_join(world, engagement, attacker);
+			// The target is part of an engagement: same as reaching the engagement (joined if joinable, on the attacker's own side, see world_army_join_engagement).
+			world_army_join_engagement(world, attacker, engagement);
 		}
 		else
 		{
-			// Both armies start a new engagement halfway between them, the attacker on the attacker side. The engagement never moves afterwards.
-			world_entity_engagements::state start = {};
-			start.location = (armies.locations[attackerIndex] + armies.locations[targetIndex]) / 2;
-			start.kind = world_entity_engagements::KIND_FIELD;
-			start.phase = world_entity_engagements::PHASE_ACTIVE;
-			start.main_target = target;
-			start.attacker.commander = attackerOwner;
-			start.defender.commander = armies.owners[targetIndex];
-			engagement = world_spawn_engagement(world, start);
-			army_engagement_join(world, engagement, attacker, world_entity_engagements::SIDE_ATTACKER);
-			army_engagement_join(world, engagement, target, world_entity_engagements::SIDE_DEFENDER);
+			world_engagement_start_field_battle(world, attacker, target);
 		}
 		break;
 	}
 	case ENTITY_TYPE::ENGAGEMENT:
-		army_engagement_try_join(world, target, attacker);
+		if (world_entity_is_valid(world, target)) world_army_join_engagement(world, attacker, target);
 		break;
 	default:
 		break;
 	}
 }
 
-// Men of each pooled type (men at arms, horsemen, knights) a raising army draws from its home settlement per tick.
-constexpr ui16 RAISE_POOL_DRAW_PER_TICK = 3;
-
-// Levies a raising army draws from its home settlement's peasants per tick.
-constexpr ui16 RAISE_LEVIES_PER_TICK = 2;
-
-// Moves men of a type from a settlement pool (home) to an army (and the settlement's raised count), up to the target, the pool content and the per-tick limit.
-static void raise_draw_from_pool(match_world_state& world, ui16 army_index, ui16 settlement_index, ui8 troop_type, ui16 army_count, ui16 target)
+// Moves men of a type from a settlement pool (home) to an army (and the settlement's raised count), up to the target, the pool content and the per-tick limit
+// (GAME_PARAMETERS.raise_pool_draw_per_tick, per type).
+static void raise_draw_from_pool(match_world_state& world, ui16 army_index, ui16 settlement_index, TROOP_TYPE troop_type, ui16 army_count, ui16 target)
 {
 	ui16 wanted = army_count < target ? target - army_count : 0;
-	if (wanted > RAISE_POOL_DRAW_PER_TICK) wanted = RAISE_POOL_DRAW_PER_TICK;
+	if (wanted > GAME_PARAMETERS.raise_pool_draw_per_tick) wanted = GAME_PARAMETERS.raise_pool_draw_per_tick;
 
 	army_add_troops(world, army_index, troop_type, settlement_raise_soldiers(world, settlement_index, troop_type, wanted));
 }
@@ -129,10 +107,10 @@ void world_system_armies_raising(match_world_state& world)
 		const army_troop_count& target = armies.raised_troops[armyIndex];
 
         // Levies come from the garrison like the others; each one raised also kills one population (settlement_raise_soldiers).
-        raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_LEVIES, composition.levies, target.levies);
-		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
-		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_HORSEMEN, composition.horsemen, target.horsemen);
-		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE_KNIGHTS, composition.knights, target.knights);
+        raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::LEVIES, composition.levies, target.levies);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::HORSEMEN, composition.horsemen, target.horsemen);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::KNIGHTS, composition.knights, target.knights);
 
 		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
 			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)

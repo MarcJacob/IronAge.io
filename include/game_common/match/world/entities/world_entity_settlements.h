@@ -3,6 +3,7 @@
 
 #include "core.h"
 #include "world_entity_common.h"
+#include "../troop_types.h"
 
 // Optional (nullptr = nothing happens) type-specific behavior. Implemented in world_sim_entity_settlement.cpp.
 struct settlement_building_events

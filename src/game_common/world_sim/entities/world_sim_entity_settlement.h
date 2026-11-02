@@ -5,6 +5,7 @@
 
 #include "core/std_types.h"
 #include "game_common/match/game_parameters.h"
+#include "game_common/match/world/entities/world_entity_common.h"
 #include "game_common/match/world/world_state.h"
 #include "game_common/match/world/world_pathing.h"
 
@@ -20,6 +21,12 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 
 // Gives the settlement to a new owner. Its tax rate resets to 0.
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner);
+
+// True if the settlement is under siege (an engagement of kind SIEGE has it as its main target).
+static inline bool settlement_is_besieged(const match_world_state& world, ui16 settlement_index)
+{
+	return world.entities->settlements.sieges[settlement_index].is_valid();
+}
 
 // SETTLEMENT POPULATION PRIMITIVES
 // Every change to a settlement's peasants / home / raised counts and population_total goes through these (taking the settlement's index).
@@ -82,10 +89,10 @@ static inline ui32 settlement_kill_population(match_world_state& world, ui16 set
 }
 
 // Deaths of raised soldiers. Removes up to count raised soldiers of a type, returns how many were removed.
-static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
+static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
 	auto& raisedSoldiers = world.entities->settlements.raised[settlement_index];
-	ui16& raised = troop_count_field(raisedSoldiers, troop_type);
+	ui16& raised = raisedSoldiers.access_troop_count(troop_type);
 	ui16 removed = ia_min(count, raised);
 	raised -= removed;
 	world.entities->settlements.pop_total[settlement_index] -= ia_min((ui32)removed, world.entities->settlements.pop_total[settlement_index]);
@@ -94,10 +101,10 @@ static inline ui16 settlement_remove_soldiers_raised(match_world_state& world, u
 }
 
 // Training. Moves up to count peasants into the garrison of a type. Returns how many were moved.
-static inline ui16 settlement_train_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui32 count)
+static inline ui16 settlement_train_soldiers(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui32 count)
 {
 	auto& garrisonTroops = world.entities->settlements.garrison[settlement_index];
-	ui16& troops = troop_count_field(garrisonTroops, troop_type);
+	ui16& troops = garrisonTroops.access_troop_count(troop_type);
 
     ui16 moved = 0;
 
@@ -121,9 +128,9 @@ static inline ui16 settlement_train_soldiers(match_world_state& world, ui16 sett
 }
 
 // Discharge. Moves up to count garrison soldiers of a type back to peasants. Returns how many were moved.
-static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
+static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& troops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+	ui16& troops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
 	ui16 moved = ia_min(count, troops);
 	troops -= moved;
 	world.entities->settlements.pop_unemployed[settlement_index] += moved;
@@ -132,13 +139,13 @@ static inline ui16 settlement_discharge_soldiers(match_world_state& world, ui16 
 
 // Raising from the garrison. Moves up to count home soldiers of a type to raised. Returns how many were moved.
 // Each levy raised also leaves a stratum (unemployed, then workers, then peasants), so pop_total is unchanged.
-static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
+static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
-	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
+	ui16& garrisonTroops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
+	ui16& raised = world.entities->settlements.raised[settlement_index].access_troop_count(troop_type);
 
 	ui16 moved = ia_min(count, garrisonTroops);
-	if (troop_type == TROOP_TYPE_LEVIES) moved = (ui16)settlement_take_population(world, settlement_index, moved);
+	if (troop_type == TROOP_TYPE::LEVIES) moved = (ui16)settlement_take_population(world, settlement_index, moved);
 
 	garrisonTroops -= moved;
 	raised += moved;
@@ -148,14 +155,14 @@ static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 sett
 
 // Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison. Returns how many were moved.
 // Levies come back as unemployed population instead (the daily training refills the pool).
-static inline ui16 settlement_release_raised(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
+static inline ui16 settlement_release_raised(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& garrisonTroops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
-	ui16& raised = troop_count_field(world.entities->settlements.raised[settlement_index], troop_type);
+	ui16& garrisonTroops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
+	ui16& raised = world.entities->settlements.raised[settlement_index].access_troop_count(troop_type);
 
 	ui16 moved = ia_min(count, raised);
 
-	if (troop_type == TROOP_TYPE_LEVIES) world.entities->settlements.pop_unemployed[settlement_index] += moved;
+	if (troop_type == TROOP_TYPE::LEVIES) world.entities->settlements.pop_unemployed[settlement_index] += moved;
 	else garrisonTroops += moved;
 	raised -= moved;
 
@@ -218,9 +225,9 @@ static inline ui32 settlement_remove_workers(match_world_state& world, ui16 sett
 
 // Deaths of home soldiers (local pool). Removes up to count garrison soldiers of a type, returns how many were removed.
 // Levies killed this way kill that much population too.
-static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 count)
+static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
-	if (troop_type == TROOP_TYPE_LEVIES)
+	if (troop_type == TROOP_TYPE::LEVIES)
 	{
 		ui16& levies = world.entities->settlements.garrison[settlement_index].levies;
 		ui16 killedLevies = ia_min(count, levies);
@@ -229,7 +236,7 @@ static inline ui16 settlement_remove_soldiers_home(match_world_state& world, ui1
 		return killedLevies;
 	}
 
-    auto& troops = troop_count_field(world.entities->settlements.garrison[settlement_index], troop_type);
+    auto& troops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
 
     ui16 removed = ia_min(count, troops);
 	troops -= removed;
@@ -377,11 +384,11 @@ static inline ui16 settlement_levy_max(ui32 population_total)
 }
 
 // Casualties of the garrison (levies kill population). Takes up to kills[type] men of each type, returns the dead per type.
-static inline void settlement_garrison_take_casualties(match_world_state& world, ui16 settlement_index, const ui32 kills[TROOP_TYPE_COUNT], ui32 out_dead[TROOP_TYPE_COUNT])
+static inline void settlement_garrison_take_casualties(match_world_state& world, ui16 settlement_index, const army_troop_count& kills, army_troop_count& out_dead)
 {
-	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 	{
-		out_dead[troopType] = settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(kills[troopType], (ui32)0xFFFF));
+		out_dead.access_troop_count((TROOP_TYPE)troopType) = settlement_remove_soldiers_home(world, settlement_index, (TROOP_TYPE)troopType, (ui16)ia_min(kills.count[troopType], (ui32)0xFFFF));
 	}
 }
 

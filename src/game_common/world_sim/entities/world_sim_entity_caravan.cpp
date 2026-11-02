@@ -190,7 +190,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         if (!guid.is_valid() || guid == origin) continue;
 
         // Caravans cannot enter a besieged settlement.
-        if (settlements.sieges[index].is_valid()) continue;
+        if (settlement_is_besieged(world, index)) continue;
 
         bool excluded = false;
         for (ui32 i = 0; i < destination_exclude_count; i++) excluded = excluded || guid == destination_excludes[i];

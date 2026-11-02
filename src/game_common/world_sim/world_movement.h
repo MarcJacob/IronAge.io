@@ -23,6 +23,12 @@ static constexpr ui8 TILE_TERRAIN_TRAVEL_COST[] = {
 // Travel difficulty of a road tile, whatever its terrain.
 static constexpr ui8 ROAD_TRAVEL_COST = 1;
 
+// True if the two locations are at most the given number of tiles apart (straight line distance).
+static inline bool world_location_within_tiles(world_location a, world_location b, ui32 tiles)
+{
+    return vec2_dist_squared(a, b) <= (float)tiles * (float)tiles;
+}
+
 // Returns the travel cost of entering a tile for the given path parameters. 0 means impassable / invalid for the given params.
 static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region_index, ui16 tile_index, const path_params& params)
 {

@@ -6,6 +6,7 @@
 
 #include "../world_sim.h"
 #include "../entities/world_sim_entity_settlement.h"
+#include "../entities/world_sim_entity_army.h"
 
 // DAILY ECONOMY
 // Per settlement, in this order: production (with the trade volume bonus), tax on it, the rest into the market goods, sales of the sellable goods, pop growth.
@@ -71,27 +72,6 @@ static void settlement_goods_sales(world_entity_settlements& settlements, ui16 s
     if (settlement.siege.is_valid()) settlement.economy.consumption /= 2; // Under siege: half the usual consumption.
 
     goods -= ia_min(settlement.economy.consumption, settlement.economy.sellable);
-}
-
-// Deaths of home soldiers: each type loses its share of the count (rounded down), the rounding rest is taken in type order. Returns how many died.
-static ui32 settlement_soldiers_home_die(match_world_state& world, ui16 settlement_index, ui32 count)
-{
-    world_entity_settlement_view settlement { world.entities->settlements, settlement_index };
-
-    count = ia_min(count, settlement.soldiers_home());
-    if (count == 0) return 0;
-
-    ui32 removed = 0;
-    // Levies are not population (not in soldiers_home): they are left out.
-    for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT; troopType++)
-    {
-        removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)((ui64)troop_count_field(settlement.garrison, troopType) * count / settlement.soldiers_home()));
-    }
-    for (ui8 troopType = TROOP_TYPE_MEN_AT_ARMS; troopType < TROOP_TYPE_COUNT && removed < count; troopType++)
-    {
-        removed += settlement_remove_soldiers_home(world, settlement_index, troopType, (ui16)ia_min(count - removed, (ui32)0xFFFF));
-    }
-    return removed;
 }
 
 // Population growth in per mille, from how well consumption demand was met. required must not be 0.
@@ -244,18 +224,18 @@ void world_system_economy_daily_tick(match_world_state& world)
 // Daily training of a troop type: every duration_days days, trains up to the type's amount of peasants into soldiers, limited by the ceiling (already capped
 // by max) applied to the total (home + raised), and by the peasants above the minimum. Never removes troops.
 // A training that finds no room or no peasants is skipped, the progress resets anyway.
-static void train_troop(match_world_state& world, ui16 settlement_index, ui8 troop_type, ui16 ceiling)
+static void train_troop(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 ceiling)
 {
     world_entity_settlement_view settlement { world.entities->settlements, settlement_index };
 
-    settlement_troop_training& training = settlement.troop_training[troop_type];
+    settlement_troop_training& training = settlement.troop_training[(ui8)troop_type];
 
     training.progress_days++;
     if (training.progress_days < (training.duration_days > 0 ? training.duration_days : 1)) return;
     training.progress_days = 0;
 
     ui32 minLeft = GAME_PARAMETERS.raise_min_population_left;
-    ui32 owned = (ui32)troop_count_field(settlement.garrison, troop_type) + troop_count_field(settlement.raised, troop_type);
+    ui32 owned = (ui32)settlement.garrison.count[(ui8)troop_type] + settlement.raised.count[(ui8)troop_type];
     ui32 room = owned < ceiling ? ceiling - owned : 0;
     ui32 available = settlement.pop_peasants > minLeft ? settlement.pop_peasants - minLeft : 0;
     ui32 trained = ia_min(ia_min(room, available), (ui32)training.amount);
@@ -287,9 +267,9 @@ void world_system_economy_troop_growth(match_world_state& world)
 
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 
-        train_troop(world, settlementIndex, TROOP_TYPE_MEN_AT_ARMS, ceilings.men_at_arms);
-        train_troop(world, settlementIndex, TROOP_TYPE_HORSEMEN, ceilings.horsemen);
-        train_troop(world, settlementIndex, TROOP_TYPE_KNIGHTS, ceilings.knights);
+        train_troop(world, settlementIndex, TROOP_TYPE::MEN_AT_ARMS, ceilings.men_at_arms);
+        train_troop(world, settlementIndex, TROOP_TYPE::HORSEMEN, ceilings.horsemen);
+        train_troop(world, settlementIndex, TROOP_TYPE::KNIGHTS, ceilings.knights);
     }
 }
 
@@ -312,4 +292,28 @@ void world_system_settlement_buildings_daily_tick(match_world_state& world)
             }
         }
     }
+}
+
+// Runs daily. Soldiers of the local pools are paid from the owner's treasury, as much as it holds (down to 0, no debt). An unpaid day has no consequence.
+// Garrison levies are not paid (no upkeep).
+void world_system_local_troops_pay(match_world_state& world)
+{
+	if (!world_is_daily_tick(world)) return;
+
+	world_entity_settlements& settlements = world.entities->settlements;
+
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid()) continue;
+
+		match_player_id owner = settlements.owners[settlementIndex];
+		if (owner >= world.player_count) continue;
+
+		world_player_state& player = world.player_states[owner];
+		army_troop_count paidTroops = settlements.garrison[settlementIndex];
+		paidTroops.levies = 0;
+		ui32 paid = ia_min(army_daily_consumption(paidTroops), player.treasury);
+		player.treasury -= paid;
+		player.expenses += paid;
+	}
 }

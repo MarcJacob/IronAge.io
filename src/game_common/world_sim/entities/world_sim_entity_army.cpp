@@ -1,5 +1,6 @@
 #include "world_sim_entity_army.h"
 #include "../world_sim.h"
+#include "game_common/match/world/troop_types.h"
 #include "world_sim_entity_settlement.h"
 #include "world_sim_entity_engagement.h"
 #include "game_common/match/world/world.h"
@@ -57,12 +58,14 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
+	// Callers make sure the settlement is owned by the army's owner (the disband command refuses otherwise, GO_HOME deserts instead): the men enter its garrison.
+	ASSERT(world.entities->settlements.owners[settlement.get_index()] == world.entities->armies.owners[army.get_index()]);
 	army_troop_count men = world.entities->armies.compositions[army.get_index()];
 
 	// Levies return as unemployed population (settlement_release_raised), the other types rejoin the local troops (garrison).
-	for (ui8 troopType = 0; troopType < TROOP_TYPE_COUNT; troopType++)
+	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 	{
-		settlement_release_raised(world, settlement.get_index(), troopType, troop_count_field(men, troopType));
+		settlement_release_raised(world, settlement.get_index(), (TROOP_TYPE)troopType, men.count[troopType]);
 	}
 
 	// Homecoming: gold goes to the owner's treasury. Supplies are split by homecoming_settlement_goods_percent: that share joins the settlement's local goods
@@ -81,26 +84,26 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	world_destroy_army(world, army);
 }
 
-void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES])
+void world_army_take_casualties(match_world_state& world, entity_guid army, const army_troop_count& kills, army_troop_count& out_dead)
 {
 	world_entity_armies& armies = world.entities->armies;
 
-	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
+	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
 	{
-		out_dead[unitType] = army_remove_troops(world, army.get_index(), unitType, (ui16)ia_min(kills[unitType], (ui32)0xFFFF));
+		out_dead.count[unitType] = army_remove_troops(world, army.get_index(), (TROOP_TYPE)unitType, (ui16)ia_min(kills.count[unitType], (ui32)0xFFFF));
 	}
 
 	// The dead also leave their home settlement (raised counts and total population), even if it changed owner. Skipped if the home is gone.
 	entity_guid home = armies.home_settlements[army.get_index()];
 	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
 
-	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++)
+	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
 	{
-		settlement_remove_soldiers_raised(world, home.get_index(), unitType, (ui16)out_dead[unitType]);
+		settlement_remove_soldiers_raised(world, home.get_index(), (TROOP_TYPE)unitType, (ui16)out_dead.count[unitType]);
 	}
 }
 
-ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_type, ui16 count)
+ui16 world_army_desertion(match_world_state& world, entity_guid army, TROOP_TYPE troop_type, ui16 count)
 {
 	world_entity_armies& armies = world.entities->armies;
 	ui16 deserters = army_remove_troops(world, army.get_index(), troop_type, count);
@@ -108,11 +111,7 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 
 	// An army in a engagement no longer counts them among its side's men.
 	entity_guid engagement = armies.engagements[army.get_index()];
-	if (engagement.is_valid())
-	{
-		ui32& sideMen = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[army.get_index()]).men[troop_type];
-		sideMen -= ia_min(sideMen, (ui32)deserters);
-	}
+	if (engagement.is_valid()) world_engagement_remove_troops(world, engagement, armies.engagement_sides[army.get_index()], troop_type, deserters);
 
 	// They go back to the home settlement, even if it changed owner. Gone if the home no longer exists.
 	entity_guid home = armies.home_settlements[army.get_index()];
@@ -126,32 +125,6 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_
 	// The last man leaving ends the army. The army is invalid after this.
 	if (army_total_manpower(armies.compositions[army.get_index()]) == 0) world_destroy_army(world, army);
 	return deserters;
-}
-
-bool army_can_exit_current_engagement(const match_world_state& world, ui16 army_index)
-{
-	const world_entity_armies& armies = world.entities->armies;
-	entity_guid engagement = armies.engagements[army_index];
-	if (!engagement.is_valid()) return false;
-
-	// Only an idle siege has no fighting: its armies just walk out of it.
-	return world.entities->engagements.states[engagement.get_index()].phase == world_entity_engagements::PHASE_BESIEGING;
-}
-
-void army_exit_engagement(match_world_state& world, ui16 army_index)
-{
-	world_entity_armies& armies = world.entities->armies;
-	entity_guid engagement = armies.engagements[army_index];
-	if (!engagement.is_valid()) return;
-
-	// Its men leave their side (a siege recounts its sides every round anyway).
-	world_entity_engagements::side_state& side = world.entities->engagements.states[engagement.get_index()].side(armies.engagement_sides[army_index]);
-	ui32 counts[world_entity_engagements::UNIT_TYPES];
-	army_unit_counts(armies.compositions[army_index], counts);
-	for (ui8 unitType = 0; unitType < world_entity_engagements::UNIT_TYPES; unitType++) side.men[unitType] -= ia_min(counts[unitType], side.men[unitType]);
-
-	armies.engagements[army_index] = INVALID_ENTITY_GUID;
-	world_engagement_army_left(world, engagement); // May end a siege left without attackers.
 }
 
 void army_order_station_nearest_friendly_settlement(match_world_state& world, ui16 army_index)
@@ -214,7 +187,7 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.engagements = memory.alloc<entity_guid>(count);
 	if (armies.engagements == nullptr) return false;
 
-	armies.engagement_sides = memory.alloc<ui8>(count);
+	armies.engagement_sides = memory.alloc<ENGAGEMENT_SIDE>(count);
 	if (armies.engagement_sides == nullptr) return false;
 
 	armies.raised_troops = memory.alloc<army_troop_count>(count);
@@ -267,4 +240,96 @@ ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
 		+ (ui64)troops.horsemen * GAME_PARAMETERS.carry_horseman
 		+ (ui64)troops.knights * GAME_PARAMETERS.carry_knight;
 	return (ui32)ia_min(capacity, (ui64)0xFFFFFFFF);
+}
+
+// RAID LOOT (temporary: becomes tile-based raiding later)
+
+// What is left of a settlement's daily share: day_max is the share of the amount the settlement had before today's looting, taken is what was already taken today.
+static ui32 raid_budget_left(ui64 day_max, ui32 taken)
+{
+	return day_max > taken ? (ui32)(day_max - taken) : 0;
+}
+
+void world_army_loot_settlement(match_world_state& world, entity_guid army, entity_guid settlement)
+{
+	world_entity_armies& armies = world.entities->armies;
+	world_entity_settlements& settlements = world.entities->settlements;
+	ui16 army_index = army.get_index();
+	ui16 settlement_index = settlement.get_index();
+	settlement_raid& raid = settlements.raids[settlement_index];
+	settlement_trading& trade = settlements.trade[settlement_index];
+	const game_parameters& params = GAME_PARAMETERS;
+
+	raid.raided = 1;
+	raid.looted_today = 1;
+
+	ui32 capacity = army_supply_capacity(world, army_index);
+	ui32& gold = armies.gold[army_index];
+	ui32& supplies = armies.supplies[army_index];
+	ui32 goldRoom = capacity > gold ? capacity - gold : 0;
+	ui32 suppliesRoom = capacity > supplies ? capacity - supplies : 0;
+
+	// Production (last day's figure, the economy tick runs right after and does not credit what is taken).
+	ui64 productionMax = (ui64)settlements.economies[settlement_index].production * ia_min(params.raid_production_percent, (ui32)100) / 100;
+	ui64 goldMax = productionMax * ia_min(params.raid_production_gold_percent, (ui32)100) / 100;
+	ui32 takenGold = ia_min(raid_budget_left(goldMax, raid.production_gold), goldRoom);
+	ui32 takenSupplies = ia_min(raid_budget_left(productionMax - goldMax, raid.production_supplies), suppliesRoom);
+	raid.production_gold += takenGold;
+	raid.production_supplies += takenSupplies;
+	gold += takenGold;
+	supplies += takenSupplies;
+	goldRoom -= takenGold;
+	suppliesRoom -= takenSupplies;
+
+	// Peasants killed, 1 gold each.
+	ui64 killedMax = ((ui64)settlements.pop_peasants[settlement_index] + raid.peasants_killed) * ia_min(params.raid_peasants_percent, (ui32)100) / 100;
+	ui32 killed = settlement_remove_peasants(world, settlement_index, ia_min(raid_budget_left(killedMax, raid.peasants_killed), goldRoom));
+	raid.peasants_killed += killed;
+	gold += killed;
+
+	// Goods, local pool first, 1 supply each.
+	ui64 goodsStock = (ui64)trade.market_goods + trade.export_goods;
+	ui64 goodsMax = (goodsStock + raid.goods_taken) * ia_min(params.raid_goods_percent, (ui32)100) / 100;
+	ui32 goods = (ui32)ia_min(ia_min((ui64)raid_budget_left(goodsMax, raid.goods_taken), (ui64)suppliesRoom), goodsStock);
+	ui32 fromLocal = ia_min(goods, trade.market_goods);
+	trade.market_goods -= fromLocal;
+	trade.export_goods -= goods - fromLocal;
+	raid.goods_taken += goods;
+	supplies += goods;
+}
+
+void world_system_raid_loot(match_world_state& world)
+{
+	if (!world_is_daily_tick(world)) return;
+
+	world_entity_armies& armies = world.entities->armies;
+	world_entity_settlements& settlements = world.entities->settlements;
+
+	for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		settlement_raid& raid = settlements.raids[settlementIndex];
+		raid = { .raided = raid.looted_today };
+	}
+
+	if (armies.max_count == 0) return;
+	ui32 start = world.rand_gen.next_range<ui32>(0, armies.max_count);
+	for (ui32 step = 0; step < armies.max_count; step++)
+	{
+		ui16 armyIndex = (ui16)((start + step) % armies.max_count);
+		if (!armies.guids[armyIndex].is_valid() || armies.raising[armyIndex] || armies.engagements[armyIndex].is_valid()) continue;
+
+		const army_order& order = armies.orders[armyIndex];
+		if (order.type != ARMY_ORDER_RAID || order.state != ARMY_ORDER_STATE_RAID_RAIDING) continue;
+		if (!world_entity_is_valid(world, order.target) || order.target.get_type() != ENTITY_TYPE::SETTLEMENT) continue;
+
+		world_army_loot_settlement(world, armies.guids[armyIndex], order.target);
+
+		// Gold pool full: head home (GO_HOME disbands at home, or falls back to station if there is no valid home).
+		ui32 capacity = army_supply_capacity(world, armyIndex);
+		if (capacity > 0 && armies.gold[armyIndex] >= capacity)
+		{
+			armies.orders[armyIndex] = {};
+			armies.orders[armyIndex].type = ARMY_ORDER_GO_HOME;
+		}
+	}
 }

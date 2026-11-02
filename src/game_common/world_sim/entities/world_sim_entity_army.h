@@ -4,6 +4,7 @@
 #define WORLD_SIM_ARMY_INCLUDED
 
 #include "game_common/match/game_parameters.h"
+#include "game_common/match/world/troop_types.h"
 #include "game_common/match/world/world_state.h"
 
 // Gives the army a STATION order at the location (the order system then walks it there). Does not touch its movement.
@@ -39,79 +40,47 @@ void world_destroy_army(match_world_state& world, entity_guid army);
 // Allocates the armies' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 
-static inline ui64 army_total_manpower(const army_troop_count& composition)
-{
-	return (ui64)composition.levies + composition.men_at_arms + composition.horsemen + composition.knights;
-}
-
-// Troop types, in the order of world_entity_engagements::UNIT_TYPES (cheapest first).
-constexpr ui8 TROOP_TYPE_LEVIES = 0;
-constexpr ui8 TROOP_TYPE_MEN_AT_ARMS = 1;
-constexpr ui8 TROOP_TYPE_HORSEMEN = 2;
-constexpr ui8 TROOP_TYPE_KNIGHTS = 3;
-constexpr ui8 TROOP_TYPE_COUNT = 4;
-
-static inline ui16& troop_count_field(army_troop_count& troops, ui8 troop_type)
-{
-	switch (troop_type)
-	{
-	case TROOP_TYPE_LEVIES: return troops.levies;
-	case TROOP_TYPE_MEN_AT_ARMS: return troops.men_at_arms;
-	case TROOP_TYPE_HORSEMEN: return troops.horsemen;
-	default: return troops.knights;
-	}
-}
-
 // ARMY PRIMITIVES
 // Army composition changes. Take the army's index. They only touch the army: the home settlement's counts and the player stats are the caller's business.
 
 // Adds men of a type to the army's composition (clamped to the ui16 count). Returns how many were added.
-static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, ui8 troop_type, ui16 count)
+static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& troops = troop_count_field(world.entities->armies.compositions[army_index], troop_type);
+	ui16& troops = world.entities->armies.compositions[army_index].access_troop_count(troop_type);
 	ui16 added = ia_min(count, (ui16)(0xFFFF - troops));
 	troops += added;
 	return added;
 }
 
 // Removes up to count men of a type from the army's composition. Returns how many were removed.
-static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index, ui8 troop_type, ui16 count)
+static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& troops = troop_count_field(world.entities->armies.compositions[army_index], troop_type);
+	ui16& troops = world.entities->armies.compositions[army_index].access_troop_count(troop_type);
 	ui16 removed = ia_min(count, troops);
 	troops -= removed;
 	return removed;
 }
 
-// Man count of each unit type of an army, in the order of world_entity_engagements::UNIT_TYPES.
-static inline void army_unit_counts(const army_troop_count& composition, ui32 out_counts[world_entity_engagements::UNIT_TYPES])
-{
-	out_counts[0] = composition.levies;
-	out_counts[1] = composition.men_at_arms;
-	out_counts[2] = composition.horsemen;
-	out_counts[3] = composition.knights;
-}
+// Destroys an army and returns its men to the settlement: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
+void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 // Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as unemployed pop, the others in the local pool), even if it changed owner,
 // or vanish if the home is invalid. Returns how many left the army.
 // @TODO(Marc): The further from home the army is, the less likely deserters should be to make it back.
-ui16 world_army_desertion(match_world_state& world, entity_guid army, ui8 troop_type, ui16 count);
+ui16 world_army_desertion(match_world_state& world, entity_guid army, TROOP_TYPE troop_type, ui16 count);
 
 // Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid).
-void world_army_take_casualties(match_world_state& world, entity_guid army, const ui32 kills[world_entity_engagements::UNIT_TYPES], ui32 out_dead[world_entity_engagements::UNIT_TYPES]);
+void world_army_take_casualties(match_world_state& world, entity_guid army, const army_troop_count& kills, army_troop_count& out_dead);
 
-// Can the army leave its engagement right now? True only in an idle siege (BESIEGING): nothing fights there, so it just walks out (army_exit_engagement).
-// Fighting engagements pin their armies until concluded.
-bool army_can_exit_current_engagement(const match_world_state& world, ui16 army_index);
+// Raiding. The army loots the settlement it raids: production (gold and supplies), peasants killed (gold), goods (supplies). Each is the min of the daily potential left on the
+// settlement and the room left in the army's gold / supplies pool (capacity: army_supply_capacity). What is taken leaves the settlement; nothing else is destroyed.
+void world_army_loot_settlement(match_world_state& world, entity_guid army, entity_guid settlement);
 
-// The army leaves its engagement at once (its men leave the side's men). May end a siege left without attackers.
-void army_exit_engagement(match_world_state& world, ui16 army_index);
+// Runs daily, before the settlement economy. Resets the settlements' daily raided totals (raided = looted yesterday), then every army raiding (RAID_RAIDING,
+// not fleeing / travelling / raising / in an engagement) loots its target. Armies go in index order from a random start so none has a standing advantage on a shared target.
+// Declared in systems_war.h.
 
 // Gives the army a STATION order at the nearest friendly settlement (at its own location if there is none).
 void army_order_station_nearest_friendly_settlement(match_world_state& world, ui16 army_index);
-
-void army_engagement_join(match_world_state& world, entity_guid engagement, entity_guid army, ui8 side);
-// Joins the army to the engagement on its owner's side if the engagement is joinable for them (not neutral). Returns whether it joined. Same outcome for the proximity join and attacks.
-bool army_engagement_try_join(match_world_state& world, entity_guid engagement, entity_guid army);
 
 #endif // WORLD_SIM_ARMY_INCLUDED

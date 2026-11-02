@@ -33,6 +33,21 @@ static inline world_location caravan_endpoint(const match_world_state& world, WO
     return tile;
 }
 
+// Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
+// Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
+// For ships (caravan_flags IS_SHIP) only coastal ones (settlement_dock_tile). Distances stay between the settlement tiles.
+// Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - local and export pools). Sizes below min_value are not candidates.
+// Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
+// (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (profit x 100 / tile distance), only candidates
+// reaching trade.min_profit_per_travel_dist_percent count (see caravan_spawn_score). Returns false if there is no destination, otherwise the destination and the caravan size for it.
+bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
+    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_value,
+    const entity_guid* destination_excludes = nullptr, ui32 destination_exclude_count = 0);
+
+// Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
+// With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
+void world_caravan_retarget(match_world_state& world, entity_guid caravan);
+
 entity_guid world_spawn_entity_caravan(match_world_state& world, const world_entity_caravan& start_state);
 void world_destroy_entity_caravan(match_world_state& world, const entity_guid& caravan);
 

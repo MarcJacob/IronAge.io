@@ -68,6 +68,9 @@ constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
 constexpr ui32 AI_TREASURY_COMFORT = 1500;
 constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
 constexpr ui32 AI_TINY_ARMY = 10; // Idle armies under this are disbanded.
+constexpr ui32 AI_DEFEND_GATHER_RADIUS = 40; // Own idle armies this close to a threat help against it.
+constexpr ui32 AI_ASSAULT_OUTNUMBER = 3; // Begin the assault when the besiegers have this many times the defenders' men (total men)...
+constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
 
 // Rows of SETTLEMENT_BUILDING_TABLE the AI knows, looked up by row name at compile time (the table has no enum), so inserting or reordering rows cannot break them.
 // Returns SETTLEMENT_BUILDING_TYPE_COUNT if there is no such row (caught by the static_asserts below).

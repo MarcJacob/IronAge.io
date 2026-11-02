@@ -95,7 +95,7 @@ export enum ARMY_ORDER
     GO_HOME = 4,
 }
 
-// Mirrors world_entity_engagements::PHASE_* (same header), the engagement GDO's phase.
+// Mirrors the C++ ENGAGEMENT_PHASE enum (same header as below), the engagement GDO's phase.
 export enum ENGAGEMENT_PHASE
 {
     ACTIVE = 0,
@@ -105,7 +105,7 @@ export enum ENGAGEMENT_PHASE
     OUTSIDE = 4,
 }
 
-// Mirrors world_entity_engagements::KIND_* (include/game_common/match/world/entities/world_entity_armies.h), the engagement GDO's kind. Update here if they change.
+// Mirrors the C++ ENGAGEMENT_KIND enum (include/game_common/match/world/entities/world_entity_armies.h), the engagement GDO's kind. Update here if they change.
 export enum ENGAGEMENT_KIND
 {
     FIELD = 0,

@@ -125,7 +125,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.viewport_location = engagementLoc - render_state.viewport.bottom_left;
 			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
 			const world_entity_engagements::state& engagementState = engagements.states[engagementIndex];
-			outEntity.flags = (engagementState.kind == world_entity_engagements::KIND_SIEGE ? 1 : 0) | (engagementState.phase == world_entity_engagements::PHASE_BESIEGING ? 2 : 0);
+			outEntity.flags = (engagementState.kind == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (engagementState.phase == ENGAGEMENT_PHASE::BESIEGING ? 2 : 0);
 			outEntity.fractional_offset = {};
 
 			visibleCount++;

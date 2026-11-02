@@ -15,8 +15,8 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
 - May absorb / reorder: `army_supplies` tasks 3-4, `trade_market_goods` phases 2-3, backlog army items (stance / retreat, standing orders, combining, detection index).
 - Multi-file architecture change.
 - Design now in `management/design/military_design.md` (troop stats, wagons, battle formula, supply system, conquest looting). Tasks (each reviewed by user before the next):
-  - R0 [DONE, tested, uncommitted] Small fixes: attack-target wrapper vs engagements, siege exit by order, lift siege fix, reach 2 tiles, stale comments / imprint lines. Field withdrawal removed (see decisions).
-  - R1 [built, NOT compiled / tested; open: GO_HOME disband has no owner check, stale comment match_ai_tactics_military.cpp:87] Pop model (survey done, see decisions "Pop"): all soldiers (garrison + armies, all types) count in origin settlement's pop and use pool slots; raised ones don't consume local goods.
+  - R0 [DONE, tested, committed] Small fixes: attack-target wrapper vs engagements, siege exit by order, lift siege fix, reach 2 tiles, stale comments / imprint lines. Field withdrawal removed (see decisions).
+  - R1 [DONE, tested, committed 20db280; open: GO_HOME disband has no owner check, stale comment match_ai_tactics_military.cpp:87] Pop model (survey done, see decisions "Pop"): all soldiers (garrison + armies, all types) count in origin settlement's pop and use pool slots; raised ones don't consume local goods.
   - R2 Troop stats, Wagons, new battle formula, counter bonuses.
   - R3 Army gold, pay, supply purchases (caravans / stationed settlement), armies + campaigns as trade targets. Replaces `army_supplies` tasks 3-4.
   - R4 Conquest looting, banditry, army-to-army looting.
@@ -138,8 +138,21 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 
 `alpha_troops_recruitment_2026-10-18.md`, `basic_world_economy_2026-10-18.md` (buildings), `straight_line_movement_2026-10-15.md`.
 
+## Army / engagement cleanup (peer session, ~30 files, DONE, tested, committed)
+
+Grew out of R1 leftovers.
+- R1 leftovers [DONE in code]: GO_HOME with changed-hands home -> men desert, army destroyed, gold / supplies vanish; `world_disband_army` asserts owner; stale comment fixed.
+- Troops: `TROOP_TYPE`, `army_troop_count`, one `troop_type_stats {damage, defense, armor}` table (health gone), `army_total_manpower` (ui64).
+- Engagement code isolated in own files (`world_entity_engagements.h` + .cpp, enums for side / kind / phase, toolbox functions, both engagement systems); leftover constexprs became game params / AI constants. Commands no longer touch an army's engagement; each order handles it.
+- Leave rule: `world_engagement_can_be_left` = army beyond join radius x param (2), or attacker side of an idle siege. Auto-join is aggro only, skips leavable engagements; STATION joins a siege whose join radius contains its station point; ATTACK joins on arrival.
+- DEFEND / RAID no longer wander (RAID_MOVING and its params removed).
+- Fix pending build: engagement GDO count properties switched UI32 -> UI16.
+- Watch in playtest: armies leaving fights beyond 2x radius; STATION joining sieges; ATTACK reaching idle sieges via order only; caravan siege retarget now on movement tick.
+- Open: battles end in 1-2 rounds (formula / numbers, user to decide; design doc line 68 same); splitting `systems_war.h` per entity conflicts with one-header-per-category rule in `world_sim.imprint.md` (decision needed); `world_army_attack_entity` not yet moved to army files; `order_hostile_men` / `order_find_hostile_army` stay in orders file.
+- Stale docs: `management/design/military_design.md` (formula), older sections of `military_state.md`.
+
 ## Next step
 
 Everything through P3e is tested and committed (0031653).
-Status: R0 done and tested; R1 built but needs compile + hand test (R0 and R1 uncommitted). Then: decide GO_HOME owner check; R2 (stats / wagons / formula; user to update design doc line 68 formula); user finishes design doc (supply system); R3-R5 per task list.
+Status: R0 and R1 done, tested, committed. Cleanup (above) done, tested, committed. Next: R2 (stats / wagons / formula; user to update design doc line 68 formula); user finishes design doc (supply system); R3-R5 per task list.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

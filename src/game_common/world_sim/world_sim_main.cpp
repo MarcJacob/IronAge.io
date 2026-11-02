@@ -23,7 +23,6 @@
 #include "systems/world_system_army.cpp"
 #include "systems/world_system_army_economy.cpp"
 #include "systems/world_system_standing_orders.cpp"
-#include "systems/world_system_engagement.cpp"
 #include "systems/world_system_worker_construction.cpp"
 #include "systems/world_system_caravan_spawn.cpp"
 #include "systems/world_system_caravan_trade.cpp"
@@ -128,6 +127,42 @@ PLAYER_DIPLOMATIC_STATUS world_entity_get_diplomatic_status(const match_world_st
 	}
 	if (entity.get_type() == ENTITY_TYPE::ENGAGEMENT) return engagement_diplomatic_status(world, entity, player);
 	return world_player_get_diplomatic_status(world, player, world_entity_get_owner(world, entity));
+}
+
+bool world_pick_random_point(match_world_state& world, const world_random_point_params& params, world_location& out_point)
+{
+	// Not implemented yet: asserted unset so they cannot be silently ignored.
+	ASSERT(params.terrain_type_mask == 0 && !params.restrict_to_player_territory && params.area_radius_tiles == 0);
+
+	const world_dimensions& size = world.terrain->size_tiles;
+
+	if (!params.settlement_territory.is_valid())
+	{
+		// No restriction: any tile of the world.
+		out_point = { (ui16)(world.rand_gen.next<ui32>() % size.x), (ui16)(world.rand_gen.next<ui32>() % size.y) };
+		return true;
+	}
+
+	// Settlement territory: random tiles of the rectangle bounding its claimed tiles, until one is claimed.
+	ASSERT(params.settlement_territory.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, params.settlement_territory));
+	ui16 settlementIndex = params.settlement_territory.get_index();
+	const world_entity_settlements::territory& territory = world.entities->settlements.territories[settlementIndex];
+	ui32 width = (ui32)territory.bounds_max.x - territory.bounds_min.x + 1;
+	ui32 height = (ui32)territory.bounds_max.y - territory.bounds_min.y + 1;
+
+	ui8 attempts = params.max_attempts != 0 ? params.max_attempts : 8;
+	for (ui8 attempt = 0; attempt < attempts; attempt++)
+	{
+		world_location point = { (ui16)(territory.bounds_min.x + world.rand_gen.next<ui32>() % width), (ui16)(territory.bounds_min.y + world.rand_gen.next<ui32>() % height) };
+		if (world_tile_owned_by_settlement(world, point, settlementIndex))
+		{
+			out_point = point;
+			return true;
+		}
+	}
+
+	out_point = world.entities->settlements.locations[settlementIndex];
+	return false;
 }
 
 // MAIN LIFECYCLE FUNCTIONS

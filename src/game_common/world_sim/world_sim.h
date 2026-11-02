@@ -22,25 +22,35 @@ static inline bool world_is_daily_tick(const match_world_state& world)
 
 // ENTITIES
 
-// Destroys an army and returns its men to the settlement: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
-void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
-
-// Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
-// Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
-// For ships (caravan_flags IS_SHIP) only coastal ones (settlement_dock_tile). Distances stay between the settlement tiles.
-// Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - local and export pools). Sizes below min_value are not candidates.
-// Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
-// (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (profit x 100 / tile distance), only candidates
-// reaching trade.min_profit_per_travel_dist_percent count (see caravan_spawn_score). Returns false if there is no destination, otherwise the destination and the caravan size for it.
-bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
-    WORLD_ENTITY_CARAVAN_FLAGS caravan_flags, entity_guid& out_destination, ui32& out_value,
-    const entity_guid* destination_excludes = nullptr, ui32 destination_exclude_count = 0);
-
-// Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
-// With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
-void world_caravan_retarget(match_world_state& world, entity_guid caravan);
-
 // SHARED SYSTEM HELPERS
+
+// True if the tile at the location is claimed by the settlement (it is part of its territory).
+static inline bool world_tile_owned_by_settlement(const match_world_state& world, world_location location, ui16 settlement_index)
+{
+    ui16 regionIndex, tileIndex;
+    world_get_tile(*world.terrain, location, regionIndex, tileIndex);
+    return world.terrain->regions[regionIndex].owners[tileIndex] == settlement_index;
+}
+
+// Restrictions of a random point of the world. Zero-initialized = no restriction at all (any tile of the world).
+// Only settlement_territory is applied for now: the other restrictions are not implemented and asserted unset.
+struct world_random_point_params
+{
+    entity_guid settlement_territory; // Only tiles claimed by this settlement. INVALID_ENTITY_GUID = any.
+
+    // @TODO(Marc): Not implemented yet.
+    ui8 terrain_type_mask; // Only tiles of these types (bit = 1 << TERRAIN_TILE_TYPE, see PATH_TERRAIN_*). 0 = any.
+    bool restrict_to_player_territory; // Only tiles claimed by a settlement of player_territory.
+    match_player_id player_territory;
+    ui16 area_radius_tiles; // Only tiles within this many tiles of area_center. 0 = no area restriction.
+    world_location area_center;
+
+    ui8 max_attempts; // Random tiles tried before giving up on a restrictive search. 0 = default (8). Unrestricted searches always succeed in one.
+};
+
+// Picks a random tile of the world satisfying the restrictions (see world_random_point_params), using the world's deterministic random generator.
+// Returns false if none was found, in which case out_point is the settlement's location (settlement territory restriction) or INVALID_WORLD_LOCATION.
+bool world_pick_random_point(match_world_state& world, const world_random_point_params& params, world_location& out_point);
 
 // LIFECYCLE
 

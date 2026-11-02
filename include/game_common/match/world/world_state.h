@@ -9,6 +9,7 @@
 #include "entities/world_entity_settlements.h"
 #include "entities/world_entity_workers.h"
 #include "entities/world_entity_caravans.h"
+#include "entities/world_entity_engagements.h"
 #include "entities/world_entity_armies.h"
 
 // State of one player, indexed by match_player_id in the world state.

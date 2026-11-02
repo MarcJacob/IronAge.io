@@ -4,8 +4,6 @@
 #define WORLD_ENTITIES_INCLUDED
 
 #include "core.h"
-#include "game_common/game_data_object.h"
-
 #include "../world.h"
 
 // Possible types for an entity.
@@ -93,15 +91,6 @@ struct world_entity_movement
 	world_location move_target; // Current waypoint: the tile whose center the entity is moving straight towards. Only set by the movement system.
 	ui32 path_handle; // Path the entity is following, INVALID_PATH_HANDLE if none.
 	world_location path_destination; // The destination move_target was computed for: a different destination means a new path is needed. Not exposed.
-};
-
-// Contains a count of all troop types.
-struct army_troop_count
-{
-    ui16 levies;
-    ui16 men_at_arms;
-    ui16 horsemen;
-    ui16 knights;
 };
 
 bool            world_entity_is_valid(const match_world_state& world, entity_guid entity);

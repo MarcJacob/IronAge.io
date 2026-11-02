@@ -6,6 +6,7 @@
 
 #include "core.h"
 #include "game_common/game_data_object.h"
+#include "world/troop_types.h"
 
 // @TODO(Marc): Move arable land parameters to params struct.
 
@@ -89,10 +90,7 @@ struct game_parameters
     ui32 order_attack_reach_tiles = 2; // An army resolves its attack (or chase) on a target within this many tiles.
     ui32 order_station_acquire_radius = 5; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked...
     ui32 order_station_leash = 10; // ... as long as they are at most this far from the station point (the army returns to it afterwards).
-    ui32 order_defend_wander_radius = 12; // DEFEND_TERRITORY: the army walks to random points within this many tiles of its settlement.
-    ui32 order_defend_wander_chance = 40; // Each tick it stands on its point, it picks a new one with a chance of 1 in this. At least 1.
     ui32 order_defend_threat_radius = 20; // Hostile armies in the territory or this close to the settlement count in the threat the army weighs itself against.
-    ui32 order_raid_moving_speed_percent = 50; // RAID_MOVING: the army moves at this percent of its normal speed.
     ui32 order_raid_flee_radius = 15; // Stronger hostile armies this close make the raiding army flee...
     ui32 order_raid_return_radius = 25; // ... until none is within this radius.
     ui32 order_go_home_disband_tiles = 2; // GO_HOME: the army disbands once this close to its home settlement.
@@ -101,28 +99,41 @@ struct game_parameters
     // Radius = base tiles + 1 per power of 2 of the troops involved above the threshold (threshold x 2 -> +1, x 4 -> +2...). Sieges do not count the men inside the settlement.
     ui32 engagement_join_base_tiles = 2;
     ui32 engagement_join_troops_threshold = 256; // At least 1.
+    ui32 engagement_pin_distance_tiles = 2; // Armies in an engagement move towards its location until they are this many tiles from it, then stay pinned.
+    ui32 engagement_leave_radius_multiplier = 2; // An army farther than this many join radii from its engagement may leave it (see world_engagement_can_be_left).
 
-    // ENGAGEMENT DAMAGE. Per round a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it over its men by type; each type
-    // reduces the damage aimed at it by a random 0 .. (men of that type x defense); what is left kills one man per health point set (a remainder kills one more at random, proportionally).
+    // ENGAGEMENT DAMAGE. Every engagement_tick_interval ticks a round runs: a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it
+    // over its men by type; each type's share is divided by rand(1, defense) then by rand(1, armor): what is left is the number of men killed of that type.
+    ui32 engagement_tick_interval = 20; // World ticks per round. At least 1.
     ui32 engagement_damage_min_percent = 50;
     ui32 engagement_damage_max_percent = 100;
-    ui32 damage_levy = 2;
-    ui32 damage_men_at_arms = 4;
-    ui32 damage_horseman = 6;
-    ui32 damage_knight = 9;
-    ui32 defense_levy = 1;
-    ui32 defense_men_at_arms = 3;
-    ui32 defense_horseman = 4;
-    ui32 defense_knight = 7;
-    ui32 health_levy = 20; // Damage points to kill one man. At least 1.
-    ui32 health_men_at_arms = 30;
-    ui32 health_horseman = 40;
-    ui32 health_knight = 60;
+
+    // Per troop type, in TROOP_TYPE order (levies, men at arms, horsemen, knights). Defense and armor are used as at least 1.
+    struct troop_type_stat_def
+    {
+        ui8 damage;
+        ui8 defense;
+        ui8 armor;
+    };
+    troop_type_stat_def troop_type_stats[(ui8)TROOP_TYPE::TROOP_TYPE_COUNT] = {
+        { 2, 1, 1 },
+        { 6, 4, 4 },
+        { 4, 4, 2 },
+        { 12, 6, 10 },
+    };
+
+    // ARMY RAISING.
+    ui16 raise_pool_draw_per_tick = 3; // Most men of each troop type moved from the settlement into a raising army per tick.
+
+    // SIEGES AND CARAVANS, in tiles.
+    ui32 caravan_siege_wait_tiles = 10; // A caravan returning to a besieged origin stops this close to it.
+    ui32 caravan_siege_recheck_tiles = 30; // A caravan this close to a besieged destination looks for another one.
 
 
     // MOVEMENT
     // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only, ships water only.
     ui32 armies_workers_cross_water = 1;
+
     // Speed of each entity kind ON A ROAD, in thousandths of a tile per tick (world_entity_movement::travel_speed). Off-road it is divided by the tile's travel cost.
     ui32 army_travel_speed = 200;
     ui32 worker_travel_speed = 200;
@@ -192,18 +203,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(engagement_join_troops_threshold, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(engagement_damage_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(engagement_damage_max_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(damage_levy, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(damage_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(damage_horseman, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(damage_knight, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(defense_levy, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(defense_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(defense_horseman, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(defense_knight, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(health_levy, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(health_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(health_horseman, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(health_knight, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(armies_workers_cross_water, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_travel_speed, GAME_DATA_PROP_TYPE::UI32)

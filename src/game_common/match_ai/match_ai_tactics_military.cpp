@@ -2,7 +2,6 @@
 
 #include "match_ai_internal.h"
 
-constexpr ui32 AI_DEFEND_GATHER_RADIUS = 40; // Own idle armies this close to a threat help against it.
 
 // The biggest foreign army within AI_THREAT_RADIUS of one of our settlements.
 static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat)
@@ -137,9 +136,6 @@ static void ai_tactics_campaign(ai_context& ctx)
 		orders++;
 	}
 }
-
-constexpr ui32 AI_ASSAULT_OUTNUMBER = 3; // Begin the assault when the besiegers have this many times the defenders' men (total men)...
-constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
 
 // Sieges this player commands that are only besieging: begin the assault if the besiegers outnumber the defenders enough, or run low on supplies.
 static void ai_tactics_assault(ai_context& ctx)
