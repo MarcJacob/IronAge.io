@@ -132,6 +132,7 @@ struct game_parameters
     // SIEGES AND CARAVANS, in tiles.
     ui32 caravan_siege_wait_tiles = 10; // A caravan returning to a besieged origin stops this close to it.
     ui32 caravan_siege_recheck_tiles = 30; // A caravan this close to a besieged destination looks for another one.
+    ui32 caravan_army_follow_tiles = 3; // A caravan following an army re-paths once the army is farther than this from the caravan's path destination (or once a day).
 
 
     // MOVEMENT
@@ -168,6 +169,7 @@ struct game_parameters
     ui32 raid_peasants_percent = 10; // Of its peasants, killed (1 gold each).
     ui32 raid_goods_percent = 20; // Of its local + export goods (become supplies 1:1).
     ui32 good_price_gold = 1; // Gold price of one good (armies buy goods with their gold, see world_system_armies_upkeep).
+    ui32 army_friendly_trade_bonus_percent = 25; // Caravans: profit bonus (%) for a friendly army target over a neutral one.
 
     // CONSTRUCTION
     ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's pending worker pay) while a road worker is building.
@@ -234,6 +236,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raid_peasants_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_goods_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(good_price_gold, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_friendly_trade_bonus_percent, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)

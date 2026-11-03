@@ -33,9 +33,24 @@ static inline world_location caravan_endpoint(const match_world_state& world, WO
     return tile;
 }
 
+// Tile a caravan travels to for a destination guid: a settlement (same as caravan_endpoint) or an army (its current tile). Ships never target armies.
+static inline world_location caravan_destination_tile(const match_world_state& world, WORLD_ENTITY_CARAVAN_FLAGS flags, entity_guid destination)
+{
+    if (destination.get_type() == ENTITY_TYPE::ARMY)
+    {
+        ASSERT(!caravan_is_ship(flags));
+        return world.entities->armies.locations[destination.get_index()];
+    }
+    return caravan_endpoint(world, flags, destination.get_index());
+}
+
+// Volume profit of delivering size goods to an army, from its current state (the selector's prediction and the delivery's actual profit).
+ui64 caravan_army_trade_profit(const match_world_state& world, ui16 army_index, match_player_id origin_owner, ui32 origin_capacity, ui32 size, ui32 trade_dist);
+
 // Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
 // Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
 // For ships (caravan_flags IS_SHIP) only coastal ones (settlement_dock_tile). Distances stay between the settlement tiles.
+// Armies are also candidates (land caravans with a valid origin only): army_is_trade_target, size min(value, supplies room, buy power), see caravan_army_candidate_weight.
 // Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - local and export pools). Sizes below min_value are not candidates.
 // Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
 // (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (profit x 100 / tile distance), only candidates

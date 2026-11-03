@@ -49,7 +49,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
             return; // No opportunity: no spawn today.
         }
 
-        world_location destinationLocation = caravan_endpoint(world, caravan.flags, destination.get_index());
+        world_location destinationLocation = caravan_destination_tile(world, caravan.flags, destination);
         path_result path;
         world_request_path(world, startLocation, destinationLocation, caravan_path_params(caravan.flags), path);
         if (path.count == 0 || path.partial)
@@ -62,7 +62,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         settlementTrade.export_goods -= size;
 
         caravan.origin_settlement = origin;
-        caravan.destination_settlement = destination;
+        caravan.destination = destination;
         caravan.value = (ui16)size;
         caravan.location = startLocation;
         caravan.movement.travel_speed = (ui16)(ship ? GAME_PARAMETERS.ship_travel_speed : GAME_PARAMETERS.caravan_travel_speed);

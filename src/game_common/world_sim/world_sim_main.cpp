@@ -122,7 +122,7 @@ PLAYER_DIPLOMATIC_STATUS world_entity_get_diplomatic_status(const match_world_st
 		const world_entity_caravans& caravans = world.entities->caravans;
 		PLAYER_DIPLOMATIC_STATUS origin = world_entity_get_diplomatic_status(world, caravans.origin_settlements[entity.get_index()], player);
 		if (origin != PLAYER_DIPLOMATIC_STATUS_HOSTILE) return origin;
-		bool destinationHostile = world_entity_get_diplomatic_status(world, caravans.destination_settlements[entity.get_index()], player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+		bool destinationHostile = world_entity_get_diplomatic_status(world, caravans.destinations[entity.get_index()], player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
 		return destinationHostile ? PLAYER_DIPLOMATIC_STATUS_HOSTILE : PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
 	}
 	if (entity.get_type() == ENTITY_TYPE::ENGAGEMENT) return engagement_diplomatic_status(world, entity, player);

@@ -248,6 +248,32 @@ ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
 	return (ui32)ia_min(capacity, (ui64)0xFFFFFFFF);
 }
 
+// CARAVAN TRADE TARGET QUERIES
+
+ui32 army_supplies_room(const match_world_state& world, ui16 army_index)
+{
+	ui32 capacity = army_supply_capacity(world, army_index);
+	ui32 supplies = world.entities->armies.supplies[army_index];
+	return capacity > supplies ? capacity - supplies : 0;
+}
+
+ui32 army_supplies_buy_power(const match_world_state& world, ui16 army_index)
+{
+	return world.entities->armies.gold[army_index] / ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1);
+}
+
+PLAYER_DIPLOMATIC_STATUS army_trade_status(const match_world_state& world, ui16 army_index, match_player_id origin_owner)
+{
+	const world_entity_armies& armies = world.entities->armies;
+	if (army_index >= armies.max_count || !armies.guids[army_index].is_valid()) return PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+	return world_player_get_diplomatic_status(world, origin_owner, armies.owners[army_index]);
+}
+
+bool army_is_trade_target(const match_world_state& world, ui16 army_index, match_player_id origin_owner)
+{
+	return army_trade_status(world, army_index, origin_owner) != PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+}
+
 // RAID LOOT (temporary: becomes tile-based raiding later)
 
 // What is left of a settlement's daily share: day_max is the share of the amount the settlement had before today's looting, taken is what was already taken today.

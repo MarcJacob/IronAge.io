@@ -19,8 +19,9 @@ static inline ui32 trade_tile_distance(world_location from, world_location to)
 
 // Trade volume profit of a delivery (volume only, never goods). Split between both ends by trade_profit_receiver_share.
 // destination_volume_fraction is the destination's settlement_trade_volume_fraction (fixed point). A 0 capacity counts as a full pool.
+// destination_is_army (an army as the destination): no distance bonus, no capacity-ratio scaling (neutral), no short-trade ramp. The scarcity rate and incoming bonus stay.
 static inline ui64 trade_volume_profit(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity,
-    ui32 destination_volume_fraction, ui32 tile_distance, const game_trade_parameters& trade_parameters)
+    ui32 destination_volume_fraction, ui32 tile_distance, const game_trade_parameters& trade_parameters, bool destination_is_army)
 {
     // Destination fill once half the caravan is delivered, fixed point, clamped to full.
     ui64 fill = IA_FIXED_ONE;
@@ -31,7 +32,7 @@ static inline ui64 trade_volume_profit(ui32 caravan_value, ui32 destination_pool
     i32 scarcityMax = (i32)ia_min(trade_parameters.scarcity_value_max_percent, (ui32)10000);
     i32 scarcityMin = (i32)ia_min(trade_parameters.scarcity_value_min_percent, (ui32)10000);
     ui64 scarcityPermille = (ui64)ia_max(ia_lerp_fixed(scarcityMax, scarcityMin, (ui32)fill), (i32)1) * 10;
-    ui64 distancePermille = (ui64)tile_distance * 1000 / ia_max(trade_parameters.good_val_markup_increase_dist, (ui16)1);
+    ui64 distancePermille = destination_is_army ? 0 : (ui64)tile_distance * 1000 / ia_max(trade_parameters.good_val_markup_increase_dist, (ui16)1);
     ui64 profit = (ui64)caravan_value * (scarcityPermille + distancePermille) / 1000;
 
     // Capacity scaling: (destination - origin) x 100 / origin, clamped to [-malus, +bonus]. Origin 0: full bonus if the destination has any capacity.
@@ -40,7 +41,7 @@ static inline ui64 trade_volume_profit(ui32 caravan_value, ui32 destination_pool
     i64 capacityPercent = 0;
     if (origin_capacity > 0) capacityPercent = ((i64)destination_capacity - (i64)origin_capacity) * 100 / (i64)origin_capacity;
     else if (destination_capacity > 0) capacityPercent = bonusMax;
-    capacityPercent = ia_min(ia_max(capacityPercent, -malusMax), bonusMax);
+    capacityPercent = destination_is_army ? 0 : ia_min(ia_max(capacityPercent, -malusMax), bonusMax);
     profit = profit * (ui64)(100 + capacityPercent) / 100;
 
     // Destination trade bonus: up to incoming_profit_bonus_percent_max more, linear in its volume fraction.
@@ -50,13 +51,20 @@ static inline ui64 trade_volume_profit(ui32 caravan_value, ui32 destination_pool
 
     // Short-trade penalty on the whole profit: 0 up to distance_margin_min_tiles, linear to 100% at twice that, 100% beyond. 0 = no ramp.
     ui64 minTiles = trade_parameters.distance_margin_min_tiles;
-    if (minTiles > 0)
+    if (minTiles > 0 && !destination_is_army)
     {
         ui64 ramp = tile_distance > minTiles ? ia_min((ui64)tile_distance - minTiles, minTiles) : 0;
         profit = profit * ramp / minTiles;
     }
 
     return profit;
+}
+
+// Settlement destination (all existing calls).
+static inline ui64 trade_volume_profit(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity,
+    ui32 destination_volume_fraction, ui32 tile_distance, const game_trade_parameters& trade_parameters)
+{
+    return trade_volume_profit(caravan_value, destination_pool, destination_capacity, origin_capacity, destination_volume_fraction, tile_distance, trade_parameters, false);
 }
 
 // Receiver's part of a profit (profit_receiver_percent, clamped to 100). The exporter's part is the rest.

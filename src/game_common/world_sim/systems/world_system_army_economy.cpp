@@ -1,7 +1,7 @@
 // Army economy systems: soldiers consume goods every day, and armies buy them with gold.
 // Armies carry gold and supplies (goods). Their soldiers consume the supplies daily (per-type upkeep rates).
-// Inside territory its owner owns, an army is paid gold by the treasury (a day of consumption at the goods price per day), up to its carry capacity.
-// An army standing in a settlement's territory buys goods from its market goods with its gold, up to its carry capacity. The owner of the settlement gets the gold.
+// Inside territory its owner owns (pay only; purchases need the settlement itself), an army is paid gold by the treasury (a day of consumption at the goods price per day), up to its carry capacity.
+// An army standing in a settlement itself (at its location) buys goods from its market goods with its gold, up to its carry capacity. The owner of the settlement gets the gold.
 // Consumption that supplies cannot cover makes troops desert, in which case they go back home. A raising army stops raising instead.
 // Outside of the owner's territory armies are not paid: they must be back regularly, or find *alternative* means of financing themselves (later).
 // Soldiers waiting in a settlement (local pool) are paid from the treasury instead.
@@ -15,7 +15,7 @@
 #include "../world_sim.h"
 
 // Index of the settlement whose territory the army stands in, world_terrain::UNOWNED_TILE if none.
-static ui16 army_tile_owner(const match_world_state& world, ui16 army_index)
+ui16 army_tile_owner(const match_world_state& world, ui16 army_index)
 {
 	ui16 regionIndex, tileIndex;
 	world_get_tile(*world.terrain, world.entities->armies.locations[army_index], regionIndex, tileIndex);
@@ -88,9 +88,9 @@ void world_system_armies_upkeep(match_world_state& world)
 			gold += paid;
 		}
 
-		// Purchase: goods from the market goods of the settlement the army stands in (besieged or not), up to the supplies capacity, as far as its gold goes.
+		// Purchase: goods from the market goods of the settlement the army stands in (its location equals the settlement's; besieged or not), up to the supplies capacity, as far as its gold goes.
 		// Same owner only for now (friendly stub). The seller's owner gets the whole payment, and the goods sold count as trade volume.
-		if (inOwnerTerritory && supplies < capacity)
+		if (inOwnerTerritory && supplies < capacity && armies.locations[armyIndex] == world.entities->settlements.locations[settlementIndex])
 		{
 			world_entity_settlements& settlements = world.entities->settlements;
 			ui32& marketGoods = settlements.trade[settlementIndex].market_goods;

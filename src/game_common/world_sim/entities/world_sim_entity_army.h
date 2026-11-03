@@ -83,4 +83,21 @@ void world_army_loot_settlement(match_world_state& world, entity_guid army, enti
 // Gives the army a STATION order at the nearest friendly settlement (at its own location if there is none).
 void army_order_station_nearest_friendly_settlement(match_world_state& world, ui16 army_index);
 
+// CARAVAN TRADE TARGET QUERIES (armies as caravan destinations)
+
+// Index of the settlement whose territory the army stands in, world_terrain::UNOWNED_TILE if none (defined in world_system_army_economy.cpp).
+ui16 army_tile_owner(const match_world_state& world, ui16 army_index);
+
+// Room left in the army's supplies: army_supply_capacity - supplies, floor 0.
+ui32 army_supplies_room(const match_world_state& world, ui16 army_index);
+
+// Goods the army's gold can buy: gold / good_price_gold (a 0 price counts as 1).
+ui32 army_supplies_buy_power(const match_world_state& world, ui16 army_index);
+
+// Status of the army relative to the origin owner (HOSTILE for a dead army). The owner's own armies are whatever the diplomatic stub says (friendly).
+PLAYER_DIPLOMATIC_STATUS army_trade_status(const match_world_state& world, ui16 army_index, match_player_id origin_owner);
+
+// True for any live army that is not hostile to the origin owner, whatever it is doing (engagement, fleeing, GO_HOME). Friendly vs neutral: army_trade_status.
+bool army_is_trade_target(const match_world_state& world, ui16 army_index, match_player_id origin_owner);
+
 #endif // WORLD_SIM_ARMY_INCLUDED

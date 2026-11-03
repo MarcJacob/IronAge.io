@@ -20,7 +20,7 @@ struct world_entity_caravans : public world_entity_container
 
     WORLD_ENTITY_CARAVAN_FLAGS* flags;
     entity_guid* origin_settlements;
-    entity_guid* destination_settlements;
+    entity_guid* destinations; // Settlement or army.
 
     ui16* values;
 
@@ -33,7 +33,7 @@ struct world_entity_caravans : public world_entity_container
 
         WORLD_ENTITY_CARAVAN_FLAGS flags;
         entity_guid origin_settlement;
-        entity_guid destination_settlement;
+        entity_guid destination;
 
         ui16 value;
 
@@ -50,7 +50,7 @@ struct world_entity_caravans : public world_entity_container
         world_entity_movement& movement;
         WORLD_ENTITY_CARAVAN_FLAGS& flags;
         entity_guid& origin_settlement;
-        entity_guid& destination_settlement;
+        entity_guid& destination;
         ui16& value;
 
         void copy_from(const single& source)
@@ -59,7 +59,7 @@ struct world_entity_caravans : public world_entity_container
             movement = source.movement;
             flags = source.flags;
             origin_settlement = source.origin_settlement;
-            destination_settlement = source.destination_settlement;
+            destination = source.destination;
             value = source.value;
         }
 
@@ -68,7 +68,7 @@ struct world_entity_caravans : public world_entity_container
             , movement(collection.movements[index])
             , flags(collection.flags[index])
             , origin_settlement(collection.origin_settlements[index])
-            , destination_settlement(collection.destination_settlements[index])
+            , destination(collection.destinations[index])
             , value(collection.values[index])
         {}
     };
@@ -80,7 +80,7 @@ inline void world_entity_caravans::single::copy_from(const world_entity_caravans
     movement = source.movement;
     flags = source.flags;
     origin_settlement = source.origin_settlement;
-    destination_settlement = source.destination_settlement;
+    destination = source.destination;
     value = source.value;
     owner = INVALID_MATCH_PLAYER_ID;
 }
@@ -91,7 +91,7 @@ inline void world_entity_caravans::single::copy_from(const world_entity_caravans
     movement = collection.movements[index];
     flags = collection.flags[index];
     origin_settlement = collection.origin_settlements[index];
-    destination_settlement = collection.destination_settlements[index];
+    destination = collection.destinations[index];
     value = collection.values[index];
     owner = INVALID_MATCH_PLAYER_ID;
 }
@@ -109,7 +109,7 @@ GAME_DATA_PROPERTY_PATH(movement_fractional_loc, movement.fractional_loc, GAME_D
 GAME_DATA_PROPERTY_PATH(movement_travel_speed, movement.travel_speed, GAME_DATA_PROP_TYPE::UI16)
 
 GAME_DATA_PROPERTY(origin_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
-GAME_DATA_PROPERTY(destination_settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_PROPERTY_PATH(destination_settlement, destination, GAME_DATA_PROP_TYPE::ENTITY_GUID) // Name kept for the client; the guid may be a settlement or an army.
 GAME_DATA_PROPERTY(value, GAME_DATA_PROP_TYPE::UI16)
 GAME_DATA_PROPERTY(owner, GAME_DATA_PROP_TYPE::PLAYER_ID)
 GAME_DATA_OBJECT_DEF_END();

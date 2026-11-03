@@ -6,6 +6,7 @@
 
 #include "../entities/world_sim_entity_engagement.h"
 #include "../entities/world_sim_entity_caravan.h"
+#include "../entities/world_sim_entity_army.h"
 
 // What entities can cross (caravans: CARAVAN_PATH_PARAMS, ships: SHIP_PATH_PARAMS). Entities move in straight segments. Other members zero-initialized.
 // TEMP: armies and workers also cross water while GAME_PARAMETERS.armies_workers_cross_water is set, until ships exist.
@@ -156,7 +157,7 @@ void world_system_entity_movement_decision(match_world_state& world)
             continue;
         }
 
-        entity_guid destination = caravans.destination_settlements[caravanIndex];
+        entity_guid destination = caravans.destinations[caravanIndex];
         if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
         {
             // A besieged destination cannot be entered: from caravan_siege_recheck_tiles away the caravan looks for another target (and keeps its goods).
@@ -167,7 +168,30 @@ void world_system_entity_movement_decision(match_world_state& world)
                 world_caravan_retarget(world, caravan);
                 continue;
             }
-            caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], destination.get_index());
+            caravans.movements[caravanIndex].destination = caravan_destination_tile(world, caravans.flags[caravanIndex], destination);
+        }
+        else if (destination.get_type() == ENTITY_TYPE::ARMY && world_entity_is_valid(world, destination)
+            && army_is_trade_target(world, destination.get_index(), world_entity_get_owner(world, caravans.origin_settlements[caravanIndex])))
+        {
+            // Follows the army (also while GO_HOME: it ends when the army is disbanded and destroyed).
+            // Within 1 tile it stops: delivery happens there. An army in an engagement is approached only to the engagement's edge (its join radius): the caravan stops there and
+            // delivers once the engagement is not fighting. It follows the army again if the army leaves the engagement or the engagement ends.
+            const world_entity_armies& armies = world.entities->armies;
+            world_entity_movement& movement = caravans.movements[caravanIndex];
+            world_location caravanLocation = caravans.locations[caravanIndex];
+            world_location armyLocation = armies.locations[destination.get_index()];
+            entity_guid engagement = armies.engagements[destination.get_index()];
+            if (world_location_within_tiles(caravanLocation, armyLocation, 1)
+                || (world_entity_is_valid(world, engagement) && world_location_within_tiles(caravanLocation, world_entity_get_location(world, engagement), engagement_join_radius(world, engagement))))
+            {
+                world_movement_stop(movement, caravanLocation);
+            }
+            else if (movement.destination == caravanLocation // Stopped or arrived: follow again.
+                || !world_location_within_tiles(movement.destination, armyLocation, GAME_PARAMETERS.caravan_army_follow_tiles)
+                || world_is_daily_tick(world))
+            {
+                movement.destination = armyLocation;
+            }
         }
         else
         {

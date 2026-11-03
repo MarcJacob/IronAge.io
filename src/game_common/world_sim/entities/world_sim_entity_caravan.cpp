@@ -2,6 +2,7 @@
 
 #include "world_sim_entity_caravan.h"
 #include "world_sim_entity_settlement.h"
+#include "world_sim_entity_army.h"
 #include "game_common/match/world/world_state.h"
 #include "game_common/match/world/world_trade.h"
 
@@ -107,8 +108,8 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
     {
         return false;
     }
-    world.entities->caravans.destination_settlements = memory.alloc<entity_guid>(count);
-    if (world.entities->caravans.destination_settlements == nullptr)
+    world.entities->caravans.destinations = memory.alloc<entity_guid>(count);
+    if (world.entities->caravans.destinations == nullptr)
     {
         return false;
     }
@@ -135,16 +136,20 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
 // A higher exponent needs a lower clamp (ratio ^ exponent x 4096 must stay under 2^64).
 static constexpr ui32 CARAVAN_WEIGHT_EXPONENT = 2;
 static constexpr ui64 CARAVAN_WEIGHT_RATIO_MAX = 1 << 20;
-static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity, ui32 destination_volume_fraction,
-    ui32 tile_distance, ui32 path_cost)
+static ui64 caravan_profit_weight(ui32 caravan_value, ui64 profit, ui32 path_cost)
 {
     static constexpr ui64 WEIGHT_SCALE = 1000;
-    const game_trade_parameters& trade = GAME_PARAMETERS.trade;
-    ui64 profit = trade_volume_profit(caravan_value, destination_pool, destination_capacity, origin_capacity, destination_volume_fraction, tile_distance, trade);
-    ui64 gain = caravan_value + profit - trade_profit_receiver_share(profit, trade);
+    ui64 gain = caravan_value + profit - trade_profit_receiver_share(profit, GAME_PARAMETERS.trade);
     if (gain == 0) return 0;
     ui64 ratio = gain * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
     return ia_pow(ia_min(ratio, CARAVAN_WEIGHT_RATIO_MAX), CARAVAN_WEIGHT_EXPONENT);
+}
+
+static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity, ui32 destination_volume_fraction,
+    ui32 tile_distance, ui32 path_cost)
+{
+    ui64 profit = trade_volume_profit(caravan_value, destination_pool, destination_capacity, origin_capacity, destination_volume_fraction, tile_distance, GAME_PARAMETERS.trade);
+    return caravan_profit_weight(caravan_value, profit, path_cost);
 }
 
 // SPAWN SCORE (spawning mode). Score = total profit x 100 / tile distance, in thousandths (1000 = 1 percent of profit per tile).
@@ -161,6 +166,49 @@ static ui32 caravan_candidate_size(const world_entity_settlements& settlements, 
     ui32 total = settlement_market_total(settlements, index);
     ui32 capacity = settlement_market_capacity(settlements, index);
     return ia_min(size, capacity > total ? capacity - total : (ui32)0);
+}
+
+// Profit of delivering size goods to an army: no army-size penalty (trade_volume_profit with destination_is_army), friendly armies get army_friendly_trade_bonus_percent more.
+// The volume fraction is the one of the settlement whose territory the army stands on (0 outside any). Used by the selector and by the delivery, so both agree.
+ui64 caravan_army_trade_profit(const match_world_state& world, ui16 army_index, match_player_id origin_owner, ui32 origin_capacity, ui32 size, ui32 trade_dist)
+{
+    ui16 territory = army_tile_owner(world, army_index);
+    ui32 volumeFraction = territory != world_terrain::UNOWNED_TILE ? settlement_trade_volume_fraction(world.entities->settlements, territory) : 0;
+
+    ui64 profit = trade_volume_profit(size, world.entities->armies.supplies[army_index], army_supply_capacity(world, army_index), origin_capacity, volumeFraction, trade_dist,
+            GAME_PARAMETERS.trade, true);
+    if (army_trade_status(world, army_index, origin_owner) == PLAYER_DIPLOMATIC_STATUS_FRIENDLY)
+        profit = profit * (100 + (ui64)GAME_PARAMETERS.army_friendly_trade_bonus_percent) / 100;
+    return profit;
+}
+
+// Weight of an army slot as a destination (0 = not a candidate), and the caravan size for it. Pure: called in both passes of the selection, so no per-army storage is needed.
+// Needs a valid origin (its owner decides who is hostile). Spawn: score threshold as for settlements; retarget: the gain-over-cost weight with the live distance.
+// Profit: caravan_army_trade_profit.
+static ui64 caravan_army_candidate_weight(const match_world_state& world, ui16 army_index, world_location source, entity_guid origin, bool spawning, ui32 caravan_value,
+    ui32 min_value, ui32 origin_capacity, const entity_guid* destination_excludes, ui32 destination_exclude_count, ui32& out_size)
+{
+    const world_entity_armies& armies = world.entities->armies;
+    entity_guid guid = armies.guids[army_index];
+    if (!guid.is_valid()) return 0;
+
+    for (ui32 i = 0; i < destination_exclude_count; i++) if (guid == destination_excludes[i]) return 0;
+
+    match_player_id originOwner = world.entities->settlements.owners[origin.get_index()];
+    if (!army_is_trade_target(world, army_index, originOwner)) return 0;
+
+    // At spawn, an origin that does not allow foreign export only targets its own owner's armies.
+    if (spawning && !world.entities->settlements.trade[origin.get_index()].allow_foreign_export && armies.owners[army_index] != originOwner) return 0;
+
+    out_size = ia_min(ia_min(caravan_value, (ui32)0xFFFF), ia_min(army_supplies_room(world, army_index), army_supplies_buy_power(world, army_index)));
+    if (out_size == 0 || out_size < min_value) return 0;
+
+    ui32 tradeDist = trade_tile_distance(source, armies.locations[army_index]);
+    ui64 profit = caravan_army_trade_profit(world, army_index, originOwner, origin_capacity, out_size, tradeDist);
+
+    if (!spawning) return caravan_profit_weight(out_size, profit, tradeDist);
+    ui64 score = caravan_spawn_score(profit, tradeDist);
+    return score >= (ui64)GAME_PARAMETERS.trade.min_profit_per_travel_dist_percent * 1000 ? score : 0;
 }
 
 bool world_caravan_select_destination(match_world_state& world, world_location source, entity_guid origin, ui32 caravan_value, ui32 min_value, bool size_to_room,
@@ -226,6 +274,17 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         totalWeight += weights[index];
     }
 
+    // Army candidates (slot order, after the settlements). Not for ships or without a valid origin. Their weights are recomputed in pass 2 instead of stored.
+    bool armyTargets = originValid && !caravan_is_ship(caravan_flags);
+    const world_entity_armies& armies = world.entities->armies;
+    ui32 armySize = 0;
+    if (armyTargets)
+    {
+        for (ui32 index = 0; index < armies.max_count; index++)
+            totalWeight += caravan_army_candidate_weight(world, (ui16)index, source, origin, spawning, caravan_value, min_value, originCapacity, destination_excludes,
+                destination_exclude_count, armySize);
+    }
+
     if (totalWeight == 0) return false; // No candidate (or none with a profit): no random number drawn.
 
     // Pick: a random point in [0, totalWeight).
@@ -248,6 +307,22 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
             return true;
         }
         roll -= weight;
+    }
+    if (armyTargets)
+    {
+        for (ui32 index = 0; index < armies.max_count; index++)
+        {
+            ui64 weight = caravan_army_candidate_weight(world, (ui16)index, source, origin, spawning, caravan_value, min_value, originCapacity, destination_excludes,
+                destination_exclude_count, armySize);
+            if (weight == 0) continue;
+            if (roll < weight)
+            {
+                out_destination = armies.guids[index];
+                out_value = armySize;
+                return true;
+            }
+            roll -= weight;
+        }
     }
     ASSERT(false); // Unreachable: roll < range.
     return false;

@@ -214,12 +214,24 @@ function army_panel_state(army: EntityData, edit_raise_targets: boolean, note: s
     };
 }
 
+// A caravan destination is a settlement or an army, told apart by the guid's type.
+function caravan_destination_text(guid: number): string
+{
+    const target = guid === 0 ? null : query_entity(guid);
+    if (target !== null && target.entity_type === Backend.ENTITY_TYPE.ARMY)
+    {
+        const location = target.get_location("location");
+        return `Army (${location.x}, ${location.y})`;
+    }
+    return settlement_text(guid, "None");
+}
+
 function caravan_panel_state(caravan: EntityData): CaravanPanelUI.CaravanPanelState
 {
     return {
         value: caravan.get_number("value"),
         origin: settlement_text(caravan.get_number("origin_settlement"), "Lost"),
-        destination: settlement_text(caravan.get_number("destination_settlement"), "None"),
+        destination: caravan_destination_text(caravan.get_number("destination_settlement")),
     };
 }
 

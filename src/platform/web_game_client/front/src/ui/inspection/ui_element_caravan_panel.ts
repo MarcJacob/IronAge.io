@@ -14,7 +14,7 @@ export interface CaravanPanelState
 {
     value: number;
     origin: string; // Origin settlement, as text.
-    destination: string; // Destination settlement, as text.
+    destination: string; // Destination (settlement or army), as text.
 }
 
 let el: {
