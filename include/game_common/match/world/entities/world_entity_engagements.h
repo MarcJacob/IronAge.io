@@ -21,7 +21,7 @@ static inline ENGAGEMENT_SIDE engagement_opposite_side(ENGAGEMENT_SIDE side) { r
 // What the engagement is.
 enum class ENGAGEMENT_KIND : ui8
 {
-	FIELD = 0, // Armies against armies.
+	FIELD_BATTLE = 0, // Armies against armies in the field.
 	SIEGE, // Armies against a settlement (main_target) and what defends it.
 };
 
@@ -31,10 +31,11 @@ enum class ENGAGEMENT_KIND : ui8
 enum class ENGAGEMENT_PHASE : ui8
 {
 	ACTIVE = 0,
-	BESIEGING,
-	ASSAULT,
-	SALLY,
-	OUTSIDE,
+
+	SIEGE_IDLE, // Siege is ongoing, no active fighting is going on.
+	SIEGE_ASSAULT, // Siege is ongoing, the attackers are assaulting the defenders in the settlement.
+	SIEGE_SALLY, // Siege is ongoing, the defenders have left the settlement to engage the attackers.
+	SIEGE_OUTSIDE_BATTLE, // Siege camp is under attack outside, the defenders in the settlement are not involved.
 };
 
 // A engagement between two sides of armies. Free armies close enough join it by themselves (engagement_join_radius), or by an ATTACK order targeting it, a member army or the besieged settlement. Fixed size: it doesn't know which armies are in it, armies point to it instead.

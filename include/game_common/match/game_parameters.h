@@ -106,10 +106,10 @@ struct game_parameters
 
     // ENGAGEMENT DAMAGE. Every engagement_tick_interval ticks a round runs: a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it
     // over its men by type; each type's share is divided by rand(1, defense) then by rand(1, armor): what is left is the number of men killed of that type.
-    ui32 engagement_tick_interval = 20; // World ticks per round. At least 1.
+    ui32 engagement_tick_interval = 10; // World ticks per round. At least 1.
     ui32 engagement_damage_min_percent = 50;
     ui32 engagement_damage_max_percent = 100;
-    ui32 engagement_damage_scale_percent = 100; // Scales all damage dealt per round (100 = 1.0). Tunes battle length.
+    ui32 engagement_damage_scale_percent = 5; // Scales all damage dealt per round (100 = 1.0). Tunes battle length.
 
     // Per troop type, in TROOP_TYPE order (levies, men at arms, horsemen, knights, wagons). Defense and armor are used as at least 1. Damage 0 deals nothing.
     struct troop_type_stat_def
@@ -138,12 +138,13 @@ struct game_parameters
     // TEMP: until ships exist. 1 = armies and workers path across water tiles (at their terrain travel cost), 0 = land only. Caravans are always land only, ships water only.
     ui32 armies_workers_cross_water = 1;
 
-    // Speed of each entity kind ON A ROAD, in thousandths of a tile per tick (world_entity_movement::travel_speed). Off-road it is divided by the tile's travel cost.
-    ui32 army_travel_speed = 200;
+    // Speed of each entity kind with tile travel cost = 1, in thousandths of a tile per tick. 
+    // Divided by the tile's travel cost.
+    ui32 army_travel_speed = 150;
     ui32 army_wagon_speed_divisor = 2; // An army containing at least one wagon moves at its normal speed divided by this (stopgap until the army speed rework).
-    ui32 worker_travel_speed = 200;
+    ui32 worker_travel_speed = 300;
     ui32 caravan_travel_speed = 200;
-    ui32 ship_travel_speed = 400; // Ships (caravans with IS_SHIP): twice caravan_travel_speed. Water costs are unchanged (coast 3, sea 7).
+    ui32 ship_travel_speed = 600;
 
     // ECONOMY
     // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
@@ -152,6 +153,7 @@ struct game_parameters
     ui32 upkeep_horseman = 4;
     ui32 upkeep_knight = 15;
     ui32 upkeep_wagon = 1;
+
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
     // Supplies refill (from the treasury, inside its owner's territory) up to it.
     ui32 carry_levy = 10;
@@ -159,6 +161,7 @@ struct game_parameters
     ui32 carry_horseman = 16;
     ui32 carry_knight = 15;
     ui32 carry_wagon = 100;
+
     // RAID LOOT (temporary, until tile-based raiding). Most a settlement can lose to raiders per day, all armies together.
     ui32 raid_production_percent = 10; // Of its production.
     ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies).

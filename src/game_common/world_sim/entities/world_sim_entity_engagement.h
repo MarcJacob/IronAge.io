@@ -46,7 +46,7 @@ void world_army_join_engagement(match_world_state& world, entity_guid army, enti
 bool world_army_join_engagement(match_world_state& world, entity_guid army, entity_guid engagement);
 
 // Damage points the given men deal before the round's random percent: sum over the types of count x damage. 0 = they cannot hurt anyone (e.g. only wagons).
-ui64 troops_base_damage(const army_troop_count& troops);
+ui32 troops_base_damage(const army_troop_count& troops);
 
 // The side the army would join the engagement on (see above). Returns false if it would not join (neutral, standing on the besieged settlement as a defender,
 // or the army cannot inflict damage: troops_base_damage of its men is 0). This also keeps harmless armies from auto-joining.

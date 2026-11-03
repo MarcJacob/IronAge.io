@@ -21,7 +21,7 @@ static constexpr ui8 TILE_TERRAIN_TRAVEL_COST[] = {
 };
 
 // Travel difficulty of a road tile, whatever its terrain.
-static constexpr ui8 ROAD_TRAVEL_COST = 1;
+static constexpr ui8 ROAD_TRAVEL_COST = 2;
 
 // True if the two locations are at most the given number of tiles apart (straight line distance).
 static inline bool world_location_within_tiles(world_location a, world_location b, ui32 tiles)

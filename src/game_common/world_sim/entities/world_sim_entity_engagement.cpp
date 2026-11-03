@@ -184,7 +184,7 @@ entity_guid world_engagement_start_field_battle(match_world_state& world, entity
 
 	world_entity_engagements::state start = {};
 	start.location = (armies.locations[attackerIndex] + armies.locations[targetIndex]) / 2;
-	start.kind = ENGAGEMENT_KIND::FIELD;
+	start.kind = ENGAGEMENT_KIND::FIELD_BATTLE;
 	start.phase = ENGAGEMENT_PHASE::ACTIVE;
 	start.main_target = target;
 	start.attacker.commander = armies.owners[attackerIndex];
@@ -413,15 +413,16 @@ void world_system_engagement_auto_join(match_world_state& world)
 	}
 }
 
-ui64 troops_base_damage(const army_troop_count& troops)
+ui32 troops_base_damage(const army_troop_count& troops)
 {
-	ui64 base = 0;
+	ui32 base = 0;
 	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
-		base += (ui64)troops.count[unitType] * GAME_PARAMETERS.troop_type_stats[unitType].damage;
+		base += (ui32)troops.count[unitType] * GAME_PARAMETERS.troop_type_stats[unitType].damage;
 	return base;
 }
 
-// Damage points a side deals this round, before the defences of the other side: its men's total damage x a random percent in [min, max] x engagement_damage_scale_percent (rounded up).
+// Damage points a side deals this round, before the defences of the other side: 
+// its men's total damage x a random percent in [min, max] x engagement_damage_scale_percent (rounded up).
 // One RNG roll.
 static ui32 engagement_roll_side_damage(match_world_state& world, const army_troop_count& troops)
 {
@@ -430,8 +431,10 @@ static ui32 engagement_roll_side_damage(match_world_state& world, const army_tro
 	ui32 percent = world.rand_gen.next_range<ui32>(minPercent, maxPercent + 1);
 	if (percent > maxPercent) percent = maxPercent; // The range function may land on its max.
 
-	ui64 base = troops_base_damage(troops);
-	return (ui32)ia_min((base * percent * GAME_PARAMETERS.engagement_damage_scale_percent + 9999) / 10000, (ui64)0xFFFFFFFF);
+	ui32 base = troops_base_damage(troops);
+    
+    // Apply random effective percent + global scale percent, divided by 10000 (with 9999 added to ensure that any amount of damage inflicted leads to 1 effective damage point no matter what).
+	return (base * percent * GAME_PARAMETERS.engagement_damage_scale_percent + 9999) / 10000;
 }
 
 // Men killed in a group (an army or the garrison) of a side that deals with the damage of the other side. The group takes its men's share of the damage
