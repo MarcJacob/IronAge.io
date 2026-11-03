@@ -220,7 +220,8 @@ ui32 army_daily_consumption(const army_troop_count& troops)
 	ui64 consumption = ((ui64)troops.levies * GAME_PARAMETERS.upkeep_levy_per_mille) / 1000
 		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.upkeep_men_at_arms
 		+ (ui64)troops.horsemen * GAME_PARAMETERS.upkeep_horseman
-		+ (ui64)troops.knights * GAME_PARAMETERS.upkeep_knight;
+		+ (ui64)troops.knights * GAME_PARAMETERS.upkeep_knight
+		+ (ui64)troops.wagons * GAME_PARAMETERS.upkeep_wagon;
 	return (ui32)ia_min(consumption, (ui64)0xFFFFFFFF);
 }
 
@@ -238,7 +239,8 @@ ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
 	ui64 capacity = (ui64)troops.levies * GAME_PARAMETERS.carry_levy
 		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.carry_men_at_arms
 		+ (ui64)troops.horsemen * GAME_PARAMETERS.carry_horseman
-		+ (ui64)troops.knights * GAME_PARAMETERS.carry_knight;
+		+ (ui64)troops.knights * GAME_PARAMETERS.carry_knight
+		+ (ui64)troops.wagons * GAME_PARAMETERS.carry_wagon;
 	return (ui32)ia_min(capacity, (ui64)0xFFFFFFFF);
 }
 

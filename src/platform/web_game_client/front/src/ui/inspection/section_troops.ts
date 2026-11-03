@@ -10,6 +10,7 @@ export const TROOPS = [
     { name: "men_at_arms", label: "Men-at-arms", color: "#4aa3ff" },
     { name: "horsemen", label: "Horsemen", color: "#f0b040" },
     { name: "knights", label: "Knights", color: "#c060e0" },
+    { name: "wagons", label: "Wagons", color: "#a0764a" },
 ];
 
 export const MAX_COUNT = 0xFFFF; // Counts are ui16.

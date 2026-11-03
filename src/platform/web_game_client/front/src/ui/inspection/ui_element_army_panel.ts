@@ -15,7 +15,7 @@ const IDS = {
     order: "army_panel_order",
     gold: "army_panel_gold",
     note: "army_panel_note",
-    troops: ["army_panel_levies", "army_panel_men_at_arms", "army_panel_horsemen", "army_panel_knights"], // Troop order.
+    troops: ["army_panel_levies", "army_panel_men_at_arms", "army_panel_horsemen", "army_panel_knights", "army_panel_wagons"], // Troop order.
     supplies: "army_panel_supplies",
     consumption: "army_panel_consumption",
     consumption_value: "army_panel_consumption_value",
@@ -25,7 +25,7 @@ const IDS = {
     warning_text: "army_panel_warning_text",
 };
 
-const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0"]; // Troop order, as in section_troops.ts.
+const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0", "#a0764a"]; // Troop order, as in section_troops.ts.
 
 const CONSUMPTION_TOOLTIP = [
     "Soldiers consume supplies every day.",
@@ -46,7 +46,7 @@ export interface ArmyPanelState
     origin: string; // Home settlement, as text.
     order: string; // Current standing order and its target, as text.
     raising: boolean; // Raise gauges (compact, target marker) instead of the count gauges.
-    troops: (ArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights). Null hides the gauge.
+    troops: (ArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights, wagons). Null hides the gauge.
     targets_editable: boolean; // While raising: the target sliders can be moved (emits raise_targets).
     supplies: number;
     supplies_capacity: number;

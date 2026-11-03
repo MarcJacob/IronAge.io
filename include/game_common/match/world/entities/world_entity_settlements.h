@@ -154,7 +154,7 @@ struct world_entity_settlements : public world_entity_container
 	settlement_troop_training (*troop_training)[4]; // Indexed by troop type (TROOP_TYPE_*).
 
 	inline ui32 soldiers_home(ui16 index) const { return (ui32)garrison[index].men_at_arms + garrison[index].horsemen + garrison[index].knights; }
-	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights; }
+	inline ui32 soldiers_raised(ui16 index) const { return (ui32)raised[index].levies + raised[index].men_at_arms + raised[index].horsemen + raised[index].knights + raised[index].wagons; }
 	inline ui32 soldiers_total(ui16 index) const { return soldiers_home(index) + soldiers_raised(index); } // Everyone who is a soldier, at home or raised.
 	inline ui32 at_home(ui16 index) const { return pop_unemployed[index] + pop_peasants[index] + pop_workers[index] + soldiers_home(index); }
     inline ui32 urban_pop(ui16 index) const { return pop_unemployed[index] + pop_workers[index] + soldiers_home(index); }
@@ -220,7 +220,7 @@ struct world_entity_settlements : public world_entity_container
         settlement_troop_training troop_training[4]; // Indexed by troop type (TROOP_TYPE_*).
 
         inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
-        inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
+        inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights + raised.wagons; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); } // Everyone who is a soldier, at home or raised.
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
         inline ui32 urban_pop() const { return pop_unemployed + pop_workers + soldiers_home(); }
@@ -286,7 +286,7 @@ struct world_entity_settlements : public world_entity_container
         settlement_raid& raid;
 
         inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
-        inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights; }
+        inline ui32 soldiers_raised() const { return (ui32)raised.levies + raised.men_at_arms + raised.horsemen + raised.knights + raised.wagons; }
         inline ui32 soldiers_total() const { return soldiers_home() + soldiers_raised(); }
         inline ui32 at_home() const { return pop_unemployed + pop_peasants + pop_workers + soldiers_home(); }
         inline ui32 urban_pop() const { return pop_unemployed + pop_workers + soldiers_home(); }
@@ -468,6 +468,9 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(raised_men_at_arms, raised.men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(raised_horsemen, raised.horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(raised_knights, raised.knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(raised_wagons, raised.wagons, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(troops_wagons, garrison.wagons, GAME_DATA_PROP_TYPE::UI16) // Civilian pool like levies.
+	GAME_DATA_PROPERTY_PATH(max_wagons, troop_max.wagons, GAME_DATA_PROP_TYPE::UI16) // Garrison + raised.
 
 	GAME_DATA_PROPERTY_PATH(troops_levies, garrison.levies, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(max_levies, troop_max.levies, GAME_DATA_PROP_TYPE::UI16)

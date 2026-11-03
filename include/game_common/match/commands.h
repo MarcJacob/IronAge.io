@@ -203,6 +203,7 @@ struct command_data_raise_army
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
+	ui16 target_wagons; // At most the settlement's wagons max (troop_max.wagons) minus its raised wagons.
 	ui8 start_order; // Order the army gets once its raising ends: RAISE_START_ORDER_*.
 };
 
@@ -221,6 +222,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_wagons, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(start_order, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
@@ -256,7 +258,7 @@ void command_build_road_apply(match_world_state& world, match_player_id player,
 struct command_data_set_settlement_troop_ceiling
 {
 	entity_guid settlement;
-	ui8 troop_type; // 0 men at arms, 1 horsemen, 2 knights (levies are not poolable).
+	ui8 troop_type; // 0 men at arms, 1 horsemen, 2 knights (levies and wagons are not poolable).
 	ui16 ceiling; // Raw value, stored as is (0xFFFF = saturated).
 };
 
@@ -280,6 +282,7 @@ struct command_data_set_army_raise_targets
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
+	ui16 target_wagons;
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_army_raise_targets)
@@ -288,6 +291,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_army_raise_targets)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(target_wagons, GAME_DATA_PROP_TYPE::UI16)
 GAME_DATA_OBJECT_DEF_END()
 
 bool command_set_army_raise_targets_validity_check(const match_world_state& world, match_player_id player,

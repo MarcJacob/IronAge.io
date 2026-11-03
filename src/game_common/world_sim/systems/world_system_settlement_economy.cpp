@@ -265,6 +265,12 @@ void world_system_economy_troop_growth(match_world_state& world)
         ui32 levyTrained = ia_max((ui32)1, (ui32)((ui64)population * GAME_PARAMETERS.levy_training_per_mille / 1000));
         levies = (ui16)ia_min((ui32)levies + levyTrained, levyRoom); // Also dismisses what is above the room.
 
+        // Wagons: same, with a fixed rate (wagon_training_per_day, whatever the population) and the max from the caravanserais (kept by their events).
+        ui16& wagons = settlements.garrison[settlementIndex].wagons;
+        ui16 wagonMax = settlements.troop_max[settlementIndex].wagons;
+        ui32 wagonRoom = wagonMax > settlements.raised[settlementIndex].wagons ? wagonMax - settlements.raised[settlementIndex].wagons : 0;
+        wagons = (ui16)ia_min((ui32)wagons + GAME_PARAMETERS.wagon_training_per_day, wagonRoom);
+
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 
         train_troop(world, settlementIndex, TROOP_TYPE::MEN_AT_ARMS, ceilings.men_at_arms);
@@ -312,6 +318,7 @@ void world_system_local_troops_pay(match_world_state& world)
 		world_player_state& player = world.player_states[owner];
 		army_troop_count paidTroops = settlements.garrison[settlementIndex];
 		paidTroops.levies = 0;
+		paidTroops.wagons = 0;
 		ui32 paid = ia_min(army_daily_consumption(paidTroops), player.treasury);
 		player.treasury -= paid;
 		player.expenses += paid;

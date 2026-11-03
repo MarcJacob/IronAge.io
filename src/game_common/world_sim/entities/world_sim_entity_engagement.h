@@ -45,7 +45,11 @@ void world_army_join_engagement(match_world_state& world, entity_guid army, enti
 // Callers make sure the army is valid, free (not in an engagement) and has men; the engagement must be valid. A raising army may join: its raising is suspended meanwhile.
 bool world_army_join_engagement(match_world_state& world, entity_guid army, entity_guid engagement);
 
-// The side the army would join the engagement on (see above). Returns false if it would not join (neutral, or standing on the besieged settlement as a defender).
+// Damage points the given men deal before the round's random percent: sum over the types of count x damage. 0 = they cannot hurt anyone (e.g. only wagons).
+ui64 troops_base_damage(const army_troop_count& troops);
+
+// The side the army would join the engagement on (see above). Returns false if it would not join (neutral, standing on the besieged settlement as a defender,
+// or the army cannot inflict damage: troops_base_damage of its men is 0). This also keeps harmless armies from auto-joining.
 bool world_army_pick_engagement_side(const match_world_state& world, entity_guid army, entity_guid engagement, ENGAGEMENT_SIDE& out_side);
 
 // Whether an army at the location, on the side, can leave the engagement: when it is farther than engagement_leave_radius_multiplier join radii from it, or when it is

@@ -264,6 +264,7 @@ void settlement_building_tradepost_on_added(match_world_state& world, entity_gui
     settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
     trade.caravan_count_max++;
     trade.market_capacity_buildings += TRADE_POST_MARKET_CAPACITY;
+    world.entities->settlements.troop_max[settlement.get_index()].wagons += GAME_PARAMETERS.tradepost_wagon_max_increase;
 }
 
 void settlement_building_tradepost_on_removed(match_world_state& world, entity_guid settlement)
@@ -273,6 +274,7 @@ void settlement_building_tradepost_on_removed(match_world_state& world, entity_g
     settlement_trading& trade = world.entities->settlements.trade[settlement.get_index()];
     trade.caravan_count_max--;
     trade.market_capacity_buildings -= TRADE_POST_MARKET_CAPACITY;
+    world.entities->settlements.troop_max[settlement.get_index()].wagons -= GAME_PARAMETERS.tradepost_wagon_max_increase;
 }
 
 // TRADE DEPOT

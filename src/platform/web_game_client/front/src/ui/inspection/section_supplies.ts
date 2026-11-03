@@ -25,7 +25,7 @@ export function supplies_color(fraction: number): string
     return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 
-// Daily consumption of the given troops (levies, men-at-arms, horsemen, knights), from the game parameters. Same rule as the simulation.
+// Daily consumption of the given troops (levies, men-at-arms, horsemen, knights, wagons), from the game parameters. Same rule as the simulation.
 // Raising an army costs one day of it, taken from the treasury and put in the army's supplies.
 export function troops_consumption(targets: number[]): number
 {
@@ -33,5 +33,6 @@ export function troops_consumption(targets: number[]): number
     return Math.floor(targets[0] * parameters.get_number("upkeep_levy_per_mille") / 1000)
         + targets[1] * parameters.get_number("upkeep_men_at_arms")
         + targets[2] * parameters.get_number("upkeep_horseman")
-        + targets[3] * parameters.get_number("upkeep_knight");
+        + targets[3] * parameters.get_number("upkeep_knight")
+        + targets[4] * parameters.get_number("upkeep_wagon");
 }

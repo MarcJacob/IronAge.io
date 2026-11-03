@@ -206,7 +206,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 // The troops are the raise targets.
 static ui32 raise_army_cost(const command_data_raise_army& command)
 {
-	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
 	return army_daily_consumption(targets);
 }
 
@@ -249,12 +249,17 @@ bool command_raise_army_validity_check(const match_world_state& world, match_pla
 
 	if (settlements.owners[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
+	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
 	if (command.start_order >= RAISE_START_ORDER_COUNT && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
-	// Every type, levies included, is drawn from the garrison pool when raising: targets can exceed what the pool holds.
+	// Wagons: raised ones plus this army's must fit under the settlement's wagons max (2 per caravanserai). The pool (garrison) counts toward that max too,
+	// so the pool and the raised never exceed it and this bounds what can ever be drawn.
+	if (command.target_wagons > settlements.troop_max[settlementIndex].wagons - ia_min(settlements.raised[settlementIndex].wagons, settlements.troop_max[settlementIndex].wagons)
+		&& command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
+
+	// Every type, levies and wagons included, is drawn from the garrison pool when raising: targets can exceed what the pool holds.
 
 	if (!raise_army_can_afford(world, command, feedback) && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
@@ -287,7 +292,7 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owners[settlementIndex];
 	newArmy.location = command.raise_location; // The spawn function defaults the destination to the location.
-	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
 	newArmy.supplies = raise_army_cost(command);
@@ -420,11 +425,11 @@ void command_build_road_apply(match_world_state& world, match_player_id player, 
 
 // SET SETTLEMENT TROOP CEILING
 
-// The command's troop_type counts the poolable types: 0 is the first type after levies (men at arms), so the troop type is MEN_AT_ARMS + the command's value.
+// The command's troop_type counts the poolable types: 0 is the first type after levies (men at arms), so the troop type is MEN_AT_ARMS + the command's value. Wagons are not poolable.
 static bool command_troop_ceiling_type(ui8 command_troop_type, TROOP_TYPE& out_type)
 {
 	ui8 type = (ui8)TROOP_TYPE::MEN_AT_ARMS + command_troop_type;
-	if (type >= (ui8)TROOP_TYPE::TROOP_TYPE_COUNT) return false;
+	if (type >= (ui8)TROOP_TYPE::WAGONS) return false;
 	out_type = (TROOP_TYPE)type;
 	return true;
 }
@@ -565,7 +570,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	// No dedicated error for an army that is not raising: reported as unspecified.
 	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
-	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0
+	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
 		&& command_add_error(feedback, COMMAND_ERROR_NO_RAISE_TARGET)) return false;
 
 	// The home settlement must still exist.
@@ -575,6 +580,12 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
+
+	// Wagons: the army's target may not exceed the room under the wagons max, counting the wagons it already has (they are in the settlement's raised count).
+	const world_entity_settlements& settlements = world.entities->settlements;
+	ui16 homeIndex = home.get_index();
+	ui32 wagonRoom = (ui32)ia_max(settlements.troop_max[homeIndex].wagons, settlements.raised[homeIndex].wagons) - settlements.raised[homeIndex].wagons + armies.compositions[armyIndex].wagons;
+	if (command.target_wagons > wagonRoom && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -586,7 +597,7 @@ void command_set_army_raise_targets_apply(match_world_state& world, match_player
 	const command_data_set_army_raise_targets& command = command_header.get_command_data<command_data_set_army_raise_targets>();
 
 	// Targets below the current counts are allowed: nothing is returned, the army just completes.
-	world.entities->armies.raised_troops[command.army.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights };
+	world.entities->armies.raised_troops[command.army.get_index()] = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
 }
 
 // STOP RAISING ARMY

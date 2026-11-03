@@ -79,6 +79,9 @@ bool world_army_pick_engagement_side(const match_world_state& world, entity_guid
 	const world_entity_armies& armies = world.entities->armies;
 	ui16 armyIndex = army.get_index();
 
+	// An army that cannot inflict damage joins nothing.
+	if (troops_base_damage(armies.compositions[armyIndex]) == 0) return false;
+
 	PLAYER_DIPLOMATIC_STATUS status = engagement_diplomatic_status(world, engagement, armies.owners[armyIndex]);
 	if (status == PLAYER_DIPLOMATIC_STATUS_NEUTRAL) return false;
 
@@ -410,7 +413,15 @@ void world_system_engagement_auto_join(match_world_state& world)
 	}
 }
 
-// Damage points a side deals this round, before the defences of the other side: its men's total damage x a random percent in [min, max] (rounded up).
+ui64 troops_base_damage(const army_troop_count& troops)
+{
+	ui64 base = 0;
+	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
+		base += (ui64)troops.count[unitType] * GAME_PARAMETERS.troop_type_stats[unitType].damage;
+	return base;
+}
+
+// Damage points a side deals this round, before the defences of the other side: its men's total damage x a random percent in [min, max] x engagement_damage_scale_percent (rounded up).
 // One RNG roll.
 static ui32 engagement_roll_side_damage(match_world_state& world, const army_troop_count& troops)
 {
@@ -419,10 +430,8 @@ static ui32 engagement_roll_side_damage(match_world_state& world, const army_tro
 	ui32 percent = world.rand_gen.next_range<ui32>(minPercent, maxPercent + 1);
 	if (percent > maxPercent) percent = maxPercent; // The range function may land on its max.
 
-	ui64 base = 0;
-	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
-		base += (ui64)troops.count[unitType] * GAME_PARAMETERS.troop_type_stats[unitType].damage;
-	return (ui32)ia_min((base * percent + 99) / 100, (ui64)0xFFFFFFFF);
+	ui64 base = troops_base_damage(troops);
+	return (ui32)ia_min((base * percent * GAME_PARAMETERS.engagement_damage_scale_percent + 9999) / 10000, (ui64)0xFFFFFFFF);
 }
 
 // Men killed in a group (an army or the garrison) of a side that deals with the damage of the other side. The group takes its men's share of the damage
@@ -498,6 +507,15 @@ void world_system_engagements(match_world_state& world)
 		for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++) sideMen[sideIndex] = army_total_manpower(engagement.side((ENGAGEMENT_SIDE)sideIndex).troops);
 		ui64 attackerMen = sideMen[(ui8)ENGAGEMENT_SIDE::ATTACKER];
 		ui64 defenderMen = sideMen[(ui8)ENGAGEMENT_SIDE::DEFENDER];
+
+		// Zero-damage rule (damage rounds only, not an idle siege): a side that cannot deal damage (only wagons...) loses even with men left. It counts as wiped below:
+		// attacker wiped = siege lifted / attackers gone, defender wiped = conquest (outside clash: back to besieging). Both harmless = the engagement ends with no winner
+		// (the attacker counts as wiped, so no conquest). Armies are only released, never destroyed by this rule.
+		if (engagement.phase != ENGAGEMENT_PHASE::BESIEGING)
+		{
+			if (troops_base_damage(engagement.attacker.troops) == 0) attackerMen = 0;
+			if (troops_base_damage(engagement.defender.troops) == 0) defenderMen = 0;
+		}
 
 		// Commanders follow the men (before any casualty of this round).
 		world_engagement_update_commanders(world, engagements.guids[engagementIndex]);

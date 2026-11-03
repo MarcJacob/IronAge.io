@@ -182,6 +182,10 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
+		// Stopgap until the army speed rework: an army with any wagon moves at a fraction of the normal speed.
+		ui32 speed = GAME_PARAMETERS.army_travel_speed;
+		if (armies.compositions[armyIndex].wagons > 0) speed /= ia_max((ui32)1, GAME_PARAMETERS.army_wagon_speed_divisor);
+		armies.movements[armyIndex].travel_speed = (ui16)speed;
 		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
 	}
 

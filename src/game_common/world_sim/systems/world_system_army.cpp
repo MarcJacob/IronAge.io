@@ -23,6 +23,9 @@ void world_army_attack_entity(match_world_state& world, entity_guid attacker, en
 	// Joining engagements requires a free army with men (see world_army_join_engagement).
 	if (armies.engagements[attackerIndex].is_valid() || army_total_manpower(armies.compositions[attackerIndex]) == 0) return;
 
+	// An army that cannot inflict damage (only wagons...) attacks nothing: no siege, no battle, no join, no instant conquest.
+	if (troops_base_damage(armies.compositions[attackerIndex]) == 0) return;
+
 	switch (target.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
@@ -111,9 +114,10 @@ void world_system_armies_raising(match_world_state& world)
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::MEN_AT_ARMS, composition.men_at_arms, target.men_at_arms);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::HORSEMEN, composition.horsemen, target.horsemen);
 		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::KNIGHTS, composition.knights, target.knights);
+		raise_draw_from_pool(world, armyIndex, homeIndex, TROOP_TYPE::WAGONS, composition.wagons, target.wagons); // No pool: limited by the wagons max (settlement_raise_soldiers).
 
 		if (composition.levies >= target.levies && composition.men_at_arms >= target.men_at_arms
-			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights)
+			&& composition.horsemen >= target.horsemen && composition.knights >= target.knights && composition.wagons >= target.wagons)
 		{
 			armies.raising[armyIndex] = 0;
 		}

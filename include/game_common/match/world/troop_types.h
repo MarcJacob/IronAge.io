@@ -11,6 +11,7 @@ enum class TROOP_TYPE : ui8
     MEN_AT_ARMS = 1,
     HORSEMEN = 2,
     KNIGHTS = 3,
+    WAGONS = 4, // Handled like levies (civilian while in the garrison), but deal no damage and carry goods.
 
     TROOP_TYPE_COUNT,
 };
@@ -26,6 +27,7 @@ struct army_troop_count
             ui16 men_at_arms;
             ui16 horsemen;
             ui16 knights;
+            ui16 wagons;
         };
         ui16 count[(ui8)TROOP_TYPE::TROOP_TYPE_COUNT];
     };
@@ -39,6 +41,7 @@ struct army_troop_count
             case TROOP_TYPE::MEN_AT_ARMS: return count[(ui8)type];
             case TROOP_TYPE::HORSEMEN: return count[(ui8)type];
             case TROOP_TYPE::KNIGHTS: return count[(ui8)type];
+            case TROOP_TYPE::WAGONS: return count[(ui8)type];
             default: return count[0];
         }
     }

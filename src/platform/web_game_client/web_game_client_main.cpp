@@ -98,7 +98,7 @@ static void fill_render_entities_significance(const client_render_state& renderS
         case ENTITY_TYPE::ARMY:
         {
             const army_troop_count& troops = armies.compositions[index];
-            entity.significance = (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights;
+            entity.significance = (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights + troops.wagons;
             break;
         }
         case ENTITY_TYPE::CARAVAN: entity.significance = caravans.values[index] / 100; break;

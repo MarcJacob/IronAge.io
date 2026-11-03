@@ -34,7 +34,8 @@ function draw_troop_count(env: EntityRenderEnv, viewport_x: number, viewport_y: 
     if (army === null || army.get_number("engagement") !== 0) return;
 
     const total = army.get_number("composition_levies") + army.get_number("composition_men_at_arms")
-        + army.get_number("composition_horsemen") + army.get_number("composition_knights");
+        + army.get_number("composition_horsemen") + army.get_number("composition_knights")
+        + army.get_number("composition_wagons");
     const center = env.canvas_center(viewport_x, viewport_y);
     env.draw_label(String(total), center.x, center.y + size / 2 + 2);
 }

@@ -79,6 +79,8 @@ struct game_parameters
     // BUILDINGS
     ui8 housing_pop_increase = 100; // How much urban population capacity increases per housing.
     ui8 barracks_maa_max_increase = 50; // How much Men At Arms max is increased per barracks in a settlement.
+    ui32 wagon_training_per_day = 1; // Wagons added to a settlement's garrison pool per day, up to the max (garrison + raised), whatever its population.
+    ui8 tradepost_wagon_max_increase = 2; // How much the wagons max is increased per caravanserai (tradepost) in a settlement.
 
     // MILITARY
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
@@ -107,8 +109,9 @@ struct game_parameters
     ui32 engagement_tick_interval = 20; // World ticks per round. At least 1.
     ui32 engagement_damage_min_percent = 50;
     ui32 engagement_damage_max_percent = 100;
+    ui32 engagement_damage_scale_percent = 100; // Scales all damage dealt per round (100 = 1.0). Tunes battle length.
 
-    // Per troop type, in TROOP_TYPE order (levies, men at arms, horsemen, knights). Defense and armor are used as at least 1.
+    // Per troop type, in TROOP_TYPE order (levies, men at arms, horsemen, knights, wagons). Defense and armor are used as at least 1. Damage 0 deals nothing.
     struct troop_type_stat_def
     {
         ui8 damage;
@@ -120,6 +123,7 @@ struct game_parameters
         { 6, 4, 4 },
         { 4, 4, 2 },
         { 12, 6, 10 },
+        { 0, 0, 30 },
     };
 
     // ARMY RAISING.
@@ -136,22 +140,25 @@ struct game_parameters
 
     // Speed of each entity kind ON A ROAD, in thousandths of a tile per tick (world_entity_movement::travel_speed). Off-road it is divided by the tile's travel cost.
     ui32 army_travel_speed = 200;
+    ui32 army_wagon_speed_divisor = 2; // An army containing at least one wagon moves at its normal speed divided by this (stopgap until the army speed rework).
     ui32 worker_travel_speed = 200;
     ui32 caravan_travel_speed = 200;
     ui32 ship_travel_speed = 400; // Ships (caravans with IS_SHIP): twice caravan_travel_speed. Water costs are unchanged (coast 3, sea 7).
 
     // ECONOMY
-    // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (500 = 0.5), computed on the army's levy total and rounded down.
-    ui32 upkeep_levy_per_mille = 500;
-    ui32 upkeep_men_at_arms = 2;
-    ui32 upkeep_horseman = 10;
-    ui32 upkeep_knight = 30;
+    // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
+    ui32 upkeep_levy_per_mille = 1000;
+    ui32 upkeep_men_at_arms = 3;
+    ui32 upkeep_horseman = 4;
+    ui32 upkeep_knight = 15;
+    ui32 upkeep_wagon = 1;
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
     // Supplies refill (from the treasury, inside its owner's territory) up to it.
     ui32 carry_levy = 10;
-    ui32 carry_men_at_arms = 6;
-    ui32 carry_horseman = 20;
-    ui32 carry_knight = 10;
+    ui32 carry_men_at_arms = 10;
+    ui32 carry_horseman = 16;
+    ui32 carry_knight = 15;
+    ui32 carry_wagon = 100;
     // RAID LOOT (temporary, until tile-based raiding). Most a settlement can lose to raiders per day, all armies together.
     ui32 raid_production_percent = 10; // Of its production.
     ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies).
@@ -214,10 +221,12 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(upkeep_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(upkeep_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(upkeep_wagon, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(carry_levy, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(carry_men_at_arms, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(carry_horseman, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(carry_knight, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(carry_wagon, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_production_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_production_gold_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_peasants_percent, GAME_DATA_PROP_TYPE::UI32)

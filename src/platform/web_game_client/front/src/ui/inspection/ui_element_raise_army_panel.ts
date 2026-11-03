@@ -9,11 +9,11 @@ import { StaticGauge } from "./static_rows.js"
 // Every DOM id this module uses (index.html).
 const IDS = {
     root: "game_hud_raise_army_panel",
-    troops: ["raise_army_panel_levies", "raise_army_panel_men_at_arms", "raise_army_panel_horsemen", "raise_army_panel_knights"], // Troop order.
+    troops: ["raise_army_panel_levies", "raise_army_panel_men_at_arms", "raise_army_panel_horsemen", "raise_army_panel_knights", "raise_army_panel_wagons"], // Troop order.
     cost: "raise_army_panel_cost",
 };
 
-const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0"]; // Troop order, as in section_troops.ts.
+const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0", "#a0764a"]; // Troop order, as in section_troops.ts.
 
 export interface RaiseArmyTroopState
 {
@@ -23,7 +23,7 @@ export interface RaiseArmyTroopState
 
 export interface RaiseArmyPanelState
 {
-    troops: (RaiseArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights). Null hides the gauge.
+    troops: (RaiseArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights, wagons). Null hides the gauge.
     cost: number; // One day of the troops' consumption, taken from the treasury.
     treasury: number;
 }

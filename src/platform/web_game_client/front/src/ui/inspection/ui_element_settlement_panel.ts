@@ -41,12 +41,13 @@ const IDS = {
     market_goods: "settlement_panel_market_goods",
     market_goods_percent: "settlement_panel_market_goods_percent",
     trade_volume: "settlement_panel_trade_volume",
-    garrison: ["settlement_panel_levies", "settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights"], // Troop order (levies first: no ceiling).
+    garrison: ["settlement_panel_levies", "settlement_panel_men_at_arms", "settlement_panel_horsemen", "settlement_panel_knights", "settlement_panel_wagons"], // Troop order (levies first and wagons last: no ceiling).
     building_bar_template: "settlement_panel_building_bar_template",
     building_template: "settlement_panel_building_template",
 };
 
-const GARRISON_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0"]; // Troop order, as in section_troops.ts.
+const GARRISON_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0", "#a0764a"]; // Troop order, as in section_troops.ts.
+const WAGONS_INDEX = 4; // Like levies (index 0), wagons have no ceiling: the max is their limit.
 const MARKET_GOODS_COLOR = "#d4a93c";
 const TRADE_VOLUME_COLOR = "#4fc08d";
 const EXPORT_COLOR = "#7fd0ff"; // Export pool gauge segment (the export ratio slider's color is in style.css).
@@ -290,7 +291,7 @@ function init(): void
 function emit_ceiling(troop_type: number, value: number): void
 {
     const garrison = shown?.garrison[troop_type] ?? null;
-    if (garrison === null || troop_type === 0) return; // Levies have no ceiling.
+    if (garrison === null || troop_type === 0 || troop_type === WAGONS_INDEX) return; // Levies and wagons have no ceiling.
     events.emit("ceiling", troop_type - 1, value >= garrison.max ? CEILING_SATURATED : value); // The command's troop_type starts at men-at-arms.
 }
 
@@ -320,8 +321,8 @@ export function submit(state: SettlementPanelState | null): void
     for (let i = 0; i < el.garrison.length; i++)
     {
         const garrison = state.garrison[i] ?? null;
-        // Levies (first): no ceiling; the pool and the raised levies against the max (garrison + raised).
-        if (garrison !== null && i === 0)
+        // Levies (first): no ceiling; the pool and the raised levies against the max (garrison + raised). Wagons (last): same.
+        if (garrison !== null && (i === 0 || i === WAGONS_INDEX))
         {
             el.garrison[i].submit({ color: GARRISON_COLORS[i], current: garrison.home, raised: garrison.raised, max: garrison.max, editable: false });
             continue;

@@ -56,9 +56,9 @@ function engagement_panel_state(engagement: EntityData, note: string): Engagemen
 {
     const side = (name: string) =>
     {
-        const perType = ["levies", "men_at_arms", "horsemen", "knights"].map(type => engagement.get_number(`${name}_men_${type}`));
+        const perType = ["levies", "men_at_arms", "horsemen", "knights", "wagons"].map(type => engagement.get_number(`${name}_men_${type}`));
         const men = perType.reduce((sum, count) => sum + count, 0);
-        return `${Backend.get_player_name(engagement.get_number(`${name}_commander`))}, ${men} men (levies ${perType[0]}, men at arms ${perType[1]}, horsemen ${perType[2]}, knights ${perType[3]})`;
+        return `${Backend.get_player_name(engagement.get_number(`${name}_commander`))}, ${men} men (levies ${perType[0]}, men at arms ${perType[1]}, horsemen ${perType[2]}, knights ${perType[3]}, wagons ${perType[4]})`;
     };
 
     let target = "";
@@ -97,7 +97,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
     // Garrison levies are working pop (already in the strata), so the home soldiers shown apart from them are the other types.
     // Raised troops of every type, levies included, are in "population" and shown apart from it.
     const soldiers_home = prop("troops_men_at_arms") + prop("troops_horsemen") + prop("troops_knights");
-    const raised = prop("raised_levies") + prop("raised_men_at_arms") + prop("raised_horsemen") + prop("raised_knights");
+    const raised = prop("raised_levies") + prop("raised_men_at_arms") + prop("raised_horsemen") + prop("raised_knights") + prop("raised_wagons");
     const parameters = get_game_parameters();
 
     // Ongoing projects by building type, as their progress (0..255).
@@ -138,7 +138,7 @@ function settlement_panel_state(settlement: EntityData, context: InspectionConte
             const troop_raised = prop(`raised_${troop.name}`);
             const max = prop(`max_${troop.name}`);
             if (max === 0 && home === 0 && troop_raised === 0) return null;
-            return { home, raised: troop_raised, max, ceiling: troop.name === "levies" ? max : prop(`ceiling_${troop.name}`) };
+            return { home, raised: troop_raised, max, ceiling: troop.name === "levies" || troop.name === "wagons" ? max : prop(`ceiling_${troop.name}`) };
         }),
         buildings: settlement.get_array("building_counts").map((count, building_type): SettlementPanelUI.SettlementBuildingState | null => {
             const definition = get_building_definition(building_type);

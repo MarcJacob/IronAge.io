@@ -12,9 +12,9 @@ import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
 // Targets in troop order as the target_* properties of RAISE_ARMY and SET_ARMY_RAISE_TARGETS.
-export function raise_target_props(targets: number[]): { target_levies: number, target_men_at_arms: number, target_horsemen: number, target_knights: number }
+export function raise_target_props(targets: number[]): { target_levies: number, target_men_at_arms: number, target_horsemen: number, target_knights: number, target_wagons: number }
 {
-    return { target_levies: targets[0], target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3] };
+    return { target_levies: targets[0], target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3], target_wagons: targets[4] };
 }
 
 // Whether the path preview is drawn as acceptable (green) or refused (red), from the validity feedback of the order.
@@ -34,8 +34,8 @@ function is_preview_valid(feedback: CommandFeedback, points: { x: number, y: num
 
 export class ArmyRaising extends Core.Mode
 {
-    // Troops to raise per type (levies, men-at-arms, horsemen, knights), set with the panel's sliders. At least one must be nonzero to raise.
-    private targets = [0, 0, 0, 0];
+    // Troops to raise per type (levies, men-at-arms, horsemen, knights, wagons), set with the panel's sliders. At least one must be nonzero to raise.
+    private targets = [0, 0, 0, 0, 0];
 
     // exit_key: code of the key that entered the mode, pressing it again leaves the mode.
     constructor(private settlement_guid: number, private exit_key: string) { super(); }
