@@ -82,7 +82,7 @@ export function submit(state: RaiseArmyPanelState | null): void
             : { color: TROOP_COLORS[i], current: 0, max: troop.max, slider: troop.target, slider_name: "target", compact: true, editable: true });
     }
 
-    set_text(el.cost, `${state.cost} (1 day of supplies)`);
+    set_text(el.cost, `${state.cost} gold (1 day of upkeep)`);
     el.cost.classList.toggle("warn", state.cost > state.treasury);
 }
 

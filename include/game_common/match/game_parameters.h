@@ -147,7 +147,7 @@ struct game_parameters
     ui32 ship_travel_speed = 600;
 
     // ECONOMY
-    // Daily army upkeep paid from the owner's treasury, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
+    // Daily army upkeep, in goods consumed from the army's supplies, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
     ui32 upkeep_levy_per_mille = 1000;
     ui32 upkeep_men_at_arms = 3;
     ui32 upkeep_horseman = 4;
@@ -155,7 +155,7 @@ struct game_parameters
     ui32 upkeep_wagon = 1;
 
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
-    // Supplies refill (from the treasury, inside its owner's territory) up to it.
+    // Gold is paid by the treasury inside the owner's territory, and buys supplies at a settlement the army stands in, up to it.
     ui32 carry_levy = 10;
     ui32 carry_men_at_arms = 10;
     ui32 carry_horseman = 16;
@@ -164,11 +164,10 @@ struct game_parameters
 
     // RAID LOOT (temporary, until tile-based raiding). Most a settlement can lose to raiders per day, all armies together.
     ui32 raid_production_percent = 10; // Of its production.
-    ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies).
+    ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies, as goods).
     ui32 raid_peasants_percent = 10; // Of its peasants, killed (1 gold each).
     ui32 raid_goods_percent = 20; // Of its local + export goods (become supplies 1:1).
-    ui32 homecoming_settlement_goods_percent = 50; // Disbanding army: share of its supplies that joins the settlement's local goods (placeholder). The rest goes to the treasury as gold.
-    ui32 army_supply_refill_days = 2; // Days of its own consumption an army refills per day inside its owner's territory (it consumes 1, so the net gain is refill - 1 days per day).
+    ui32 good_price_gold = 1; // Gold price of one good (armies buy goods with their gold, see world_system_armies_upkeep).
 
     // CONSTRUCTION
     ui32 road_crew_cost_per_day = 50; // Wealth paid per day (treasury -> settlement's pending worker pay) while a road worker is building.
@@ -234,8 +233,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raid_production_gold_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_peasants_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(raid_goods_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(homecoming_settlement_goods_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY(army_supply_refill_days, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(good_price_gold, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(road_crew_cost_per_day, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(road_build_ticks_per_cost, GAME_DATA_PROP_TYPE::UI16)

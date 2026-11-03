@@ -202,8 +202,8 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 
 // RAISE ARMY
 
-// Cost: raising itself is free, but the army starts with one day of its troops' consumption as supplies, paid by the settlement's owner from the treasury.
-// The troops are the raise targets.
+// Cost: raising itself is free, but the army starts with one day of its troops' consumption as gold, paid by the settlement's owner from the treasury.
+// It also starts with up to that many goods, taken from the settlement's market goods. The troops are the raise targets.
 static ui32 raise_army_cost(const command_data_raise_army& command)
 {
 	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
@@ -219,7 +219,7 @@ static bool raise_army_can_afford(const match_world_state& world, const command_
 	return true;
 }
 
-// Takes the cost out of the treasury. The new army's supplies are set to it in apply.
+// Takes the cost out of the treasury. The new army's gold is set to it in apply.
 static void raise_army_charge(match_world_state& world, const command_data_raise_army& command)
 {
 	match_player_id owner = world.entities->settlements.owners[command.settlement.get_index()];
@@ -295,7 +295,12 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
-	newArmy.supplies = raise_army_cost(command);
+	newArmy.gold = raise_army_cost(command);
+
+	// Goods: one day of the targets' consumption from the home settlement's market goods, keeping a day of the settlement's own consumption (last economic tick).
+	const settlement_trading& trade = settlements.trade[settlementIndex];
+	ui32 goodsKept = settlements.economies[settlementIndex].consumption;
+	newArmy.supplies = ia_min(raise_army_cost(command), trade.market_goods > goodsKept ? trade.market_goods - goodsKept : 0);
 
 	// The order the army follows once it is raised (raising armies ignore their order, see world_system_army_orders).
 	if (command.start_order == RAISE_START_ORDER_STATION)
@@ -312,6 +317,7 @@ void command_raise_army_apply(match_world_state& world, match_player_id player, 
 
 	world_spawn_army(world, newArmy);
 	raise_army_charge(world, command);
+	world.entities->settlements.trade[settlementIndex].market_goods -= newArmy.supplies;
 }
 
 // ENTITY SET ATTACK TARGET

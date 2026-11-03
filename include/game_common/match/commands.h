@@ -45,13 +45,13 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	SET_ALLOW_FOREIGN_EXPORT, // Sets whether a settlement may send caravans / ships to settlements of other players.
 
-	BEGIN_ASSAULT, // The attacker commander of a siege that is only besieging (idle) starts the assault: damage rounds begin and last until one side is gone.
+	BEGIN_ASSAULT, // The attacker commander of a siege in the SIEGE_IDLE phase starts the assault: damage rounds begin and last until one side is gone.
 
-	LIFT_SIEGE, // The attacker commander of a siege that is only besieging (idle) ends it: its armies are released.
+	LIFT_SIEGE, // The attacker commander of a siege in the SIEGE_IDLE phase ends it: its armies are released.
 
-	WITHDRAW_ARMY, // An own army in a siege that is only besieging (idle) leaves it and goes to the nearest friendly settlement. A siege left without attacking armies ends.
+	WITHDRAW_ARMY, // An own army that can leave its engagement (the attacker side of a siege that is not fighting, or an army far enough from it) leaves it and goes to the nearest friendly settlement. A siege left without attacking armies ends.
 
-	SALLY_OUT, // The defender commander (the settlement's owner) of a siege that is besieging or in an outside clash sends out the garrison: the fight becomes a sally.
+	SALLY_OUT, // The defender commander (the settlement's owner) of a siege in the SIEGE_IDLE or SIEGE_OUTSIDE_BATTLE phase sends out the garrison: the fight becomes a sally.
 
 	SET_ARMY_ORDER, // Gives an own, raised army a standing order (ARMY_ORDER_TYPE) with its target / location.
 
@@ -371,7 +371,7 @@ void command_disband_army_apply(match_world_state& world, match_player_id player
 // BEGIN ASSAULT
 struct command_data_begin_assault
 {
-	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING phase).
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the SIEGE_IDLE phase).
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_begin_assault)
@@ -409,7 +409,7 @@ void command_set_army_order_apply(match_world_state& world, match_player_id play
 // SALLY OUT
 struct command_data_sally_out
 {
-	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING or OUTSIDE phase).
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the SIEGE_IDLE or SIEGE_OUTSIDE_BATTLE phase).
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_sally_out)
@@ -425,7 +425,7 @@ void command_sally_out_apply(match_world_state& world, match_player_id player,
 // LIFT SIEGE
 struct command_data_lift_siege
 {
-	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the BESIEGING phase).
+	entity_guid engagement; // The siege (a engagement entity of kind SIEGE in the SIEGE_IDLE phase).
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_lift_siege)
@@ -441,7 +441,7 @@ void command_lift_siege_apply(match_world_state& world, match_player_id player,
 // WITHDRAW ARMY
 struct command_data_withdraw_army
 {
-	entity_guid army; // An own army inside a siege in the BESIEGING phase.
+	entity_guid army; // An own army that can leave its engagement (see WITHDRAW_ARMY).
 };
 
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_withdraw_army)

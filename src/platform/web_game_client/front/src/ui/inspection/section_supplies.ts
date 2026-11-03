@@ -26,7 +26,7 @@ export function supplies_color(fraction: number): string
 }
 
 // Daily consumption of the given troops (levies, men-at-arms, horsemen, knights, wagons), from the game parameters. Same rule as the simulation.
-// Raising an army costs one day of it, taken from the treasury and put in the army's supplies.
+// Raising an army costs one day of it in gold, taken from the treasury and put in the army's gold.
 export function troops_consumption(targets: number[]): number
 {
     const parameters = get_game_parameters();

@@ -19,8 +19,8 @@ void world_system_caravan_spawn(match_world_state& world);
 // Caravans that reached their destination settlement deliver their goods, both ends gain trade volume, and the caravan disappears.
 void world_system_caravan_trade(match_world_state& world);
 
-// Daily: armies inside their owner's territory refill their supplies from the treasury (down to 0, no debt, adds to the player's expenses),
-// then consume them per troop. Unfunded consumption makes troops desert back home.
+// Daily: armies inside their owner's territory are paid gold from the treasury (down to 0, no debt, adds to the player's expenses),
+// buy goods with it from the settlement they stand in, then consume goods per troop. Unfunded consumption makes troops desert back home.
 void world_system_armies_upkeep(match_world_state& world);
 
 // Daily: soldiers of the settlements' local pools are paid from the owner's treasury (down to 0, no debt, adds to the player's expenses).

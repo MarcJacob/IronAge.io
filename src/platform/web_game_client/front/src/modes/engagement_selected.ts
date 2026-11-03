@@ -1,5 +1,5 @@
 // A engagement / siege (engagement) is selected: play goes on as usual, the panel shows it, and for a siege a bottom bar offers Begin assault.
-// The button is greyed out unless the command is valid for the local player (attacker commander, besieging phase), the panel's note says why not.
+// The button is greyed out unless the command is valid for the local player (attacker commander, SIEGE_IDLE phase), the panel's note says why not.
 // Leaves when the selection stops being this engagement. Escape clears the selection.
 
 import * as Core from "../core.js"

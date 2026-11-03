@@ -16,7 +16,7 @@ enum ARMY_ORDER_TYPE : ui8
 	ARMY_ORDER_ATTACK, // Chase the order's target entity (settlement, army or engagement), then start / join an engagement (a siege for a settlement) once close enough. The order goes on after the engagement.
 	                   // A target army inside an engagement stands for that engagement (the order's location is then the engagement's); a neutral one is not joined, the army waits next to it.
 	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: stand on it (no patrolling for now), attack intruders in its territory, retreat to the settlement from stronger forces.
-	ARMY_ORDER_RAID, // Target = a hostile settlement: go to its territory, stay there, flee stronger forces.
+	ARMY_ORDER_RAID, // Target = a hostile or neutral settlement: go to its territory, stay there, flee stronger forces.
 	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
 	ARMY_ORDER_TYPE_COUNT,
 };
@@ -65,8 +65,8 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* home_settlements; // Settlement this army was raised from.
 	army_order* orders; // Standing order (see ARMY_ORDER_TYPE).
 
-	ui32* gold; // Gold the army carries (raid loot, see world_system_raid_loot). Added to the owner's treasury when the army disbands.
-	ui32* supplies; // Wealth the army carries. Consumed daily by its soldiers, refilled from the owner's treasury inside the owner's territory. See world_system_armies_upkeep.
+	ui32* gold; // Gold the army carries (pay from the owner's treasury, raid loot). Buys supplies at the settlement it stands in. Goes to the owner's treasury when the army disbands.
+	ui32* supplies; // Goods the army carries (1 per good). Consumed daily by its soldiers, bought with gold from the settlement it stands in. See world_system_armies_upkeep.
 	ui16* desertions; // Men who deserted at the last daily tick (reset by every daily tick).
 
 	struct view;

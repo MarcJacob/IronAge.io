@@ -123,7 +123,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = INVALID_MATCH_PLAYER_ID;
 			outEntity.guid = engagements.guids[engagementIndex];
 			outEntity.viewport_location = engagementLoc - render_state.viewport.bottom_left;
-			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
+			// Bit 0: siege. Bit 1: idle (SIEGE_IDLE phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
 			outEntity.flags = (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (!engagements.fighting_actives[engagementIndex] ? 2 : 0);
 			outEntity.fractional_offset = {};
 

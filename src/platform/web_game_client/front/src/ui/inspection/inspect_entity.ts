@@ -45,10 +45,10 @@ export interface InspectionContext
 
 const ENGAGEMENT_PHASE_NAMES: { [phase: number]: string } = {
     [Backend.ENGAGEMENT_PHASE.ACTIVE]: "Fighting",
-    [Backend.ENGAGEMENT_PHASE.BESIEGING]: "Besieging",
-    [Backend.ENGAGEMENT_PHASE.ASSAULT]: "Assault",
-    [Backend.ENGAGEMENT_PHASE.SALLY]: "Sally",
-    [Backend.ENGAGEMENT_PHASE.OUTSIDE]: "Outside clash",
+    [Backend.ENGAGEMENT_PHASE.SIEGE_IDLE]: "Besieging",
+    [Backend.ENGAGEMENT_PHASE.SIEGE_ASSAULT]: "Assault",
+    [Backend.ENGAGEMENT_PHASE.SIEGE_SALLY]: "Sally",
+    [Backend.ENGAGEMENT_PHASE.SIEGE_OUTSIDE_BATTLE]: "Outside clash",
 };
 
 // Engagement / siege panel: kind, phase, each side's commander with its total men, and the main target.

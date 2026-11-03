@@ -468,7 +468,7 @@ static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 			return;
 		}
 
-		// The origin changed hands: the men give up and go back to it (it is the new owner's now). The army's gold and supplies are lost with it.
+		// The origin changed hands: the men give up and go back to it (it is the new owner's now). The last man leaving sends its gold to the treasury and its supplies to the home (only if still owned).
 		entity_guid army = armies.guids[army_index];
 		for (ui8 troopTypeIndex = 0; troopTypeIndex < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT && world_entity_is_valid(world, army); troopTypeIndex++)
 		{

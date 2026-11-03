@@ -86,7 +86,7 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 		targets.levies = (ui16)ia_min((ui32)settlement.home_troops.levies, 400u); // Levies are a garrison pool now, not taken from the peasants.
 		targets.men_at_arms = settlement.home_troops.men_at_arms;
 
-		// Raising costs one day of the army's consumption, taken from the treasury.
+		// Raising costs one day of the army's consumption in gold, taken from the treasury (the army starts with it as gold).
 		ui32 cost = ai_world_troops_daily_consumption(targets);
 		if (treasury < cost) break;
 

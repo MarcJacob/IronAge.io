@@ -29,7 +29,7 @@ export class ArmySelected extends Core.Mode
     // Disband is refused (greyed out) unless the army is in its home settlement's territory.
     private disband_item: ActionBarUI.ActionBarItem = { id: "disband", name: "Disband", state: 'unselectable' };
 
-    private can_withdraw: boolean | null = null; // Whether the bar currently shows Withdraw (army in a siege that is only besieging).
+    private can_withdraw: boolean | null = null; // Whether the bar currently shows Withdraw (army that can leave its engagement, see WITHDRAW_ARMY).
     private withdraw_item: ActionBarUI.ActionBarItem = { id: "withdraw", name: "Withdraw", state: 'selectable' };
 
     // Go home: walk to the home settlement and disband.

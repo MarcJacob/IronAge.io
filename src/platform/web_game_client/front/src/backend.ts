@@ -99,10 +99,10 @@ export enum ARMY_ORDER
 export enum ENGAGEMENT_PHASE
 {
     ACTIVE = 0,
-    BESIEGING = 1,
-    ASSAULT = 2,
-    SALLY = 3,
-    OUTSIDE = 4,
+    SIEGE_IDLE = 1,
+    SIEGE_ASSAULT = 2,
+    SIEGE_SALLY = 3,
+    SIEGE_OUTSIDE_BATTLE = 4,
 }
 
 // Mirrors the C++ ENGAGEMENT_KIND enum (include/game_common/match/world/entities/world_entity_armies.h), the engagement GDO's kind. Update here if they change.
@@ -585,7 +585,7 @@ export class RenderEntity
 }
 
 export const ENGAGEMENT_FLAG_SIEGE = 1 << 0; // Render flags of engagements (game_client_render.cpp).
-export const ENGAGEMENT_FLAG_IDLE = 1 << 1; // Siege in its besieging phase: no fighting yet.
+export const ENGAGEMENT_FLAG_IDLE = 1 << 1; // Siege in its SIEGE_IDLE phase: no fighting yet.
 export const CARAVAN_FLAG_IS_SHIP = 1 << 0; // Mirrors WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP.
 
 export class RenderState

@@ -55,6 +55,18 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	if (engagement.is_valid()) world_engagement_army_left(world, engagement);
 }
 
+// Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (if it is still the owner's, lost otherwise). Call before destroying the army.
+static void army_homecoming(match_world_state& world, ui16 armyIndex)
+{
+	world_entity_armies& armies = world.entities->armies;
+	world.player_states[armies.owners[armyIndex]].treasury += armies.gold[armyIndex];
+
+	entity_guid home = armies.home_settlements[armyIndex];
+	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
+	if (world.entities->settlements.owners[home.get_index()] != armies.owners[armyIndex]) return;
+	settlement_market_add(world.entities->settlements, home.get_index(), armies.supplies[armyIndex]);
+}
+
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement)
 {
 	ASSERT(world_entity_is_valid(world, settlement) && settlement.get_type() == ENTITY_TYPE::SETTLEMENT);
@@ -68,19 +80,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 		settlement_release_raised(world, settlement.get_index(), (TROOP_TYPE)troopType, men.count[troopType]);
 	}
 
-	// Homecoming: gold goes to the owner's treasury. Supplies are split by homecoming_settlement_goods_percent: that share joins the settlement's local goods
-	// (only if it still is the owner's), the rest counts as gold 1:1 in the treasury.
-	ui16 armyIndex = army.get_index();
-	match_player_id owner = world.entities->armies.owners[armyIndex];
-	ui32 supplies = world.entities->armies.supplies[armyIndex];
-	ui32 toSettlement = 0;
-	if (world.entities->settlements.owners[settlement.get_index()] == owner)
-	{
-		toSettlement = (ui32)((ui64)supplies * ia_min(GAME_PARAMETERS.homecoming_settlement_goods_percent, (ui32)100) / 100);
-		world.entities->settlements.trade[settlement.get_index()].market_goods += toSettlement;
-	}
-	world.player_states[owner].treasury += world.entities->armies.gold[armyIndex] + (supplies - toSettlement);
-
+	army_homecoming(world, army.get_index());
 	world_destroy_army(world, army);
 }
 
@@ -123,7 +123,11 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, TROOP_TYPE
 	}
 
 	// The last man leaving ends the army. The army is invalid after this.
-	if (army_total_manpower(armies.compositions[army.get_index()]) == 0) world_destroy_army(world, army);
+	if (army_total_manpower(armies.compositions[army.get_index()]) == 0)
+	{
+		army_homecoming(world, army.get_index());
+		world_destroy_army(world, army);
+	}
 	return deserters;
 }
 

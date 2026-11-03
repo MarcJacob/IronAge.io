@@ -113,7 +113,7 @@ export class RESOURCES_STORE
         ARMY: new RESOURCE_SPRITE("art/entity_army.svg"),
         CARAVAN: new RESOURCE_SPRITE("art/entity_caravan.svg"),
         ENGAGEMENT: new RESOURCE_SPRITE("art/entity_engagement.svg"), // Crossing swords: field engagements, and sieges that are fighting.
-        SIEGE: new RESOURCE_SPRITE("art/entity_siege.svg"), // Catapult: sieges in their idle besieging phase.
+        SIEGE: new RESOURCE_SPRITE("art/entity_siege.svg"), // Catapult: sieges in their SIEGE_IDLE phase.
         SHIP: new RESOURCE_SPRITE("art/entity_ship.svg"), // Caravans with the ship flag.
     };
 

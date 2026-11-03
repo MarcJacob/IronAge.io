@@ -29,7 +29,7 @@ const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0", "#a0764a"]; //
 
 const CONSUMPTION_TOOLTIP = [
     "Soldiers consume supplies every day.",
-    "Armies refill from the treasury inside their owner's territory.",
+    "Inside their territory armies are paid gold, which buys goods from the settlement they stand in.",
     "Missing supplies make soldiers desert.",
 ];
 
