@@ -81,16 +81,15 @@ static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_sie
 	const world_entity_armies& armies = world.entities->armies;
 	if (slot >= engagements.max_count || !engagements.guids[slot].is_valid()) return false;
 
-	const world_entity_engagements::state& engagement = engagements.states[slot];
-	if (engagement.kind != ENGAGEMENT_KIND::SIEGE || engagement.phase != ENGAGEMENT_PHASE::BESIEGING) return false;
+	if (engagements.kinds[slot] != ENGAGEMENT_KIND::SIEGE || engagements.phases[slot] != ENGAGEMENT_PHASE::SIEGE_IDLE) return false;
 
 	out.guid = engagements.guids[slot];
-	out.attacker_commander = engagement.attacker.commander;
+	out.attacker_commander = engagements.attacker_commanders[slot];
 	out.attacker_men = 0;
 	out.defender_men = 0;
 	out.min_supply_days = 0xFFFFFFFF;
-	out.attacker_men = (ui32)army_total_manpower(engagement.attacker.troops);
-	out.defender_men = (ui32)army_total_manpower(engagement.defender.troops);
+	out.attacker_men = (ui32)army_total_manpower(engagements.attacker_troops[slot]);
+	out.defender_men = (ui32)army_total_manpower(engagements.defender_troops[slot]);
 	for (ui16 army = 0; army < armies.max_count; army++)
 	{
 		if (!armies.guids[army].is_valid() || armies.engagements[army]._value != out.guid._value || armies.engagement_sides[army] != ENGAGEMENT_SIDE::ATTACKER) continue;

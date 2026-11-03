@@ -62,9 +62,9 @@ void world_system_armies_upkeep(match_world_state& world)
 			if (!world_entity_is_valid(world, originArmy)) continue;
 		}
 
-        // If army is engaged in a field battle, do not run its supply consumption / refill logic.
+        // If army is in an engagement where troops are fighting (field battle, assault...), do not run its supply consumption / refill logic.
         entity_guid armyCurrentEngagement = armies.engagements[armyIndex];
-        if (armyCurrentEngagement.is_valid() && world.entities->engagements.states[armyCurrentEngagement.get_index()].kind == ENGAGEMENT_KIND::FIELD_BATTLE) continue;
+        if (armyCurrentEngagement.is_valid() && world.entities->engagements.fighting_actives[armyCurrentEngagement.get_index()]) continue;
 
 		// Refill, before consuming so the day's consumption is covered. It adds army_supply_refill_days of the supply basis's consumption at most,
 		// and leaves room for the day's consumption above the capacity, so the army ends the day at the capacity (not below it) if it can.

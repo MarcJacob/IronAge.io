@@ -25,9 +25,9 @@ enum class ENGAGEMENT_KIND : ui8
 	SIEGE, // Armies against a settlement (main_target) and what defends it.
 };
 
-// Phase of the engagement. A field engagement is always ACTIVE. A siege goes BESIEGING (idle, no damage), then ASSAULT (started by the attacker commander)
-// or SALLY (started by the defender commander); OUTSIDE is a clash of defending armies against the besiegers, the garrison does not take part.
-// Damage rounds only happen in every phase but BESIEGING.
+// Phase of the engagement. A field engagement is always ACTIVE. A siege goes SIEGE_IDLE, then SIEGE_ASSAULT (started by the attacker commander)
+// or SIEGE_SALLY (started by the defender commander); SIEGE_OUTSIDE_BATTLE is a clash of defending armies against the besiegers, the garrison does not take part.
+// Whether troops deal and take damage is the engagement's fighting_active flag (set on phase changes), not the phase itself.
 enum class ENGAGEMENT_PHASE : ui8
 {
 	ACTIVE = 0,
@@ -41,58 +41,147 @@ enum class ENGAGEMENT_PHASE : ui8
 // A engagement between two sides of armies. Free armies close enough join it by themselves (engagement_join_radius), or by an ATTACK order targeting it, a member army or the besieged settlement. Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_engagements : public world_entity_container
 {
-	struct side_state
-	{
-		army_troop_count troops; // Troops still fighting, per unit type.
-		ui32 damage; // Damage points dealt this round BY this side, before the defences of the other side.
-		match_player_id commander; // Player leading this side.
-	};
+	world_location* locations;
+	ENGAGEMENT_KIND* kinds;
+	ENGAGEMENT_PHASE* phases;
+	entity_guid* main_targets; // Field engagement: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
+	ui32* phase_ticks; // World age when the current phase started.
+	bool* fighting_actives; // True while troops deal and take damage: damage rounds run only then, and other mechanics (army supply...) are suspended.
+	ui32* durations; // Rounds since the engagement started (one round every GAME_PARAMETERS.engagement_tick_interval ticks).
+
+	// Per side. Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
+	// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
+	army_troop_count* attacker_troops; // Troops still fighting, per unit type.
+	ui32* attacker_damages; // Damage points dealt this round BY the side, before the defences of the other side.
+	match_player_id* attacker_commanders; // Player leading the side.
+	army_troop_count* defender_troops;
+	ui32* defender_damages;
+	match_player_id* defender_commanders;
+
+	inline army_troop_count& side_troops(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_troops[index] : defender_troops[index]; }
+	inline const army_troop_count& side_troops(ENGAGEMENT_SIDE side, ui16 index) const { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_troops[index] : defender_troops[index]; }
+	inline ui32& side_damage(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_damages[index] : defender_damages[index]; }
+	inline match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commanders[index] : defender_commanders[index]; }
+	inline const match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) const { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commanders[index] : defender_commanders[index]; }
 
 	struct view;
 
-	// Single state structure should work since everything gets read engagement-by-engagement anyway.
-	struct state
+	// Consolidated representation of a single engagement for viewing purposes.
+	struct single
 	{
 		world_location location;
 		ENGAGEMENT_KIND kind;
 		ENGAGEMENT_PHASE phase;
-		entity_guid main_target; // Field engagement: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
-		ui32 phase_tick; // World age when the current phase started.
-		side_state attacker;
-		side_state defender;
-		ui32 duration; // Rounds since the engagement started (one round every GAME_PARAMETERS.engagement_tick_interval ticks).
+		entity_guid main_target;
+		ui32 phase_tick;
+		bool fighting_active;
+
+		army_troop_count attacker_troops;
+		ui32 attacker_damage;
+		match_player_id attacker_commander;
+		army_troop_count defender_troops;
+		ui32 defender_damage;
+		match_player_id defender_commander;
+
+		ui32 duration;
 		ui8 join_radius; // Tiles. Not stored in the world: filled by world_entity_query_engagement (engagement_join_radius) for viewers.
 		ui8 viewer_status; // PLAYER_DIPLOMATIC_STATUS of the engagement for the viewing player (engagement_diplomatic_status). Not stored either: filled by the query.
 
-		inline side_state& side(ENGAGEMENT_SIDE side_index) { return side_index == ENGAGEMENT_SIDE::ATTACKER ? attacker : defender; }
-		inline const side_state& side(ENGAGEMENT_SIDE side_index) const { return side_index == ENGAGEMENT_SIDE::ATTACKER ? attacker : defender; }
-
-		// Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
-		// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
-
 		void copy_from(const view& source);
 		void copy_from(const world_entity_engagements& collection, ui16 index);
+	};
 
-	} *states;
-
-	using single = state; // Consolidated representation of a single engagement for viewing purposes.
-
-	// Reference view of a engagement slot.
+	// Reference view of a engagement slot. Query-derived values are not stored in the collection.
 	struct view
 	{
-		state& data; // The whole slot: the state is plain data.
+		world_location& location;
+		ENGAGEMENT_KIND& kind;
+		ENGAGEMENT_PHASE& phase;
+		entity_guid& main_target;
+		ui32& phase_tick;
+		bool& fighting_active;
 
-		void copy_from(const single& source) { data = source; }
+		army_troop_count& attacker_troops;
+		ui32& attacker_damage;
+		match_player_id& attacker_commander;
+		army_troop_count& defender_troops;
+		ui32& defender_damage;
+		match_player_id& defender_commander;
+
+		ui32& duration;
+
+		void copy_from(const single& source)
+		{
+			location = source.location;
+			kind = source.kind;
+			phase = source.phase;
+			main_target = source.main_target;
+			phase_tick = source.phase_tick;
+			fighting_active = source.fighting_active;
+			attacker_troops = source.attacker_troops;
+			attacker_damage = source.attacker_damage;
+			attacker_commander = source.attacker_commander;
+			defender_troops = source.defender_troops;
+			defender_damage = source.defender_damage;
+			defender_commander = source.defender_commander;
+			duration = source.duration;
+		}
 
 		view(world_entity_engagements& collection, ui16 index)
-			: data(collection.states[index])
+			: location(collection.locations[index])
+			, kind(collection.kinds[index])
+			, phase(collection.phases[index])
+			, main_target(collection.main_targets[index])
+			, phase_tick(collection.phase_ticks[index])
+			, fighting_active(collection.fighting_actives[index])
+			, attacker_troops(collection.attacker_troops[index])
+			, attacker_damage(collection.attacker_damages[index])
+			, attacker_commander(collection.attacker_commanders[index])
+			, defender_troops(collection.defender_troops[index])
+			, defender_damage(collection.defender_damages[index])
+			, defender_commander(collection.defender_commanders[index])
+			, duration(collection.durations[index])
 		{}
 	};
 };
 
-inline void world_entity_engagements::state::copy_from(const world_entity_engagements::view& source) { *this = source.data; }
+inline void world_entity_engagements::single::copy_from(const world_entity_engagements::view& source)
+{
+	location = source.location;
+	kind = source.kind;
+	phase = source.phase;
+	main_target = source.main_target;
+	phase_tick = source.phase_tick;
+	fighting_active = source.fighting_active;
+	attacker_troops = source.attacker_troops;
+	attacker_damage = source.attacker_damage;
+	attacker_commander = source.attacker_commander;
+	defender_troops = source.defender_troops;
+	defender_damage = source.defender_damage;
+	defender_commander = source.defender_commander;
+	duration = source.duration;
+	join_radius = 0;
+	viewer_status = 0;
+}
 
-inline void world_entity_engagements::state::copy_from(const world_entity_engagements& collection, ui16 index) { *this = collection.states[index]; }
+inline void world_entity_engagements::single::copy_from(const world_entity_engagements& collection, ui16 index)
+{
+	location = collection.locations[index];
+	kind = collection.kinds[index];
+	phase = collection.phases[index];
+	main_target = collection.main_targets[index];
+	phase_tick = collection.phase_ticks[index];
+	fighting_active = collection.fighting_actives[index];
+	attacker_troops = collection.attacker_troops[index];
+	attacker_damage = collection.attacker_damages[index];
+	attacker_commander = collection.attacker_commanders[index];
+	defender_troops = collection.defender_troops[index];
+	defender_damage = collection.defender_damages[index];
+	defender_commander = collection.defender_commanders[index];
+	duration = collection.durations[index];
+	join_radius = 0;
+	viewer_status = 0;
+}
 
 using world_entity_engagement = world_entity_engagements::single;
 using world_entity_engagement_view = world_entity_engagements::view;
@@ -104,22 +193,23 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_engagement)
 	GAME_DATA_PROPERTY(phase, GAME_DATA_PROP_TYPE::UI8)
 	GAME_DATA_PROPERTY(main_target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(phase_tick, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(fighting_active, GAME_DATA_PROP_TYPE::UI8)
 
-	GAME_DATA_PROPERTY_PATH(attacker_men_levies, attacker.troops.count[(ui8)TROOP_TYPE::LEVIES], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(attacker_men_men_at_arms, attacker.troops.count[(ui8)TROOP_TYPE::MEN_AT_ARMS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(attacker_men_horsemen, attacker.troops.count[(ui8)TROOP_TYPE::HORSEMEN], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(attacker_men_knights, attacker.troops.count[(ui8)TROOP_TYPE::KNIGHTS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(attacker_men_wagons, attacker.troops.count[(ui8)TROOP_TYPE::WAGONS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(attacker_damage, attacker.damage, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(attacker_commander, attacker.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(attacker_men_levies, attacker_troops.count[(ui8)TROOP_TYPE::LEVIES], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(attacker_men_men_at_arms, attacker_troops.count[(ui8)TROOP_TYPE::MEN_AT_ARMS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(attacker_men_horsemen, attacker_troops.count[(ui8)TROOP_TYPE::HORSEMEN], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(attacker_men_knights, attacker_troops.count[(ui8)TROOP_TYPE::KNIGHTS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(attacker_men_wagons, attacker_troops.count[(ui8)TROOP_TYPE::WAGONS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(attacker_damage, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(attacker_commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
 
-	GAME_DATA_PROPERTY_PATH(defender_men_levies, defender.troops.count[(ui8)TROOP_TYPE::LEVIES], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(defender_men_men_at_arms, defender.troops.count[(ui8)TROOP_TYPE::MEN_AT_ARMS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(defender_men_horsemen, defender.troops.count[(ui8)TROOP_TYPE::HORSEMEN], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(defender_men_knights, defender.troops.count[(ui8)TROOP_TYPE::KNIGHTS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(defender_men_wagons, defender.troops.count[(ui8)TROOP_TYPE::WAGONS], GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY_PATH(defender_damage, defender.damage, GAME_DATA_PROP_TYPE::UI32)
-	GAME_DATA_PROPERTY_PATH(defender_commander, defender.commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
+	GAME_DATA_PROPERTY_PATH(defender_men_levies, defender_troops.count[(ui8)TROOP_TYPE::LEVIES], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(defender_men_men_at_arms, defender_troops.count[(ui8)TROOP_TYPE::MEN_AT_ARMS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(defender_men_horsemen, defender_troops.count[(ui8)TROOP_TYPE::HORSEMEN], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(defender_men_knights, defender_troops.count[(ui8)TROOP_TYPE::KNIGHTS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY_PATH(defender_men_wagons, defender_troops.count[(ui8)TROOP_TYPE::WAGONS], GAME_DATA_PROP_TYPE::UI16)
+	GAME_DATA_PROPERTY(defender_damage, GAME_DATA_PROP_TYPE::UI32)
+	GAME_DATA_PROPERTY(defender_commander, GAME_DATA_PROP_TYPE::PLAYER_ID)
 
 	GAME_DATA_PROPERTY(duration, GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(join_radius, GAME_DATA_PROP_TYPE::UI8)

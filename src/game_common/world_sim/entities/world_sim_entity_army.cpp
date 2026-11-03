@@ -62,7 +62,7 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	ASSERT(world.entities->settlements.owners[settlement.get_index()] == world.entities->armies.owners[army.get_index()]);
 	army_troop_count men = world.entities->armies.compositions[army.get_index()];
 
-	// Levies return as unemployed population (settlement_release_raised), the other types rejoin the local troops (garrison).
+	// Levies refill the garrison levy pool up to its max and the rest becomes unemployed population (settlement_release_raised), the other types rejoin the local troops (garrison).
 	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 	{
 		settlement_release_raised(world, settlement.get_index(), (TROOP_TYPE)troopType, men.count[troopType]);

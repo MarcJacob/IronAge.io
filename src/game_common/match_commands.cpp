@@ -751,16 +751,17 @@ bool command_begin_assault_validity_check(const match_world_state& world, match_
 	const command_data_begin_assault& command = command_header.get_command_data<command_data_begin_assault>();
 
 	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
-		|| world.entities->engagements.states[command.engagement.get_index()].kind != ENGAGEMENT_KIND::SIEGE)
+		|| world.entities->engagements.kinds[command.engagement.get_index()] != ENGAGEMENT_KIND::SIEGE)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
 
-	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 siegeIndex = command.engagement.get_index();
 
-	if (siege.attacker.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
-	if (siege.phase != ENGAGEMENT_PHASE::BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+	if (engagements.attacker_commanders[siegeIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (engagements.phases[siegeIndex] != ENGAGEMENT_PHASE::SIEGE_IDLE && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -881,16 +882,17 @@ bool command_sally_out_validity_check(const match_world_state& world, match_play
 	const command_data_sally_out& command = command_header.get_command_data<command_data_sally_out>();
 
 	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
-		|| world.entities->engagements.states[command.engagement.get_index()].kind != ENGAGEMENT_KIND::SIEGE)
+		|| world.entities->engagements.kinds[command.engagement.get_index()] != ENGAGEMENT_KIND::SIEGE)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
 
-	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 siegeIndex = command.engagement.get_index();
 
-	if (siege.defender.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
-	if (siege.phase != ENGAGEMENT_PHASE::BESIEGING && siege.phase != ENGAGEMENT_PHASE::OUTSIDE && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+	if (engagements.defender_commanders[siegeIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (engagements.phases[siegeIndex] != ENGAGEMENT_PHASE::SIEGE_IDLE && engagements.phases[siegeIndex] != ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -910,16 +912,17 @@ bool command_lift_siege_validity_check(const match_world_state& world, match_pla
 	const command_data_lift_siege& command = command_header.get_command_data<command_data_lift_siege>();
 
 	if (!world_entity_is_valid(world, command.engagement) || command.engagement.get_type() != ENTITY_TYPE::ENGAGEMENT
-		|| world.entities->engagements.states[command.engagement.get_index()].kind != ENGAGEMENT_KIND::SIEGE)
+		|| world.entities->engagements.kinds[command.engagement.get_index()] != ENGAGEMENT_KIND::SIEGE)
 	{
 		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
 		return false;
 	}
 
-	const world_entity_engagements::state& siege = world.entities->engagements.states[command.engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 siegeIndex = command.engagement.get_index();
 
-	if (siege.attacker.commander != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
-	if (siege.phase != ENGAGEMENT_PHASE::BESIEGING && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
+	if (engagements.attacker_commanders[siegeIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_COMMANDER)) return false;
+	if (engagements.phases[siegeIndex] != ENGAGEMENT_PHASE::SIEGE_IDLE && command_add_error(feedback, COMMAND_ERROR_WRONG_PHASE)) return false;
 
 	return command_is_valid(feedback);
 }

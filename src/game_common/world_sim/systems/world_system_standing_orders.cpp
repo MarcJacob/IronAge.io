@@ -33,7 +33,7 @@ struct army_order_def
 static void engagement_battle_logic(match_world_state& world, ui16 army_index)
 {
 	world_entity_armies& armies = world.entities->armies;
-	world_location engagementLocation = world.entities->engagements.states[armies.engagements[army_index].get_index()].location;
+	world_location engagementLocation = world.entities->engagements.locations[armies.engagements[army_index].get_index()];
 	armies.movements[army_index].destination = vec2_dist_squared(armies.locations[army_index], engagementLocation) > GAME_PARAMETERS.engagement_pin_distance_tiles * GAME_PARAMETERS.engagement_pin_distance_tiles
 		? engagementLocation : armies.locations[army_index];
 }
@@ -115,7 +115,7 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 	if (armies.engagements[army_index].is_valid())
 	{
 		entity_guid engagement = armies.engagements[army_index];
-		bool stationedInside = world_location_within_tiles(order.location, engagements.states[engagement.get_index()].location, engagement_join_radius(world, engagement));
+		bool stationedInside = world_location_within_tiles(order.location, engagements.locations[engagement.get_index()], engagement_join_radius(world, engagement));
 		if (stationedInside || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
 			engagement_battle_logic(world, army_index);
@@ -132,8 +132,8 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 			if (!engagement.is_valid()) continue;
 
 			ui32 radius = engagement_join_radius(world, engagement);
-			if (!world_location_within_tiles(order.location, engagements.states[engagementIndex].location, radius)
-				|| !world_location_within_tiles(armies.locations[army_index], engagements.states[engagementIndex].location, radius)) continue;
+			if (!world_location_within_tiles(order.location, engagements.locations[engagementIndex], radius)
+				|| !world_location_within_tiles(armies.locations[army_index], engagements.locations[engagementIndex], radius)) continue;
 
 			if (world_army_join_engagement(world, armies.guids[army_index], engagement))
 			{
@@ -243,7 +243,7 @@ static void army_order_attack_logic(match_world_state& world, ui16 army_index)
 
 	if (world_entity_is_valid(world, engagement))
 	{
-		world_location engagementLocation = world.entities->engagements.states[engagement.get_index()].location;
+		world_location engagementLocation = world.entities->engagements.locations[engagement.get_index()];
 		armies.orders[army_index].location = engagementLocation;
 		if (world_entity_is_neutral(world, engagement, armies.owners[army_index]))
 		{
@@ -279,8 +279,9 @@ static void army_order_defend_logic(match_world_state& world, ui16 army_index)
 	// An army in the siege of the settlement it defends stays in it. Any other engagement it can leave, it leaves.
 	if (armies.engagements[army_index].is_valid())
 	{
-		const world_entity_engagements::state& state = world.entities->engagements.states[armies.engagements[army_index].get_index()];
-		if ((state.kind == ENGAGEMENT_KIND::SIEGE && state.main_target == settlement) || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
+		const world_entity_engagements& engagements = world.entities->engagements;
+		ui16 engagementIndex = armies.engagements[army_index].get_index();
+		if ((engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && engagements.main_targets[engagementIndex] == settlement) || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
 			engagement_battle_logic(world, army_index);
 			return;

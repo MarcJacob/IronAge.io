@@ -77,7 +77,7 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 	case ENTITY_TYPE::WORKER:
 		return world.entities->workers.locations[entity.get_index()];
 	case ENTITY_TYPE::ENGAGEMENT:
-		return world.entities->engagements.states[entity.get_index()].location;
+		return world.entities->engagements.locations[entity.get_index()];
     case ENTITY_TYPE::CARAVAN:
         return world.entities->caravans.locations[entity.get_index()];
 	default:

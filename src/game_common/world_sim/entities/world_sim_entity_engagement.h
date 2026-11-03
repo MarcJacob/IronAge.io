@@ -7,7 +7,7 @@
 
 // Spawns a new engagement in the world with the provided start state and returns its GUID.
 // Returns a deterministic new ID according to match state, if there's room.
-entity_guid world_spawn_engagement(match_world_state& world, const world_entity_engagements::state& start_state);
+entity_guid world_spawn_engagement(match_world_state& world, const world_entity_engagement& start_state);
 void world_destroy_engagement(match_world_state& world, entity_guid engagement);
 
 // Ends a engagement: releases every army in it (clears their engagement link), then destroys it (a siege also clears its settlement's siege).
@@ -41,7 +41,7 @@ void world_army_join_engagement(match_world_state& world, entity_guid army, enti
 
 // Same, with the side picked for the army's owner (see engagement_diplomatic_status): friendly engagement = attackers, hostile = defenders. Returns whether the army joined.
 // Does not join (false) if the engagement is neutral to the owner, or if the army stands on the besieged settlement and would take the defender side of its siege.
-// Defenders joining an idle siege (BESIEGING) from outside turn it into an OUTSIDE clash.
+// Defenders joining an idle siege (SIEGE_IDLE) from outside turn it into a SIEGE_OUTSIDE_BATTLE clash (fighting_active on).
 // Callers make sure the army is valid, free (not in an engagement) and has men; the engagement must be valid. A raising army may join: its raising is suspended meanwhile.
 bool world_army_join_engagement(match_world_state& world, entity_guid army, entity_guid engagement);
 
@@ -53,7 +53,7 @@ ui32 troops_base_damage(const army_troop_count& troops);
 bool world_army_pick_engagement_side(const match_world_state& world, entity_guid army, entity_guid engagement, ENGAGEMENT_SIDE& out_side);
 
 // Whether an army at the location, on the side, can leave the engagement: when it is farther than engagement_leave_radius_multiplier join radii from it, or when it is
-// on the attacker side of an idle siege (BESIEGING: nothing fights there, it just walks out). Otherwise the engagement pins it until concluded.
+// on the attacker side of an idle siege (not fighting_active: nothing fights there, it just walks out). Otherwise the engagement pins it until concluded.
 // Also decides if a free army auto-joins: one that could leave right away is not aggroed, its order logic joins it if it wants to.
 bool world_engagement_can_be_left(const match_world_state& world, entity_guid engagement, world_location location, ENGAGEMENT_SIDE side);
 
@@ -63,7 +63,7 @@ bool world_army_can_leave_current_engagement(const match_world_state& world, ent
 // The army leaves its current engagement at once (its men leave the side's men). May end a siege left without attackers. Does nothing if the army is not in an engagement.
 void world_army_leave_current_engagement(match_world_state& world, entity_guid army);
 
-// Starts a siege of a settlement by an army (the army and the engagement must be valid and the army free, see world_army_join_engagement): spawns an idle (BESIEGING) siege
+// Starts a siege of a settlement by an army (the army and the engagement must be valid and the army free, see world_army_join_engagement): spawns an idle (SIEGE_IDLE, not fighting_active) siege
 // halfway between them, with the garrison as the defender side, and joins the army to the attacker side. Returns the siege.
 // The caller makes sure the settlement has a garrison to besiege and is not already besieged.
 entity_guid world_engagement_start_siege(match_world_state& world, entity_guid attacker, entity_guid settlement);
@@ -73,11 +73,11 @@ entity_guid world_engagement_start_siege(match_world_state& world, entity_guid a
 entity_guid world_engagement_start_field_battle(match_world_state& world, entity_guid attacker, entity_guid target);
 
 // Siege commands. The engagement must be a siege (asserted, along with the phase each one is allowed in).
-// The attackers begin the assault of an idle siege (BESIEGING -> ASSAULT).
+// The attackers begin the assault of an idle siege (SIEGE_IDLE -> SIEGE_ASSAULT, fighting_active on).
 void world_engagement_siege_begin_assault(match_world_state& world, entity_guid engagement);
-// The garrison sallies out of an idle (BESIEGING) or OUTSIDE siege (-> SALLY).
+// The garrison sallies out of an idle (SIEGE_IDLE) or SIEGE_OUTSIDE_BATTLE siege (-> SIEGE_SALLY, fighting_active on).
 void world_engagement_siege_sally_out(match_world_state& world, entity_guid engagement);
-// The attackers lift an idle (BESIEGING) siege: every army in it gets a STATION order where it stands, then the siege ends.
+// The attackers lift an idle (SIEGE_IDLE) siege: every army in it gets a STATION order where it stands, then the siege ends.
 void world_engagement_siege_lift(match_world_state& world, entity_guid engagement);
 
 // Removes up to count troops of a type from a side of an engagement (the men still fighting for it). Returns how many were removed. Does not touch any army.

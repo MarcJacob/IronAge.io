@@ -154,7 +154,9 @@ static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 sett
 }
 
 // Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison. Returns how many were moved.
-// Levies and wagons come back as unemployed population instead (the daily training refills the levy pool).
+// Levies and wagons come back as unemployed population instead. Returning levies also fill the garrison levy pool up to the levy max
+// (the pool is a subset of the strata, so the pool count rises without any further population change); the rest is plain unemployed pop.
+static inline ui16 settlement_levy_max(ui32 population_total);
 static inline ui16 settlement_release_raised(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
 {
 	ui16& garrisonTroops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
@@ -165,6 +167,14 @@ static inline ui16 settlement_release_raised(match_world_state& world, ui16 sett
 	if (troop_type == TROOP_TYPE::LEVIES || troop_type == TROOP_TYPE::WAGONS) world.entities->settlements.pop_unemployed[settlement_index] += moved;
 	else garrisonTroops += moved;
 	raised -= moved;
+
+	if (troop_type == TROOP_TYPE::LEVIES)
+	{
+		// Max counts garrison + raised (raised already reduced above).
+		ui32 levyMax = settlement_levy_max(world.entities->settlements.pop_total[settlement_index]);
+		ui32 levyRoom = levyMax > (ui32)garrisonTroops + raised ? levyMax - garrisonTroops - raised : 0;
+		garrisonTroops += (ui16)ia_min((ui32)moved, levyRoom);
+	}
 
 	return moved;
 }

@@ -6,7 +6,7 @@
 #include "../world_sim.h"
 #include "../world_movement.h"
 
-entity_guid world_spawn_engagement(match_world_state& world, const world_entity_engagements::state& start_state)
+entity_guid world_spawn_engagement(match_world_state& world, const world_entity_engagement& start_state)
 {
 	world_entity_engagements& engagements = world.entities->engagements;
 	ui16 freeIndex = 0;
@@ -21,7 +21,7 @@ entity_guid world_spawn_engagement(match_world_state& world, const world_entity_
 
 	world_entity_engagements::view newEngagement { engagements, freeIndex };
 	newEngagement.copy_from(start_state);
-	newEngagement.data.phase_tick = world.age;
+	newEngagement.phase_tick = world.age;
 	engagements.guids[freeIndex] = newID;
 	engagements.active_count++;
 
@@ -43,10 +43,10 @@ void world_destroy_engagement(match_world_state& world, entity_guid engagement)
 	ui16 index = engagement.get_index();
 
 	// Clear the besieged settlement's siege (it may be gone already, or under another siege by now).
-	const world_entity_engagements::state& ended = engagements.states[index];
-	if (ended.kind == ENGAGEMENT_KIND::SIEGE && ended.main_target.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, ended.main_target))
+	entity_guid endedTarget = engagements.main_targets[index];
+	if (engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE && endedTarget.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, endedTarget))
 	{
-		entity_guid& siege = world.entities->settlements.sieges[ended.main_target.get_index()];
+		entity_guid& siege = world.entities->settlements.sieges[endedTarget.get_index()];
 		if (siege == engagement) siege = INVALID_ENTITY_GUID;
 	}
 
@@ -63,7 +63,7 @@ void world_army_join_engagement(match_world_state& world, entity_guid army, enti
 
 	for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
 	{
-		world.entities->engagements.states[engagement.get_index()].side(side).troops.count[unitType] += armies.compositions[armyIndex].count[unitType];
+		world.entities->engagements.side_troops(side, engagement.get_index()).count[unitType] += armies.compositions[armyIndex].count[unitType];
 	}
 
 	armies.engagements[armyIndex] = engagement;
@@ -85,13 +85,14 @@ bool world_army_pick_engagement_side(const match_world_state& world, entity_guid
 	PLAYER_DIPLOMATIC_STATUS status = engagement_diplomatic_status(world, engagement, armies.owners[armyIndex]);
 	if (status == PLAYER_DIPLOMATIC_STATUS_NEUTRAL) return false;
 
-	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 engagementIndex = engagement.get_index();
 	// Friendly = join the attackers, hostile = join the defenders.
 	out_side = status == PLAYER_DIPLOMATIC_STATUS_FRIENDLY ? ENGAGEMENT_SIDE::ATTACKER : ENGAGEMENT_SIDE::DEFENDER;
 
 	// An army standing on the besieged settlement does not take the defender side of its siege.
-	if (state.kind == ENGAGEMENT_KIND::SIEGE && out_side == ENGAGEMENT_SIDE::DEFENDER && world_entity_is_valid(world, state.main_target)
-		&& armies.locations[armyIndex] == world.entities->settlements.locations[state.main_target.get_index()]) return false;
+	if (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && out_side == ENGAGEMENT_SIDE::DEFENDER && world_entity_is_valid(world, engagements.main_targets[engagementIndex])
+		&& armies.locations[armyIndex] == world.entities->settlements.locations[engagements.main_targets[engagementIndex].get_index()]) return false;
 
 	return true;
 }
@@ -108,26 +109,29 @@ bool world_army_join_engagement(match_world_state& world, entity_guid army, enti
 	ENGAGEMENT_SIDE side;
 	if (!world_army_pick_engagement_side(world, army, engagement, side)) return false;
 
-	world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	world_entity_engagements& engagements = world.entities->engagements;
+	ui16 engagementIndex = engagement.get_index();
 	world_army_join_engagement(world, army, engagement, side);
-	if (state.kind == ENGAGEMENT_KIND::SIEGE && side == ENGAGEMENT_SIDE::DEFENDER && state.phase == ENGAGEMENT_PHASE::BESIEGING)
+	if (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && side == ENGAGEMENT_SIDE::DEFENDER && engagements.phases[engagementIndex] == ENGAGEMENT_PHASE::SIEGE_IDLE)
 	{
-		state.phase = ENGAGEMENT_PHASE::OUTSIDE;
-		state.phase_tick = world.age;
+		engagements.phases[engagementIndex] = ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE;
+		engagements.phase_ticks[engagementIndex] = world.age;
+		engagements.fighting_actives[engagementIndex] = true; // Defending armies clash with the besiegers.
 	}
 	return true;
 }
 
 bool world_engagement_can_be_left(const match_world_state& world, entity_guid engagement, world_location location, ENGAGEMENT_SIDE side)
 {
-	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 engagementIndex = engagement.get_index();
 
 	// Far enough away.
 	float leaveRadius = (float)(engagement_join_radius(world, engagement) * GAME_PARAMETERS.engagement_leave_radius_multiplier);
-	if (vec2_dist_squared(location, state.location) > leaveRadius * leaveRadius) return true;
+	if (vec2_dist_squared(location, engagements.locations[engagementIndex]) > leaveRadius * leaveRadius) return true;
 
 	// Otherwise only the attackers of an idle siege: nothing fights there, they just walk out.
-	return state.kind == ENGAGEMENT_KIND::SIEGE && state.phase == ENGAGEMENT_PHASE::BESIEGING && side == ENGAGEMENT_SIDE::ATTACKER;
+	return engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && !engagements.fighting_actives[engagementIndex] && side == ENGAGEMENT_SIDE::ATTACKER;
 }
 
 bool world_army_can_leave_current_engagement(const match_world_state& world, entity_guid army)
@@ -163,14 +167,15 @@ entity_guid world_engagement_start_siege(match_world_state& world, entity_guid a
 
 	// The settlement's garrison is the defending side, it is recounted into the engagement at every round (see world_system_engagements).
 	// A siege starts idle (besieging): no damage until the attacker commander begins the assault.
-	world_entity_engagements::state start = {};
-	start.defender.troops = settlements.garrison[settlementIndex];
+	world_entity_engagement start = {};
+	start.defender_troops = settlements.garrison[settlementIndex];
 	start.location = (armies.locations[attackerIndex] + settlements.locations[settlementIndex]) / 2; // Start engagement at midpoint between belligerents.
 	start.kind = ENGAGEMENT_KIND::SIEGE;
-	start.phase = ENGAGEMENT_PHASE::BESIEGING;
+	start.phase = ENGAGEMENT_PHASE::SIEGE_IDLE;
+	start.fighting_active = false;
 	start.main_target = settlement;
-	start.attacker.commander = armies.owners[attackerIndex];
-	start.defender.commander = settlements.owners[settlementIndex];
+	start.attacker_commander = armies.owners[attackerIndex];
+	start.defender_commander = settlements.owners[settlementIndex];
 	entity_guid engagement = world_spawn_engagement(world, start);
 	world_army_join_engagement(world, attacker, engagement, ENGAGEMENT_SIDE::ATTACKER);
 	return engagement;
@@ -182,13 +187,14 @@ entity_guid world_engagement_start_field_battle(match_world_state& world, entity
 	ui16 attackerIndex = attacker.get_index();
 	ui16 targetIndex = target.get_index();
 
-	world_entity_engagements::state start = {};
+	world_entity_engagement start = {};
 	start.location = (armies.locations[attackerIndex] + armies.locations[targetIndex]) / 2;
 	start.kind = ENGAGEMENT_KIND::FIELD_BATTLE;
 	start.phase = ENGAGEMENT_PHASE::ACTIVE;
+	start.fighting_active = true;
 	start.main_target = target;
-	start.attacker.commander = armies.owners[attackerIndex];
-	start.defender.commander = armies.owners[targetIndex];
+	start.attacker_commander = armies.owners[attackerIndex];
+	start.defender_commander = armies.owners[targetIndex];
 	entity_guid engagement = world_spawn_engagement(world, start);
 	world_army_join_engagement(world, attacker, engagement, ENGAGEMENT_SIDE::ATTACKER);
 	world_army_join_engagement(world, target, engagement, ENGAGEMENT_SIDE::DEFENDER);
@@ -198,29 +204,33 @@ entity_guid world_engagement_start_field_battle(match_world_state& world, entity
 void world_engagement_siege_begin_assault(match_world_state& world, entity_guid engagement)
 {
 	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
-	world_entity_engagements::state& siege = world.entities->engagements.states[engagement.get_index()];
-	ASSERT(siege.kind == ENGAGEMENT_KIND::SIEGE && siege.phase == ENGAGEMENT_PHASE::BESIEGING);
+	world_entity_engagements& engagements = world.entities->engagements;
+	ui16 index = engagement.get_index();
+	ASSERT(engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE && engagements.phases[index] == ENGAGEMENT_PHASE::SIEGE_IDLE);
 
-	siege.phase = ENGAGEMENT_PHASE::ASSAULT;
-	siege.phase_tick = world.age;
+	engagements.phases[index] = ENGAGEMENT_PHASE::SIEGE_ASSAULT;
+	engagements.phase_ticks[index] = world.age;
+	engagements.fighting_actives[index] = true;
 }
 
 void world_engagement_siege_sally_out(match_world_state& world, entity_guid engagement)
 {
 	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
-	world_entity_engagements::state& siege = world.entities->engagements.states[engagement.get_index()];
-	ASSERT(siege.kind == ENGAGEMENT_KIND::SIEGE && (siege.phase == ENGAGEMENT_PHASE::BESIEGING || siege.phase == ENGAGEMENT_PHASE::OUTSIDE));
+	world_entity_engagements& engagements = world.entities->engagements;
+	ui16 index = engagement.get_index();
+	ASSERT(engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE && (engagements.phases[index] == ENGAGEMENT_PHASE::SIEGE_IDLE || engagements.phases[index] == ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE));
 
 	// The garrison joins the defender side at the next round (the siege recounts its sides then).
-	siege.phase = ENGAGEMENT_PHASE::SALLY;
-	siege.phase_tick = world.age;
+	engagements.phases[index] = ENGAGEMENT_PHASE::SIEGE_SALLY;
+	engagements.phase_ticks[index] = world.age;
+	engagements.fighting_actives[index] = true;
 }
 
 void world_engagement_siege_lift(match_world_state& world, entity_guid engagement)
 {
 	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
-	ASSERT(world.entities->engagements.states[engagement.get_index()].kind == ENGAGEMENT_KIND::SIEGE);
-	ASSERT(world.entities->engagements.states[engagement.get_index()].phase == ENGAGEMENT_PHASE::BESIEGING);
+	ASSERT(world.entities->engagements.kinds[engagement.get_index()] == ENGAGEMENT_KIND::SIEGE);
+	ASSERT(world.entities->engagements.phases[engagement.get_index()] == ENGAGEMENT_PHASE::SIEGE_IDLE);
 
 	// Every army freed stands where it is (its order would otherwise take it straight back into a new siege).
 	world_entity_armies& armies = world.entities->armies;
@@ -238,7 +248,7 @@ void world_engagement_siege_lift(match_world_state& world, entity_guid engagemen
 ui16 world_engagement_remove_troops(match_world_state& world, entity_guid engagement, ENGAGEMENT_SIDE side, TROOP_TYPE troop_type, ui16 count)
 {
 	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
-	ui16& troops = world.entities->engagements.states[engagement.get_index()].side(side).troops.access_troop_count(troop_type);
+	ui16& troops = world.entities->engagements.side_troops(side, engagement.get_index()).access_troop_count(troop_type);
 	ui16 removed = ia_min(count, troops);
 	troops -= removed;
 	return removed;
@@ -262,18 +272,18 @@ void world_engagement_update_commanders(match_world_state& world, entity_guid en
 	if (!world_entity_is_valid(world, engagement) || engagement.get_type() != ENTITY_TYPE::ENGAGEMENT) return;
 
 	const world_entity_armies& armies = world.entities->armies;
-	world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	world_entity_engagements& engagements = world.entities->engagements;
+	ui16 engagementIndex = engagement.get_index();
 
 	// A siege's defender commander is its settlement's owner, set at spawn and never recomputed.
 	for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++)
 	{
 		ENGAGEMENT_SIDE side = (ENGAGEMENT_SIDE)sideIndex;
-		if (state.kind == ENGAGEMENT_KIND::SIEGE && side == ENGAGEMENT_SIDE::DEFENDER) continue;
+		if (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && side == ENGAGEMENT_SIDE::DEFENDER) continue;
 
 		// @TODO(Marc): P4: the leader army's owner of a campaign overrides this (campaign leader commands).
 		// The owner with the most men commands; the incumbent keeps command on a tie (and when nobody is left).
-		world_entity_engagements::side_state& sideState = state.side(side);
-		match_player_id best = sideState.commander;
+		match_player_id best = engagements.side_commander(side, engagementIndex);
 		ui32 bestMen = engagement_owner_men(world, engagement, side, best);
 		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 		{
@@ -286,7 +296,7 @@ void world_engagement_update_commanders(match_world_state& world, entity_guid en
 				bestMen = men;
 			}
 		}
-		sideState.commander = best;
+		engagements.side_commander(side, engagementIndex) = best;
 	}
 }
 
@@ -303,7 +313,7 @@ void world_engagement_end(match_world_state& world, entity_guid engagement)
 void world_siege_check_attackers(match_world_state& world, entity_guid engagement)
 {
 	if (!world_entity_is_valid(world, engagement) || engagement.get_type() != ENTITY_TYPE::ENGAGEMENT) return;
-	if (world.entities->engagements.states[engagement.get_index()].kind != ENGAGEMENT_KIND::SIEGE) return;
+	if (world.entities->engagements.kinds[engagement.get_index()] != ENGAGEMENT_KIND::SIEGE) return;
 
 	const world_entity_armies& armies = world.entities->armies;
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
@@ -321,13 +331,13 @@ void world_engagement_army_left(match_world_state& world, entity_guid engagement
 
 PLAYER_DIPLOMATIC_STATUS engagement_diplomatic_status(const match_world_state& world, entity_guid engagement, match_player_id player)
 {
-	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
 
 	// Rating of each side for the player: 2 friendly, 1 neutral, 0 hostile.
 	ui8 rating[(ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT];
 	for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++)
 	{
-		PLAYER_DIPLOMATIC_STATUS commanderStatus = world_player_get_diplomatic_status(world, player, state.side((ENGAGEMENT_SIDE)sideIndex).commander);
+		PLAYER_DIPLOMATIC_STATUS commanderStatus = world_player_get_diplomatic_status(world, player, engagements.side_commander((ENGAGEMENT_SIDE)sideIndex, engagement.get_index()));
 		rating[sideIndex] = commanderStatus == PLAYER_DIPLOMATIC_STATUS_FRIENDLY ? 2 : (commanderStatus == PLAYER_DIPLOMATIC_STATUS_HOSTILE ? 0 : 1);
 	}
 
@@ -339,15 +349,17 @@ PLAYER_DIPLOMATIC_STATUS engagement_diplomatic_status(const match_world_state& w
 
 ui32 engagement_join_radius(const match_world_state& world, entity_guid engagement)
 {
-	const world_entity_engagements::state& state = world.entities->engagements.states[engagement.get_index()];
+	const world_entity_engagements& engagements = world.entities->engagements;
+	ui16 index = engagement.get_index();
+	entity_guid mainTarget = engagements.main_targets[index];
 
-	ui64 troops = army_total_manpower(state.attacker.troops) + army_total_manpower(state.defender.troops);
+	ui64 troops = army_total_manpower(engagements.attacker_troops[index]) + army_total_manpower(engagements.defender_troops[index]);
 
 	// A siege's defender side holds the garrison (inside the settlement) unless it is an outside clash, or the settlement is the attackers' already: not counted.
-	if (state.kind == ENGAGEMENT_KIND::SIEGE && state.phase != ENGAGEMENT_PHASE::OUTSIDE &&world_entity_is_valid(world, state.main_target)
-		&& world.entities->settlements.owners[state.main_target.get_index()] != state.attacker.commander)
+	if (engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE && engagements.phases[index] != ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE && world_entity_is_valid(world, mainTarget)
+		&& world.entities->settlements.owners[mainTarget.get_index()] != engagements.attacker_commanders[index])
 	{
-		troops -= ia_min((ui64)army_total_manpower(world.entities->settlements.garrison[state.main_target.get_index()]), troops);
+		troops -= ia_min((ui64)army_total_manpower(world.entities->settlements.garrison[mainTarget.get_index()]), troops);
 	}
 
 	ui64 threshold = ia_max(GAME_PARAMETERS.engagement_join_troops_threshold, (ui32)1);
@@ -376,8 +388,44 @@ bool world_alloc_engagements(match_world_state& world, mem_arena& memory, ui32 c
 	engagements.guids = memory.alloc<entity_guid>(count);
 	if (engagements.guids == nullptr) return false;
 
-	engagements.states = memory.alloc<world_entity_engagements::state>(count);
-	if (engagements.states == nullptr) return false;
+	engagements.locations = memory.alloc<world_location>(count);
+	if (engagements.locations == nullptr) return false;
+
+	engagements.kinds = memory.alloc<ENGAGEMENT_KIND>(count);
+	if (engagements.kinds == nullptr) return false;
+
+	engagements.phases = memory.alloc<ENGAGEMENT_PHASE>(count);
+	if (engagements.phases == nullptr) return false;
+
+	engagements.main_targets = memory.alloc<entity_guid>(count);
+	if (engagements.main_targets == nullptr) return false;
+
+	engagements.phase_ticks = memory.alloc<ui32>(count);
+	if (engagements.phase_ticks == nullptr) return false;
+
+	engagements.fighting_actives = memory.alloc<bool>(count);
+	if (engagements.fighting_actives == nullptr) return false;
+
+	engagements.durations = memory.alloc<ui32>(count);
+	if (engagements.durations == nullptr) return false;
+
+	engagements.attacker_troops = memory.alloc<army_troop_count>(count);
+	if (engagements.attacker_troops == nullptr) return false;
+
+	engagements.attacker_damages = memory.alloc<ui32>(count);
+	if (engagements.attacker_damages == nullptr) return false;
+
+	engagements.attacker_commanders = memory.alloc<match_player_id>(count);
+	if (engagements.attacker_commanders == nullptr) return false;
+
+	engagements.defender_troops = memory.alloc<army_troop_count>(count);
+	if (engagements.defender_troops == nullptr) return false;
+
+	engagements.defender_damages = memory.alloc<ui32>(count);
+	if (engagements.defender_damages == nullptr) return false;
+
+	engagements.defender_commanders = memory.alloc<match_player_id>(count);
+	if (engagements.defender_commanders == nullptr) return false;
 
 	return true;
 }
@@ -401,7 +449,7 @@ void world_system_engagement_auto_join(match_world_state& world)
 		{
 			if (!armies.guids[armyIndex].is_valid() || armies.engagements[armyIndex].is_valid()) continue;
 			if (army_total_manpower(armies.compositions[armyIndex]) == 0) continue;
-			if (vec2_dist_squared(armies.locations[armyIndex], engagements.states[engagementIndex].location) > radius * radius) continue;
+			if (vec2_dist_squared(armies.locations[armyIndex], engagements.locations[engagementIndex]) > radius * radius) continue;
 
 			// An army that could leave right away (attacker of an idle siege...) is not aggroed: its order logic joins it if it wants to.
 			ENGAGEMENT_SIDE side;
@@ -471,35 +519,35 @@ void world_system_engagements(match_world_state& world)
 	{
 		if (!engagements.guids[engagementIndex].is_valid()) continue;
 
-		world_entity_engagements::state& engagement = engagements.states[engagementIndex];
+		const entity_guid engagementGuid = engagements.guids[engagementIndex];
 
 		// Siege: the besieged settlement's garrison is part of the defender side (unless the settlement is already the attackers'). The sides are recounted from their
 		// armies and the garrison, which can change between rounds (training, desertion).
-		bool besiegingSettlement = engagement.kind == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagement.main_target);
+		bool besiegingSettlement = engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagements.main_targets[engagementIndex]);
 		ui16 garrisonIndex = 0xFFFF;
 		ui64 garrisonMen = 0;
 		if (besiegingSettlement)
 		{
-			engagement.attacker.troops = {};
-			engagement.defender.troops = {};
+			engagements.attacker_troops[engagementIndex] = {};
+			engagements.defender_troops[engagementIndex] = {};
 			for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 			{
-				if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagements.guids[engagementIndex])) continue;
+				if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagementGuid)) continue;
 
-				army_troop_count& sideTroops = engagement.side(armies.engagement_sides[armyIndex]).troops;
+				army_troop_count& sideTroops = engagements.side_troops(armies.engagement_sides[armyIndex], engagementIndex);
 				for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) sideTroops.count[unitType] += armies.compositions[armyIndex].count[unitType];
 			}
 
-			ui16 settlementIndex = engagement.main_target.get_index();
+			ui16 settlementIndex = engagements.main_targets[engagementIndex].get_index();
 
 			// Not during an outside clash: the garrison (and any army inside) stays out of it.
-			if (world.entities->settlements.owners[settlementIndex] != engagement.attacker.commander && engagement.phase != ENGAGEMENT_PHASE::OUTSIDE)
+			if (world.entities->settlements.owners[settlementIndex] != engagements.attacker_commanders[engagementIndex] && engagements.phases[engagementIndex] != ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE)
 			{
 				garrisonIndex = settlementIndex;
 				for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
 				{
 					ui16 count = world.entities->settlements.garrison[garrisonIndex].count[unitType];
-					engagement.defender.troops.count[unitType] += count;
+					engagements.defender_troops[engagementIndex].count[unitType] += count;
 					garrisonMen += count;
 				}
 			}
@@ -507,54 +555,56 @@ void world_system_engagements(match_world_state& world)
 
 		// Men per side at the start of the tick. Armies take damage in proportion to their share of it.
 		ui64 sideMen[(ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT] = {}; // Indexed by ENGAGEMENT_SIDE.
-		for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++) sideMen[sideIndex] = army_total_manpower(engagement.side((ENGAGEMENT_SIDE)sideIndex).troops);
+		for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++) sideMen[sideIndex] = army_total_manpower(engagements.side_troops((ENGAGEMENT_SIDE)sideIndex, engagementIndex));
 		ui64 attackerMen = sideMen[(ui8)ENGAGEMENT_SIDE::ATTACKER];
 		ui64 defenderMen = sideMen[(ui8)ENGAGEMENT_SIDE::DEFENDER];
 
-		// Zero-damage rule (damage rounds only, not an idle siege): a side that cannot deal damage (only wagons...) loses even with men left. It counts as wiped below:
+		// Zero-damage rule (fighting only, not an idle siege): a side that cannot deal damage (only wagons...) loses even with men left. It counts as wiped below:
 		// attacker wiped = siege lifted / attackers gone, defender wiped = conquest (outside clash: back to besieging). Both harmless = the engagement ends with no winner
 		// (the attacker counts as wiped, so no conquest). Armies are only released, never destroyed by this rule.
-		if (engagement.phase != ENGAGEMENT_PHASE::BESIEGING)
+		if (engagements.fighting_actives[engagementIndex])
 		{
-			if (troops_base_damage(engagement.attacker.troops) == 0) attackerMen = 0;
-			if (troops_base_damage(engagement.defender.troops) == 0) defenderMen = 0;
+			if (troops_base_damage(engagements.attacker_troops[engagementIndex]) == 0) attackerMen = 0;
+			if (troops_base_damage(engagements.defender_troops[engagementIndex]) == 0) defenderMen = 0;
 		}
 
 		// Commanders follow the men (before any casualty of this round).
-		world_engagement_update_commanders(world, engagements.guids[engagementIndex]);
+		world_engagement_update_commanders(world, engagementGuid);
 
 		// A wiped side means the engagement is over: its armies are already dead, the others are released below.
 		// Sieges: defender side wiped = conquest by the attacker commander (below); attacker side wiped = siege lifted.
 		// A siege whose settlement is gone is over too (nothing left to besiege).
 		// An outside clash is the exception: its defender side is only the relief armies, and losing them sends the siege back to besieging (below).
-		bool outside = engagement.kind == ENGAGEMENT_KIND::SIEGE && engagement.phase == ENGAGEMENT_PHASE::OUTSIDE;
-		bool over = attackerMen == 0 || (defenderMen == 0 && !outside) || (engagement.kind == ENGAGEMENT_KIND::SIEGE && !besiegingSettlement);
+		bool isSiege = engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE;
+		bool outside = isSiege && engagements.phases[engagementIndex] == ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE;
+		bool over = attackerMen == 0 || (defenderMen == 0 && !outside) || (isSiege && !besiegingSettlement);
 
 		// Relief armies wiped (attacker side won the outside clash): the siege goes on, idle again.
 		if (!over && outside && defenderMen == 0)
 		{
-			engagement.phase = ENGAGEMENT_PHASE::BESIEGING;
-			engagement.phase_tick = world.age;
-			engagement.duration = 0;
+			engagements.phases[engagementIndex] = ENGAGEMENT_PHASE::SIEGE_IDLE;
+			engagements.phase_ticks[engagementIndex] = world.age;
+			engagements.durations[engagementIndex] = 0;
+			engagements.fighting_actives[engagementIndex] = false; // Fighting stops: back to the idle siege.
 		}
 
-		// An idle siege (besieging) only checks for a wiped side: no damage rounds until the assault begins.
-		bool fighting = !over && engagement.phase != ENGAGEMENT_PHASE::BESIEGING;
+		// An idle siege only checks for a wiped side: no damage rounds until the fighting starts.
+		bool fighting = !over && engagements.fighting_actives[engagementIndex];
 
 		if (fighting)
 		{
-			engagement.duration++;
+			engagements.durations[engagementIndex]++;
 			// Both sides roll before anyone takes casualties (attacker first).
 			for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++)
 			{
-				world_entity_engagements::side_state& sideState = engagement.side((ENGAGEMENT_SIDE)sideIndex);
-				sideState.damage = engagement_roll_side_damage(world, sideState.troops);
+				ENGAGEMENT_SIDE side = (ENGAGEMENT_SIDE)sideIndex;
+				engagements.side_damage(side, engagementIndex) = engagement_roll_side_damage(world, engagements.side_troops(side, engagementIndex));
 			}
 		}
 
 		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 		{
-			if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagements.guids[engagementIndex])) continue;
+			if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagementGuid)) continue;
 
 			if (over)
 			{
@@ -569,11 +619,11 @@ void world_system_engagements(match_world_state& world)
 			ui64 menBefore = army_total_manpower(composition);
 
 			army_troop_count kills = {};
-			engagement_group_kills(world, engagement.side(engagement_opposite_side(side)).damage, sideMen[(ui8)side], composition, kills);
+			engagement_group_kills(world, engagements.side_damage(engagement_opposite_side(side), engagementIndex), sideMen[(ui8)side], composition, kills);
 
 			army_troop_count dead = {};
 			world_army_take_casualties(world, armies.guids[armyIndex], kills, dead);
-			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagements.guids[engagementIndex], side, (TROOP_TYPE)unitType, dead.count[unitType]);
+			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagementGuid, side, (TROOP_TYPE)unitType, dead.count[unitType]);
 
 			// A raising army that had no men is just empty (still waiting for its men), not wiped out.
 			if (army_total_manpower(composition) == 0 && !(armies.raising[armyIndex] && menBefore == 0)) world_destroy_army(world, armies.guids[armyIndex]);
@@ -588,18 +638,18 @@ void world_system_engagements(match_world_state& world)
 		{
 			army_troop_count kills = {};
 			army_troop_count dead = {};
-			engagement_group_kills(world, engagement.attacker.damage, defenderMen, world.entities->settlements.garrison[garrisonIndex], kills);
+			engagement_group_kills(world, engagements.attacker_damages[engagementIndex], defenderMen, world.entities->settlements.garrison[garrisonIndex], kills);
 
 			settlement_garrison_take_casualties(world, garrisonIndex, kills, dead);
-			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagements.guids[engagementIndex], ENGAGEMENT_SIDE::DEFENDER, (TROOP_TYPE)unitType, dead.count[unitType]);
+			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagementGuid, ENGAGEMENT_SIDE::DEFENDER, (TROOP_TYPE)unitType, dead.count[unitType]);
 		}
 
 		// Attackers wiping the defenders of a siege take the settlement.
 		if (over && attackerMen > 0 && besiegingSettlement)
 		{
-			world_settlement_change_owner(world, engagement.main_target.get_index(), engagement.attacker.commander);
+			world_settlement_change_owner(world, engagements.main_targets[engagementIndex].get_index(), engagements.attacker_commanders[engagementIndex]);
 		}
 
-		if (over) world_destroy_engagement(world, engagements.guids[engagementIndex]);
+		if (over) world_destroy_engagement(world, engagementGuid);
 	}
 }

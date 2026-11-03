@@ -115,7 +115,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// ENGAGEMENTS
 		for (ui16 engagementIndex = 0; engagementIndex < engagements.max_count; engagementIndex++)
 		{
-			vec2<float> engagementLoc = engagements.states[engagementIndex].location;
+			vec2<float> engagementLoc = engagements.locations[engagementIndex];
 			if (!engagements.guids[engagementIndex].is_valid() || !is_visible_in_viewport(engagementLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -124,8 +124,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.guid = engagements.guids[engagementIndex];
 			outEntity.viewport_location = engagementLoc - render_state.viewport.bottom_left;
 			// Bit 0: siege. Bit 1: idle (besieging phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
-			const world_entity_engagements::state& engagementState = engagements.states[engagementIndex];
-			outEntity.flags = (engagementState.kind == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (engagementState.phase == ENGAGEMENT_PHASE::BESIEGING ? 2 : 0);
+			outEntity.flags = (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (!engagements.fighting_actives[engagementIndex] ? 2 : 0);
 			outEntity.fractional_offset = {};
 
 			visibleCount++;
