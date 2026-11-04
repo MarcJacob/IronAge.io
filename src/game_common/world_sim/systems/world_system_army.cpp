@@ -43,6 +43,7 @@ void world_army_attack_entity(match_world_state& world, entity_guid attacker, en
 		// Nobody defends it (no garrison, and no defender army can be in a new siege): taken at once.
 		if (army_total_manpower(settlements.garrison[targetIndex]) == 0)
 		{
+			world_army_conquest_loot(world, attacker, targetIndex);
 			world_settlement_change_owner(world, targetIndex, attackerOwner);
 			break;
 		}

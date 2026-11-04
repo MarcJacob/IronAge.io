@@ -300,8 +300,140 @@ void world_engagement_update_commanders(match_world_state& world, entity_guid en
 	}
 }
 
+// LOOT
+
+// Adds to a loot pool, saturating.
+static void loot_pool_add(ui32& pool, ui64 amount)
+{
+	pool = (ui32)ia_min((ui64)pool + amount, (ui64)0xFFFFFFFF);
+}
+
+void world_engagement_loot_add(match_world_state& world, entity_guid engagement, ui64 gold, ui64 supplies)
+{
+	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
+	loot_pool_add(world.entities->engagements.loot_gold[engagement.get_index()], gold);
+	loot_pool_add(world.entities->engagements.loot_supplies[engagement.get_index()], supplies);
+}
+
+// Kills part of a settlement's population (conquest) and returns the gold it yields (1 each). Soldiers at home count in the urban population the percentage applies to,
+// but only unemployed and workers can be killed here.
+static ui32 settlement_conquest_loot(match_world_state& world, ui16 settlement_index)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	const game_parameters& params = GAME_PARAMETERS;
+
+	ui32 peasantsKilled = settlement_remove_peasants(world, settlement_index, (ui32)((ui64)settlements.pop_peasants[settlement_index] * ia_min(params.conquest_loot_peasants_percent, (ui32)100) / 100));
+
+	ui64 urbanTarget = (ui64)settlements.urban_pop(settlement_index) * ia_min(params.conquest_loot_urban_percent, (ui32)100) / 100;
+	ui32 civilians = settlements.pop_unemployed[settlement_index] + settlements.pop_workers[settlement_index];
+	ui32 urbanKilled = settlement_kill_population(world, settlement_index, (ui32)ia_min(urbanTarget, (ui64)civilians));
+
+	return peasantsKilled + urbanKilled;
+}
+
+// Shares a pool (gold or supplies) among the qualifying armies: those of the side of the engagement, or only_army if valid. By manpower, each capped by the room
+// left in its own gold / supplies pool. What the capped armies could not take is shared again among those with room left, until the pool is empty or nobody has room.
+static void loot_share(match_world_state& world, ui32& pool, bool is_gold, entity_guid engagement, ENGAGEMENT_SIDE side, entity_guid only_army)
+{
+	world_entity_armies& armies = world.entities->armies;
+
+	while (pool > 0)
+	{
+		// Armies with room left.
+		ui64 totalMen = 0;
+		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+		{
+			if (!armies.guids[armyIndex].is_valid()) continue;
+			if (only_army.is_valid() ? !(armies.guids[armyIndex] == only_army) : (!(armies.engagements[armyIndex] == engagement) || armies.engagement_sides[armyIndex] != side)) continue;
+
+			ui32 stock = is_gold ? armies.gold[armyIndex] : armies.supplies[armyIndex];
+			if (army_supply_capacity(world, (ui16)armyIndex) > stock) totalMen += army_total_manpower(armies.compositions[armyIndex]);
+		}
+		if (totalMen == 0) break;
+
+		ui32 poolBefore = pool;
+		for (ui32 armyIndex = 0; armyIndex < armies.max_count && pool > 0; armyIndex++)
+		{
+			if (!armies.guids[armyIndex].is_valid()) continue;
+			if (only_army.is_valid() ? !(armies.guids[armyIndex] == only_army) : (!(armies.engagements[armyIndex] == engagement) || armies.engagement_sides[armyIndex] != side)) continue;
+
+			ui32& stock = is_gold ? armies.gold[armyIndex] : armies.supplies[armyIndex];
+			ui32 capacity = army_supply_capacity(world, (ui16)armyIndex);
+			if (capacity <= stock) continue;
+
+			// Rounded up so a pass always gives something away.
+			ui64 men = army_total_manpower(armies.compositions[armyIndex]);
+			ui64 share = ((ui64)poolBefore * men + totalMen - 1) / totalMen;
+			share = ia_min(ia_min(share, (ui64)(capacity - stock)), (ui64)pool);
+			stock += (ui32)share;
+			pool -= (ui32)share;
+		}
+		if (pool == poolBefore) break;
+	}
+}
+
+// What is left of the pools is looted by the local population: gold becomes trade volume and supplies become goods of the settlement. Nothing if there is none.
+static void loot_leftover_to_settlement(match_world_state& world, ui16 settlement_index, ui32 gold, ui32 supplies)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	if (settlement_index >= settlements.max_count || !settlements.guids[settlement_index].is_valid()) return;
+
+	settlement_trading& trade = settlements.trade[settlement_index];
+	trade.trade_volume = (ui32)ia_min((ui64)trade.trade_volume + gold, (ui64)0xFFFFFFFF);
+	settlement_market_add(settlements, settlement_index, supplies);
+}
+
+void world_army_conquest_loot(match_world_state& world, entity_guid army, ui16 settlement_index)
+{
+	ui32 gold = settlement_conquest_loot(world, settlement_index);
+	ui32 supplies = 0;
+	loot_share(world, gold, true, INVALID_ENTITY_GUID, ENGAGEMENT_SIDE::ATTACKER, army);
+	loot_leftover_to_settlement(world, settlement_index, gold, supplies);
+}
+
+void world_engagement_on_finish(match_world_state& world, entity_guid engagement, bool has_winner, ENGAGEMENT_SIDE winner)
+{
+	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);
+	world_entity_engagements& engagements = world.entities->engagements;
+	ui16 index = engagement.get_index();
+	entity_guid mainTarget = engagements.main_targets[index];
+	bool isSiege = engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE;
+	bool targetValid = world_entity_is_valid(world, mainTarget) && mainTarget.get_type() == ENTITY_TYPE::SETTLEMENT;
+
+	// Attackers winning a siege conquer the settlement: its people pay.
+	if (has_winner && isSiege && winner == ENGAGEMENT_SIDE::ATTACKER && targetValid)
+		loot_pool_add(engagements.loot_gold[index], settlement_conquest_loot(world, mainTarget.get_index()));
+
+	if (has_winner)
+	{
+		loot_share(world, engagements.loot_gold[index], true, engagement, winner, INVALID_ENTITY_GUID);
+		loot_share(world, engagements.loot_supplies[index], false, engagement, winner, INVALID_ENTITY_GUID);
+	}
+
+	// Leftover: the besieged settlement, or the settlement whose territory the engagement is in.
+	ui16 settlementIndex = 0xFFFF;
+	if (isSiege && targetValid)
+	{
+		settlementIndex = mainTarget.get_index();
+	}
+	else
+	{
+		ui16 regionIndex, tileIndex;
+		world_get_tile(*world.terrain, engagements.locations[index], regionIndex, tileIndex);
+		settlementIndex = world.terrain->regions[regionIndex].owners[tileIndex];
+		if (settlementIndex == world_terrain::UNOWNED_TILE) settlementIndex = 0xFFFF;
+	}
+	loot_leftover_to_settlement(world, settlementIndex, engagements.loot_gold[index], engagements.loot_supplies[index]);
+
+	engagements.loot_gold[index] = 0;
+	engagements.loot_supplies[index] = 0;
+}
+
 void world_engagement_end(match_world_state& world, entity_guid engagement)
 {
+	// Reaching here without a verdict (siege lifted, attackers gone): the defender side wins a siege, a field battle has no winner.
+	world_engagement_on_finish(world, engagement, world.entities->engagements.kinds[engagement.get_index()] == ENGAGEMENT_KIND::SIEGE, ENGAGEMENT_SIDE::DEFENDER);
+
 	world_entity_armies& armies = world.entities->armies;
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
@@ -408,6 +540,12 @@ bool world_alloc_engagements(match_world_state& world, mem_arena& memory, ui32 c
 
 	engagements.durations = memory.alloc<ui32>(count);
 	if (engagements.durations == nullptr) return false;
+
+	engagements.loot_gold = memory.alloc<ui32>(count);
+	if (engagements.loot_gold == nullptr) return false;
+
+	engagements.loot_supplies = memory.alloc<ui32>(count);
+	if (engagements.loot_supplies == nullptr) return false;
 
 	engagements.attacker_troops = memory.alloc<army_troop_count>(count);
 	if (engagements.attacker_troops == nullptr) return false;
@@ -523,10 +661,12 @@ void world_system_engagements(match_world_state& world)
 
 		// Siege: the besieged settlement's garrison is part of the defender side (unless the settlement is already the attackers'). The sides are recounted from their
 		// armies and the garrison, which can change between rounds (training, desertion).
-		bool besiegingSettlement = engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagements.main_targets[engagementIndex]);
 		ui16 garrisonIndex = 0xFFFF;
 		ui64 garrisonMen = 0;
-		if (besiegingSettlement)
+
+		bool isSiege = engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE 
+            && world_entity_is_valid(world, engagements.main_targets[engagementIndex]);
+		if (isSiege)
 		{
 			engagements.attacker_troops[engagementIndex] = {};
 			engagements.defender_troops[engagementIndex] = {};
@@ -535,7 +675,10 @@ void world_system_engagements(match_world_state& world)
 				if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagementGuid)) continue;
 
 				army_troop_count& sideTroops = engagements.side_troops(armies.engagement_sides[armyIndex], engagementIndex);
-				for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) sideTroops.count[unitType] += armies.compositions[armyIndex].count[unitType];
+				for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) 
+                {
+                    sideTroops.count[unitType] += armies.compositions[armyIndex].count[unitType];
+                }
 			}
 
 			ui16 settlementIndex = engagements.main_targets[engagementIndex].get_index();
@@ -555,7 +698,11 @@ void world_system_engagements(match_world_state& world)
 
 		// Men per side at the start of the tick. Armies take damage in proportion to their share of it.
 		ui64 sideMen[(ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT] = {}; // Indexed by ENGAGEMENT_SIDE.
-		for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++) sideMen[sideIndex] = army_total_manpower(engagements.side_troops((ENGAGEMENT_SIDE)sideIndex, engagementIndex));
+		for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++) 
+        {
+            sideMen[sideIndex] = army_total_manpower(engagements.side_troops((ENGAGEMENT_SIDE)sideIndex, engagementIndex));
+        }
+
 		ui64 attackerMen = sideMen[(ui8)ENGAGEMENT_SIDE::ATTACKER];
 		ui64 defenderMen = sideMen[(ui8)ENGAGEMENT_SIDE::DEFENDER];
 
@@ -573,11 +720,11 @@ void world_system_engagements(match_world_state& world)
 
 		// A wiped side means the engagement is over: its armies are already dead, the others are released below.
 		// Sieges: defender side wiped = conquest by the attacker commander (below); attacker side wiped = siege lifted.
-		// A siege whose settlement is gone is over too (nothing left to besiege).
 		// An outside clash is the exception: its defender side is only the relief armies, and losing them sends the siege back to besieging (below).
-		bool isSiege = engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE;
+
 		bool outside = isSiege && engagements.phases[engagementIndex] == ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE;
-		bool over = attackerMen == 0 || (defenderMen == 0 && !outside) || (isSiege && !besiegingSettlement);
+
+		bool over = attackerMen == 0 || (isSiege && (defenderMen == 0 && !outside) || !isSiege && (defenderMen == 0));
 
 		// Relief armies wiped (attacker side won the outside clash): the siege goes on, idle again.
 		if (!over && outside && defenderMen == 0)
@@ -588,12 +735,11 @@ void world_system_engagements(match_world_state& world)
 			engagements.fighting_actives[engagementIndex] = false; // Fighting stops: back to the idle siege.
 		}
 
-		// An idle siege only checks for a wiped side: no damage rounds until the fighting starts.
 		bool fighting = !over && engagements.fighting_actives[engagementIndex];
-
 		if (fighting)
 		{
 			engagements.durations[engagementIndex]++;
+
 			// Both sides roll before anyone takes casualties (attacker first).
 			for (ui8 sideIndex = 0; sideIndex < (ui8)ENGAGEMENT_SIDE::ENGAGEMENT_SIDE_COUNT; sideIndex++)
 			{
@@ -602,38 +748,51 @@ void world_system_engagements(match_world_state& world)
 			}
 		}
 
-		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
-		{
-			if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagementGuid)) continue;
+        // Have all involved armies take damage.
+        if (fighting)
+        {
+            for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+            {
+                if (!armies.guids[armyIndex].is_valid() || !(armies.engagements[armyIndex] == engagementGuid)) continue;
 
-			if (over)
-			{
-				armies.engagements[armyIndex] = INVALID_ENTITY_GUID;
-				continue;
-			}
-			if (!fighting) continue;
+                // Take the enemy side's damage, in proportion to this army's men of each type (see engagement_group_kills).
+                ENGAGEMENT_SIDE side = armies.engagement_sides[armyIndex];
+                army_troop_count& composition = armies.compositions[armyIndex];
+                ui64 menBefore = army_total_manpower(composition);
 
-			// Take the enemy side's damage, in proportion to this army's men of each type (see engagement_group_kills).
-			ENGAGEMENT_SIDE side = armies.engagement_sides[armyIndex];
-			army_troop_count& composition = armies.compositions[armyIndex];
-			ui64 menBefore = army_total_manpower(composition);
+                army_troop_count kills = {};
+                engagement_group_kills(world, engagements.side_damage(engagement_opposite_side(side), engagementIndex), sideMen[(ui8)side], composition, kills);
 
-			army_troop_count kills = {};
-			engagement_group_kills(world, engagements.side_damage(engagement_opposite_side(side), engagementIndex), sideMen[(ui8)side], composition, kills);
+                army_troop_count dead = {};
+                world_army_take_casualties(world, armies.guids[armyIndex], kills, dead);
 
-			army_troop_count dead = {};
-			world_army_take_casualties(world, armies.guids[armyIndex], kills, dead);
-			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagementGuid, side, (TROOP_TYPE)unitType, dead.count[unitType]);
+                for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
+                {
+                    world_engagement_remove_troops(world, engagementGuid, side, (TROOP_TYPE)unitType, dead.count[unitType]);
+                }
 
-			// A raising army that had no men is just empty (still waiting for its men), not wiped out.
-			if (army_total_manpower(composition) == 0 && !(armies.raising[armyIndex] && menBefore == 0)) world_destroy_army(world, armies.guids[armyIndex]);
+                // The dead leave their daily upkeep as supplies.
+                world_engagement_loot_add(world, engagementGuid, 0, army_daily_consumption(dead));
 
-			// Destroying the last attacking army of a siege ends it (engagement gone, armies released).
-			if (!engagements.guids[engagementIndex].is_valid()) break;
-		}
-		if (!engagements.guids[engagementIndex].is_valid()) continue;
+                if (army_total_manpower(composition) == 0)
+                {
+                    // A destroyed army drops everything it carries (before it is destroyed: that can end the engagement).
+                    world_engagement_loot_add(world, engagementGuid, armies.gold[armyIndex], armies.supplies[armyIndex]);
+                    world_destroy_army(world, armies.guids[armyIndex]);
+                }
 
-		// The garrison takes its share of the attacker's damage, like an army. Levy deaths kill population. Survivors stay in the garrison.
+                // Destroying an army can destroy the engagement, check if it has happened.
+                if (!engagements.guids[engagementIndex].is_valid()) 
+                    break;
+            }
+        }
+        
+        // If engagement was destroyed (probably because last army in it was destroyed), stop logic here.
+		if (!engagements.guids[engagementIndex].is_valid())
+            continue;
+
+        // Siege-specific logic
+		// The garrison takes its share of the attacker's damage, like an army.
 		if (fighting && !outside && garrisonIndex != 0xFFFF && garrisonMen > 0)
 		{
 			army_troop_count kills = {};
@@ -641,15 +800,26 @@ void world_system_engagements(match_world_state& world)
 			engagement_group_kills(world, engagements.attacker_damages[engagementIndex], defenderMen, world.entities->settlements.garrison[garrisonIndex], kills);
 
 			settlement_garrison_take_casualties(world, garrisonIndex, kills, dead);
-			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++) world_engagement_remove_troops(world, engagementGuid, ENGAGEMENT_SIDE::DEFENDER, (TROOP_TYPE)unitType, dead.count[unitType]);
+			for (ui8 unitType = 0; unitType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; unitType++)
+            {
+                world_engagement_remove_troops(world, engagementGuid, ENGAGEMENT_SIDE::DEFENDER, (TROOP_TYPE)unitType, dead.count[unitType]);
+            }
+			world_engagement_loot_add(world, engagementGuid, 0, army_daily_consumption(dead));
 		}
 
-		// Attackers wiping the defenders of a siege take the settlement.
-		if (over && attackerMen > 0 && besiegingSettlement)
+		if (over)
 		{
-			world_settlement_change_owner(world, engagements.main_targets[engagementIndex].get_index(), engagements.attacker_commanders[engagementIndex]);
-		}
+			// Winner: the side with men left (and damage to deal, see above). Neither = no winner (loot goes to the local settlement).
+			bool attackerWon = attackerMen > 0;
+			bool defenderWon = attackerMen == 0 && defenderMen > 0;
+			world_engagement_on_finish(world, engagementGuid, attackerWon || defenderWon, attackerWon ? ENGAGEMENT_SIDE::ATTACKER : ENGAGEMENT_SIDE::DEFENDER);
 
-		if (over) world_destroy_engagement(world, engagementGuid);
+			// Attacker victory in a siege: the settlement changes owner.
+			if (attackerWon && isSiege)
+				world_settlement_change_owner(world, engagements.main_targets[engagementIndex].get_index(), engagements.attacker_commanders[engagementIndex]);
+
+			// Releases the armies left in it too.
+			world_engagement_end(world, engagementGuid);
+		}
 	}
 }

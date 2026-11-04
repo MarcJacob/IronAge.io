@@ -22,7 +22,7 @@
 #include "systems/world_system_settlement_economy.cpp"
 #include "systems/world_system_army.cpp"
 #include "systems/world_system_army_economy.cpp"
-#include "systems/world_system_standing_orders.cpp"
+#include "systems/world_system_army_standing_orders.cpp"
 #include "systems/world_system_worker_construction.cpp"
 #include "systems/world_system_caravan_spawn.cpp"
 #include "systems/world_system_caravan_trade.cpp"

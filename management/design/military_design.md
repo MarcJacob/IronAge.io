@@ -176,9 +176,17 @@ Armies can be sent to Raid specific territories as a standing order. They will t
 
 Armies will, when possible and if their standing order allows it, attack enemy caravans and worker groups. Doing so they will destroy the caravan or worker entity, and get some gold and supply from it. Caravans are considered valid targets according to their origin, meaning an army might attack and despoil a caravan that was heading for the player's own territory.
 
+Caravans that end up in range of an army are intercepted even if the army is not actively chasing them. Active chasing depends on the standing order (Station within leash, Raid, Defend). Loot is capped by the army's carrying capacity. Workers are not targets for now.
+
 ## Looting
 
-When conquering an enemy settlement, some proportion (based on number of attackers and some cap) of its goods, population and buildings will be taken / killed / destroyed, turning into supplies and gold (respectively), with the goods shared between victorious armies depending on their respective numbers.
+Every engagement has a Loot Pool (gold + supplies reserve), shared among the victorious armies when the engagement ends.
+
+Pool sources:
+- Every army destroyed in the engagement drops all of its gold and supplies into the pool.
+- A conquered settlement adds to the pool: 20% of its peasants and 30% of its urban population are killed, each yielding one gold. Buildings are not destroyed for now.
+
+Distribution: among the victorious armies, by manpower and limited by each army's carrying capacity. Leftover loot becomes goods / trade volume for the settlement where the engagement is located (the local population loots the battlefield).
 
 # Supply system
 

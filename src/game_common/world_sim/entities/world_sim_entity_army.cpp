@@ -51,8 +51,9 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 	armies.guids[index] = INVALID_ENTITY_GUID;
 	armies.active_count--;
 
-	// A siege whose last attacking army is gone ends with it.
-	if (engagement.is_valid()) world_engagement_army_left(world, engagement);
+    // Signal the engagement the army is part of.
+	if (engagement.is_valid()) 
+        world_engagement_army_left(world, engagement);
 }
 
 // Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (if it is still the owner's, lost otherwise). Call before destroying the army.

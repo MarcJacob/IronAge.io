@@ -48,6 +48,8 @@ struct world_entity_engagements : public world_entity_container
 	ui32* phase_ticks; // World age when the current phase started.
 	bool* fighting_actives; // True while troops deal and take damage: damage rounds run only then, and other mechanics (army supply...) are suspended.
 	ui32* durations; // Rounds since the engagement started (one round every GAME_PARAMETERS.engagement_tick_interval ticks).
+	ui32* loot_gold; // Loot pool: gold dropped by destroyed armies and conquest. Shared among the victors when the engagement ends (world_engagement_on_finish).
+	ui32* loot_supplies; // Loot pool: supplies dropped by destroyed armies, plus the daily upkeep of every soldier killed.
 
 	// Per side. Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
 	// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
@@ -75,6 +77,8 @@ struct world_entity_engagements : public world_entity_container
 		entity_guid main_target;
 		ui32 phase_tick;
 		bool fighting_active;
+		ui32 loot_gold;
+		ui32 loot_supplies;
 
 		army_troop_count attacker_troops;
 		ui32 attacker_damage;
@@ -100,6 +104,8 @@ struct world_entity_engagements : public world_entity_container
 		entity_guid& main_target;
 		ui32& phase_tick;
 		bool& fighting_active;
+		ui32& loot_gold;
+		ui32& loot_supplies;
 
 		army_troop_count& attacker_troops;
 		ui32& attacker_damage;
@@ -118,6 +124,8 @@ struct world_entity_engagements : public world_entity_container
 			main_target = source.main_target;
 			phase_tick = source.phase_tick;
 			fighting_active = source.fighting_active;
+			loot_gold = source.loot_gold;
+			loot_supplies = source.loot_supplies;
 			attacker_troops = source.attacker_troops;
 			attacker_damage = source.attacker_damage;
 			attacker_commander = source.attacker_commander;
@@ -134,6 +142,8 @@ struct world_entity_engagements : public world_entity_container
 			, main_target(collection.main_targets[index])
 			, phase_tick(collection.phase_ticks[index])
 			, fighting_active(collection.fighting_actives[index])
+			, loot_gold(collection.loot_gold[index])
+			, loot_supplies(collection.loot_supplies[index])
 			, attacker_troops(collection.attacker_troops[index])
 			, attacker_damage(collection.attacker_damages[index])
 			, attacker_commander(collection.attacker_commanders[index])
@@ -153,6 +163,8 @@ inline void world_entity_engagements::single::copy_from(const world_entity_engag
 	main_target = source.main_target;
 	phase_tick = source.phase_tick;
 	fighting_active = source.fighting_active;
+	loot_gold = source.loot_gold;
+	loot_supplies = source.loot_supplies;
 	attacker_troops = source.attacker_troops;
 	attacker_damage = source.attacker_damage;
 	attacker_commander = source.attacker_commander;
@@ -172,6 +184,8 @@ inline void world_entity_engagements::single::copy_from(const world_entity_engag
 	main_target = collection.main_targets[index];
 	phase_tick = collection.phase_ticks[index];
 	fighting_active = collection.fighting_actives[index];
+	loot_gold = collection.loot_gold[index];
+	loot_supplies = collection.loot_supplies[index];
 	attacker_troops = collection.attacker_troops[index];
 	attacker_damage = collection.attacker_damages[index];
 	attacker_commander = collection.attacker_commanders[index];

@@ -104,6 +104,10 @@ struct game_parameters
     ui32 engagement_pin_distance_tiles = 2; // Armies in an engagement move towards its location until they are this many tiles from it, then stay pinned.
     ui32 engagement_leave_radius_multiplier = 2; // An army farther than this many join radii from its engagement may leave it (see world_engagement_can_be_left).
 
+    // ENGAGEMENT LOOT. A conquered settlement adds gold to the engagement's loot pool: people killed, 1 gold each.
+    ui32 conquest_loot_peasants_percent = 20; // Of its peasants.
+    ui32 conquest_loot_urban_percent = 30; // Of its urban population (unemployed, workers and home soldiers count; only unemployed and workers can actually be killed).
+
     // ENGAGEMENT DAMAGE. Every engagement_tick_interval ticks a round runs: a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it
     // over its men by type; each type's share is divided by rand(1, defense) then by rand(1, armor): what is left is the number of men killed of that type.
     ui32 engagement_tick_interval = 10; // World ticks per round. At least 1.

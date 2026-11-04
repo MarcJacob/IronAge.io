@@ -11,7 +11,6 @@
 
 #include "../entities/world_sim_entity_army.h"
 #include "../entities/world_sim_entity_engagement.h"
-#include "../entities/world_sim_entity_settlement.h"
 
 #include "../world_movement.h"
 
@@ -54,7 +53,9 @@ static bool order_is_hostile_entity(const match_world_state& world, ui16 army_in
 	return true;
 }
 
-// The hostile army nearest to the center within the radius (lowest slot on a tie), or an invalid guid. With territory_of set, only armies inside that settlement's territory.
+// The hostile army nearest to the center within the radius (lowest slot on a tie), or an invalid guid.
+// With territory_of set, only armies inside that settlement's territory.
+// @TODO(Marc): More generalized spatial querying system.
 static entity_guid order_find_hostile_army(match_world_state& world, ui16 army_index, world_location center, float radius, ui16 territory_of)
 {
 	const world_entity_armies& armies = world.entities->armies;
@@ -111,7 +112,8 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 	world_entity_engagements& engagements = world.entities->engagements;
 	army_order& order = armies.orders[army_index];
 
-	// An army stationed within the join radius of an engagement joins it and stays in it. Engagements that do not aggro the army (idle sieges it attacks) are joined here.
+	// An army stationed within the join radius of an engagement joins it and stays in it.
+    // Engagements that do not aggro the army (idle sieges it attacks) are also joined.
 	if (armies.engagements[army_index].is_valid())
 	{
 		entity_guid engagement = armies.engagements[army_index];

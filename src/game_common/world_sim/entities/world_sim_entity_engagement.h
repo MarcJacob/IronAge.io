@@ -10,6 +10,21 @@
 entity_guid world_spawn_engagement(match_world_state& world, const world_entity_engagement& start_state);
 void world_destroy_engagement(match_world_state& world, entity_guid engagement);
 
+// LOOT. Every engagement has a pool of gold and supplies (loot_gold / loot_supplies): destroyed armies drop what they carry, every soldier killed leaves his daily upkeep
+// as supplies, a conquered settlement adds gold (people killed, see conquest_loot_* parameters).
+// Adds to the pool of a valid engagement.
+void world_engagement_loot_add(match_world_state& world, entity_guid engagement, ui64 gold, ui64 supplies);
+
+// Event: the engagement is finishing (call before it is destroyed; world_engagement_end calls it too, with the defender as winner of a siege and no winner otherwise, so a second call is harmless).
+// With a winner: an attacker victory in a siege first adds the conquest loot (the owner change itself is up to the caller); then the pools are shared among the armies
+// still in the engagement on the winning side, by manpower, capped by what each can carry (the rest goes to those with room left).
+// What remains becomes trade volume (gold) and goods (supplies) of the besieged settlement, or of the settlement whose territory the engagement is in; it is lost if there is none.
+// The pools are emptied.
+void world_engagement_on_finish(match_world_state& world, entity_guid engagement, bool has_winner, ENGAGEMENT_SIDE winner);
+
+// Conquest of a settlement with no engagement (empty garrison): the conquest loot goes to the conquering army up to its carrying room, the rest to the settlement.
+void world_army_conquest_loot(match_world_state& world, entity_guid army, ui16 settlement_index);
+
 // Ends a engagement: releases every army in it (clears their engagement link), then destroys it (a siege also clears its settlement's siege).
 void world_engagement_end(match_world_state& world, entity_guid engagement);
 
