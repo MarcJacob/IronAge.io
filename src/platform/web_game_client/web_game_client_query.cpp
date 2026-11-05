@@ -44,7 +44,7 @@ static ui32 inspect_settlement_extra(entity_guid settlement, ui8* out_buffer, ui
     for (ui16 workerIndex = 0; workerIndex < workers.max_count && extra.construction_project_count < entity_inspection_extra_settlement::MAX_PROJECTS; workerIndex++)
     {
         if (!workers.guids[workerIndex].is_valid()) continue;
-        if ((WORK_TYPE)workers.work_types[workerIndex] != WORK_TYPE::BUILD_SETTLEMENT_BUILDING) continue;
+        if ((WORK_TYPE)workers.work_type[workerIndex] != WORK_TYPE::BUILD_SETTLEMENT_BUILDING) continue;
         if (workers.origin_entity[workerIndex]._value != settlement._value) continue;
 
         const build_settlement_building_data& data = *(const build_settlement_building_data*)workers.action_data[workerIndex].bytes;

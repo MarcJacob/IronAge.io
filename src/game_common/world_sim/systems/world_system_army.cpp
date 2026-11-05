@@ -19,22 +19,22 @@ void world_army_attack_entity(match_world_state& world, entity_guid attacker, en
 
 	ui16 attackerIndex = attacker.get_index();
 	ui16 targetIndex = target.get_index();
-	match_player_id attackerOwner = armies.owners[attackerIndex];
+	match_player_id attackerOwner = armies.owner[attackerIndex];
 
 	// Joining engagements requires a free army with men (see world_army_join_engagement).
-	if (armies.engagements[attackerIndex].is_valid() || army_total_manpower(armies.compositions[attackerIndex]) == 0) return;
+	if (armies.engagement[attackerIndex].is_valid() || army_total_manpower(armies.composition[attackerIndex]) == 0) return;
 
 	// An army that cannot inflict damage (only wagons...) attacks nothing: no siege, no battle, no join, no instant conquest.
-	if (troops_base_damage(armies.compositions[attackerIndex]) == 0) return;
+	if (troops_base_damage(armies.composition[attackerIndex]) == 0) return;
 
 	switch (target.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
 	{
-		if (settlements.owners[targetIndex] == attackerOwner) break;
+		if (settlements.owner[targetIndex] == attackerOwner) break;
 
 		// Join the siege of this settlement if there is one (and it is joinable for the attacker, see world_army_join_engagement).
-		entity_guid siege = settlements.sieges[targetIndex];
+		entity_guid siege = settlements.siege[targetIndex];
 		if (world_entity_is_valid(world, siege))
 		{
 			world_army_join_engagement(world, attacker, siege);
@@ -54,7 +54,7 @@ void world_army_attack_entity(match_world_state& world, entity_guid attacker, en
 	}
 	case ENTITY_TYPE::ARMY:
 	{
-		entity_guid engagement = armies.engagements[targetIndex];
+		entity_guid engagement = armies.engagement[targetIndex];
 		if (engagement.is_valid())
 		{
 			// The target is part of an engagement: same as reaching the engagement (joined if joinable, on the attacker's own side, see world_army_join_engagement).
@@ -95,23 +95,23 @@ void world_system_armies_raising(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid() || !armies.raising[armyIndex]) continue;
-		if (armies.engagements[armyIndex].is_valid()) continue; // Suspended, resumes after the engagement.
+		if (armies.engagement[armyIndex].is_valid()) continue; // Suspended, resumes after the engagement.
 
 		// Raising ends if the home settlement is gone or changed hands. The army is kept as is.
-		entity_guid home = armies.home_settlements[armyIndex];
-        const match_player_id& homeOwner = settlements.owners[home.get_index()];
-		if (!world_entity_is_valid(world, home) || homeOwner != armies.owners[armyIndex])
+		entity_guid home = armies.home_settlement[armyIndex];
+        const match_player_id& homeOwner = settlements.owner[home.get_index()];
+		if (!world_entity_is_valid(world, home) || homeOwner != armies.owner[armyIndex])
 		{
 			armies.raising[armyIndex] = 0;
-			if (army_total_manpower(armies.compositions[armyIndex]) == 0) world_destroy_army(world, armies.guids[armyIndex]); // Nothing was raised.
+			if (army_total_manpower(armies.composition[armyIndex]) == 0) world_destroy_army(world, armies.guids[armyIndex]); // Nothing was raised.
 			continue;
 		}
 
 		// Still walking to the raise location.
-		if (!(armies.locations[armyIndex] == armies.movements[armyIndex].destination)) continue;
+		if (!(armies.location[armyIndex] == armies.movement[armyIndex].destination)) continue;
 
 		ui16 homeIndex = home.get_index();
-		army_troop_count& composition = armies.compositions[armyIndex];
+		army_troop_count& composition = armies.composition[armyIndex];
 		const army_troop_count& target = armies.raised_troops[armyIndex];
 
         // Levies come from the garrison like the others; each one raised also kills one population (settlement_raise_soldiers).

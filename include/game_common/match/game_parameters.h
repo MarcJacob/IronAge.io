@@ -104,6 +104,16 @@ struct game_parameters
     ui32 engagement_pin_distance_tiles = 2; // Armies in an engagement move towards its location until they are this many tiles from it, then stay pinned.
     ui32 engagement_leave_radius_multiplier = 2; // An army farther than this many join radii from its engagement may leave it (see world_engagement_can_be_left).
 
+    // CAMPAIGNS. Join and cluster radius (tiles) = base + per_member x the armies that are members. A campaign follows the centroid of its member armies within that radius.
+    ui32 campaign_join_base_tiles = 4;
+    ui32 campaign_join_per_member_tiles = 1;
+    ui32 campaign_move_cap_tiles = 1; // Most tiles the campaign's location moves along each axis per tick.
+    ui32 campaign_march_step_tiles = 4; // MARCHING: how far ahead of the campaign (along each axis) its armies are sent each time.
+    ui32 campaign_march_arrive_tiles = 2; // MARCHING: the campaign picks a new waypoint once this close to the last one.
+    ui32 campaign_spread_tiles = 3; // MARCHING: each army is sent to a random spot within this many tiles of the waypoint, so they do not stack up.
+    ui32 campaign_assault_distance_tiles = 10; // MARCHING ends (ON_OBJECTIVE) once the campaign is this close to the objective's location.
+    ui32 campaign_army_garrison_percent = 50; // A settlement joining a campaign raises an army of this % of each of its garrison troop types.
+
     // ENGAGEMENT LOOT. A conquered settlement adds gold to the engagement's loot pool: people killed, 1 gold each.
     ui32 conquest_loot_peasants_percent = 20; // Of its peasants.
     ui32 conquest_loot_urban_percent = 30; // Of its urban population (unemployed, workers and home soldiers count; only unemployed and workers can actually be killed).

@@ -55,6 +55,12 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	SET_ARMY_ORDER, // Gives an own, raised army a standing order (ARMY_ORDER_TYPE) with its target / location.
 
+	CAMPAIGN_JOIN, // An own settlement or army, not in a campaign yet, joins a campaign. With no campaign given, a settlement founds a new one.
+
+	SET_CAMPAIGN_OBJECTIVE, // Gives an own campaign its objective (CAMPAIGN_OBJECTIVE_TYPE) with its target.
+
+	CAMPAIGN_BEGIN, // Has an own, gathering campaign with an objective march now, without waiting for the armies still joining it.
+
 	TYPE_COUNT,
 };
 
@@ -85,19 +91,13 @@ enum COMMAND_ERROR : ui32
 {
 	COMMAND_ERROR_UNSPECIFIED = 1 << 0, // Invalid, no detail available.
 	COMMAND_ERROR_INVALID_ENTITY = 1 << 1, // An entity is missing or not of the expected type.
-	COMMAND_ERROR_NOT_OWNER = 1 << 2, // The player does not own the entity.
-	COMMAND_ERROR_TARGET_OUT_OF_BOUNDS = 1 << 3, // A target location is outside the world.
+	COMMAND_ERROR_NOT_OWNER = 1 << 2, // The player does not own (or command) the entity.
+	COMMAND_ERROR_TARGET_OUT_OF_BOUNDS = 1 << 3, // A target location is outside the world, or outside the territory it must be in.
 	COMMAND_ERROR_INVALID_PATH = 1 << 4, // See match_command_validity_feedback::invalid_path_reason.
-	COMMAND_ERROR_TARGET_OUT_OF_TERRITORY = 1 << 5, // A target location is outside the settlement's territory.
-	COMMAND_ERROR_NOT_ENOUGH_POPULATION = 1 << 6, // See population_needed / population_current.
-	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 7, // No free slot for the entity the command would create.
-	COMMAND_ERROR_ARMY_RAISING = 1 << 8, // The army is still raising and refuses move and attack orders.
-	COMMAND_ERROR_NO_RAISE_TARGET = 1 << 9, // Raise army with all targets at 0.
-	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 10, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits).
-	COMMAND_ERROR_NOT_IN_HOME_TERRITORY = 1 << 11, // The army is not inside its home settlement's territory.
-	COMMAND_ERROR_NOT_ENOUGH_TREASURY = 1 << 12, // The command costs more than the treasury holds (e.g. the supplies of a new army).
-	COMMAND_ERROR_WRONG_PHASE = 1 << 13, // The engagement is not in a phase the command works in.
-	COMMAND_ERROR_NOT_COMMANDER = 1 << 14, // The player does not command the side of the engagement the command is for.
+	COMMAND_ERROR_NOT_ENOUGH_RESOURCES = 1 << 5, // The command costs more than is available (population, treasury). See population_needed / population_current.
+	COMMAND_ERROR_ENTITY_LIMIT_REACHED = 1 << 6, // No free slot for the entity the command would create.
+	COMMAND_ERROR_ENTITY_UNAVAILABLE = 1 << 7, // The entity is in a state that refuses the command (raising, wrong engagement phase, already in a campaign...).
+	COMMAND_ERROR_VALUE_OUT_OF_RANGE = 1 << 8, // A command value is outside its allowed range (e.g. tax rate outside the game parameters' limits, no raise target).
 };
 
 // Values of match_command_validity_feedback::invalid_path_reason.
@@ -406,6 +406,60 @@ bool command_set_army_order_validity_check(const match_world_state& world, match
 void command_set_army_order_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// CAMPAIGN JOIN
+struct command_data_campaign_join
+{
+	entity_guid entity; // An own settlement or army that is not part of a campaign.
+	entity_guid campaign; // The campaign to join (an own one), or invalid: a new campaign is founded on the entity, which must then be a settlement.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_campaign_join)
+	GAME_DATA_PROPERTY(entity, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(campaign, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_campaign_join_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_campaign_join_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// SET CAMPAIGN OBJECTIVE
+struct command_data_set_campaign_objective
+{
+	entity_guid campaign; // An own campaign.
+	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
+	entity_guid target; // CONQUER_SETTLEMENT: a hostile or neutral settlement.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_set_campaign_objective)
+	GAME_DATA_PROPERTY(campaign, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(objective_type, GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_set_campaign_objective_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_set_campaign_objective_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
+// CAMPAIGN BEGIN
+struct command_data_campaign_begin
+{
+	entity_guid campaign; // An own campaign that is gathering and has an objective.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_campaign_begin)
+	GAME_DATA_PROPERTY(campaign, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_campaign_begin_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_campaign_begin_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // SALLY OUT
 struct command_data_sally_out
 {
@@ -618,6 +672,12 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_sally_out_validity_check, command_sally_out_apply },
 	{ "SET_ARMY_ORDER", MATCH_COMMAND_TYPE::SET_ARMY_ORDER, sizeof(command_data_set_army_order),
 		command_set_army_order_validity_check, command_set_army_order_apply },
+	{ "CAMPAIGN_JOIN", MATCH_COMMAND_TYPE::CAMPAIGN_JOIN, sizeof(command_data_campaign_join),
+		command_campaign_join_validity_check, command_campaign_join_apply },
+	{ "SET_CAMPAIGN_OBJECTIVE", MATCH_COMMAND_TYPE::SET_CAMPAIGN_OBJECTIVE, sizeof(command_data_set_campaign_objective),
+		command_set_campaign_objective_validity_check, command_set_campaign_objective_apply },
+	{ "CAMPAIGN_BEGIN", MATCH_COMMAND_TYPE::CAMPAIGN_BEGIN, sizeof(command_data_campaign_begin),
+		command_campaign_begin_validity_check, command_campaign_begin_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

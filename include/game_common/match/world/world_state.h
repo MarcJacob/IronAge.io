@@ -10,6 +10,7 @@
 #include "entities/world_entity_workers.h"
 #include "entities/world_entity_caravans.h"
 #include "entities/world_entity_engagements.h"
+#include "entities/world_entity_campaigns.h"
 #include "entities/world_entity_armies.h"
 
 // State of one player, indexed by match_player_id in the world state.
@@ -44,6 +45,7 @@ struct world_entities
     world_entity_armies armies;
     world_entity_workers workers;
     world_entity_engagements engagements;
+    world_entity_campaigns campaigns;
 };
 
 // Contains the match's world state, namely its active entities, and static elements such as tiles.

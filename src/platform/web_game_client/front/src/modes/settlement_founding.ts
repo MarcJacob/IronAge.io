@@ -60,7 +60,7 @@ export class SettlementFounding extends Core.Mode
         const flags = values.error_flags ?? 0;
         if ((flags & COMMAND_ERROR.TARGET_OUT_OF_BOUNDS) !== 0) return "Outside the world";
         if ((flags & COMMAND_ERROR.INVALID_PATH) !== 0 && values.invalid_path_reason === COMMAND_INVALID_PATH.DESTINATION_INVALID) return "Cannot found a settlement here";
-        if ((flags & COMMAND_ERROR.NOT_ENOUGH_POPULATION) !== 0) return "Not enough peasants";
+        if ((flags & COMMAND_ERROR.NOT_ENOUGH_RESOURCES) !== 0) return "Not enough peasants";
         if ((flags & COMMAND_ERROR.ENTITY_LIMIT_REACHED) !== 0) return "Too many entities";
         if (!valid) return "Refused";
         return has_path ? "Valid" : "No path";

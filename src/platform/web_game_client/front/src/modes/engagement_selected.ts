@@ -73,8 +73,8 @@ export class EngagementSelected extends Core.Mode
             const feedback = get_command_feedback("BEGIN_ASSAULT", { engagement: this.engagement_guid });
             canAssault = feedback.valid;
             const flags = feedback.values.error_flags ?? 0;
-            if ((flags & COMMAND_ERROR.NOT_COMMANDER) !== 0) note = canSally ? "Only the attacker commander can begin the assault or lift the siege." : "Only the attacker commander can begin the assault.";
-            else if ((flags & COMMAND_ERROR.WRONG_PHASE) !== 0) note = canSally ? "" : "The siege is not idle: the assault cannot begin.";
+            if ((flags & COMMAND_ERROR.NOT_OWNER) !== 0) note = canSally ? "Only the attacker commander can begin the assault or lift the siege." : "Only the attacker commander can begin the assault.";
+            else if ((flags & COMMAND_ERROR.ENTITY_UNAVAILABLE) !== 0) note = canSally ? "" : "The siege is not idle: the assault cannot begin.";
         }
 
         if (siege !== this.is_siege || canAssault !== this.can_assault || canLift !== this.can_lift || canSally !== this.can_sally)

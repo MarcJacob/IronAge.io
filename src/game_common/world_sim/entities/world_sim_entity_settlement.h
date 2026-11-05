@@ -25,7 +25,7 @@ void world_settlement_change_owner(match_world_state& world, ui16 settlement_ind
 // True if the settlement is under siege (an engagement of kind SIEGE has it as its main target).
 static inline bool settlement_is_besieged(const match_world_state& world, ui16 settlement_index)
 {
-	return world.entities->settlements.sieges[settlement_index].is_valid();
+	return world.entities->settlements.siege[settlement_index].is_valid();
 }
 
 // SETTLEMENT POPULATION PRIMITIVES
@@ -325,7 +325,7 @@ static inline void settlement_trade_volume_add(world_entity_settlements& settlem
 // Known limits, ignored for now: the first water neighbour may be a pond while another one is the sea; two settlements may share a dock tile.
 static inline bool settlement_dock_tile(const match_world_state& world, ui16 settlement_index, world_location& out_dock)
 {
-	world_location location = world.entities->settlements.locations[settlement_index];
+	world_location location = world.entities->settlements.location[settlement_index];
 	for (const vec2<i8>& offset : NEIGHBOUR_OFFSETS_ALL)
 	{
 		ui16 regionIndex, tileIndex;

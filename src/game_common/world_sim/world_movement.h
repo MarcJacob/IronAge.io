@@ -29,6 +29,14 @@ static inline bool world_location_within_tiles(world_location a, world_location 
     return vec2_dist_squared(a, b) <= (float)tiles * (float)tiles;
 }
 
+// True if the tile (in the world) is land. Entities may path across water but only stand and stop on land.
+static inline bool world_tile_is_land(const world_terrain& terrain, world_location loc)
+{
+    ui16 regionIndex, tileIndex;
+    world_get_tile(terrain, loc, regionIndex, tileIndex);
+    return (PATH_TERRAIN_LAND & (1 << (ui8)terrain.regions[regionIndex].terrain_types[tileIndex])) != 0;
+}
+
 // Returns the travel cost of entering a tile for the given path parameters. 0 means impassable / invalid for the given params.
 static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region_index, ui16 tile_index, const path_params& params)
 {

@@ -10,32 +10,37 @@
 // Gives the army a STATION order at the location (the order system then walks it there). Does not touch its movement.
 static inline void army_order_station(world_entity_armies& armies, ui16 index, world_location location)
 {
-	armies.orders[index] = {};
-	armies.orders[index].type = ARMY_ORDER_STATION;
-	armies.orders[index].location = location;
+	armies.order[index] = {};
+	armies.order[index].type = ARMY_ORDER_STATION;
+	armies.order[index].location = location;
 }
 
 // Gives the army an ATTACK order on the target entity (the order system chases it and resolves the attack on reaching it).
 static inline void army_order_attack(world_entity_armies& armies, ui16 index, entity_guid target)
 {
-	armies.orders[index] = {};
-	armies.orders[index].type = ARMY_ORDER_ATTACK;
-	armies.orders[index].target = target;
+	armies.order[index] = {};
+	armies.order[index].type = ARMY_ORDER_ATTACK;
+	armies.order[index].target = target;
 }
 
 // Gives the army a DEFEND_TERRITORY order for the settlement (its own). The location is the first point it walks to.
 static inline void army_order_defend_territory(world_entity_armies& armies, ui16 index, entity_guid settlement, world_location location)
 {
-	armies.orders[index] = {};
-	armies.orders[index].type = ARMY_ORDER_DEFEND_TERRITORY;
-	armies.orders[index].target = settlement;
-	armies.orders[index].location = location;
+	armies.order[index] = {};
+	armies.order[index].type = ARMY_ORDER_DEFEND_TERRITORY;
+	armies.order[index].target = settlement;
+	armies.order[index].location = location;
 }
 
 // Spawns a new army in the world with the provided start state and returns its GUID.
 // Returns a deterministic new ID according to match state, if there's room.
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state);
 void world_destroy_army(match_world_state& world, entity_guid army);
+
+// A settlement that joined a campaign raises an army for it: campaign_army_garrison_percent of each type of its garrison, paid like the raise command (gold and goods),
+// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army. Does nothing if that army already exists,
+// if the garrison gives no men, the treasury cannot pay, or there is no army slot left.
+void world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign);
 
 // Allocates the armies' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
@@ -46,7 +51,7 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 // Adds men of a type to the army's composition (clamped to the ui16 count). Returns how many were added.
 static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& troops = world.entities->armies.compositions[army_index].access_troop_count(troop_type);
+	ui16& troops = world.entities->armies.composition[army_index].access_troop_count(troop_type);
 	ui16 added = ia_min(count, (ui16)(0xFFFF - troops));
 	troops += added;
 	return added;
@@ -55,7 +60,7 @@ static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, TR
 // Removes up to count men of a type from the army's composition. Returns how many were removed.
 static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index, TROOP_TYPE troop_type, ui16 count)
 {
-	ui16& troops = world.entities->armies.compositions[army_index].access_troop_count(troop_type);
+	ui16& troops = world.entities->armies.composition[army_index].access_troop_count(troop_type);
 	ui16 removed = ia_min(count, troops);
 	troops -= removed;
 	return removed;

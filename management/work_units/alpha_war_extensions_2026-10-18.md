@@ -40,7 +40,7 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
   - R4 Looting. Design in `military_design.md` "Raiding & Looting". Decisions:
     - Engagement Loot Pool (gold + supplies): destroyed armies drop all gold / supplies into it; conquest adds 20% of peasants + 30% of urban pop (killed, 1 gold each); no building destruction. Shared among victorious armies by manpower, capped by carry capacity; leftover becomes goods / trade volume of the settlement where the engagement is located.
     - Banditry: caravans only (no workers); valid by origin owner's status (hostile / neutral); intercepted when in range of an army even when not chased; active chase depends on order (Station leash, Raid, Defend); loot half gold / half supplies, capped by carry capacity.
-    - R4a [DONE, tested] Loot Pool (`loot_gold` / `loot_supplies` on engagements, not in GDO; params `conquest_loot_peasants_percent` 20, `conquest_loot_urban_percent` 30). Loot block in `world_sim_entity_engagement.cpp` (`world_engagement_on_finish` called first in `world_engagement_end`). Winner: attacker men > 0 -> attacker; else defender if men > 0; else none (siege: defender wins by default). Dead soldiers (armies + garrison) also add their daily consumption to the pool's supplies. Sharing: repeated passes, by men among armies with room, capped by room. Leftover: gold -> trade_volume, supplies -> `settlement_market_add`; settlement = besieged one, else owner of the tile at the engagement location, else lost. Conquest: peasants via `settlement_remove_peasants`, 30% of urban pop (soldiers counted, capped to unemployed + workers) via `settlement_kill_population`. Instant conquest of empty garrison (`world_system_army.cpp:46`) also loots. Over branch replaces `world_destroy_engagement` with winner decision + on_finish + owner change + `world_engagement_end`.    - R4b [TODO] Banditry.
+    - R4a [DONE, tested, committed 07bbf73] Loot Pool (`loot_gold` / `loot_supplies` on engagements, not in GDO; params `conquest_loot_peasants_percent` 20, `conquest_loot_urban_percent` 30). Loot block in `world_sim_entity_engagement.cpp` (`world_engagement_on_finish` called first in `world_engagement_end`). Winner: attacker men > 0 -> attacker; else defender if men > 0; else none (siege: defender wins by default). Dead soldiers (armies + garrison) also add their daily consumption to the pool's supplies. Sharing: repeated passes, by men among armies with room, capped by room. Leftover: gold -> trade_volume, supplies -> `settlement_market_add`; settlement = besieged one, else owner of the tile at the engagement location, else lost. Conquest: peasants via `settlement_remove_peasants`, 30% of urban pop (soldiers counted, capped to unemployed + workers) via `settlement_kill_population`. Instant conquest of empty garrison (`world_system_army.cpp:46`) also loots. Over branch replaces `world_destroy_engagement` with winner decision + on_finish + owner change + `world_engagement_end`.    - R4b [DONE, tested, committed 8acfb30] Banditry (caravan looting). Battle / siege loot UI deferred.
   - R5 P4 campaign / P5 campaign AI (shared supply pool).
 
 ## Tasks
@@ -150,6 +150,14 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Raided flag set on any day a non-fleeing army loots; cleared after a day without looting.
 - Live off the land stance: 15% slower; supplies from tile and troop count, logistic curve exceeding consumption (1 per soldier) under 150 men, plateau above.
 - Campaign: real entity (own logic); region = territory + settlement; Defense objective only for own territory for now. Leader army = army it was started from. Valid trade target with settlement-like profit formula, but must hold gold to pay (1:1 + scarcity), no distance bonus. 75% of garrison becomes a new campaign army; settlement in one campaign at a time; campaign army refills instantly from home while in friendly territory. Vassal / overlord forced join later. Entity limits unchanged.
+- P4a decisions (supersede "Leader army" above: NO leader army; the creating army / settlement is just the first member):
+  - Micro entity, appended after CARAVAN. Survey notes: this unit's builder report (engagement entity is the precedent).
+  - Join = `SET_ARMY_ORDER` new JOIN_CAMPAIGN order targeting the campaign; no join command. Joined army stands (STATION), manual orders refused (new error flag) until campaign disbanded; never leaves.
+  - Armies point to their campaign (campaign has no member list). Campaign ends when it has no members.
+  - Rules: one campaign per player (owner-only for now), one campaign per settlement (pointer on settlement; settlement joining is P4b). Raising armies cannot create / join; engaged ones can.
+  - No objective field until P5; commander stub untouched; fixed name "Campaign"; join radius = base + per-member increment (params), drawn as circle.
+  - Campaign location follows its armies, never jumping: starts at the first member's location; then moves toward the centroid of members currently clustered around it (within a cluster radius of the campaign). Members farther away are ignored for positioning (still members). If none are near, re-anchor on a member (owner's armies first, then lowest index) only if within a splinter distance (param); farther = campaign splintered and ends. Per-tick move is capped (param). Cluster radius = join radius (same param pair).
+  - Steps: A sim data + lifecycle, B commands + join rules, C client read-only, D client interaction. Each reviewed before the next.
 - Campaign UI: tall banner on a shaft at leader army tile, large minimum screen size. Selected: name "Campaign", objectives, member army list (inspection extra data), faint white lines to members and objectives, state, each member's order.
 - Campaign AI runs in the deterministic world sim; replaces `match_ai` pseudo-campaign.
 - Army supply idea (user, to be written into design doc): armies are always trade targets for caravans (unattractive if small enough to live off the land / raid); they must pay gold for supplies; payment split between caravan owner and origin settlement, so armies weigh on the local economy and can starve the populace if numerous / long-staying. Likely replaces `army_supplies` tasks 3-4 / ties to `trade_market_goods`.
@@ -173,8 +181,29 @@ Grew out of R1 leftovers.
 - Open: battles end in 1-2 rounds (formula / numbers, user to decide; design doc line 68 same); splitting `systems_war.h` per entity conflicts with one-header-per-category rule in `world_sim.imprint.md` (decision needed); `world_army_attack_entity` not yet moved to army files; `order_hostile_men` / `order_find_hostile_army` stay in orders file.
 - Stale docs: `management/design/military_design.md` (formula), older sections of `military_state.md`.
 
+## Peer brief
+
+Goal: P4a Step A, campaign entity sim data + lifecycle. No commands, no client / TS, no AI, no JOIN_CAMPAIGN order yet. User reviews before Step B.
+
+Start from: imprints for `src/game_common/world_sim/` and `include/game_common/match/world/entities/`; `world_sim/.ai_imprint/` (military_state.md, soldier_population.md). Live standing-orders file is `systems/world_system_army_standing_orders.cpp` (not `world_system_standing_orders.cpp`). Decisions: this file, Decisions > "P4a decisions" and Campaign bullets. Precedent: engagement entity (`world_entity_engagements.h`, `world_sim_entity_engagement.cpp`).
+
+Scope:
+1. Micro entity `CAMPAIGN` appended after CARAVAN (`world_entity_common.h`); SoA header `world_entity_campaigns.h` (single, view, copy_from, GDO, query). Fields: location, owner, query-derived join radius. No leader / objective / member list.
+2. `world_state.h` storage, alloc in `world_sim_main.cpp`, memory estimate in `game_common_main.cpp`, cases in `world_entity_is_valid` / `get_location` / `get_owner`.
+3. `world_sim_entity_campaign.h/.cpp`: spawn (owner, founding location; first free slot, ASSERT when full), destroy, query.
+4. Army: `campaign` guid + JOINING / JOINED state arrays (like engagements / engagement_sides). Settlement: `campaign` guid pointer (unused otherwise). Touch every place the engagement fields touch.
+5. `world_system_campaigns` (declared in `systems_war.h`, called in `world_state_tick` after movement). Per campaign, each tick: promote JOINING armies within join radius to JOINED; move location toward centroid of JOINED armies within cluster radius (= join radius), per-tick move capped; if none in range, re-anchor on a JOINED member (owner's first, then lowest index) only if within splinter distance, else campaign ends; ends when no members. Integer math, slot order, no RNG.
+6. Join radius = `campaign_join_base_tiles` + `campaign_join_per_member_tiles` x joined members. Params also for move cap and splinter distance (`game_parameters.h`).
+7. Cleanup: hook in `world_destroy_army` (leave campaign, end it if empty); destroying a campaign clears members' and settlements' pointers; `world_settlement_change_owner` handles settlement pointer.
+
+Constraints: root conventions; no build / test; do not edit imprints; leave `match_ai` pseudo-campaign alone.
+
+Done: all of the above present; report lists files changed, not done, hand checks.
+
+Open questions: none.
+
 ## Next step
 
 Everything through P3e is tested and committed (0031653).
-Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4a done, tested (uncommitted). Next: R4b banditry, then R5.
+Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4 done, tested, committed. Next: P4 campaign entity (design first), then P5 / R5.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

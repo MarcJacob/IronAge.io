@@ -18,7 +18,7 @@
 ui16 army_tile_owner(const match_world_state& world, ui16 army_index)
 {
 	ui16 regionIndex, tileIndex;
-	world_get_tile(*world.terrain, world.entities->armies.locations[army_index], regionIndex, tileIndex);
+	world_get_tile(*world.terrain, world.entities->armies.location[army_index], regionIndex, tileIndex);
 	return world.terrain->regions[regionIndex].owners[tileIndex];
 }
 
@@ -26,7 +26,7 @@ ui16 army_tile_owner(const match_world_state& world, ui16 army_index)
 static bool army_is_in_owner_territory(const match_world_state& world, ui16 army_index)
 {
 	ui16 tileOwner = army_tile_owner(world, army_index);
-	return tileOwner != world_terrain::UNOWNED_TILE && world.entities->settlements.owners[tileOwner] == world.entities->armies.owners[army_index];
+	return tileOwner != world_terrain::UNOWNED_TILE && world.entities->settlements.owner[tileOwner] == world.entities->armies.owner[army_index];
 }
 
 // Runs daily. Pays the armies inside their owner's territory (the treasury pays as much as it can: never below 0, no debt), then they buy goods with their gold
@@ -41,7 +41,7 @@ void world_system_armies_upkeep(match_world_state& world)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
 
-		match_player_id owner = armies.owners[armyIndex];
+		match_player_id owner = armies.owner[armyIndex];
 		if (owner >= world.player_count) continue;
 
 		world_player_state& player = world.player_states[owner];
@@ -51,12 +51,12 @@ void world_system_armies_upkeep(match_world_state& world)
 
 		// Men of an army whose home settlement now belongs to someone else desert: army_wrong_origin_owner_desertion_percent of each type per day, rounded up.
 		// They go back to the home settlement. The army is destroyed when its last man leaves: stop at once, its slot is free.
-		entity_guid originSettlement = armies.home_settlements[armyIndex];
+		entity_guid originSettlement = armies.home_settlement[armyIndex];
 		if (world_entity_is_valid(world, originSettlement) && originSettlement.get_type() == ENTITY_TYPE::SETTLEMENT
-			&& world.entities->settlements.owners[originSettlement.get_index()] != owner)
+			&& world.entities->settlements.owner[originSettlement.get_index()] != owner)
 		{
 			entity_guid originArmy = armies.guids[armyIndex];
-			army_troop_count troops = armies.compositions[armyIndex];
+			army_troop_count troops = armies.composition[armyIndex];
 			for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT && world_entity_is_valid(world, originArmy); troopType++)
 			{
 				ui16 deserters = (ui16)(((ui64)troops.count[troopType] * ia_min(GAME_PARAMETERS.army_wrong_origin_owner_desertion_percent, (ui32)100) + 99) / 100);
@@ -67,10 +67,10 @@ void world_system_armies_upkeep(match_world_state& world)
 		}
 
         // If army is in an engagement where troops are fighting (field battle, assault...), do not run its supply consumption / refill logic.
-        entity_guid armyCurrentEngagement = armies.engagements[armyIndex];
-        if (armyCurrentEngagement.is_valid() && world.entities->engagements.fighting_actives[armyCurrentEngagement.get_index()]) continue;
+        entity_guid armyCurrentEngagement = armies.engagement[armyIndex];
+        if (armyCurrentEngagement.is_valid() && world.entities->engagements.fighting_active[armyCurrentEngagement.get_index()]) continue;
 
-		ui32 consumption = army_daily_consumption(armies.compositions[armyIndex]);
+		ui32 consumption = army_daily_consumption(armies.composition[armyIndex]);
 		ui32 capacity = army_supply_capacity(world, (ui16)armyIndex);
 		ui32 price = GAME_PARAMETERS.good_price_gold;
 		ui16 settlementIndex = army_tile_owner(world, (ui16)armyIndex);
@@ -90,7 +90,7 @@ void world_system_armies_upkeep(match_world_state& world)
 
 		// Purchase: goods from the market goods of the settlement the army stands in (its location equals the settlement's; besieged or not), up to the supplies capacity, as far as its gold goes.
 		// Same owner only for now (friendly stub). The seller's owner gets the whole payment, and the goods sold count as trade volume.
-		if (inOwnerTerritory && supplies < capacity && armies.locations[armyIndex] == world.entities->settlements.locations[settlementIndex])
+		if (inOwnerTerritory && supplies < capacity && armies.location[armyIndex] == world.entities->settlements.location[settlementIndex])
 		{
 			world_entity_settlements& settlements = world.entities->settlements;
 			ui32& marketGoods = settlements.trade[settlementIndex].market_goods;
@@ -100,7 +100,7 @@ void world_system_armies_upkeep(match_world_state& world)
 			marketGoods -= bought;
 			settlement_trade_volume_add(settlements, settlementIndex, bought);
 			gold -= cost;
-			world_player_state& seller = world.player_states[settlements.owners[settlementIndex]];
+			world_player_state& seller = world.player_states[settlements.owner[settlementIndex]];
 			seller.treasury += cost;
 			seller.income += cost;
 			supplies += bought;
@@ -123,7 +123,7 @@ void world_system_armies_upkeep(match_world_state& world)
 
 		// The army is destroyed when its last man leaves: stop at once, its slot is free.
 		entity_guid army = armies.guids[armyIndex];
-		army_troop_count troops = armies.compositions[armyIndex];
+		army_troop_count troops = armies.composition[armyIndex];
 		for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 		{
 			ui16 deserters = (ui16)((ui64)troops.count[troopType] * unfunded / consumption);

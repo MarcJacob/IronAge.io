@@ -141,46 +141,46 @@ void world_system_entity_movement_decision(match_world_state& world)
         // Returning caravans only walk back to their origin (the trade system refunds them there). Without an origin they are lost.
         if (((ui8)caravans.flags[caravanIndex] & (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME) != 0)
         {
-            entity_guid origin = caravans.origin_settlements[caravanIndex];
+            entity_guid origin = caravans.origin_settlement[caravanIndex];
             if (origin.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, origin))
             {
                 // A besieged origin cannot be entered: within caravan_siege_wait_tiles of it the caravan stops and waits for the siege to end.
                 float waitTiles = (float)GAME_PARAMETERS.caravan_siege_wait_tiles;
                 if (settlement_is_besieged(world, origin.get_index())
-                    && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[origin.get_index()]) <= waitTiles * waitTiles)
-                    world_movement_stop(caravans.movements[caravanIndex], caravans.locations[caravanIndex]);
+                    && vec2_dist_squared(caravans.location[caravanIndex], settlements.location[origin.get_index()]) <= waitTiles * waitTiles)
+                    world_movement_stop(caravans.movement[caravanIndex], caravans.location[caravanIndex]);
                 else
-                    caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
+                    caravans.movement[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
             }
             else
                 world_destroy_caravan(world, caravan);
             continue;
         }
 
-        entity_guid destination = caravans.destinations[caravanIndex];
+        entity_guid destination = caravans.destination[caravanIndex];
         if (destination.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, destination))
         {
             // A besieged destination cannot be entered: from caravan_siege_recheck_tiles away the caravan looks for another target (and keeps its goods).
             float recheckTiles = (float)GAME_PARAMETERS.caravan_siege_recheck_tiles;
             if (settlement_is_besieged(world, destination.get_index())
-                && vec2_dist_squared(caravans.locations[caravanIndex], settlements.locations[destination.get_index()]) <= recheckTiles * recheckTiles)
+                && vec2_dist_squared(caravans.location[caravanIndex], settlements.location[destination.get_index()]) <= recheckTiles * recheckTiles)
             {
                 world_caravan_retarget(world, caravan);
                 continue;
             }
-            caravans.movements[caravanIndex].destination = caravan_destination_tile(world, caravans.flags[caravanIndex], destination);
+            caravans.movement[caravanIndex].destination = caravan_destination_tile(world, caravans.flags[caravanIndex], destination);
         }
         else if (destination.get_type() == ENTITY_TYPE::ARMY && world_entity_is_valid(world, destination)
-            && army_is_trade_target(world, destination.get_index(), world_entity_get_owner(world, caravans.origin_settlements[caravanIndex])))
+            && army_is_trade_target(world, destination.get_index(), world_entity_get_owner(world, caravans.origin_settlement[caravanIndex])))
         {
             // Follows the army (also while GO_HOME: it ends when the army is disbanded and destroyed).
             // Within 1 tile it stops: delivery happens there. An army in an engagement is approached only to the engagement's edge (its join radius): the caravan stops there and
             // delivers once the engagement is not fighting. It follows the army again if the army leaves the engagement or the engagement ends.
             const world_entity_armies& armies = world.entities->armies;
-            world_entity_movement& movement = caravans.movements[caravanIndex];
-            world_location caravanLocation = caravans.locations[caravanIndex];
-            world_location armyLocation = armies.locations[destination.get_index()];
-            entity_guid engagement = armies.engagements[destination.get_index()];
+            world_entity_movement& movement = caravans.movement[caravanIndex];
+            world_location caravanLocation = caravans.location[caravanIndex];
+            world_location armyLocation = armies.location[destination.get_index()];
+            entity_guid engagement = armies.engagement[destination.get_index()];
             if (world_location_within_tiles(caravanLocation, armyLocation, 1)
                 || (world_entity_is_valid(world, engagement) && world_location_within_tiles(caravanLocation, world_entity_get_location(world, engagement), engagement_join_radius(world, engagement))))
             {
@@ -208,16 +208,16 @@ void world_system_entity_movement(match_world_state& world)
 		if (!armies.guids[armyIndex].is_valid()) continue;
 		// Stopgap until the army speed rework: an army with any wagon moves at a fraction of the normal speed.
 		ui32 speed = GAME_PARAMETERS.army_travel_speed;
-		if (armies.compositions[armyIndex].wagons > 0) speed /= ia_max((ui32)1, GAME_PARAMETERS.army_wagon_speed_divisor);
-		armies.movements[armyIndex].travel_speed = (ui16)speed;
-		world_entity_follow_path(world, armies.movements[armyIndex], armies.locations[armyIndex], ARMY_WORKER_PATH_PARAMS);
+		if (armies.composition[armyIndex].wagons > 0) speed /= ia_max((ui32)1, GAME_PARAMETERS.army_wagon_speed_divisor);
+		armies.movement[armyIndex].travel_speed = (ui16)speed;
+		world_entity_follow_path(world, armies.movement[armyIndex], armies.location[armyIndex], ARMY_WORKER_PATH_PARAMS);
 	}
 
     world_entity_workers& workers = world.entities->workers;
     for (ui32 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
     {
         if (!workers.guids[workerIndex].is_valid()) continue;
-        world_entity_follow_path(world, workers.movements[workerIndex], workers.locations[workerIndex], ARMY_WORKER_PATH_PARAMS);
+        world_entity_follow_path(world, workers.movement[workerIndex], workers.position[workerIndex], ARMY_WORKER_PATH_PARAMS);
     }
 
     world_entity_caravans& caravans = world.entities->caravans;
@@ -226,7 +226,7 @@ void world_system_entity_movement(match_world_state& world)
         if (!caravans.guids[caravanIndex].is_valid()) continue;
 
         bool partial = false;
-        bool hasPath = world_entity_follow_path(world, caravans.movements[caravanIndex], caravans.locations[caravanIndex], caravan_path_params(caravans.flags[caravanIndex]), &partial);
+        bool hasPath = world_entity_follow_path(world, caravans.movement[caravanIndex], caravans.location[caravanIndex], caravan_path_params(caravans.flags[caravanIndex]), &partial);
 
         // No (or only a partial) path means the destination is unreachable: pick another one.
         // Returning caravans are left alone: they keep asking for a path home.

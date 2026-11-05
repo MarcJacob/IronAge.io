@@ -23,7 +23,7 @@ static void world_tile_set_road(match_world_state& world, world_location locatio
 // Projects call it once everything else they need for the day is there, so a day is only paid when it advances. A free worker (cost 0) always succeeds.
 static bool worker_pay_day(match_world_state& world, ui16 worker_index)
 {
-    ui32 cost = world.entities->workers.daily_costs[worker_index];
+    ui32 cost = world.entities->workers.daily_cost[worker_index];
     if (cost == 0) return true;
 
     // The owner of the worker's origin pays. Every work type has a settlement origin for now. Where the money comes from depending on the origin's type: later.
@@ -47,7 +47,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     world_entity_workers& workers = world.entities->workers;
     build_road_data& data = *(build_road_data*)workers.action_data[worker_index].bytes;
 
-    if (world_is_daily_tick(world) || workers.work_times[worker_index] == 0) data.funded = worker_pay_day(world, worker_index);
+    if (world_is_daily_tick(world) || workers.work_time[worker_index] == 0) data.funded = worker_pay_day(world, worker_index);
     if (!data.funded) return false; // Stalled until a day can be paid.
 
     path_params params = {};
@@ -75,8 +75,8 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     }
 
     // Walk to the tile.
-    world_entity_movement& movement = workers.movements[worker_index];
-    world_location& location = workers.locations[worker_index];
+    world_entity_movement& movement = workers.movement[worker_index];
+    world_location& location = workers.position[worker_index];
     movement.destination = next;
     if (location != next) return false;
 
@@ -87,7 +87,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
         data.ticks_left = (ui16)(ia_max((ui8)1, world_tile_move_cost(*world.terrain, regionIndex, tileIndex, params)) * GAME_PARAMETERS.road_build_ticks_per_cost);
         ui16 tileOwner = world.terrain->regions[regionIndex].owners[tileIndex];
         match_player_id crewOwner = world_entity_get_owner(world, workers.guids[worker_index]);
-        if (tileOwner == world_terrain::UNOWNED_TILE || world.entities->settlements.owners[tileOwner] != crewOwner)
+        if (tileOwner == world_terrain::UNOWNED_TILE || world.entities->settlements.owner[tileOwner] != crewOwner)
             data.ticks_left *= GAME_PARAMETERS.road_build_foreign_multiplier;
     }
 
@@ -107,13 +107,13 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
 {
     world_entity_workers& workers = world.entities->workers;
     found_settlement_data& data = *(found_settlement_data*)workers.action_data[worker_index].bytes;
-    world_entity_movement& movement = workers.movements[worker_index];
-    world_location& location = workers.locations[worker_index];
+    world_entity_movement& movement = workers.movement[worker_index];
+    world_location& location = workers.position[worker_index];
 
     const world_entity_settlements& settlements = world.entities->settlements;
     ui16 originIndex = workers.origin_entity[worker_index].get_index();
 
-    movement.destination = data.returning ? settlements.locations[originIndex] : data.target;
+    movement.destination = data.returning ? settlements.location[originIndex] : data.target;
     if (location != movement.destination)
     {
         return false;
@@ -129,7 +129,7 @@ static bool worker_logic_found_settlement_tick(match_world_state& world, ui16 wo
     }
 
     // At the target. Checked again: the situation may have changed since the worker left (location taken, slots filled, owner changed).
-    match_player_id owner = settlements.owners[originIndex];
+    match_player_id owner = settlements.owner[originIndex];
     if (!world_is_valid_settlement_location(world, data.target, owner) || settlements.active_count >= settlements.max_count)
     {
         data.returning = 1;
@@ -197,7 +197,7 @@ void world_system_worker_construction(match_world_state& world)
 
         if (!finished)
         {
-            switch ((WORK_TYPE)workers.work_types[workerIndex])
+            switch ((WORK_TYPE)workers.work_type[workerIndex])
             {
             case WORK_TYPE::BUILD_ROAD:
                 finished = worker_logic_build_road_tick(world, workerIndex);
@@ -221,6 +221,6 @@ void world_system_worker_construction(match_world_state& world)
         }
 
         // Increment Time spent working on the project, so it is 0 during the first tick.
-        workers.work_times[workerIndex]++;
+        workers.work_time[workerIndex]++;
     }
 }

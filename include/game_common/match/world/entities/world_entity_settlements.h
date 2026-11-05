@@ -127,9 +127,9 @@ struct settlement_raid
 // Property arrays for a world's settlements.
 struct world_entity_settlements : public world_entity_container
 {
-	match_player_id*	owners;
-	world_location*		locations;
-    ui64*                founding_ticks;
+	match_player_id*	owner;
+	world_location*		location;
+    ui64*                founding_tick;
 
     // Base economic factors.
 	ui32* pop_total;
@@ -166,14 +166,14 @@ struct world_entity_settlements : public world_entity_container
 
     ui32*               base_land_surplus; // Assuming peasant population at capacity, the total surplus output from land.
 
-	i8*                 tax_rates; // -100..100, % of the daily production moved to the owner's treasury. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
+	i8*                 tax_rate; // -100..100, % of the daily production moved to the owner's treasury. Negative (future investment) is not applied yet. Reset to 0 on change of owner.
 
     settlement_buildings* buildings;
 
     settlement_trading* trade;
-    settlement_economy* economies;
+    settlement_economy* economy;
 
-    struct territory
+    struct settlement_territory
     {
         world_location bounds_min, bounds_max; // Rectangle bounds of all currently claimed tiles.
         ui16 tile_count; // Total number of claimed tiles.
@@ -181,15 +181,21 @@ struct world_entity_settlements : public world_entity_container
         bool takeover_pending; // Some tiles have takeover_check set.
     };
 
-	territory* territories; // Influence values used to claim / lose land.
+	settlement_territory* territory; // Influence values used to claim / lose land.
 
 	// Desired counts of the local troop pool.
 	army_troop_count*	troop_ceilings;
 
 	// The siege (engagement entity of kind SIEGE) this settlement is under, INVALID if none. Invariant: set exactly while such a engagement has this settlement as its main_target.
-	entity_guid*		sieges;
+	entity_guid*		siege;
 
-	settlement_raid*	raids;
+	// The campaign this settlement is part of, INVALID if none.
+	entity_guid*		campaign;
+
+	// The army the settlement trains to send to its campaign, INVALID if none.
+	entity_guid*		campaign_army;
+
+	settlement_raid*	raid;
 
 	struct view;
 
@@ -232,7 +238,7 @@ struct world_entity_settlements : public world_entity_container
 
         settlement_economy economy;
 
-        territory territory;
+        settlement_territory territory;
         ui32 base_land_surplus;
 
         settlement_buildings buildings;
@@ -244,6 +250,8 @@ struct world_entity_settlements : public world_entity_container
 		army_troop_count troop_ceilings;
 		army_troop_count troop_effective_ceilings;
 		entity_guid siege; // The siege this settlement is under, INVALID if none.
+		entity_guid campaign; // The campaign this settlement is part of, INVALID if none.
+		entity_guid campaign_army; // The army the settlement trains to send to its campaign, INVALID if none.
 		settlement_raid raid;
 
 		void copy_from(const view& source);
@@ -280,9 +288,11 @@ struct world_entity_settlements : public world_entity_container
         settlement_buildings& buildings;
         settlement_trading& trade;
         settlement_economy& economy;
-        territory& territory;
+        settlement_territory& territory;
         army_troop_count& troop_ceilings;
         entity_guid& siege;
+        entity_guid& campaign;
+        entity_guid& campaign_army;
         settlement_raid& raid;
 
         inline ui32 soldiers_home() const { return (ui32)garrison.men_at_arms + garrison.horsemen + garrison.knights; }
@@ -317,14 +327,16 @@ struct world_entity_settlements : public world_entity_container
             territory = source.territory;
             troop_ceilings = source.troop_ceilings;
             siege = source.siege;
+            campaign = source.campaign;
+            campaign_army = source.campaign_army;
             raid = source.raid;
         }
 
         view(world_entity_settlements& collection, ui16 index)
             : guid(collection.guids[index])
-            , owner(collection.owners[index])
-            , location(collection.locations[index])
-            , founding_tick(collection.founding_ticks[index])
+            , owner(collection.owner[index])
+            , location(collection.location[index])
+            , founding_tick(collection.founding_tick[index])
             , pop_total(collection.pop_total[index])
             , pop_unemployed(collection.pop_unemployed[index])
             , pop_peasants(collection.pop_peasants[index])
@@ -338,14 +350,16 @@ struct world_entity_settlements : public world_entity_container
             , pop_change(collection.pop_change[index])
             , pop_growth_per_mille(collection.pop_growth_per_mille[index])
             , base_land_surplus(collection.base_land_surplus[index])
-            , tax_rate(collection.tax_rates[index])
+            , tax_rate(collection.tax_rate[index])
             , buildings(collection.buildings[index])
             , trade(collection.trade[index])
-            , economy(collection.economies[index])
-            , territory(collection.territories[index])
+            , economy(collection.economy[index])
+            , territory(collection.territory[index])
             , troop_ceilings(collection.troop_ceilings[index])
-            , siege(collection.sieges[index])
-            , raid(collection.raids[index])
+            , siege(collection.siege[index])
+            , campaign(collection.campaign[index])
+            , campaign_army(collection.campaign_army[index])
+            , raid(collection.raid[index])
         {
         }
 	};
@@ -378,6 +392,8 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	trade_volume_max = 0;
 	troop_ceilings = source.troop_ceilings;
 	siege = source.siege;
+	campaign = source.campaign;
+	campaign_army = source.campaign_army;
 	raid = source.raid;
 	economy = {};
 	troop_effective_ceilings = {};
@@ -386,9 +402,9 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 inline void world_entity_settlements::single::copy_from(const world_entity_settlements& collection, ui16 index)
 {
 	guid = collection.guids[index];
-	owner = collection.owners[index];
-	location = collection.locations[index];
-	founding_tick = collection.founding_ticks[index];
+	owner = collection.owner[index];
+	location = collection.location[index];
+	founding_tick = collection.founding_tick[index];
 	pop_total = collection.pop_total[index];
 	pop_unemployed = collection.pop_unemployed[index];
 	pop_peasants = collection.pop_peasants[index];
@@ -401,18 +417,20 @@ inline void world_entity_settlements::single::copy_from(const world_entity_settl
 	for (ui8 troopType = 0; troopType < 4; troopType++) troop_training[troopType] = collection.troop_training[index][troopType];
 	pop_change = collection.pop_change[index];
 	pop_growth_per_mille = collection.pop_growth_per_mille[index];
-	tax_rate = collection.tax_rates[index];
-	territory = collection.territories[index];
+	tax_rate = collection.tax_rate[index];
+	territory = collection.territory[index];
 	base_land_surplus = collection.base_land_surplus[index];
 	buildings = collection.buildings[index];
 	trade = collection.trade[index];
-	economy = collection.economies[index];
+	economy = collection.economy[index];
 	market_capacity = 0;
 	trade_volume_max = 0;
 	troop_ceilings = collection.troop_ceilings[index];
-	siege = collection.sieges[index];
-	raid = collection.raids[index];
-	economy = collection.economies[index];
+	siege = collection.siege[index];
+	campaign = collection.campaign[index];
+	campaign_army = collection.campaign_army[index];
+	raid = collection.raid[index];
+	economy = collection.economy[index];
 	troop_effective_ceilings = collection.troop_ceilings[index];
 }
 
@@ -494,6 +512,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_settlement)
 	GAME_DATA_PROPERTY_PATH(training_knights_days, troop_training[3].duration_days, GAME_DATA_PROP_TYPE::UI16)
 
 	GAME_DATA_PROPERTY(siege, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(campaign, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+	GAME_DATA_PROPERTY(campaign_army, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY_PATH(raided, raid.raided, GAME_DATA_PROP_TYPE::UI8)
 
 GAME_DATA_OBJECT_DEF_END()

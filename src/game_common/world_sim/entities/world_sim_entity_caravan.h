@@ -28,7 +28,7 @@ static inline const path_params& caravan_path_params(WORLD_ENTITY_CARAVAN_FLAGS 
 // A ship endpoint without a dock (should not happen: ship origins have a Trade Port, ship destinations are coastal) falls back to the settlement tile.
 static inline world_location caravan_endpoint(const match_world_state& world, WORLD_ENTITY_CARAVAN_FLAGS flags, ui16 settlement_index)
 {
-    world_location tile = world.entities->settlements.locations[settlement_index];
+    world_location tile = world.entities->settlements.location[settlement_index];
     if (caravan_is_ship(flags)) settlement_dock_tile(world, settlement_index, tile);
     return tile;
 }
@@ -39,7 +39,7 @@ static inline world_location caravan_destination_tile(const match_world_state& w
     if (destination.get_type() == ENTITY_TYPE::ARMY)
     {
         ASSERT(!caravan_is_ship(flags));
-        return world.entities->armies.locations[destination.get_index()];
+        return world.entities->armies.location[destination.get_index()];
     }
     return caravan_endpoint(world, flags, destination.get_index());
 }

@@ -41,6 +41,7 @@ constexpr ui64 match_get_required_mem(game_match_start_params& params)
         + microEntityCount * sizeof(world_entity_armies::single) // Armies.
         + microEntityCount * sizeof(world_entity_engagements::single) // Engagements.
         + microEntityCount * sizeof(world_entity_workers::single) // Workers.
+        + microEntityCount * sizeof(world_entity_campaigns::single) // Campaigns.
         + KiB(4); // Margin for the alignment padding of the ~30 allocations.
 }
 

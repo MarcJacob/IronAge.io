@@ -59,17 +59,17 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	if (slot >= armies.max_count || !armies.guids[slot].is_valid()) return false;
 
 	out.guid = armies.guids[slot];
-	out.home = armies.home_settlements[slot];
-	out.owner = armies.owners[slot];
-	out.location = armies.locations[slot];
-	out.troops = ai_troops_sum(armies.compositions[slot]);
+	out.home = armies.home_settlement[slot];
+	out.owner = armies.owner[slot];
+	out.location = armies.location[slot];
+	out.troops = ai_troops_sum(armies.composition[slot]);
 	out.raising = armies.raising[slot];
 	out.troops_target = out.raising ? ia_max(out.troops, ai_troops_sum(armies.raised_troops[slot])) : out.troops;
-	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.compositions[slot]), (ui32)1);
+	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.composition[slot]), (ui32)1);
 	// Available: standing (STATION) or defending, not engaged, and arrived. ATTACK / RAID / GO_HOME are busy.
-	const ui8 orderType = armies.orders[slot].type;
-	out.idle = !out.raising && !armies.engagements[slot].is_valid() && (orderType == ARMY_ORDER_STATION || orderType == ARMY_ORDER_DEFEND_TERRITORY)
-		&& armies.locations[slot] == armies.movements[slot].destination;
+	const ui8 orderType = armies.order[slot].type;
+	out.idle = !out.raising && !armies.engagement[slot].is_valid() && (orderType == ARMY_ORDER_STATION || orderType == ARMY_ORDER_DEFEND_TERRITORY)
+		&& armies.location[slot] == armies.movement[slot].destination;
 	return true;
 }
 
@@ -81,10 +81,10 @@ static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_sie
 	const world_entity_armies& armies = world.entities->armies;
 	if (slot >= engagements.max_count || !engagements.guids[slot].is_valid()) return false;
 
-	if (engagements.kinds[slot] != ENGAGEMENT_KIND::SIEGE || engagements.phases[slot] != ENGAGEMENT_PHASE::SIEGE_IDLE) return false;
+	if (engagements.kind[slot] != ENGAGEMENT_KIND::SIEGE || engagements.phase[slot] != ENGAGEMENT_PHASE::SIEGE_IDLE) return false;
 
 	out.guid = engagements.guids[slot];
-	out.attacker_commander = engagements.attacker_commanders[slot];
+	out.attacker_commander = engagements.attacker_commander[slot];
 	out.attacker_men = 0;
 	out.defender_men = 0;
 	out.min_supply_days = 0xFFFFFFFF;
@@ -92,8 +92,8 @@ static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_sie
 	out.defender_men = (ui32)army_total_manpower(engagements.defender_troops[slot]);
 	for (ui16 army = 0; army < armies.max_count; army++)
 	{
-		if (!armies.guids[army].is_valid() || armies.engagements[army]._value != out.guid._value || armies.engagement_sides[army] != ENGAGEMENT_SIDE::ATTACKER) continue;
-		out.min_supply_days = ia_min(out.min_supply_days, armies.supplies[army] / ia_max(army_daily_consumption(armies.compositions[army]), (ui32)1));
+		if (!armies.guids[army].is_valid() || armies.engagement[army]._value != out.guid._value || armies.engagement_side[army] != ENGAGEMENT_SIDE::ATTACKER) continue;
+		out.min_supply_days = ia_min(out.min_supply_days, armies.supplies[army] / ia_max(army_daily_consumption(armies.composition[army]), (ui32)1));
 	}
 	return true;
 }
@@ -105,7 +105,7 @@ static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, ma
 	ui16 count = 0;
 	for (ui16 slot = 0; slot < workers.max_count; slot++)
 	{
-		if (!workers.guids[slot].is_valid() || workers.work_types[slot] != type) continue;
+		if (!workers.guids[slot].is_valid() || workers.work_type[slot] != type) continue;
 
 		entity_guid origin = workers.origin_entity[slot];
 		if (!world_entity_is_valid(world, origin)) continue;

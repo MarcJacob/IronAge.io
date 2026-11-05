@@ -58,14 +58,14 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// SETTLEMENTS
 		for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 		{
-			vec2<float> settlementLoc = settlements.locations[settlementIndex];
+			vec2<float> settlementLoc = settlements.location[settlementIndex];
 			// Settlements are visible if any of their territory is (the frontend resolves tile owners through them).
 			if (!settlements.guids[settlementIndex].is_valid()
-				|| !bounds_touch_viewport(settlements.territories[settlementIndex].bounds_min, settlements.territories[settlementIndex].bounds_max, render_state.viewport)) continue;
+				|| !bounds_touch_viewport(settlements.territory[settlementIndex].bounds_min, settlements.territory[settlementIndex].bounds_max, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::SETTLEMENT;
-			outEntity.owner = settlements.owners[settlementIndex];
+			outEntity.owner = settlements.owner[settlementIndex];
 			outEntity.guid = settlements.guids[settlementIndex];
 			outEntity.viewport_location = settlementLoc - render_state.viewport.bottom_left;
 			outEntity.flags = 0;
@@ -77,15 +77,15 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// ARMIES
 		for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 		{
-			vec2<float> armyLoc = armies.locations[armyIndex];
+			vec2<float> armyLoc = armies.location[armyIndex];
 			if (!armies.guids[armyIndex].is_valid() || !is_visible_in_viewport(armyLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
 			outEntity.entity_type = ENTITY_TYPE::ARMY;
-			outEntity.owner = armies.owners[armyIndex];
+			outEntity.owner = armies.owner[armyIndex];
 			outEntity.guid = armies.guids[armyIndex];
 			outEntity.viewport_location = armyLoc - render_state.viewport.bottom_left;
-			outEntity.fractional_offset = armies.movements[armyIndex].fractional_loc;
+			outEntity.fractional_offset = armies.movement[armyIndex].fractional_loc;
 			outEntity.flags = 0;
 
 			visibleCount++;
@@ -96,9 +96,9 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		{
             // Active workers who are outside their origin entity.
 			if (!workers.guids[workerIndex].is_valid()
-                    || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.locations[workerIndex]) continue;
+                    || world_entity_get_location(world, workers.origin_entity[workerIndex]) == workers.position[workerIndex]) continue;
 
-			vec2<float> workerLoc = workers.locations[workerIndex];
+			vec2<float> workerLoc = workers.position[workerIndex];
 			if (!is_visible_in_viewport(workerLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -106,7 +106,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = world_entity_get_owner(world, workers.guids[workerIndex]);
 			outEntity.guid = workers.guids[workerIndex];
 			outEntity.viewport_location = workerLoc - render_state.viewport.bottom_left;
-			outEntity.fractional_offset = workers.movements[workerIndex].fractional_loc;
+			outEntity.fractional_offset = workers.movement[workerIndex].fractional_loc;
 			outEntity.flags = 0;
 
 			visibleCount++;
@@ -115,7 +115,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// ENGAGEMENTS
 		for (ui16 engagementIndex = 0; engagementIndex < engagements.max_count; engagementIndex++)
 		{
-			vec2<float> engagementLoc = engagements.locations[engagementIndex];
+			vec2<float> engagementLoc = engagements.location[engagementIndex];
 			if (!engagements.guids[engagementIndex].is_valid() || !is_visible_in_viewport(engagementLoc, render_state.viewport)) continue;
 
 			render_entity& outEntity = entityStates[visibleCount];
@@ -124,7 +124,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.guid = engagements.guids[engagementIndex];
 			outEntity.viewport_location = engagementLoc - render_state.viewport.bottom_left;
 			// Bit 0: siege. Bit 1: idle (SIEGE_IDLE phase). Mirrored by ENGAGEMENT_FLAG_* in backend.ts.
-			outEntity.flags = (engagements.kinds[engagementIndex] == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (!engagements.fighting_actives[engagementIndex] ? 2 : 0);
+			outEntity.flags = (engagements.kind[engagementIndex] == ENGAGEMENT_KIND::SIEGE ? 1 : 0) | (!engagements.fighting_active[engagementIndex] ? 2 : 0);
 			outEntity.fractional_offset = {};
 
 			visibleCount++;
@@ -133,7 +133,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		// CARAVANS
 		for (ui16 caravanIndex = 0; caravanIndex < caravans.max_count; caravanIndex++)
 		{
-			vec2<float> caravanLoc = caravans.locations[caravanIndex];
+			vec2<float> caravanLoc = caravans.location[caravanIndex];
 			if (!caravans.guids[caravanIndex].is_valid() || !is_visible_in_viewport(caravanLoc, render_state.viewport)) continue;
 
 			// Caravans have no owner of their own: they are tinted as their origin settlement, if it still exists.
@@ -142,7 +142,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.owner = world_entity_get_owner(world, caravans.guids[caravanIndex]);
 			outEntity.guid = caravans.guids[caravanIndex];
 			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
-			outEntity.fractional_offset = caravans.movements[caravanIndex].fractional_loc;
+			outEntity.fractional_offset = caravans.movement[caravanIndex].fractional_loc;
 			outEntity.flags = (ui8)caravans.flags[caravanIndex];
 
 			visibleCount++;

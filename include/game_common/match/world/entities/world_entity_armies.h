@@ -18,6 +18,7 @@ enum ARMY_ORDER_TYPE : ui8
 	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: stand on it (no patrolling for now), attack intruders in its territory, retreat to the settlement from stronger forces.
 	ARMY_ORDER_RAID, // Target = a hostile or neutral settlement: go to its territory, stay there, flee stronger forces.
 	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
+	ARMY_ORDER_JOIN_CAMPAIGN, // Target = a campaign: walk to it. Once within its join radius (world_system_campaigns) the campaign takes the army over: it becomes a member and its order becomes STATION where it stands.
 	ARMY_ORDER_TYPE_COUNT,
 };
 
@@ -38,7 +39,7 @@ struct army_order
 	ARMY_ORDER_STATE state; // Sub-state of the type, zero when the order is given.
 
 	ui16 radius; // Tiles, for orders working on an area. Unused for now.
-	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY / RAID: the settlement.
+	entity_guid target; // ATTACK: the entity to attack. DEFEND_TERRITORY / RAID: the settlement. JOIN_CAMPAIGN: the campaign.
 	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: unused.
 	entity_guid engaged; // STATION / DEFEND_TERRITORY: the hostile entity the army is currently chasing, if any.
 
@@ -49,21 +50,23 @@ static_assert(sizeof(army_order) == 20, "army_order size changed.");
 // Property arrays for a world's armies.
 struct world_entity_armies : public world_entity_container
 {
-	match_player_id* owners;
-	world_location*	locations;
+	match_player_id* owner;
+	world_location*	location;
 
-	world_entity_movement* movements;
+	world_entity_movement* movement;
 
-    army_troop_count *compositions;
+    army_troop_count *composition;
 
-	entity_guid* engagements; // Engagement this army is fighting in, if any.
-	ENGAGEMENT_SIDE* engagement_sides; // Side of the engagement the army is on.
+	entity_guid* engagement; // Engagement this army is fighting in, if any.
+	ENGAGEMENT_SIDE* engagement_side; // Side of the engagement the army is on.
+
+	entity_guid* campaign; // Campaign this army is a member of, if any. Set by the campaign when it takes over an army with a JOIN_CAMPAIGN order.
 
 	army_troop_count* raised_troops; // Raise target when raising, "Original" / "Max" counts after that.
 	ui8* raising; // 1 while the army is raising.
 
-	entity_guid* home_settlements; // Settlement this army was raised from.
-	army_order* orders; // Standing order (see ARMY_ORDER_TYPE).
+	entity_guid* home_settlement; // Settlement this army was raised from.
+	army_order* order; // Standing order (see ARMY_ORDER_TYPE).
 
 	ui32* gold; // Gold the army carries (pay from the owner's treasury, raid loot). Buys supplies at the settlement it stands in. Goes to the owner's treasury when the army disbands.
 	ui32* supplies; // Goods the army carries (1 per good). Consumed daily by its soldiers, bought with gold from the settlement it stands in. See world_system_armies_upkeep.
@@ -86,6 +89,7 @@ struct world_entity_armies : public world_entity_container
 		army_order order;
 		entity_guid engagement;
         ENGAGEMENT_SIDE engagement_side;
+		entity_guid campaign;
 
 		ui32 gold;
 		ui32 supplies;
@@ -110,6 +114,7 @@ struct world_entity_armies : public world_entity_container
 		army_order& order;
 		entity_guid& engagement;
 		ENGAGEMENT_SIDE& engagement_side;
+		entity_guid& campaign;
 		ui32& gold;
 		ui32& supplies;
 		ui16& desertions;
@@ -126,22 +131,24 @@ struct world_entity_armies : public world_entity_container
 			order = source.order;
 			engagement = source.engagement;
 			engagement_side = source.engagement_side;
+			campaign = source.campaign;
 			gold = source.gold;
 			supplies = source.supplies;
 			desertions = source.desertions;
 		}
 
 		view(world_entity_armies& collection, ui16 index)
-			: owner(collection.owners[index])
-			, location(collection.locations[index])
-			, movement(collection.movements[index])
-			, composition(collection.compositions[index])
+			: owner(collection.owner[index])
+			, location(collection.location[index])
+			, movement(collection.movement[index])
+			, composition(collection.composition[index])
 			, raised_troops(collection.raised_troops[index])
 			, raising(collection.raising[index])
-			, home_settlement(collection.home_settlements[index])
-			, order(collection.orders[index])
-			, engagement(collection.engagements[index])
-			, engagement_side(collection.engagement_sides[index])
+			, home_settlement(collection.home_settlement[index])
+			, order(collection.order[index])
+			, engagement(collection.engagement[index])
+			, engagement_side(collection.engagement_side[index])
+			, campaign(collection.campaign[index])
 			, gold(collection.gold[index])
 			, supplies(collection.supplies[index])
 			, desertions(collection.desertions[index])
@@ -161,6 +168,7 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies::vi
 	order = source.order;
 	engagement = source.engagement;
 	engagement_side = source.engagement_side;
+	campaign = source.campaign;
 	gold = source.gold;
 	supplies = source.supplies;
 	supplies_consumption = 0;
@@ -170,16 +178,17 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies::vi
 
 inline void world_entity_armies::single::copy_from(const world_entity_armies& collection, ui16 index)
 {
-	owner = collection.owners[index];
-	location = collection.locations[index];
-	movement = collection.movements[index];
-	composition = collection.compositions[index];
+	owner = collection.owner[index];
+	location = collection.location[index];
+	movement = collection.movement[index];
+	composition = collection.composition[index];
 	raised_troops = collection.raised_troops[index];
 	raising = collection.raising[index];
-	home_settlement = collection.home_settlements[index];
-	order = collection.orders[index];
-	engagement = collection.engagements[index];
-	engagement_side = collection.engagement_sides[index];
+	home_settlement = collection.home_settlement[index];
+	order = collection.order[index];
+	engagement = collection.engagement[index];
+	engagement_side = collection.engagement_side[index];
+	campaign = collection.campaign[index];
 	gold = collection.gold[index];
 	supplies = collection.supplies[index];
 	supplies_consumption = 0;
@@ -220,6 +229,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 
 	GAME_DATA_PROPERTY(engagement,                                                  GAME_DATA_PROP_TYPE::ENTITY_GUID)
     GAME_DATA_PROPERTY(engagement_side,                                             GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(campaign,                                                    GAME_DATA_PROP_TYPE::ENTITY_GUID)
 
 	GAME_DATA_PROPERTY(gold,                                                    GAME_DATA_PROP_TYPE::UI32)
 	GAME_DATA_PROPERTY(supplies,                                                GAME_DATA_PROP_TYPE::UI32)

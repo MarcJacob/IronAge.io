@@ -155,16 +155,10 @@ export const COMMAND_ERROR = {
     NOT_OWNER: 1 << 2,
     TARGET_OUT_OF_BOUNDS: 1 << 3,
     INVALID_PATH: 1 << 4,
-    TARGET_OUT_OF_TERRITORY: 1 << 5,
-    NOT_ENOUGH_POPULATION: 1 << 6,
-    ENTITY_LIMIT_REACHED: 1 << 7,
-    ARMY_RAISING: 1 << 8,
-    NO_RAISE_TARGET: 1 << 9,
-    VALUE_OUT_OF_RANGE: 1 << 10,
-    NOT_IN_HOME_TERRITORY: 1 << 11,
-    NOT_ENOUGH_TREASURY: 1 << 12,
-    WRONG_PHASE: 1 << 13,
-    NOT_COMMANDER: 1 << 14,
+    NOT_ENOUGH_RESOURCES: 1 << 5,
+    ENTITY_LIMIT_REACHED: 1 << 6,
+    ENTITY_UNAVAILABLE: 1 << 7,
+    VALUE_OUT_OF_RANGE: 1 << 8,
 } as const;
 
 // Values of the feedback's invalid_path_reason. Mirrors COMMAND_INVALID_PATH_REASON (commands.h) by hand.

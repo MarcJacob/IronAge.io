@@ -32,7 +32,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
     ui32 investable = (ui32)ia_min((ui64)settlementTrade.export_goods * exportPercent / 100, (ui64)0xFFFF); // A caravan holds a ui16 value.
     if (investable < CARAVAN_MIN_SIZE_FLOOR) return;
 
-    world_location originLocation = settlements.locations[settlement_index]; // Selection distances are between settlement tiles, for ships too.
+    world_location originLocation = settlements.location[settlement_index]; // Selection distances are between settlement tiles, for ships too.
 
     world_entity_caravan caravan = {}; // Land caravan (flags 0) unless a ship.
     if (ship) caravan.flags = WORLD_ENTITY_CARAVAN_FLAGS::IS_SHIP;

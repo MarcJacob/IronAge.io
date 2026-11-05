@@ -125,7 +125,7 @@ static void world_influence_flag_takeover(const match_world_state& world, ui16 r
     if (owner == world_terrain::UNOWNED_TILE) return;
 
     world.terrain->regions[region_index].status[tile_index].takeover_check = true;
-    world.entities->settlements.territories[owner].takeover_pending = true;
+    world.entities->settlements.territory[owner].takeover_pending = true;
 }
 
 // Flags a tile and its neighbours for a takeover check.
@@ -159,7 +159,7 @@ static void world_influence_unclaim_tile(const match_world_state& world, ui16 re
     landOutput -= tileOutput;
 
     // Decrease land size.
-    auto& landSize = world.entities->settlements.territories[settlement_index].tile_count;
+    auto& landSize = world.entities->settlements.territory[settlement_index].tile_count;
     ASSERT(landSize > 0);
     landSize--;
 
@@ -177,7 +177,7 @@ static void world_influence_unclaim_tile(const match_world_state& world, ui16 re
     }
 
     // Tiles that depended on this one for their shortest path need a full rebuild of the settlement's distances.
-    world.entities->settlements.territories[settlement_index].distances_stale = true;
+    world.entities->settlements.territory[settlement_index].distances_stale = true;
 
     // Increase all non-diagonal neighbour tile border count owned by the same settlement.
     world_location tileWorldLocation = world_get_tile_location(*world.terrain, region_index, tile_index);
@@ -228,7 +228,7 @@ ui16 world_influence_claim_tile(const match_world_state& world, ui16 region_inde
     landOutput += tileOutput;
 
     // Increase land size.
-    auto& landSize = world.entities->settlements.territories[settlement_index].tile_count;
+    auto& landSize = world.entities->settlements.territory[settlement_index].tile_count;
     landSize += 1;
 
     // Increase peasant capacity.
@@ -277,8 +277,8 @@ static void world_influence_distances_rebuild(match_world_state& world, ui16 set
 {
     world_terrain& terrain = *world.terrain;
     world_entity_settlements& settlements = world.entities->settlements;
-    const world_location boundsMin = settlements.territories[settlement_index].bounds_min;
-    const world_location boundsMax = settlements.territories[settlement_index].bounds_max;
+    const world_location boundsMin = settlements.territory[settlement_index].bounds_min;
+    const world_location boundsMax = settlements.territory[settlement_index].bounds_max;
     auto& landOutput = settlements.base_land_surplus[settlement_index];
 
     // Take the output of every tile out of the total and forget its distance, except the settlement's own tile.
@@ -289,7 +289,7 @@ static void world_influence_distances_rebuild(match_world_state& world, ui16 set
             ui16 regionIndex, tileIndex;
             world_get_tile(terrain, {x, y}, regionIndex, tileIndex);
             if (terrain.regions[regionIndex].owners[tileIndex] != settlement_index) continue;
-            if (world_location{x, y} == settlements.locations[settlement_index]) continue;
+            if (world_location{x, y} == settlements.location[settlement_index]) continue;
 
             ui32 tileOutput = world_get_tile_land_production_surplus(world, regionIndex, tileIndex, terrain.regions[regionIndex].distances[tileIndex]);
             ASSERT(landOutput >= tileOutput);
@@ -314,7 +314,7 @@ static void world_influence_distances_rebuild(match_world_state& world, ui16 set
                 ui16 regionIndex, tileIndex;
                 world_get_tile(terrain, location, regionIndex, tileIndex);
                 if (terrain.regions[regionIndex].owners[tileIndex] != settlement_index) continue;
-                if (location == settlements.locations[settlement_index]) continue;
+                if (location == settlements.location[settlement_index]) continue;
 
                 ui16 newDistance = world_influence_candidate_distance(world, regionIndex, tileIndex, settlement_index);
                 if (newDistance < terrain.regions[regionIndex].distances[tileIndex])
@@ -334,7 +334,7 @@ static void world_influence_distances_rebuild(match_world_state& world, ui16 set
             ui16 regionIndex, tileIndex;
             world_get_tile(terrain, {x, y}, regionIndex, tileIndex);
             if (terrain.regions[regionIndex].owners[tileIndex] != settlement_index) continue;
-            if (world_location{x, y} == settlements.locations[settlement_index]) continue;
+            if (world_location{x, y} == settlements.location[settlement_index]) continue;
 
             ui16 distance = terrain.regions[regionIndex].distances[tileIndex];
             // Output is given back before unclaiming, which takes it out again.
@@ -349,7 +349,7 @@ static void world_influence_distances_rebuild(match_world_state& world, ui16 set
         }
     }
 
-    settlements.territories[settlement_index].distances_stale = false; // Unclaiming above flagged it again.
+    settlements.territory[settlement_index].distances_stale = false; // Unclaiming above flagged it again.
 }
 
 void world_system_settlement_territory_distance_recalc(match_world_state& world)
@@ -362,10 +362,10 @@ void world_system_settlement_territory_distance_recalc(match_world_state& world)
     for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid()) continue;
-        if (settlements.territories[settlementIndex].distances_stale) world_influence_distances_rebuild(world, settlementIndex);
+        if (settlements.territory[settlementIndex].distances_stale) world_influence_distances_rebuild(world, settlementIndex);
 
-        const world_location boundsMin = settlements.territories[settlementIndex].bounds_min;
-        const world_location boundsMax = settlements.territories[settlementIndex].bounds_max;
+        const world_location boundsMin = settlements.territory[settlementIndex].bounds_min;
+        const world_location boundsMax = settlements.territory[settlementIndex].bounds_max;
         for (world_location::val_type x = boundsMin.x; x <= boundsMax.x; x++)
         {
             for (world_location::val_type y = boundsMin.y; y <= boundsMax.y; y++)
@@ -379,7 +379,7 @@ void world_system_settlement_territory_distance_recalc(match_world_state& world)
                 tileStatus.distance_recalc = false;
 
                 world_location tileLocation = {x, y};
-                if (tileLocation == settlements.locations[settlementIndex])
+                if (tileLocation == settlements.location[settlementIndex])
                 {
                     world_influence_update_tile_distance(world, regionIndex, tileIndex, settlementIndex, 0);
                     continue;
@@ -485,7 +485,7 @@ void world_system_settlement_territory(match_world_state& world)
         ui32& peasants = world.entities->settlements.pop_peasants[settlementIndex];
         ui32& unemployed = world.entities->settlements.pop_unemployed[settlementIndex];
         ui32 peasantsCap = world.entities->settlements.pop_peasants_cap[settlementIndex];
-        bool raided = world.entities->settlements.raids[settlementIndex].raided != 0; // Raided: nobody takes up a plot.
+        bool raided = world.entities->settlements.raid[settlementIndex].raided != 0; // Raided: nobody takes up a plot.
         if (!raided && peasants < peasantsCap && unemployed > 0)
         {
             ui32 employCount = ia_min(unemployed, peasantsCap - peasants);
@@ -503,8 +503,8 @@ void world_system_settlement_territory(match_world_state& world)
 
         world_entity_settlement_view settlementView { world.entities->settlements, settlementIndex };
 
-        world_location newBoundsMin = world.entities->settlements.locations[settlementIndex];
-        world_location newBoundsMax = world.entities->settlements.locations[settlementIndex];
+        world_location newBoundsMin = world.entities->settlements.location[settlementIndex];
+        world_location newBoundsMax = world.entities->settlements.location[settlementIndex];
 
         i32 pressure = settlementView.raid.raided ? 0 : settlementView.pop_unemployed; // Raided settlements do not expand. // Unemployed population seeks to go find themselves a plot of land to farm on, marry and adopt a dog + 2 kitten.
 
@@ -516,11 +516,11 @@ void world_system_settlement_territory(match_world_state& world)
         influence_candidate candidates[INFLUENCE_CANDIDATE_COUNT];
         ui32 candidateCount = 0;
 
-        for (world_location::val_type x = world.entities->settlements.territories[settlementIndex].bounds_min.x;
-                x <= world.entities->settlements.territories[settlementIndex].bounds_max.x; x++)
+        for (world_location::val_type x = world.entities->settlements.territory[settlementIndex].bounds_min.x;
+                x <= world.entities->settlements.territory[settlementIndex].bounds_max.x; x++)
         {
-            for (world_location::val_type y = world.entities->settlements.territories[settlementIndex].bounds_min.y;
-                    y <= world.entities->settlements.territories[settlementIndex].bounds_max.y; y++)
+            for (world_location::val_type y = world.entities->settlements.territory[settlementIndex].bounds_min.y;
+                    y <= world.entities->settlements.territory[settlementIndex].bounds_max.y; y++)
             {
                 ui16 regionIndex, tileIndex;
                 world_get_tile(*world.terrain, {x, y}, regionIndex, tileIndex);
@@ -543,8 +543,8 @@ void world_system_settlement_territory(match_world_state& world)
                     settlementIndex, pressure, newBoundsMin, newBoundsMax);
         }
 
-        world.entities->settlements.territories[settlementIndex].bounds_min = newBoundsMin;
-        world.entities->settlements.territories[settlementIndex].bounds_max = newBoundsMax;
+        world.entities->settlements.territory[settlementIndex].bounds_min = newBoundsMin;
+        world.entities->settlements.territory[settlementIndex].bounds_max = newBoundsMax;
     }
 
 }
@@ -562,8 +562,8 @@ static bool world_influence_takeover_scan(const match_world_state& world, ui16 s
 {
     const world_terrain& terrain = *world.terrain;
     const world_entity_settlements& settlements = world.entities->settlements;
-    const world_location boundsMin = settlements.territories[settlement_index].bounds_min;
-    const world_location boundsMax = settlements.territories[settlement_index].bounds_max;
+    const world_location boundsMin = settlements.territory[settlement_index].bounds_min;
+    const world_location boundsMax = settlements.territory[settlement_index].bounds_max;
 
     for (world_location::val_type x = boundsMin.x; x <= boundsMax.x; x++)
     {
@@ -576,7 +576,7 @@ static bool world_influence_takeover_scan(const match_world_state& world, ui16 s
             if (decision_count == TERRITORY_TAKEOVER_DECISIONS_MAX) return false;
 
             terrain.regions[regionIndex].status[tileIndex].takeover_check = false;
-            if (world_location{x, y} == settlements.locations[settlement_index]) continue;
+            if (world_location{x, y} == settlements.location[settlement_index]) continue;
 
             // Best taker among the owners of the neighbours: shortest distance, then lowest slot.
             ui16 bestTaker = world_terrain::UNOWNED_TILE;
@@ -588,7 +588,7 @@ static bool world_influence_takeover_scan(const match_world_state& world, ui16 s
 
                 ui16 neighbourOwner = terrain.regions[neighbourRegionIndex].owners[neighbourTileIndex];
                 if (neighbourOwner == world_terrain::UNOWNED_TILE || neighbourOwner == settlement_index) continue;
-                if (settlements.pop_unemployed[neighbourOwner] == 0 || settlements.raids[neighbourOwner].raided) continue; // Only settlements with unemployed left (and not raided) can take land.
+                if (settlements.pop_unemployed[neighbourOwner] == 0 || settlements.raid[neighbourOwner].raided) continue; // Only settlements with unemployed left (and not raided) can take land.
 
                 ui16 distance = world_influence_candidate_distance(world, regionIndex, tileIndex, neighbourOwner);
                 if (distance < bestDistance || (distance == bestDistance && distance != TERRITORY_NO_DISTANCE && neighbourOwner < bestTaker))
@@ -621,13 +621,13 @@ void world_system_settlement_territory_takeover(match_world_state& world)
     for (ui16 step = 0; step < settlements.max_count && processedCount < TERRITORY_TAKEOVER_SETTLEMENTS_PER_TICK; step++)
     {
         ui16 settlementIndex = (ui16)((world.age + step) % settlements.max_count);
-        if (!settlements.guids[settlementIndex].is_valid() || !settlements.territories[settlementIndex].takeover_pending) continue;
+        if (!settlements.guids[settlementIndex].is_valid() || !settlements.territory[settlementIndex].takeover_pending) continue;
 
         processedCount++;
-        settlements.territories[settlementIndex].takeover_pending = false;
+        settlements.territory[settlementIndex].takeover_pending = false;
         if (!world_influence_takeover_scan(world, settlementIndex, decisions, decisionCount))
         {
-            settlements.territories[settlementIndex].takeover_pending = true; // Not done.
+            settlements.territory[settlementIndex].takeover_pending = true; // Not done.
             break;
         }
     }
@@ -639,7 +639,7 @@ void world_system_settlement_territory_takeover(match_world_state& world)
         if (world_influence_candidate_distance(world, decision.region_index, decision.tile_index, decision.taker) > TERRITORY_MAX_DISTANCE) continue;
 
         world_influence_claim_tile(world, decision.region_index, decision.tile_index, decision.taker);
-        world_bounds_include(settlements.territories[decision.taker].bounds_min, settlements.territories[decision.taker].bounds_max,
+        world_bounds_include(settlements.territory[decision.taker].bounds_min, settlements.territory[decision.taker].bounds_max,
                 world_get_tile_location(*world.terrain, decision.region_index, decision.tile_index));
     }
 }

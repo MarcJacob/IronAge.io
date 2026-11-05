@@ -97,16 +97,16 @@ static void fill_render_entities_significance(const client_render_state& renderS
         case ENTITY_TYPE::SETTLEMENT: entity.significance = settlements.pop_total[index]; break;
         case ENTITY_TYPE::ARMY:
         {
-            const army_troop_count& troops = armies.compositions[index];
+            const army_troop_count& troops = armies.composition[index];
             entity.significance = (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights + troops.wagons;
             break;
         }
-        case ENTITY_TYPE::CARAVAN: entity.significance = caravans.values[index] / 100; break;
+        case ENTITY_TYPE::CARAVAN: entity.significance = caravans.value[index] / 100; break;
         case ENTITY_TYPE::ENGAGEMENT:
         {
             // A siege is as significant as its settlement (the TS sizes it with the settlement formula).
             const world_entity_engagements& engagements = world.entities->engagements;
-            if (engagements.kinds[index] == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagements.main_targets[index])) entity.significance = settlements.pop_total[engagements.main_targets[index].get_index()];
+            if (engagements.kind[index] == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagements.main_target[index])) entity.significance = settlements.pop_total[engagements.main_target[index].get_index()];
             break;
         }
         case ENTITY_TYPE::WORKER: entity.significance = WORKER_SIGNIFICANCE; break;

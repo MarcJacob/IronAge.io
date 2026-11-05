@@ -259,11 +259,11 @@ static match_player_id match_find_dominant_player(const match_world_state& world
 		ui64 population = settlements.pop_total[settlementIndex];
 		totalPopulation += population;
 
-		if (settlements.owners[settlementIndex] == candidate) votes += population;
+		if (settlements.owner[settlementIndex] == candidate) votes += population;
 		else if (votes >= population) votes -= population;
 		else
 		{
-			candidate = settlements.owners[settlementIndex];
+			candidate = settlements.owner[settlementIndex];
 			votes = population - votes;
 		}
 	}
@@ -273,7 +273,7 @@ static match_player_id match_find_dominant_player(const match_world_state& world
 	ui64 candidatePopulation = 0;
 	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 	{
-		if (settlements.guids[settlementIndex].is_valid() && settlements.owners[settlementIndex] == candidate) candidatePopulation += settlements.pop_total[settlementIndex];
+		if (settlements.guids[settlementIndex].is_valid() && settlements.owner[settlementIndex] == candidate) candidatePopulation += settlements.pop_total[settlementIndex];
 	}
 
 	return (candidatePopulation * 100 >= totalPopulation * MATCH_END_POPULATION_PERCENT) ? candidate : INVALID_MATCH_PLAYER_ID;

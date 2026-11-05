@@ -28,8 +28,8 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 
 	// Every worker starts at its origin. Moving work types take it from there (start_state.position / movement are not read).
 	world_location start = world_entity_get_location(world, start_state.origin_entity);
-	workers.locations[freeIndex] = start;
-	world_entity_movement& movement = workers.movements[freeIndex];
+	workers.position[freeIndex] = start;
+	world_entity_movement& movement = workers.movement[freeIndex];
 	movement = {};
 	movement.travel_speed = (ui16)GAME_PARAMETERS.worker_travel_speed;
 	movement.destination = start;
@@ -76,26 +76,26 @@ bool world_alloc_workers(match_world_state& world, mem_arena& memory, ui32 count
 	workers.origin_entity = memory.alloc<entity_guid>(count);
 	if (workers.origin_entity == nullptr) return false;
 
-	workers.work_types = memory.alloc<WORK_TYPE>(count);
-	if (workers.work_types == nullptr) return false;
+	workers.work_type = memory.alloc<WORK_TYPE>(count);
+	if (workers.work_type == nullptr) return false;
 
-	workers.work_times = memory.alloc<ui32>(count);
-	if (workers.work_times == nullptr) return false;
+	workers.work_time = memory.alloc<ui32>(count);
+	if (workers.work_time == nullptr) return false;
 
-    workers.work_progress_ratios = memory.alloc<ui8>(count);
-    if (workers.work_progress_ratios == nullptr) return false;
+    workers.work_progress_ratio = memory.alloc<ui8>(count);
+    if (workers.work_progress_ratio == nullptr) return false;
 
-	workers.daily_costs = memory.alloc<ui32>(count);
-	if (workers.daily_costs == nullptr) return false;
+	workers.daily_cost = memory.alloc<ui32>(count);
+	if (workers.daily_cost == nullptr) return false;
 
 	workers.action_data = memory.alloc<world_worker_action_data>(count);
 	if (workers.action_data == nullptr) return false;
 
-	workers.locations = memory.alloc<world_location>(count);
-	if (workers.locations == nullptr) return false;
+	workers.position = memory.alloc<world_location>(count);
+	if (workers.position == nullptr) return false;
 
-	workers.movements = memory.alloc<world_entity_movement>(count);
-	if (workers.movements == nullptr) return false;
+	workers.movement = memory.alloc<world_entity_movement>(count);
+	if (workers.movement == nullptr) return false;
 
 	return true;
 }

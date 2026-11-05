@@ -58,16 +58,16 @@ static_assert(sizeof(build_settlement_building_data) <= WORLD_WORKER_ACTION_DATA
 struct world_entity_workers : public world_entity_container
 {
 	entity_guid* origin_entity; // Entity the project is tied to, whose type is dictated by the work type. Locates the worker.
-	WORK_TYPE* work_types; // What is being built.
-	ui32* work_times; // Ticks since the project started. How the work type uses it is up to it.
+	WORK_TYPE* work_type; // What is being built.
+	ui32* work_time; // Ticks since the project started. How the work type uses it is up to it.
 
-    ui8* work_progress_ratios; // Progress indicator in range [0, 255] freely settable by worker logic.
+    ui8* work_progress_ratio; // Progress indicator in range [0, 255] freely settable by worker logic.
 
-	ui32* daily_costs; // Paid from the origin owner's treasury (spent) for every day the project advances. 0 = free.
+	ui32* daily_cost; // Paid from the origin owner's treasury (spent) for every day the project advances. 0 = free.
 
 	world_worker_action_data* action_data;
-	world_location* locations; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
-	world_entity_movement* movements; // Movement state, used by work types that travel (like armies').
+	world_location* position; // Where the worker is on the map. Starts at the origin entity's location; only moving work types change it.
+	world_entity_movement* movement; // Movement state, used by work types that travel (like armies').
 
 	struct view;
 
@@ -118,13 +118,13 @@ struct world_entity_workers : public world_entity_container
 
 		view(world_entity_workers& collection, ui16 index)
 			: origin_entity(collection.origin_entity[index])
-			, work_type(collection.work_types[index])
-			, work_time(collection.work_times[index])
-			, work_progress_ratio(collection.work_progress_ratios[index])
-			, daily_cost(collection.daily_costs[index])
+			, work_type(collection.work_type[index])
+			, work_time(collection.work_time[index])
+			, work_progress_ratio(collection.work_progress_ratio[index])
+			, daily_cost(collection.daily_cost[index])
 			, action_data(collection.action_data[index])
-			, position(collection.locations[index])
-			, movement(collection.movements[index])
+			, position(collection.position[index])
+			, movement(collection.movement[index])
 		{}
 	};
 };
@@ -145,13 +145,13 @@ inline void world_entity_workers::single::copy_from(const world_entity_workers::
 inline void world_entity_workers::single::copy_from(const world_entity_workers& collection, ui16 index)
 {
 	origin_entity = collection.origin_entity[index];
-	work_type = collection.work_types[index];
-	work_time = collection.work_times[index];
-	work_progress_ratio = collection.work_progress_ratios[index];
-	daily_cost = collection.daily_costs[index];
+	work_type = collection.work_type[index];
+	work_time = collection.work_time[index];
+	work_progress_ratio = collection.work_progress_ratio[index];
+	daily_cost = collection.daily_cost[index];
 	action_data = collection.action_data[index];
-	position = collection.locations[index];
-	movement = collection.movements[index];
+	position = collection.position[index];
+	movement = collection.movement[index];
 	owner = INVALID_MATCH_PLAYER_ID;
 }
 

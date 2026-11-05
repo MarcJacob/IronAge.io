@@ -40,7 +40,7 @@ entity_guid world_spawn_settlement(match_world_state& world, const world_entity_
 	{
 		settlement_market_add(settlements, freeIndex, (ui64)newSettlement.pop_total * GAME_PARAMETERS.trade.start_goods_percent / 100);
 	}
-	SET_DEFAULT_VAL_STRUCT(newSettlement.territory, (world_entity_settlements::territory
+	SET_DEFAULT_VAL_STRUCT(newSettlement.territory, (world_entity_settlements::settlement_territory
 		{
 			.bounds_min = newSettlement.location,
 			.bounds_max = newSettlement.location,
@@ -83,14 +83,14 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.guids = memory.alloc<entity_guid>(count);
 	if (settlements.guids == nullptr) return false;
 
-	settlements.owners = memory.alloc<match_player_id>(count);
-	if (settlements.owners == nullptr) return false;
+	settlements.owner = memory.alloc<match_player_id>(count);
+	if (settlements.owner == nullptr) return false;
 
-	settlements.locations = memory.alloc<world_location>(count);
-	if (settlements.locations == nullptr) return false;
+	settlements.location = memory.alloc<world_location>(count);
+	if (settlements.location == nullptr) return false;
 
-    settlements.founding_ticks = memory.alloc<ui64>(count);
-    if (settlements.founding_ticks == nullptr) return false;
+    settlements.founding_tick = memory.alloc<ui64>(count);
+    if (settlements.founding_tick == nullptr) return false;
 
 	settlements.pop_total = memory.alloc<ui32>(count);
 	if (settlements.pop_total == nullptr) return false;
@@ -131,8 +131,8 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.base_land_surplus = memory.alloc<ui32>(count);
 	if (settlements.base_land_surplus == nullptr) return false;
 
-	settlements.tax_rates = memory.alloc<i8>(count);
-	if (settlements.tax_rates == nullptr) return false;
+	settlements.tax_rate = memory.alloc<i8>(count);
+	if (settlements.tax_rate == nullptr) return false;
 
 	settlements.buildings = memory.alloc<settlement_buildings>(count);
 	if (settlements.buildings == nullptr) return false;
@@ -140,20 +140,26 @@ bool world_alloc_settlements(match_world_state& world, mem_arena& memory, ui32 c
 	settlements.trade = memory.alloc<settlement_trading>(count);
 	if (settlements.trade == nullptr) return false;
 
-	settlements.economies = memory.alloc<settlement_economy>(count);
-	if (settlements.economies == nullptr) return false;
+	settlements.economy = memory.alloc<settlement_economy>(count);
+	if (settlements.economy == nullptr) return false;
 
-	settlements.territories = memory.alloc<world_entity_settlements::territory>(count);
-	if (settlements.territories == nullptr) return false;
+	settlements.territory = memory.alloc<world_entity_settlements::settlement_territory>(count);
+	if (settlements.territory == nullptr) return false;
 
 	settlements.troop_ceilings = memory.alloc<army_troop_count>(count);
 	if (settlements.troop_ceilings == nullptr) return false;
 
-	settlements.sieges = memory.alloc<entity_guid>(count);
-	if (settlements.sieges == nullptr) return false;
+	settlements.siege = memory.alloc<entity_guid>(count);
+	if (settlements.siege == nullptr) return false;
 
-	settlements.raids = memory.alloc<settlement_raid>(count);
-	if (settlements.raids == nullptr) return false;
+	settlements.campaign = memory.alloc<entity_guid>(count);
+	if (settlements.campaign == nullptr) return false;
+
+	settlements.campaign_army = memory.alloc<entity_guid>(count);
+	if (settlements.campaign_army == nullptr) return false;
+
+	settlements.raid = memory.alloc<settlement_raid>(count);
+	if (settlements.raid == nullptr) return false;
 
 	return true;
 }
@@ -175,10 +181,10 @@ bool world_entity_query_settlement(const match_world_state& world, entity_guid e
 void world_settlement_change_owner(match_world_state& world, ui16 settlement_index, match_player_id new_owner)
 {
     // Population and soldiers (raised ones included) change hands with the settlement.
-	world.entities->settlements.owners[settlement_index] = new_owner;
+	world.entities->settlements.owner[settlement_index] = new_owner;
 
     // Reset tax rate to 0 / neutral.
-	world.entities->settlements.tax_rates[settlement_index] = 0;
+	world.entities->settlements.tax_rate[settlement_index] = 0;
 }
 
 bool world_is_valid_settlement_location(const match_world_state& world, world_location loc, match_player_id player)
@@ -196,14 +202,14 @@ bool world_is_valid_settlement_location(const match_world_state& world, world_lo
 
 	// Tile owner is a settlement slot index.
 	ui16 tileOwner = terrain.regions[regionIndex].owners[tileIndex];
-	if (tileOwner != world_terrain::UNOWNED_TILE && settlements.owners[tileOwner] != player) return false;
+	if (tileOwner != world_terrain::UNOWNED_TILE && settlements.owner[tileOwner] != player) return false;
 
 	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 	{
 		if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-		i32 dx = (i32)settlements.locations[settlementIndex].x - (i32)loc.x;
-		i32 dy = (i32)settlements.locations[settlementIndex].y - (i32)loc.y;
+		i32 dx = (i32)settlements.location[settlementIndex].x - (i32)loc.x;
+		i32 dy = (i32)settlements.location[settlementIndex].y - (i32)loc.y;
 		if (dx * dx + dy * dy < (i32)(GAME_PARAMETERS.minimum_settlement_distance * GAME_PARAMETERS.minimum_settlement_distance)) return false;
 	}
 

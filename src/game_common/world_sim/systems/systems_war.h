@@ -24,4 +24,7 @@ void world_system_engagement_auto_join(match_world_state& world);
 
 void world_system_engagements(match_world_state& world);
 
+// Every tick, after movement (world_system_campaigns.cpp): campaigns take over the armies with a JOIN_CAMPAIGN order that reached them, follow their member armies, work towards their objective (gather, march, on objective) and end when none is close (a WAITING one stays) or the objective is accomplished.
+void world_system_campaigns(match_world_state& world);
+
 #endif // WORLD_SYSTEMS_WAR_INCLUDED

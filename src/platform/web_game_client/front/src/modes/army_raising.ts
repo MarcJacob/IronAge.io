@@ -24,7 +24,7 @@ function is_preview_valid(feedback: CommandFeedback, points: { x: number, y: num
     const flags = feedback.values.error_flags ?? 0;
 
     // A raise location outside the settlement's territory: the path is shown, but red.
-    if ((flags & COMMAND_ERROR.TARGET_OUT_OF_TERRITORY) !== 0) return false;
+    if ((flags & COMMAND_ERROR.TARGET_OUT_OF_BOUNDS) !== 0) return false;
 
     // Any other error (not enough population, army limit...) also refuses the order.
     if (!feedback.valid) return false;

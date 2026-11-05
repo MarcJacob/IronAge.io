@@ -15,14 +15,14 @@ enum class WORLD_ENTITY_CARAVAN_FLAGS : ui8
 
 struct world_entity_caravans : public world_entity_container
 {
-    world_location* locations;
-    world_entity_movement* movements;
+    world_location* location;
+    world_entity_movement* movement;
 
     WORLD_ENTITY_CARAVAN_FLAGS* flags;
-    entity_guid* origin_settlements;
-    entity_guid* destinations; // Settlement or army.
+    entity_guid* origin_settlement;
+    entity_guid* destination; // Settlement or army.
 
-    ui16* values;
+    ui16* value;
 
     struct view;
 
@@ -64,12 +64,12 @@ struct world_entity_caravans : public world_entity_container
         }
 
         view(world_entity_caravans& collection, ui16 index)
-            : location(collection.locations[index])
-            , movement(collection.movements[index])
+            : location(collection.location[index])
+            , movement(collection.movement[index])
             , flags(collection.flags[index])
-            , origin_settlement(collection.origin_settlements[index])
-            , destination(collection.destinations[index])
-            , value(collection.values[index])
+            , origin_settlement(collection.origin_settlement[index])
+            , destination(collection.destination[index])
+            , value(collection.value[index])
         {}
     };
 };
@@ -87,12 +87,12 @@ inline void world_entity_caravans::single::copy_from(const world_entity_caravans
 
 inline void world_entity_caravans::single::copy_from(const world_entity_caravans& collection, ui16 index)
 {
-    location = collection.locations[index];
-    movement = collection.movements[index];
+    location = collection.location[index];
+    movement = collection.movement[index];
     flags = collection.flags[index];
-    origin_settlement = collection.origin_settlements[index];
-    destination = collection.destinations[index];
-    value = collection.values[index];
+    origin_settlement = collection.origin_settlement[index];
+    destination = collection.destination[index];
+    value = collection.value[index];
     owner = INVALID_MATCH_PLAYER_ID;
 }
 

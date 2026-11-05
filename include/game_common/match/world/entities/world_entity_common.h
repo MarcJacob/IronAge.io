@@ -20,6 +20,7 @@ enum ENTITY_TYPE : ui8
 	WORKER,
 	ENGAGEMENT,
     CARAVAN,
+	CAMPAIGN,
 	// ...
 };
 

@@ -48,7 +48,7 @@ void world_destroy_caravan(match_world_state& world, const entity_guid& caravan)
     ui16 index = caravan.get_index();
 
     // Only a valid origin is touched: a destroyed settlement (or one whose slot was reused) keeps its own count.
-    settlement_trading* originTrade = caravan_origin_trade(world, caravans.origin_settlements[index]);
+    settlement_trading* originTrade = caravan_origin_trade(world, caravans.origin_settlement[index]);
     if (originTrade != nullptr)
     {
         ui8& count = caravan_is_ship(caravans.flags[index]) ? originTrade->ship_count : originTrade->caravan_count;
@@ -86,8 +86,8 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
         return false;
     }
 
-    world.entities->caravans.locations = memory.alloc<world_location>(count);
-    if (world.entities->caravans.locations == nullptr)
+    world.entities->caravans.location = memory.alloc<world_location>(count);
+    if (world.entities->caravans.location == nullptr)
     {
         return false;
     }
@@ -97,25 +97,25 @@ bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 coun
     {
         return false;
     }
-    world.entities->caravans.movements = memory.alloc<world_entity_movement>(count);
-    if (world.entities->caravans.movements == nullptr)
+    world.entities->caravans.movement = memory.alloc<world_entity_movement>(count);
+    if (world.entities->caravans.movement == nullptr)
     {
         return false;
     }
 
-    world.entities->caravans.origin_settlements = memory.alloc<entity_guid>(count);
-    if (world.entities->caravans.origin_settlements == nullptr)
+    world.entities->caravans.origin_settlement = memory.alloc<entity_guid>(count);
+    if (world.entities->caravans.origin_settlement == nullptr)
     {
         return false;
     }
-    world.entities->caravans.destinations = memory.alloc<entity_guid>(count);
-    if (world.entities->caravans.destinations == nullptr)
+    world.entities->caravans.destination = memory.alloc<entity_guid>(count);
+    if (world.entities->caravans.destination == nullptr)
     {
         return false;
     }
 
-    world.entities->caravans.values = memory.alloc<ui16>(count);
-    if (world.entities->caravans.values == nullptr)
+    world.entities->caravans.value = memory.alloc<ui16>(count);
+    if (world.entities->caravans.value == nullptr)
     {
         return false;
     }
@@ -194,16 +194,16 @@ static ui64 caravan_army_candidate_weight(const match_world_state& world, ui16 a
 
     for (ui32 i = 0; i < destination_exclude_count; i++) if (guid == destination_excludes[i]) return 0;
 
-    match_player_id originOwner = world.entities->settlements.owners[origin.get_index()];
+    match_player_id originOwner = world.entities->settlements.owner[origin.get_index()];
     if (!army_is_trade_target(world, army_index, originOwner)) return 0;
 
     // At spawn, an origin that does not allow foreign export only targets its own owner's armies.
-    if (spawning && !world.entities->settlements.trade[origin.get_index()].allow_foreign_export && armies.owners[army_index] != originOwner) return 0;
+    if (spawning && !world.entities->settlements.trade[origin.get_index()].allow_foreign_export && armies.owner[army_index] != originOwner) return 0;
 
     out_size = ia_min(ia_min(caravan_value, (ui32)0xFFFF), ia_min(army_supplies_room(world, army_index), army_supplies_buy_power(world, army_index)));
     if (out_size == 0 || out_size < min_value) return 0;
 
-    ui32 tradeDist = trade_tile_distance(source, armies.locations[army_index]);
+    ui32 tradeDist = trade_tile_distance(source, armies.location[army_index]);
     ui64 profit = caravan_army_trade_profit(world, army_index, originOwner, origin_capacity, out_size, tradeDist);
 
     if (!spawning) return caravan_profit_weight(out_size, profit, tradeDist);
@@ -245,7 +245,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         if (excluded) continue;
 
         // At spawn, an origin that does not allow foreign export only targets settlements of its own owner (travelling caravans retarget freely).
-        if (spawning && !settlements.trade[origin.get_index()].allow_foreign_export && settlements.owners[index] != settlements.owners[origin.get_index()]) continue;
+        if (spawning && !settlements.trade[origin.get_index()].allow_foreign_export && settlements.owner[index] != settlements.owner[origin.get_index()]) continue;
 
         // Ships only go to coastal settlements (they arrive at the dock tile).
         world_location dock;
@@ -254,7 +254,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
         ui32 size = caravan_candidate_size(settlements, index, caravan_value, size_to_room);
         if (size == 0 || size < min_value) continue;
 
-        ui32 tradeDist = trade_tile_distance(source, settlements.locations[index]);
+        ui32 tradeDist = trade_tile_distance(source, settlements.location[index]);
 
         // Cost is linear in the tile distance: placeholder until the real path cost is usable again.
         if (spawning)

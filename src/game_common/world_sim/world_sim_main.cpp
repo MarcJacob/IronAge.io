@@ -16,6 +16,7 @@
 #include "entities/world_sim_entity_engagement.cpp"
 #include "entities/world_sim_entity_worker.cpp"
 #include "entities/world_sim_entity_caravan.cpp"
+#include "entities/world_sim_entity_campaign.cpp"
 
 // Systems.
 #include "systems/world_system_settlement_territory.cpp"
@@ -23,6 +24,7 @@
 #include "systems/world_system_army.cpp"
 #include "systems/world_system_army_economy.cpp"
 #include "systems/world_system_army_standing_orders.cpp"
+#include "systems/world_system_campaigns.cpp"
 #include "systems/world_system_worker_construction.cpp"
 #include "systems/world_system_caravan_spawn.cpp"
 #include "systems/world_system_caravan_trade.cpp"
@@ -52,6 +54,9 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::ENGAGEMENT:
 		container = &world.entities->engagements;
 		break;
+	case ENTITY_TYPE::CAMPAIGN:
+		container = &world.entities->campaigns;
+		break;
     case ENTITY_TYPE::CARAVAN:
         container = &world.entities->caravans;
 		break;
@@ -71,15 +76,17 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 	switch (type)
 	{
 	case ENTITY_TYPE::SETTLEMENT:
-		return world.entities->settlements.locations[entity.get_index()];
+		return world.entities->settlements.location[entity.get_index()];
 	case ENTITY_TYPE::ARMY:
-		return world.entities->armies.locations[entity.get_index()];
+		return world.entities->armies.location[entity.get_index()];
 	case ENTITY_TYPE::WORKER:
-		return world.entities->workers.locations[entity.get_index()];
+		return world.entities->workers.position[entity.get_index()];
 	case ENTITY_TYPE::ENGAGEMENT:
-		return world.entities->engagements.locations[entity.get_index()];
+		return world.entities->engagements.location[entity.get_index()];
+	case ENTITY_TYPE::CAMPAIGN:
+		return world.entities->campaigns.location[entity.get_index()];
     case ENTITY_TYPE::CARAVAN:
-        return world.entities->caravans.locations[entity.get_index()];
+        return world.entities->caravans.location[entity.get_index()];
 	default:
 		// .. TODO(Marc): Need to be able to report error on the match / world level somehow. Provide a function pointer ?
 		return INVALID_WORLD_LOCATION;
@@ -93,14 +100,16 @@ match_player_id world_entity_get_owner(const match_world_state& world, entity_gu
 	switch (entity.get_type())
 	{
 	case ENTITY_TYPE::SETTLEMENT:
-		return world.entities->settlements.owners[entity.get_index()];
+		return world.entities->settlements.owner[entity.get_index()];
 	case ENTITY_TYPE::ARMY:
-		return world.entities->armies.owners[entity.get_index()];
+		return world.entities->armies.owner[entity.get_index()];
 	case ENTITY_TYPE::WORKER:
 		// Owner of the origin entity, whatever its type.
 		return world_entity_get_owner(world, world.entities->workers.origin_entity[entity.get_index()]);
 	case ENTITY_TYPE::CARAVAN:
-		return world_entity_get_owner(world, world.entities->caravans.origin_settlements[entity.get_index()]);
+		return world_entity_get_owner(world, world.entities->caravans.origin_settlement[entity.get_index()]);
+	case ENTITY_TYPE::CAMPAIGN:
+		return world.entities->campaigns.owner[entity.get_index()];
 	default:
 		return INVALID_MATCH_PLAYER_ID;
 	}
@@ -120,9 +129,9 @@ PLAYER_DIPLOMATIC_STATUS world_entity_get_diplomatic_status(const match_world_st
 	{
 		// Hostile only if both ends are. Otherwise the origin's status, except a hostile origin with a non-hostile destination: neutral (not hostile, not friendly).
 		const world_entity_caravans& caravans = world.entities->caravans;
-		PLAYER_DIPLOMATIC_STATUS origin = world_entity_get_diplomatic_status(world, caravans.origin_settlements[entity.get_index()], player);
+		PLAYER_DIPLOMATIC_STATUS origin = world_entity_get_diplomatic_status(world, caravans.origin_settlement[entity.get_index()], player);
 		if (origin != PLAYER_DIPLOMATIC_STATUS_HOSTILE) return origin;
-		bool destinationHostile = world_entity_get_diplomatic_status(world, caravans.destinations[entity.get_index()], player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+		bool destinationHostile = world_entity_get_diplomatic_status(world, caravans.destination[entity.get_index()], player) == PLAYER_DIPLOMATIC_STATUS_HOSTILE;
 		return destinationHostile ? PLAYER_DIPLOMATIC_STATUS_HOSTILE : PLAYER_DIPLOMATIC_STATUS_NEUTRAL;
 	}
 	if (entity.get_type() == ENTITY_TYPE::ENGAGEMENT) return engagement_diplomatic_status(world, entity, player);
@@ -146,7 +155,7 @@ bool world_pick_random_point(match_world_state& world, const world_random_point_
 	// Settlement territory: random tiles of the rectangle bounding its claimed tiles, until one is claimed.
 	ASSERT(params.settlement_territory.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, params.settlement_territory));
 	ui16 settlementIndex = params.settlement_territory.get_index();
-	const world_entity_settlements::territory& territory = world.entities->settlements.territories[settlementIndex];
+	const world_entity_settlements::settlement_territory& territory = world.entities->settlements.territory[settlementIndex];
 	ui32 width = (ui32)territory.bounds_max.x - territory.bounds_min.x + 1;
 	ui32 height = (ui32)territory.bounds_max.y - territory.bounds_min.y + 1;
 
@@ -161,7 +170,7 @@ bool world_pick_random_point(match_world_state& world, const world_random_point_
 		}
 	}
 
-	out_point = world.entities->settlements.locations[settlementIndex];
+	out_point = world.entities->settlements.location[settlementIndex];
 	return false;
 }
 
@@ -216,6 +225,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_workers(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_engagements(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
         if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_campaigns(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     if (start_params.procedural_map)
@@ -251,9 +261,9 @@ void world_update_player_stats(match_world_state& world)
     const world_entity_settlements& settlements = world.entities->settlements;
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
-        if (!settlements.guids[settlementIndex].is_valid() || settlements.owners[settlementIndex] >= world.player_count) continue;
+        if (!settlements.guids[settlementIndex].is_valid() || settlements.owner[settlementIndex] >= world.player_count) continue;
 
-        world_player_state& player = world.player_states[settlements.owners[settlementIndex]];
+        world_player_state& player = world.player_states[settlements.owner[settlementIndex]];
         player.settlement_count++;
         player.total_population += settlements.pop_total[settlementIndex];
         player.total_troops += settlements.soldiers_total(settlementIndex);
@@ -283,6 +293,7 @@ void world_state_tick(match_world_state& world)
     world_system_army_orders(world); // Before movement: sets each army's destination from its engagement or standing order, and resolves arrivals.
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
+    world_system_campaigns(world); // After movement: campaigns take over the armies that reached them and follow their armies' new positions.
     world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 
     world_system_armies_raising(world);

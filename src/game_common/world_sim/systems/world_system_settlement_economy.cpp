@@ -207,10 +207,10 @@ void world_system_economy_daily_tick(match_world_state& world)
         if (!settlements.guids[settlementIndex].is_valid()) continue;
         if (settlements.at_home(settlementIndex) == 0) continue; // @TODO(Marc): Destroy settlement ?
 
-        settlements.economies[settlementIndex] = {};
+        settlements.economy[settlementIndex] = {};
  
         // Settlements run no economy logic on their first 10 ticks so they can claim their initial territory.
-        if (world.age < settlements.founding_ticks[settlementIndex] + 10) continue; 
+        if (world.age < settlements.founding_tick[settlementIndex] + 10) continue; 
 
         settlement_goods_production(world, settlementIndex);
         settlement_goods_sales(settlements, settlementIndex);
@@ -312,7 +312,7 @@ void world_system_local_troops_pay(match_world_state& world)
 	{
 		if (!settlements.guids[settlementIndex].is_valid()) continue;
 
-		match_player_id owner = settlements.owners[settlementIndex];
+		match_player_id owner = settlements.owner[settlementIndex];
 		if (owner >= world.player_count) continue;
 
 		world_player_state& player = world.player_states[owner];

@@ -7,7 +7,7 @@
 #include "world_entity_common.h"
 #include "../troop_types.h"
 
-// Sides of a engagement. Armies point at their side with these (armies.engagement_sides). The attacker is the side that started it.
+// Sides of a engagement. Armies point at their side with these (armies.engagement_side). The attacker is the side that started it.
 enum class ENGAGEMENT_SIDE : ui8
 {
 	ATTACKER = 0,
@@ -41,30 +41,30 @@ enum class ENGAGEMENT_PHASE : ui8
 // A engagement between two sides of armies. Free armies close enough join it by themselves (engagement_join_radius), or by an ATTACK order targeting it, a member army or the besieged settlement. Fixed size: it doesn't know which armies are in it, armies point to it instead.
 struct world_entity_engagements : public world_entity_container
 {
-	world_location* locations;
-	ENGAGEMENT_KIND* kinds;
-	ENGAGEMENT_PHASE* phases;
-	entity_guid* main_targets; // Field engagement: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
-	ui32* phase_ticks; // World age when the current phase started.
-	bool* fighting_actives; // True while troops deal and take damage: damage rounds run only then, and other mechanics (army supply...) are suspended.
-	ui32* durations; // Rounds since the engagement started (one round every GAME_PARAMETERS.engagement_tick_interval ticks).
+	world_location* location;
+	ENGAGEMENT_KIND* kind;
+	ENGAGEMENT_PHASE* phase;
+	entity_guid* main_target; // Field engagement: the army that was attacked first. Siege: the besieged settlement, whose siege field points back here.
+	ui32* phase_tick; // World age when the current phase started.
+	bool* fighting_active; // True while troops deal and take damage: damage rounds run only then, and other mechanics (army supply...) are suspended.
+	ui32* duration; // Rounds since the engagement started (one round every GAME_PARAMETERS.engagement_tick_interval ticks).
 	ui32* loot_gold; // Loot pool: gold dropped by destroyed armies and conquest. Shared among the victors when the engagement ends (world_engagement_on_finish).
 	ui32* loot_supplies; // Loot pool: supplies dropped by destroyed armies, plus the daily upkeep of every soldier killed.
 
 	// Per side. Siege (kind SIEGE): the attacker winning takes the settlement (main_target) for the attacker commander.
 	// The garrison fights as part of the defender (counted into its men every round, casualties come out of the garrison).
 	army_troop_count* attacker_troops; // Troops still fighting, per unit type.
-	ui32* attacker_damages; // Damage points dealt this round BY the side, before the defences of the other side.
-	match_player_id* attacker_commanders; // Player leading the side.
+	ui32* attacker_damage; // Damage points dealt this round BY the side, before the defences of the other side.
+	match_player_id* attacker_commander; // Player leading the side.
 	army_troop_count* defender_troops;
-	ui32* defender_damages;
-	match_player_id* defender_commanders;
+	ui32* defender_damage;
+	match_player_id* defender_commander;
 
 	inline army_troop_count& side_troops(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_troops[index] : defender_troops[index]; }
 	inline const army_troop_count& side_troops(ENGAGEMENT_SIDE side, ui16 index) const { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_troops[index] : defender_troops[index]; }
-	inline ui32& side_damage(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_damages[index] : defender_damages[index]; }
-	inline match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commanders[index] : defender_commanders[index]; }
-	inline const match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) const { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commanders[index] : defender_commanders[index]; }
+	inline ui32& side_damage(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_damage[index] : defender_damage[index]; }
+	inline match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commander[index] : defender_commander[index]; }
+	inline const match_player_id& side_commander(ENGAGEMENT_SIDE side, ui16 index) const { return side == ENGAGEMENT_SIDE::ATTACKER ? attacker_commander[index] : defender_commander[index]; }
 
 	struct view;
 
@@ -136,21 +136,21 @@ struct world_entity_engagements : public world_entity_container
 		}
 
 		view(world_entity_engagements& collection, ui16 index)
-			: location(collection.locations[index])
-			, kind(collection.kinds[index])
-			, phase(collection.phases[index])
-			, main_target(collection.main_targets[index])
-			, phase_tick(collection.phase_ticks[index])
-			, fighting_active(collection.fighting_actives[index])
+			: location(collection.location[index])
+			, kind(collection.kind[index])
+			, phase(collection.phase[index])
+			, main_target(collection.main_target[index])
+			, phase_tick(collection.phase_tick[index])
+			, fighting_active(collection.fighting_active[index])
 			, loot_gold(collection.loot_gold[index])
 			, loot_supplies(collection.loot_supplies[index])
 			, attacker_troops(collection.attacker_troops[index])
-			, attacker_damage(collection.attacker_damages[index])
-			, attacker_commander(collection.attacker_commanders[index])
+			, attacker_damage(collection.attacker_damage[index])
+			, attacker_commander(collection.attacker_commander[index])
 			, defender_troops(collection.defender_troops[index])
-			, defender_damage(collection.defender_damages[index])
-			, defender_commander(collection.defender_commanders[index])
-			, duration(collection.durations[index])
+			, defender_damage(collection.defender_damage[index])
+			, defender_commander(collection.defender_commander[index])
+			, duration(collection.duration[index])
 		{}
 	};
 };
@@ -178,21 +178,21 @@ inline void world_entity_engagements::single::copy_from(const world_entity_engag
 
 inline void world_entity_engagements::single::copy_from(const world_entity_engagements& collection, ui16 index)
 {
-	location = collection.locations[index];
-	kind = collection.kinds[index];
-	phase = collection.phases[index];
-	main_target = collection.main_targets[index];
-	phase_tick = collection.phase_ticks[index];
-	fighting_active = collection.fighting_actives[index];
+	location = collection.location[index];
+	kind = collection.kind[index];
+	phase = collection.phase[index];
+	main_target = collection.main_target[index];
+	phase_tick = collection.phase_tick[index];
+	fighting_active = collection.fighting_active[index];
 	loot_gold = collection.loot_gold[index];
 	loot_supplies = collection.loot_supplies[index];
 	attacker_troops = collection.attacker_troops[index];
-	attacker_damage = collection.attacker_damages[index];
-	attacker_commander = collection.attacker_commanders[index];
+	attacker_damage = collection.attacker_damage[index];
+	attacker_commander = collection.attacker_commander[index];
 	defender_troops = collection.defender_troops[index];
-	defender_damage = collection.defender_damages[index];
-	defender_commander = collection.defender_commanders[index];
-	duration = collection.durations[index];
+	defender_damage = collection.defender_damage[index];
+	defender_commander = collection.defender_commander[index];
+	duration = collection.duration[index];
 	join_radius = 0;
 	viewer_status = 0;
 }
