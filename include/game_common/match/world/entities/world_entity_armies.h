@@ -43,7 +43,8 @@ struct army_order
 	world_location location; // STATION: where to stand. DEFEND_TERRITORY / RAID: unused.
 	entity_guid engaged; // STATION / DEFEND_TERRITORY: the hostile entity the army is currently chasing, if any.
 
-	ui32 reserved;
+	bool hold_position; // The army does not move to do anything other than specifically its objective (e.g. a STATION order does not chase hostiles coming within range).
+	ui8 reserved[3];
 };
 static_assert(sizeof(army_order) == 20, "army_order size changed.");
 

@@ -98,6 +98,21 @@
                         <div class="text_row"><span class="text_row_label">Location</span><span id="worker_panel_location"></span></div>
                     </div>
 
+                    <div id="game_hud_campaign_panel" hidden>
+                        <div class="text_row"><span class="text_row_label">State</span><span id="campaign_panel_state"></span></div>
+                        <div class="text_row"><span class="text_row_label">Objective</span><span id="campaign_panel_objective"></span></div>
+                        <div class="text_row"><span class="text_row_label">Troops</span><span id="campaign_panel_troops"></span></div>
+                        <div class="text_row"><span class="text_row_label">Join radius</span><span id="campaign_panel_radius"></span></div>
+                        <!-- One row per member army (or army on its way to join), cloned from the template: owner-colored army icon, men with a bar of the composition, joined or joining. -->
+                        <div id="campaign_panel_members">
+                            <div id="campaign_panel_member_template" class="campaign_member" hidden>
+                                <span class="campaign_member_icon"></span>
+                                <span class="campaign_member_text"><span class="campaign_member_men"></span> <span class="campaign_member_status"></span></span>
+                                <div class="campaign_member_bar"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="game_hud_engagement_panel" hidden>
                         <div class="text_row"><span class="text_row_label">Kind</span><span id="engagement_panel_kind"></span></div>
                         <div class="text_row"><span class="text_row_label">Phase</span><span id="engagement_panel_phase"></span></div>

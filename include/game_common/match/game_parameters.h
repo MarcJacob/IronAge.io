@@ -120,7 +120,7 @@ struct game_parameters
 
     // ENGAGEMENT DAMAGE. Every engagement_tick_interval ticks a round runs: a side deals (sum over its men of damage) x random percent in [min, max]. The target spreads it
     // over its men by type; each type's share is divided by rand(1, defense) then by rand(1, armor): what is left is the number of men killed of that type.
-    ui32 engagement_tick_interval = 10; // World ticks per round. At least 1.
+    ui32 engagement_tick_interval = 20; // World ticks per round. At least 1. (Doubled from 10: battles run at half the speed.)
     ui32 engagement_damage_min_percent = 50;
     ui32 engagement_damage_max_percent = 100;
     ui32 engagement_damage_scale_percent = 5; // Scales all damage dealt per round (100 = 1.0). Tunes battle length.
@@ -137,7 +137,7 @@ struct game_parameters
         { 6, 4, 4 },
         { 4, 4, 2 },
         { 12, 6, 10 },
-        { 0, 0, 30 },
+        { 1, 0, 30 }, // Wagons deal 1 damage: with none, a side left with only wagons would be stuck (see the zero-damage rule in world_system_engagements).
     };
 
     // ARMY RAISING.

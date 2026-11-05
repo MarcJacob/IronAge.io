@@ -93,7 +93,7 @@ static void campaign_take_over_joiners(match_world_state& world, entity_guid cam
 		if (!campaign_within_tiles(campaignLocation, armies.location[armyIndex], radius)) continue;
 
 		armies.campaign[armyIndex] = campaign;
-		army_order_station(armies, (ui16)armyIndex, armies.location[armyIndex]);
+		army_order_station(armies, (ui16)armyIndex, armies.location[armyIndex], true);
 		world_movement_stop(armies.movement[armyIndex], armies.location[armyIndex]);
 	}
 }
@@ -136,20 +136,6 @@ static world_location campaign_spread_spot(match_world_state& world, world_locat
 	return center;
 }
 
-// The campaign is over with its objective accomplished: its armies go home and it is destroyed.
-static void campaign_end_and_send_home(match_world_state& world, entity_guid campaign)
-{
-	world_entity_armies& armies = world.entities->armies;
-	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
-	{
-		if (!(armies.campaign[armyIndex] == campaign)) continue;
-
-		armies.order[armyIndex] = {};
-		armies.order[armyIndex].type = ARMY_ORDER_GO_HOME;
-	}
-	world_destroy_campaign(world, campaign);
-}
-
 // MARCHING: the campaign goes on in steps. Each time it gets close to the last waypoint, a new one is picked a step ahead towards the objective,
 // and every member army is sent to its own random spot around it. Close enough to the objective, the campaign is ON_OBJECTIVE.
 static void campaign_march(match_world_state& world, ui16 campaign_index, entity_guid campaign, world_location destination)
@@ -176,7 +162,7 @@ static void campaign_march(match_world_state& world, ui16 campaign_index, entity
 	{
 		if (!(armies.campaign[armyIndex] == campaign)) continue;
 
-		army_order_station(armies, (ui16)armyIndex, campaign_spread_spot(world, waypoint, GAME_PARAMETERS.campaign_spread_tiles));
+		army_order_station(armies, (ui16)armyIndex, campaign_spread_spot(world, waypoint, GAME_PARAMETERS.campaign_spread_tiles), true);
 	}
 }
 
@@ -234,7 +220,7 @@ void world_system_campaigns(match_world_state& world)
 
 		if (def->accomplished(world, campaigns.owner[campaignIndex], objective))
 		{
-			campaign_end_and_send_home(world, campaign);
+			world_campaign_end_and_send_home(world, campaign);
 			continue;
 		}
 

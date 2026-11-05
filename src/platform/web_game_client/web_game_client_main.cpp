@@ -109,6 +109,7 @@ static void fill_render_entities_significance(const client_render_state& renderS
             if (engagements.kind[index] == ENGAGEMENT_KIND::SIEGE && world_entity_is_valid(world, engagements.main_target[index])) entity.significance = settlements.pop_total[engagements.main_target[index].get_index()];
             break;
         }
+        case ENTITY_TYPE::CAMPAIGN: entity.significance = world.entities->campaigns.troop_count[index] / 10; break;
         case ENTITY_TYPE::WORKER: entity.significance = WORKER_SIGNIFICANCE; break;
         default: break;
         }

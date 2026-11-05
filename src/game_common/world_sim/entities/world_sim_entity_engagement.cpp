@@ -733,6 +733,14 @@ void world_system_engagements(match_world_state& world)
 			engagements.phase_tick[engagementIndex] = world.age;
 			engagements.duration[engagementIndex] = 0;
 			engagements.fighting_active[engagementIndex] = false; // Fighting stops: back to the idle siege.
+
+			// Relief armies still in it can only be harmless ones (wagons...): the idle siege would pin them forever (only attackers can leave an idle siege). They are released.
+			for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+			{
+				if (!armies.guids[armyIndex].is_valid() || !(armies.engagement[armyIndex] == engagementGuid) || armies.engagement_side[armyIndex] != ENGAGEMENT_SIDE::DEFENDER) continue;
+
+				world_army_leave_current_engagement(world, armies.guids[armyIndex]);
+			}
 		}
 
 		bool fighting = !over && engagements.fighting_active[engagementIndex];

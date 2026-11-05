@@ -83,7 +83,24 @@ export enum ENTITY_TYPE
     WORKER = 3,
     ENGAGEMENT = 4,
     CARAVAN = 5,
+    CAMPAIGN = 6,
 };
+
+// Mirrors CAMPAIGN_STATE (include/game_common/match/world/entities/world_entity_campaigns.h), the campaign GDO's state. Update here if it changes.
+export enum CAMPAIGN_STATE
+{
+    WAITING = 0,
+    GATHERING = 1,
+    MARCHING = 2,
+    ON_OBJECTIVE = 3,
+}
+
+// Mirrors CAMPAIGN_OBJECTIVE_TYPE (same header), the campaign GDO's objective_type.
+export enum CAMPAIGN_OBJECTIVE
+{
+    NONE = 0,
+    CONQUER_SETTLEMENT = 1,
+}
 
 // Mirrors ARMY_ORDER_TYPE (include/game_common/match/world/entities/world_entity_armies.h), the army GDO's order_type. Update here if it changes.
 export enum ARMY_ORDER
@@ -93,6 +110,7 @@ export enum ARMY_ORDER
     DEFEND_TERRITORY = 2,
     RAID = 3,
     GO_HOME = 4,
+    JOIN_CAMPAIGN = 5,
 }
 
 // Mirrors the C++ ENGAGEMENT_PHASE enum (same header as below), the engagement GDO's phase.

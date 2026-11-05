@@ -10,6 +10,7 @@ import * as RenderEngagement from "./entities/engagement.js"
 import * as RenderSettlement from "./entities/settlement.js"
 import * as RenderArmy from "./entities/army.js"
 import * as RenderCaravan from "./entities/caravan.js"
+import * as RenderCampaign from "./entities/campaign.js"
 import * as RenderWorker from "./entities/worker.js"
 import type { EntityRenderEnv } from "./entities/entity_render_env.js"
 
@@ -37,6 +38,7 @@ export const RENDER_CONFIG =
         [Backend.ENTITY_TYPE.WORKER]: true,
         [Backend.ENTITY_TYPE.ENGAGEMENT]: true,
         [Backend.ENTITY_TYPE.CARAVAN]: true,
+        [Backend.ENTITY_TYPE.CAMPAIGN]: true,
     } as Record<number, boolean>,
 
     tint_entities: true, // Tint entities with the color given by entity_color.
@@ -57,6 +59,7 @@ export const RENDER_CONFIG =
     ...RenderSettlement.SETTLEMENT_RENDER_CONFIG,
     ...RenderArmy.ARMY_RENDER_CONFIG,
     ...RenderEngagement.ENGAGEMENT_RENDER_CONFIG,
+    ...RenderCampaign.CAMPAIGN_RENDER_CONFIG,
 };
 
 // Opaque RGB color, 0..255 per channel.
@@ -139,6 +142,7 @@ let ENTITY_BASE_SCALE_MULTIPLIERS =
     [Backend.ENTITY_TYPE.WORKER]: 1, // Only the workers walking on the map are sent by the backend.
     [Backend.ENTITY_TYPE.ENGAGEMENT]: 3,
     [Backend.ENTITY_TYPE.CARAVAN]: 2,
+    [Backend.ENTITY_TYPE.CAMPAIGN]: 2,
 }
 
 // RGBA color per terrain type, indexed by TERRAIN_TILE_TYPE value (0..4). MUST mirror TERRAIN_TILE_TYPE in include/game_common/match/world/world_terrain.h.
@@ -347,6 +351,7 @@ function entity_screen_size(entity: Backend.RenderEntity)
         case Backend.ENTITY_TYPE.CARAVAN: return RenderCaravan.caravan_screen_size(scale, entity);
         case Backend.ENTITY_TYPE.WORKER: return RenderWorker.worker_screen_size(scale, entity);
         case Backend.ENTITY_TYPE.ENGAGEMENT: return RenderEngagement.engagement_screen_size(RENDER_CONFIG, scale, entity);
+        case Backend.ENTITY_TYPE.CAMPAIGN: return RenderCampaign.campaign_screen_size(RENDER_CONFIG, scale, entity);
         default: return 0;
     }
 }
@@ -697,6 +702,15 @@ export function draw(render_state: Backend.RenderState | null)
         }
     }
 
+    if (RENDER_CONFIG.show_campaign_join_radius && RENDER_CONFIG.show_entity_type[Backend.ENTITY_TYPE.CAMPAIGN])
+    {
+        for (let i = 0; i < render_state.entity_count; i++)
+        {
+            const entity = render_state.entity_states[i];
+            if (entity.entity_type === Backend.ENTITY_TYPE.CAMPAIGN) RenderCampaign.draw_campaign_background(env, RENDER_CONFIG, entity);
+        }
+    }
+
     for (let i = 0; i < render_state.entity_count; i++)
     {
         const entity = render_state.entity_states[i];
@@ -729,6 +743,7 @@ export function draw(render_state: Backend.RenderState | null)
             case Backend.ENTITY_TYPE.CARAVAN: RenderCaravan.draw_caravan(env, entity, vx, vy, size, color, outline, isSelected); break;
             case Backend.ENTITY_TYPE.WORKER: RenderWorker.draw_worker(env, vx, vy, size, color, isSelected); break;
             case Backend.ENTITY_TYPE.ENGAGEMENT: RenderEngagement.draw_engagement_icon(env, RENDER_CONFIG, entity, size, isSelected); break;
+            case Backend.ENTITY_TYPE.CAMPAIGN: RenderCampaign.draw_campaign_banner(env, entity, size, color, outline, isSelected); break;
         }
     }
 }
@@ -856,9 +871,11 @@ export function pick_entity_at(clientX: number, clientY: number, previous_pick: 
         if (exclude_owner !== null && entity.owner === exclude_owner) continue;
 
         const center = ARMY_DISPLAY_CENTERS.get(entity.guid) ?? entity_canvas_center(entity.viewport_x + entity.fractional_x / 1000, entity.viewport_y + entity.fractional_y / 1000);
-        const dx = clickPos.x - center.x;
-        const dy = clickPos.y - center.y;
         const size = entity_screen_size(entity);
+        // A campaign's flag sticks out upwards from its location: its click area is centered on the flag.
+        const centerY = entity.entity_type === Backend.ENTITY_TYPE.CAMPAIGN ? center.y - size / 2 : center.y;
+        const dx = clickPos.x - center.x;
+        const dy = clickPos.y - centerY;
         const isSelected = RENDER_CONFIG.outlined_entity !== null && entity.guid === RENDER_CONFIG.outlined_entity;
         if (entity_draw_mode(size, isSelected) === ENTITY_DRAW_MODE.HIDDEN) continue; // Hidden entities can't be clicked.
         const halfSize = Math.max(size, ENTITY_MIN_PICK_SIZE) / 2;

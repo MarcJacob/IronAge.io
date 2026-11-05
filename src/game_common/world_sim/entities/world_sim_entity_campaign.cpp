@@ -24,6 +24,19 @@ entity_guid world_spawn_campaign(match_world_state& world, match_player_id owner
 	return newID;
 }
 
+void world_campaign_end_and_send_home(match_world_state& world, entity_guid campaign)
+{
+	world_entity_armies& armies = world.entities->armies;
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!(armies.campaign[armyIndex] == campaign)) continue;
+
+		armies.order[armyIndex] = {};
+		armies.order[armyIndex].type = ARMY_ORDER_GO_HOME;
+	}
+	world_destroy_campaign(world, campaign);
+}
+
 void world_destroy_campaign(match_world_state& world, entity_guid campaign)
 {
 	ASSERT(world_entity_is_valid(world, campaign) && campaign.get_type() == ENTITY_TYPE::CAMPAIGN);

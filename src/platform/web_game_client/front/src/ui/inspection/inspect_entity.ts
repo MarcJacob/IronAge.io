@@ -17,6 +17,8 @@ import * as ArmyPanelUI from "./ui_element_army_panel.js"
 import * as CaravanPanelUI from "./ui_element_caravan_panel.js"
 import * as WorkerPanelUI from "./ui_element_worker_panel.js"
 import * as EngagementPanelUI from "./ui_element_engagement_panel.js"
+import * as CampaignPanelUI from "./ui_element_campaign_panel.js"
+import { RENDER_CONFIG } from "../../render.js"
 import * as RaiseArmyPanelUI from "./ui_element_raise_army_panel.js"
 import * as FoundSettlementPanelUI from "./ui_element_found_settlement_panel.js"
 import { raise_available, TROOPS, MAX_COUNT } from "./section_troops.js"
@@ -41,6 +43,9 @@ export interface InspectionContext
 
     // Engagement panel: a line of text under the rows (e.g. why the selected action is refused).
     engagement_note?: string;
+
+    // Any entity: text added to the frame's subtitle line (e.g. what the active mode expects from the player).
+    subtitle_note?: string;
 }
 
 const ENGAGEMENT_PHASE_NAMES: { [phase: number]: string } = {
@@ -78,6 +83,56 @@ function engagement_panel_state(engagement: EntityData, note: string): Engagemen
         target,
         location: engagement.get_location("location"),
         note,
+    };
+}
+
+const CAMPAIGN_STATE_NAMES: { [state: number]: string } = {
+    [Backend.CAMPAIGN_STATE.WAITING]: "Waiting for armies",
+    [Backend.CAMPAIGN_STATE.GATHERING]: "Gathering",
+    [Backend.CAMPAIGN_STATE.MARCHING]: "Marching",
+    [Backend.CAMPAIGN_STATE.ON_OBJECTIVE]: "On objective",
+};
+
+// The campaign's objective as text: its type, and its target if it has one.
+function campaign_objective_text(campaign: EntityData): string
+{
+    switch (campaign.get_number("objective_type"))
+    {
+    case Backend.CAMPAIGN_OBJECTIVE.CONQUER_SETTLEMENT: return `Conquer ${settlement_text(campaign.get_number("objective_target"), "a lost settlement").toLowerCase()}`;
+    default: return "None";
+    }
+}
+
+// Campaign panel (read-only): properties, and its member armies from the extra data (scanned by the backend): owner color, men, composition, joined or not.
+function campaign_panel_state(campaign: EntityData): CampaignPanelUI.CampaignPanelState
+{
+    const armies = campaign.extra?.get_array("member_army") ?? [];
+    const joined = campaign.extra?.get_array("member_joined") ?? [];
+    const count = campaign.extra?.get_number("member_count") ?? 0;
+    const local = Backend.LAST_RENDER_STATE?.controlled_player_id ?? 0;
+
+    const members: CampaignPanelUI.CampaignMemberState[] = [];
+    for (let i = 0; i < count && i < armies.length; i++)
+    {
+        const army = query_entity(armies[i]);
+        if (army === null) continue;
+
+        const counts = TROOPS.map(troop => army.get_number(`composition_${troop.name}`));
+        const [r, g, b] = RENDER_CONFIG.entity_color(army.get_number("owner"), local);
+        members.push({
+            color: `rgb(${r}, ${g}, ${b})`,
+            men: counts.reduce((sum, value) => sum + value, 0),
+            joined: joined[i] === 1,
+            composition: TROOPS.map((troop, type) => ({ count: counts[type], color: troop.color })).filter(segment => segment.count > 0),
+        });
+    }
+
+    return {
+        state: CAMPAIGN_STATE_NAMES[campaign.get_number("state")] ?? "",
+        objective: campaign_objective_text(campaign),
+        troops: campaign.get_number("troop_count"),
+        join_radius: campaign.get_number("join_radius"),
+        members,
     };
 }
 
@@ -178,6 +233,7 @@ function army_order_text(army: EntityData): string
     case Backend.ARMY_ORDER.DEFEND_TERRITORY: return `Defend territory of ${settlement_text(army.get_number("order_target"), "a lost settlement").toLowerCase()}`;
     case Backend.ARMY_ORDER.RAID: return `Raid ${settlement_text(army.get_number("order_target"), "a lost settlement").toLowerCase()}`;
     case Backend.ARMY_ORDER.GO_HOME: return "Go home";
+    case Backend.ARMY_ORDER.JOIN_CAMPAIGN: return "Join campaign";
     default: return "Unknown";
     }
 }
@@ -287,6 +343,7 @@ interface Shown
     caravan?: CaravanPanelUI.CaravanPanelState;
     worker?: WorkerPanelUI.WorkerPanelState;
     engagement?: EngagementPanelUI.EngagementPanelState;
+    campaign?: CampaignPanelUI.CampaignPanelState;
     raise_army?: RaiseArmyPanelUI.RaiseArmyPanelState;
     found_settlement?: FoundSettlementPanelUI.FoundSettlementPanelState;
 }
@@ -300,6 +357,7 @@ function show(shown: Shown | null): void
     CaravanPanelUI.submit(shown?.caravan ?? null);
     WorkerPanelUI.submit(shown?.worker ?? null);
     EngagementPanelUI.submit(shown?.engagement ?? null);
+    CampaignPanelUI.submit(shown?.campaign ?? null);
     RaiseArmyPanelUI.submit(shown?.raise_army ?? null);
     FoundSettlementPanelUI.submit(shown?.found_settlement ?? null);
 }
@@ -313,7 +371,8 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
         return;
     }
 
-    const subtitle = owner_name(view);
+    const owner = owner_name(view);
+    const subtitle = context.subtitle_note === undefined || context.subtitle_note === "" ? owner : `${owner} - ${context.subtitle_note}`;
     switch (view.entity_type)
     {
     case Backend.ENTITY_TYPE.SETTLEMENT: show({ title: "Settlement", subtitle, settlement: settlement_panel_state(view, context) }); break;
@@ -321,6 +380,7 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     case Backend.ENTITY_TYPE.CARAVAN: show({ title: (view.get_number("flags") & Backend.CARAVAN_FLAG_IS_SHIP) !== 0 ? "Ship" : "Caravan", subtitle, caravan: caravan_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.WORKER: show({ title: worker_title(view), subtitle, worker: worker_panel_state(view) }); break;
     case Backend.ENTITY_TYPE.ENGAGEMENT: show({ title: view.get_number("kind") === Backend.ENGAGEMENT_KIND.SIEGE ? "Siege" : "Battle", subtitle, engagement: engagement_panel_state(view, context.engagement_note ?? "") }); break;
+    case Backend.ENTITY_TYPE.CAMPAIGN: show({ title: "Campaign", subtitle, campaign: campaign_panel_state(view) }); break;
     default: show({ title: type_title(view), subtitle }); break;
     }
 }

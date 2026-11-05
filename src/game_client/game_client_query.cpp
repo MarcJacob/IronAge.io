@@ -123,6 +123,7 @@ ui32 game_client_query_entity_gdo(game_client& backend, entity_guid entity, ui8*
 	case ENTITY_TYPE::ARMY: return fill_entity_gdo<gdo_world_entity_army>(world, entity, world_entity_query_army, out_buffer, buffer_size);
 	case ENTITY_TYPE::WORKER: return fill_entity_gdo<gdo_world_entity_worker>(world, entity, world_entity_query_worker, out_buffer, buffer_size);
 	case ENTITY_TYPE::CARAVAN: return fill_entity_gdo<gdo_world_entity_caravan>(world, entity, world_entity_query_caravan, out_buffer, buffer_size);
+	case ENTITY_TYPE::CAMPAIGN: return fill_entity_gdo<gdo_world_entity_campaign>(world, entity, world_entity_query_campaign, out_buffer, buffer_size);
 	case ENTITY_TYPE::ENGAGEMENT:
 	{
 		// The engagement's diplomatic status is relative to the controlled player.

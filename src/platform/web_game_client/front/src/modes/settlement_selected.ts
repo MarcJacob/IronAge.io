@@ -11,6 +11,7 @@ import { is_own_settlement } from "../main.js"
 import { RoadBuilding } from "./road_building.js"
 import { ArmyRaising } from "./army_raising.js"
 import { SettlementFounding } from "./settlement_founding.js"
+import { CampaignStart } from "./campaign_start.js"
 
 // A bar item that starts a child mode. hotkey: shown on the button, also the key the child mode is left with.
 interface SettlementAction extends ActionBarUI.ActionBarItem
@@ -29,6 +30,7 @@ export class SettlementSelected extends Core.Mode
         this.make_item("build_road", "Build Road", 'Digit1', (guid, key) => new RoadBuilding(guid, key)),
         this.raise_item,
         this.found_item,
+        this.make_item("start_campaign", "Start Campaign", 'Digit4', (guid, key) => new CampaignStart(guid, key)),
     ] };
 
     private unsubscribe: (() => void)[] = [];

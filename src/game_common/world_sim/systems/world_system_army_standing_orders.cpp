@@ -177,6 +177,14 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 		}
 	}
 
+	// Holding position: just go to the location (enemies are still met by the engagement join above, when the location is within an engagement's radius).
+	if (order.hold_position)
+	{
+		order.engaged = INVALID_ENTITY_GUID;
+		world_army_travel_to(world, army_index, order.location, 0);
+		return;
+	}
+
 	// Arrival: close enough to the chased army, the attack is resolved (an engagement starts or is joined, which ends the chase).
 	if (order_is_hostile_entity(world, army_index, order.engaged)
 		&& world_location_within_tiles(armies.location[army_index], world_entity_get_location(world, order.engaged), GAME_PARAMETERS.order_attack_reach_tiles))

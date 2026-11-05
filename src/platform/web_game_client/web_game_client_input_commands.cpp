@@ -56,6 +56,10 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::WITHDRAW_ARMY: return gdo_buffer_place<gdo_command_data_withdraw_army>(command_type);
 	case MATCH_COMMAND_TYPE::SALLY_OUT: return gdo_buffer_place<gdo_command_data_sally_out>(command_type);
 	case MATCH_COMMAND_TYPE::SET_ARMY_ORDER: return gdo_buffer_place<gdo_command_data_set_army_order>(command_type);
+	case MATCH_COMMAND_TYPE::CAMPAIGN_JOIN: return gdo_buffer_place<gdo_command_data_campaign_join>(command_type);
+	case MATCH_COMMAND_TYPE::SET_CAMPAIGN_OBJECTIVE: return gdo_buffer_place<gdo_command_data_set_campaign_objective>(command_type);
+	case MATCH_COMMAND_TYPE::CAMPAIGN_BEGIN: return gdo_buffer_place<gdo_command_data_campaign_begin>(command_type);
+	case MATCH_COMMAND_TYPE::CAMPAIGN_DISBAND: return gdo_buffer_place<gdo_command_data_campaign_disband>(command_type);
 	default: return COMMAND_CREATE_NO_GDO;
 	}
 }

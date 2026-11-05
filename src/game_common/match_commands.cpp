@@ -1027,6 +1027,24 @@ void command_campaign_begin_apply(match_world_state& world, match_player_id play
 	campaigns.waypoint[index] = campaigns.location[index]; // Nothing to walk to yet: the system picks the first waypoint.
 }
 
+// CAMPAIGN DISBAND
+
+bool command_campaign_disband_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
+	match_command_validity_feedback* feedback)
+{
+	const command_data_campaign_disband& command = command_header.get_command_data<command_data_campaign_disband>();
+
+	if (!command_campaign_is_own(world, player, command.campaign, feedback)) return false;
+	return command_is_valid(feedback);
+}
+
+void command_campaign_disband_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
+{
+	if (!command_campaign_disband_validity_check(world, player, command_header, nullptr)) return;
+
+	world_campaign_end_and_send_home(world, command_header.get_command_data<command_data_campaign_disband>().campaign);
+}
+
 // SALLY OUT
 
 bool command_sally_out_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,

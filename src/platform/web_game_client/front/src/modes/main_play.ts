@@ -13,6 +13,7 @@ import { show_entity } from "../ui/inspection/inspect_entity.js"
 import { SettlementSelected } from "./settlement_selected.js"
 import { ArmySelected } from "./army_selected.js"
 import { EngagementSelected } from "./engagement_selected.js"
+import { CampaignSelected } from "./campaign_selected.js"
 
 const CARAVAN_PATH_COLOR = 'rgba(240, 200, 60, 0.9)';
 
@@ -85,6 +86,7 @@ export class MainPlay extends Core.Mode
         else if (is_own_settlement(selected)) Core.push_mode(new SettlementSelected(), this);
         else if (is_own_army(selected)) Core.push_mode(new ArmySelected(selected.guid), this);
         else if (selected.entity_type === Backend.ENTITY_TYPE.ENGAGEMENT) Core.push_mode(new EngagementSelected(selected.guid), this);
+        else if (selected.entity_type === Backend.ENTITY_TYPE.CAMPAIGN) Core.push_mode(new CampaignSelected(selected.guid), this);
         // Anything else (enemy or other entity types): read-only properties, no callbacks.
         else
         {

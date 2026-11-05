@@ -25,11 +25,29 @@ GAME_DATA_OBJECT_DEF_BEGIN(entity_inspection_extra_settlement)
     GAME_DATA_PROPERTY_PATH_ARRAY(construction_project_progress, construction_project_progress, GAME_DATA_PROP_TYPE::UI8, entity_inspection_extra_settlement::MAX_PROJECTS)
 GAME_DATA_OBJECT_DEF_END();
 
+// Extra data of an inspected campaign: its member armies, and the armies on their way to join it (JOIN_CAMPAIGN order), found by scanning the world's armies
+// (campaigns do not keep a list). Parallel arrays, the first member_count entries are used. See inspect_campaign_extra.
+struct entity_inspection_extra_campaign
+{
+    static constexpr ui8 MAX_MEMBERS = 32; // Armies beyond this are not reported.
+
+    ui16 member_count;
+    entity_guid member_army[MAX_MEMBERS];
+    ui8 member_joined[MAX_MEMBERS]; // 1 = a member of the campaign, 0 = still on its way to join.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(entity_inspection_extra_campaign)
+    GAME_DATA_PROPERTY(member_count, GAME_DATA_PROP_TYPE::UI16)
+    GAME_DATA_PROPERTY_PATH_ARRAY(member_army, member_army, GAME_DATA_PROP_TYPE::ENTITY_GUID, entity_inspection_extra_campaign::MAX_MEMBERS)
+    GAME_DATA_PROPERTY_PATH_ARRAY(member_joined, member_joined, GAME_DATA_PROP_TYPE::UI8, entity_inspection_extra_campaign::MAX_MEMBERS)
+GAME_DATA_OBJECT_DEF_END();
+
 // Every inspection (entity GDO + extra data if any) must fit the inspection buffer.
 static_assert(sizeof(gdo_world_entity_settlement) + sizeof(gdo_entity_inspection_extra_settlement) <= entity_inspection_context::BUFFER_SIZE, "Settlement inspection data does not fit the inspection buffer.");
 static_assert(sizeof(gdo_world_entity_army) <= entity_inspection_context::BUFFER_SIZE, "Army GDO does not fit the inspection buffer.");
 static_assert(sizeof(gdo_world_entity_worker) <= entity_inspection_context::BUFFER_SIZE, "Worker GDO does not fit the inspection buffer.");
 static_assert(sizeof(gdo_world_entity_engagement) <= entity_inspection_context::BUFFER_SIZE, "Engagement GDO does not fit the inspection buffer.");
+static_assert(sizeof(gdo_world_entity_campaign) + sizeof(gdo_entity_inspection_extra_campaign) <= entity_inspection_context::BUFFER_SIZE, "Campaign inspection data does not fit the inspection buffer.");
 
 // Writes the extra GDO of a settlement at out_buffer (buffer_size bytes free): its ongoing BUILD_SETTLEMENT_BUILDING projects.
 // The web client is a unity build with the client backend, so the local world is read directly. Returns the byte size written, 0 if nothing was written.
@@ -60,6 +78,34 @@ static ui32 inspect_settlement_extra(entity_guid settlement, ui8* out_buffer, ui
     }
 
     gdo_entity_inspection_extra_settlement gdo; // Built on the stack then copied, as for the other GDOs.
+    ia_memcpy(&gdo._data, &extra, sizeof(extra));
+    ia_memcpy(out_buffer, &gdo, sizeof(gdo));
+    return sizeof(gdo);
+}
+
+// Writes the extra GDO of a campaign at out_buffer (buffer_size bytes free): its member armies and the armies joining it. Returns the byte size written, 0 if nothing was written.
+static ui32 inspect_campaign_extra(entity_guid campaign, ui8* out_buffer, ui32 buffer_size)
+{
+    if (sizeof(gdo_entity_inspection_extra_campaign) > buffer_size) return 0;
+    if (WEB_CLIENT.backend->local_match == nullptr) return 0;
+
+    const world_entity_armies& armies = WEB_CLIENT.backend->local_match->world->entities->armies;
+
+    entity_inspection_extra_campaign extra = {};
+    for (ui16 armyIndex = 0; armyIndex < armies.max_count && extra.member_count < entity_inspection_extra_campaign::MAX_MEMBERS; armyIndex++)
+    {
+        if (!armies.guids[armyIndex].is_valid()) continue;
+
+        bool joined = armies.campaign[armyIndex]._value == campaign._value;
+        bool joining = !armies.campaign[armyIndex].is_valid() && armies.order[armyIndex].type == ARMY_ORDER_JOIN_CAMPAIGN && armies.order[armyIndex].target._value == campaign._value;
+        if (!joined && !joining) continue;
+
+        ui16 at = extra.member_count++;
+        extra.member_army[at] = armies.guids[armyIndex];
+        extra.member_joined[at] = joined ? 1 : 0;
+    }
+
+    gdo_entity_inspection_extra_campaign gdo; // Built on the stack then copied, as for the other GDOs.
     ia_memcpy(&gdo._data, &extra, sizeof(extra));
     ia_memcpy(out_buffer, &gdo, sizeof(gdo));
     return sizeof(gdo);
@@ -102,6 +148,9 @@ WASM_EXPORT ui32 client_inspect_entity(ui32 guid)
     {
     case ENTITY_TYPE::SETTLEMENT:
         extraDataSize = inspect_settlement_extra(inspectedGUID, ENTITY_INSPECTION.inspection_buffer + gdoSize, entity_inspection_context::BUFFER_SIZE - gdoSize);
+        break;
+    case ENTITY_TYPE::CAMPAIGN:
+        extraDataSize = inspect_campaign_extra(inspectedGUID, ENTITY_INSPECTION.inspection_buffer + gdoSize, entity_inspection_context::BUFFER_SIZE - gdoSize);
         break;
     default:
         break;

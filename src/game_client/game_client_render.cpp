@@ -37,6 +37,7 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 	const world_entity_workers& workers = world.entities->workers;
 	const world_entity_engagements& engagements = world.entities->engagements;
 	const world_entity_caravans& caravans = world.entities->caravans;
+	const world_entity_campaigns& campaigns = world.entities->campaigns;
 
 	render_state.frame.entity_count = 0;
 	render_state.frame.entity_states = nullptr;
@@ -48,7 +49,8 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 		+ armies.active_count
 		+ workers.active_count
 		+ engagements.active_count
-		+ caravans.active_count;
+		+ caravans.active_count
+		+ campaigns.active_count;
 
 	if (totalEntityCount > 0)
 	{
@@ -144,6 +146,23 @@ void game_client_render_entities(client_render_state& render_state, const game_m
 			outEntity.viewport_location = caravanLoc - render_state.viewport.bottom_left;
 			outEntity.fractional_offset = caravans.movement[caravanIndex].fractional_loc;
 			outEntity.flags = (ui8)caravans.flags[caravanIndex];
+
+			visibleCount++;
+		}
+
+		// CAMPAIGNS
+		for (ui16 campaignIndex = 0; campaignIndex < campaigns.max_count; campaignIndex++)
+		{
+			vec2<float> campaignLoc = campaigns.location[campaignIndex];
+			if (!campaigns.guids[campaignIndex].is_valid() || !is_visible_in_viewport(campaignLoc, render_state.viewport)) continue;
+
+			render_entity& outEntity = entityStates[visibleCount];
+			outEntity.entity_type = ENTITY_TYPE::CAMPAIGN;
+			outEntity.owner = campaigns.owner[campaignIndex];
+			outEntity.guid = campaigns.guids[campaignIndex];
+			outEntity.viewport_location = campaignLoc - render_state.viewport.bottom_left;
+			outEntity.fractional_offset = {};
+			outEntity.flags = 0;
 
 			visibleCount++;
 		}

@@ -61,6 +61,8 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	CAMPAIGN_BEGIN, // Has an own, gathering campaign with an objective march now, without waiting for the armies still joining it.
 
+	CAMPAIGN_DISBAND, // Ends an own campaign early: its armies go home.
+
 	TYPE_COUNT,
 };
 
@@ -460,6 +462,22 @@ bool command_campaign_begin_validity_check(const match_world_state& world, match
 void command_campaign_begin_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
+// CAMPAIGN DISBAND
+struct command_data_campaign_disband
+{
+	entity_guid campaign; // An own campaign.
+};
+
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_campaign_disband)
+	GAME_DATA_PROPERTY(campaign, GAME_DATA_PROP_TYPE::ENTITY_GUID)
+GAME_DATA_OBJECT_DEF_END()
+
+bool command_campaign_disband_validity_check(const match_world_state& world, match_player_id player,
+	const match_command_header& command_header, match_command_validity_feedback* feedback);
+
+void command_campaign_disband_apply(match_world_state& world, match_player_id player,
+	const match_command_header& command_header);
+
 // SALLY OUT
 struct command_data_sally_out
 {
@@ -678,6 +696,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_campaign_objective_validity_check, command_set_campaign_objective_apply },
 	{ "CAMPAIGN_BEGIN", MATCH_COMMAND_TYPE::CAMPAIGN_BEGIN, sizeof(command_data_campaign_begin),
 		command_campaign_begin_validity_check, command_campaign_begin_apply },
+	{ "CAMPAIGN_DISBAND", MATCH_COMMAND_TYPE::CAMPAIGN_DISBAND, sizeof(command_data_campaign_disband),
+		command_campaign_disband_validity_check, command_campaign_disband_apply },
 };
 
 constexpr ui8 MATCH_COMMAND_TABLE_COUNT = sizeof(MATCH_COMMAND_TABLE) / sizeof(MATCH_COMMAND_TABLE[0]);

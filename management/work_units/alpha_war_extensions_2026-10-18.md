@@ -181,29 +181,16 @@ Grew out of R1 leftovers.
 - Open: battles end in 1-2 rounds (formula / numbers, user to decide; design doc line 68 same); splitting `systems_war.h` per entity conflicts with one-header-per-category rule in `world_sim.imprint.md` (decision needed); `world_army_attack_entity` not yet moved to army files; `order_hostile_men` / `order_find_hostile_army` stay in orders file.
 - Stale docs: `management/design/military_design.md` (formula), older sections of `military_state.md`.
 
-## Peer brief
+## P4 outcome (peer session, went well beyond Step A)
 
-Goal: P4a Step A, campaign entity sim data + lifecycle. No commands, no client / TS, no AI, no JOIN_CAMPAIGN order yet. User reviews before Step B.
-
-Start from: imprints for `src/game_common/world_sim/` and `include/game_common/match/world/entities/`; `world_sim/.ai_imprint/` (military_state.md, soldier_population.md). Live standing-orders file is `systems/world_system_army_standing_orders.cpp` (not `world_system_standing_orders.cpp`). Decisions: this file, Decisions > "P4a decisions" and Campaign bullets. Precedent: engagement entity (`world_entity_engagements.h`, `world_sim_entity_engagement.cpp`).
-
-Scope:
-1. Micro entity `CAMPAIGN` appended after CARAVAN (`world_entity_common.h`); SoA header `world_entity_campaigns.h` (single, view, copy_from, GDO, query). Fields: location, owner, query-derived join radius. No leader / objective / member list.
-2. `world_state.h` storage, alloc in `world_sim_main.cpp`, memory estimate in `game_common_main.cpp`, cases in `world_entity_is_valid` / `get_location` / `get_owner`.
-3. `world_sim_entity_campaign.h/.cpp`: spawn (owner, founding location; first free slot, ASSERT when full), destroy, query.
-4. Army: `campaign` guid + JOINING / JOINED state arrays (like engagements / engagement_sides). Settlement: `campaign` guid pointer (unused otherwise). Touch every place the engagement fields touch.
-5. `world_system_campaigns` (declared in `systems_war.h`, called in `world_state_tick` after movement). Per campaign, each tick: promote JOINING armies within join radius to JOINED; move location toward centroid of JOINED armies within cluster radius (= join radius), per-tick move capped; if none in range, re-anchor on a JOINED member (owner's first, then lowest index) only if within splinter distance, else campaign ends; ends when no members. Integer math, slot order, no RNG.
-6. Join radius = `campaign_join_base_tiles` + `campaign_join_per_member_tiles` x joined members. Params also for move cap and splinter distance (`game_parameters.h`).
-7. Cleanup: hook in `world_destroy_army` (leave campaign, end it if empty); destroying a campaign clears members' and settlements' pointers; `world_settlement_change_owner` handles settlement pointer.
-
-Constraints: root conventions; no build / test; do not edit imprints; leave `match_ai` pseudo-campaign alone.
-
-Done: all of the above present; report lists files changed, not done, hand checks.
-
-Open questions: none.
+- [DONE, committed 4091417 "Basic campaign system"] Campaign entity (micro), membership, join radius, location following; entity properties renamed singular.
+- [DONE, tested, uncommitted] Campaign states WAITING / GATHERING / MARCHING / ON_OBJECTIVE; objective CONQUER_SETTLEMENT; commands `SET_CAMPAIGN_OBJECTIVE`, `CAMPAIGN_BEGIN`, `CAMPAIGN_DISBAND`; settlement joining raises an army that holds its JOIN_CAMPAIGN order until raising ends; `army_order.hold_position` (via `army_order_station`); `engagement_tick_interval` = 20 (half speed), wagons deal 1 damage; relief armies released when a siege returns to idle.
+- [DONE, tested, uncommitted] Client: render / query / inspection (large banner), campaign panel, read-only CampaignSelected mode with Disband, CampaignStart mode ("Start Campaign" button on settlement, key 4).
+- Open: client does not send `CAMPAIGN_BEGIN` yet; `hold_position` not in order GDO; imprints / `.ai_imprint` use old plural field names; `web/src` JS copy untouched.
+- Decisions changed vs "P4a decisions": campaign now has states + an objective (CONQUER_SETTLEMENT) and settlements join (raise armies); no longer "no objective field / settlement joining in P4b".
 
 ## Next step
 
 Everything through P3e is tested and committed (0031653).
-Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4 done, tested, committed. Next: P4 campaign entity (design first), then P5 / R5.
+Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4 done, tested, committed. P4 campaign: tested, working reasonably well as a first implementation (base committed 4091417; later changes in "P4 outcome" tested, commit pending by user). Next: `CAMPAIGN_BEGIN` client button and other open items in "P4 outcome", then P5.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

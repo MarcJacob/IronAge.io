@@ -8,11 +8,13 @@
 #include "game_common/match/world/world_state.h"
 
 // Gives the army a STATION order at the location (the order system then walks it there). Does not touch its movement.
-static inline void army_order_station(world_entity_armies& armies, ui16 index, world_location location)
+// hold_position: see army_order::hold_position (here: the army does not chase hostile armies / caravans coming within range).
+static inline void army_order_station(world_entity_armies& armies, ui16 index, world_location location, bool hold_position = false)
 {
 	armies.order[index] = {};
 	armies.order[index].type = ARMY_ORDER_STATION;
 	armies.order[index].location = location;
+	armies.order[index].hold_position = hold_position;
 }
 
 // Gives the army an ATTACK order on the target entity (the order system chases it and resolves the attack on reaching it).

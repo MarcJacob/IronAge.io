@@ -211,6 +211,39 @@ body {
     color: #9aa0a6;
 }
 
+/* Campaign panel member row: army icon tinted by the owner's color, men and joined state, composition bar below (segments colored by troop type). */
+.campaign_member {
+    display: grid;
+    grid-template-columns: 1.4rem 1fr;
+    column-gap: 6px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.campaign_member_icon {
+    grid-row: 1 / span 2;
+    width: 1.4rem;
+    height: 1.4rem;
+    background-color: #fff;
+    -webkit-mask: url(art/entity_army.svg) center / contain no-repeat;
+    mask: url(art/entity_army.svg) center / contain no-repeat;
+}
+
+.campaign_member_status {
+    color: #9aa0a6;
+}
+
+.campaign_member_bar {
+    display: flex;
+    height: 5px;
+    background: #14161a;
+    border: 1px solid #c7cbd1;
+}
+
+.campaign_member_bar > div {
+    height: 100%;
+}
+
 /* Building row: a small box per settlement building type (name as the icon, built count, one thin bar per ongoing project, build button top right).
    Inline so several sit side by side at the bottom of the panel. */
 .building_row {
