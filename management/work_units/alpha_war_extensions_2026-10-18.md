@@ -40,7 +40,7 @@ Rebuild army mechanics closer to the user's vision: encourage correct behaviors,
   - R4 Looting. Design in `military_design.md` "Raiding & Looting". Decisions:
     - Engagement Loot Pool (gold + supplies): destroyed armies drop all gold / supplies into it; conquest adds 20% of peasants + 30% of urban pop (killed, 1 gold each); no building destruction. Shared among victorious armies by manpower, capped by carry capacity; leftover becomes goods / trade volume of the settlement where the engagement is located.
     - Banditry: caravans only (no workers); valid by origin owner's status (hostile / neutral); intercepted when in range of an army even when not chased; active chase depends on order (Station leash, Raid, Defend); loot half gold / half supplies, capped by carry capacity.
-    - R4a [TODO] Loot Pool + army-death drops + conquest + distribution. R4b [TODO] Banditry.
+    - R4a [DONE, tested] Loot Pool (`loot_gold` / `loot_supplies` on engagements, not in GDO; params `conquest_loot_peasants_percent` 20, `conquest_loot_urban_percent` 30). Loot block in `world_sim_entity_engagement.cpp` (`world_engagement_on_finish` called first in `world_engagement_end`). Winner: attacker men > 0 -> attacker; else defender if men > 0; else none (siege: defender wins by default). Dead soldiers (armies + garrison) also add their daily consumption to the pool's supplies. Sharing: repeated passes, by men among armies with room, capped by room. Leftover: gold -> trade_volume, supplies -> `settlement_market_add`; settlement = besieged one, else owner of the tile at the engagement location, else lost. Conquest: peasants via `settlement_remove_peasants`, 30% of urban pop (soldiers counted, capped to unemployed + workers) via `settlement_kill_population`. Instant conquest of empty garrison (`world_system_army.cpp:46`) also loots. Over branch replaces `world_destroy_engagement` with winner decision + on_finish + owner change + `world_engagement_end`.    - R4b [TODO] Banditry.
   - R5 P4 campaign / P5 campaign AI (shared supply pool).
 
 ## Tasks
@@ -156,16 +156,6 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
 - Movement session works on movement / pathing backend only; P2 may move / remove the army block in `movement_decision`.
 - Builders run no build / test; user tests by hand.
 
-## Peer brief (R4a)
-
-- Goal: engagement Loot Pool. Design: `management/design/military_design.md` "Raiding & Looting" > Looting; decisions: R4 above.
-- Scope: Loot Pool (gold + supplies) per engagement; destroyed armies drop all gold / supplies into it; conquest adds gold = 20% peasants + 30% urban pop killed, 1 gold each (game parameters); no goods taken, no building destruction; at engagement end, pool shared among victorious armies (alive on the winning side; siege attackers on conquest) by manpower, capped by carry capacity (reuse Raid carry logic); leftover becomes goods / trade volume of the settlement whose territory the engagement is in, else vanishes.
-- Files: `src/game_common/world_sim/` engagement files (`world_entity_engagements.*`, engagement systems), army destroy / disband callers, conquest code, raid loot code (carry helper).
-- Imprints: world_sim chain, `.ai_imprint/military_state.md`, `army_supply_survey.md`.
-- Constraints: armies destroyed outside an engagement keep current behavior; no new client UI (ask before adding a stock readout); no build / test; warn on multi-file architecture changes.
-- Done: code complete, user hand-tests. Report changes, params, not done, test checklist.
-- Open: none (goods taken at conquest = no; field battle with no territory settlement = leftover vanishes; assumed from recommendations).
-
 ## Depends on
 
 `alpha_troops_recruitment_2026-10-18.md`, `basic_world_economy_2026-10-18.md` (buildings), `straight_line_movement_2026-10-15.md`.
@@ -186,5 +176,5 @@ Grew out of R1 leftovers.
 ## Next step
 
 Everything through P3e is tested and committed (0031653).
-Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. Next: R4-R5.
+Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4a done, tested (uncommitted). Next: R4b banditry, then R5.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

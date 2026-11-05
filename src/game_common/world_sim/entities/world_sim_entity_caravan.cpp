@@ -41,7 +41,7 @@ entity_guid world_spawn_entity_caravan(match_world_state& world, const world_ent
     return newCaravanGuid;
 }
 
-void world_destroy_entity_caravan(match_world_state& world, const entity_guid& caravan)
+void world_destroy_caravan(match_world_state& world, const entity_guid& caravan)
 {
     ASSERT(world_entity_is_valid(world, caravan) && caravan.get_type() == ENTITY_TYPE::CARAVAN);
     world_entity_caravans& caravans = world.entities->caravans;
@@ -142,7 +142,7 @@ static ui64 caravan_profit_weight(ui32 caravan_value, ui64 profit, ui32 path_cos
     ui64 gain = caravan_value + profit - trade_profit_receiver_share(profit, GAME_PARAMETERS.trade);
     if (gain == 0) return 0;
     ui64 ratio = gain * WEIGHT_SCALE / ia_max(path_cost, (ui32)1);
-    return ia_pow(ia_min(ratio, CARAVAN_WEIGHT_RATIO_MAX), CARAVAN_WEIGHT_EXPONENT);
+    return ia_pow<ui64>(ia_min(ratio, CARAVAN_WEIGHT_RATIO_MAX), CARAVAN_WEIGHT_EXPONENT);
 }
 
 static ui64 caravan_candidate_weight(ui32 caravan_value, ui32 destination_pool, ui32 destination_capacity, ui32 origin_capacity, ui32 destination_volume_fraction,

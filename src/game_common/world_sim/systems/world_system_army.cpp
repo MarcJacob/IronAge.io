@@ -6,6 +6,7 @@
 
 #include "../entities/world_sim_entity_engagement.h"
 #include "../entities/world_sim_entity_settlement.h"
+#include "../entities/world_sim_entity_caravan.h"
 
 #include "../world_movement.h"
 
@@ -66,8 +67,11 @@ void world_army_attack_entity(match_world_state& world, entity_guid attacker, en
 		break;
 	}
 	case ENTITY_TYPE::ENGAGEMENT:
-		if (world_entity_is_valid(world, target)) world_army_join_engagement(world, attacker, target);
+		world_army_join_engagement(world, attacker, target);
 		break;
+    case ENTITY_TYPE::CARAVAN:
+        world_army_loot_caravan(world, attacker, target);
+        break;
 	default:
 		break;
 	}

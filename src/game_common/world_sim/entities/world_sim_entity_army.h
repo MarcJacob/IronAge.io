@@ -76,6 +76,10 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, cons
 // settlement and the room left in the army's gold / supplies pool (capacity: army_supply_capacity). What is taken leaves the settlement; nothing else is destroyed.
 void world_army_loot_settlement(match_world_state& world, entity_guid army, entity_guid settlement);
 
+// Has the army destroy the target caravan and take its value as gold and supplies.
+// Whatever the army can't carry is left for the local settlement.
+void world_army_loot_caravan(match_world_state& world, entity_guid army, entity_guid caravan);
+
 // Runs daily, before the settlement economy. Resets the settlements' daily raided totals (raided = looted yesterday), then every army raiding (RAID_RAIDING,
 // not fleeing / travelling / raising / in an engagement) loots its target. Armies go in index order from a random start so none has a standing advantage on a shared target.
 // Declared in systems_war.h.

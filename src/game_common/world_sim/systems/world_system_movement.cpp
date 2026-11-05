@@ -42,7 +42,7 @@ static bool process_entity_movement(const match_world_state& world, world_entity
     i32 toTargetY = (i32)movement.move_target.y * 1000 - posY;
 
     // Distance rounded down by the integer square root. A step reaching it lands exactly on the waypoint's center.
-    ui32 dist = ia_isqrt((ui64)((i64)toTargetX * toTargetX + (i64)toTargetY * toTargetY));
+    ui32 dist = ia_sqrt_i((ui64)((i64)toTargetX * toTargetX + (i64)toTargetY * toTargetY));
     i32 newPosX = (i32)movement.move_target.x * 1000;
     i32 newPosY = (i32)movement.move_target.y * 1000;
     if ((ui32)step < dist)
@@ -153,7 +153,7 @@ void world_system_entity_movement_decision(match_world_state& world)
                     caravans.movements[caravanIndex].destination = caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index());
             }
             else
-                world_destroy_entity_caravan(world, caravan);
+                world_destroy_caravan(world, caravan);
             continue;
         }
 

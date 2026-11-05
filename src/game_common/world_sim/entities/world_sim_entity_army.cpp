@@ -1,6 +1,8 @@
 #include "world_sim_entity_army.h"
 #include "../world_sim.h"
+#include "game_common/match/world/entities/world_entity_armies.h"
 #include "game_common/match/world/troop_types.h"
+#include "world_sim_entity_caravan.h"
 #include "world_sim_entity_settlement.h"
 #include "world_sim_entity_engagement.h"
 #include "game_common/match/world/world.h"
@@ -329,6 +331,38 @@ void world_army_loot_settlement(match_world_state& world, entity_guid army, enti
 	trade.export_goods -= goods - fromLocal;
 	raid.goods_taken += goods;
 	supplies += goods;
+}
+
+void world_army_loot_caravan(match_world_state& world, entity_guid army, entity_guid caravan)
+{
+    if (!army.is_valid() || !caravan.is_valid()) return;
+
+    ui16 caravanValue = world.entities->caravans.values[caravan.get_index()];
+    world_destroy_caravan(world, caravan);
+
+    world_entity_army_view armyView { world.entities->armies, army.get_index() };
+
+    ui16 goldLoot = caravanValue / 2;
+    ui16 supplyLoot = caravanValue - goldLoot;
+
+    ui16 takenGold = ia_min(army_supply_capacity(world, army.get_index()) - armyView.gold, goldLoot);
+    ui16 takenSupplies = ia_min(army_supply_capacity(world, army.get_index()) - armyView.supplies, supplyLoot);
+
+    armyView.gold += takenGold;
+    armyView.supplies += takenSupplies;
+
+    // If caravan was in a settlement's territory, remaining gold goes to it as trade volume, and goods as goods.
+    ui16 regionIndex, tileIndex;
+    world_get_tile(*world.terrain, armyView.location, regionIndex, tileIndex);
+
+    if (world.terrain->regions[regionIndex].owners[tileIndex] != world_terrain::UNOWNED_TILE)
+    {
+        world_entity_settlement_view settlementView { world.entities->settlements, world.terrain->regions[regionIndex].owners[tileIndex] };
+
+        // @TODO(Marc): Split between export and local here ?
+        settlementView.trade.market_goods += supplyLoot - takenSupplies;
+        settlementView.trade.trade_volume += goldLoot - takenGold;
+    }
 }
 
 void world_system_raid_loot(match_world_state& world)

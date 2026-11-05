@@ -90,8 +90,8 @@ struct game_parameters
 
     // ARMY STANDING ORDERS (distances in tiles). See world_system_standing_orders.cpp.
     ui32 order_attack_reach_tiles = 2; // An army resolves its attack (or chase) on a target within this many tiles.
-    ui32 order_station_acquire_radius = 5; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked...
-    ui32 order_station_leash = 10; // ... as long as they are at most this far from the station point (the army returns to it afterwards).
+    ui32 order_station_acquire_radius = 10; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked.
+                                            // Army returns to station location if target goes beyond that radius.
     ui32 order_defend_threat_radius = 20; // Hostile armies in the territory or this close to the settlement count in the threat the army weighs itself against.
     ui32 order_raid_flee_radius = 15; // Stronger hostile armies this close make the raiding army flee...
     ui32 order_raid_return_radius = 25; // ... until none is within this radius.
@@ -148,7 +148,7 @@ struct game_parameters
     ui32 army_travel_speed = 150;
     ui32 army_wagon_speed_divisor = 2; // An army containing at least one wagon moves at its normal speed divided by this (stopgap until the army speed rework).
     ui32 worker_travel_speed = 300;
-    ui32 caravan_travel_speed = 200;
+    ui32 caravan_travel_speed = 250;
     ui32 ship_travel_speed = 600;
 
     // ECONOMY

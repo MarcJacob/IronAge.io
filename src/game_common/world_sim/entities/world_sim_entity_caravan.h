@@ -64,7 +64,7 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 void world_caravan_retarget(match_world_state& world, entity_guid caravan);
 
 entity_guid world_spawn_entity_caravan(match_world_state& world, const world_entity_caravan& start_state);
-void world_destroy_entity_caravan(match_world_state& world, const entity_guid& caravan);
+void world_destroy_caravan(match_world_state& world, const entity_guid& caravan);
 
 // Allocates the caravans' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 count);

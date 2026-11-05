@@ -6,19 +6,59 @@
 #define ia_min(a, b) ((a) <= (b) ? (a) : (b))
 #define ia_max(a, b) ((a) >= (b) ? (a) : (b))
 
+#include "core/std_types.h"
+
 template<typename Numeric>
-static Numeric ia_pow(Numeric base_val, ui32 pow)
+static Numeric ia_pow(Numeric base_val, ui64 pow)
+{
+    static constexpr Numeric MAX_VAL = (Numeric)(~0);
+
+	if (pow == 0) return 1;
+	if (base_val == 0) return 0;
+
+    for (;;)
+    {
+        if (pow & 1)
+            base_val *= base_val;
+    
+        pow = pow >> 1;
+        if (pow == 0)
+        {
+            break;
+        }
+
+        // If result would overflow with next power, break out now and return maximum possible value.
+        if (base_val > ((Numeric)~0 >> (sizeof(Numeric) / 2)))
+        {
+            base_val = MAX_VAL;
+            break;
+        }
+    }
+
+    ASSERT(base_val <= MAX_VAL);
+    return (Numeric)base_val;
+}
+
+// Float specialization of power function that does not feature size checks.
+template<>
+float ia_pow<float>(float base_val, ui64 pow)
 {
 	if (pow == 0) return 1;
 	if (base_val == 0) return 0;
 
-	Numeric val = base_val;
-	for (ui32 i = 1; i < pow; i++)
-	{
-		val = val * base_val;
-	}
+    for (;;)
+    {
+        if (pow & 1)
+            base_val *= base_val;
+    
+        pow = pow >> 1;
+        if (pow == 0)
+        {
+            break;
+        }
+    }
 
-	return val;
+    return base_val;
 }
 
 // Handmade square root function for when libc isn't available.
@@ -61,7 +101,7 @@ static float ia_sqrt(Numeric val, ui8 precision_level = 8)
 	for (ui8 precisionLevel = 0; precisionLevel < precision_level; precisionLevel++)
 	{
 		float estimate = (minResult + maxResult) / 2.f;
-		float estimatePow = ia_pow(estimate, 2);
+		float estimatePow = ia_pow<float>(estimate, 2);
 		if (estimatePow > val) maxResult = estimate;
 		else if (estimatePow < val) minResult = estimate;
 		else return estimate; // NOTE(Marc): Not sure the extra branch for this early out is really worthwhile unless we use a very high precision level...
@@ -86,7 +126,7 @@ static inline Numeric ia_clamped(Numeric val, Numeric min, Numeric max)
 // FIXED-POINT HELPERS
 
 // Integer square root: the largest r such that r * r <= val. Exact and integer-only, so results are identical on every machine.
-static inline ui32 ia_isqrt(ui64 val)
+static inline ui32 ia_sqrt_i(ui64 val)
 {
 	ui64 result = 0;
 	ui64 bit = (ui64)1 << 62;

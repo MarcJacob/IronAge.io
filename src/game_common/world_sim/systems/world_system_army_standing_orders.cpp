@@ -4,6 +4,8 @@
 // The order logic of each type is a row of ARMY_ORDER_DEFS.
 // Hostility is world_entity_is_hostile. Targets are found by scanning all armies (no spatial index yet). Tunables are in GAME_PARAMETERS (order_*).
 
+#include "game_common/match/game_parameters.h"
+#include "game_common/match/world/entities/world_entity_common.h"
 #include "game_common/match/world/world_state.h"
 
 #include "systems_war.h"
@@ -56,23 +58,53 @@ static bool order_is_hostile_entity(const match_world_state& world, ui16 army_in
 // The hostile army nearest to the center within the radius (lowest slot on a tie), or an invalid guid.
 // With territory_of set, only armies inside that settlement's territory.
 // @TODO(Marc): More generalized spatial querying system.
-static entity_guid order_find_hostile_army(match_world_state& world, ui16 army_index, world_location center, float radius, ui16 territory_of)
+static entity_guid order_find_closest_hostile_army(match_world_state& world, ui16 army_index, world_location center, ui16 radius, ui16 territory_of)
 {
 	const world_entity_armies& armies = world.entities->armies;
 	entity_guid found = INVALID_ENTITY_GUID;
-	float foundDist = 0;
+	ui16 foundDist = 0;
 	for (ui32 other = 0; other < armies.max_count; other++)
 	{
 		if (!order_is_hostile_entity(world, army_index, armies.guids[other])) continue;
-		// An army in an engagement stands for it: not chased (nor joined) if the engagement is neutral to this army's owner. Otherwise the chase ends in the join.
-		if (armies.engagements[other].is_valid() && world_entity_is_neutral(world, armies.engagements[other], armies.owners[army_index])) continue;
 
-		float dist = vec2_dist_squared(center, armies.locations[other]);
+		// An army in an engagement stands for it: not chased (nor joined) if the engagement is neutral to this army's owner. Otherwise the chase ends in the join.
+		if (armies.engagements[other].is_valid() 
+                && world_entity_is_neutral(world, armies.engagements[other], armies.owners[army_index])) continue;
+
+		ui16 dist = vec2_dist_squared_i<ui16>(center, armies.locations[other]);
 		if (dist > radius * radius) continue;
 		if (found.is_valid() && dist >= foundDist) continue;
 		if (territory_of != 0xFFFF && !world_tile_owned_by_settlement(world, armies.locations[other], territory_of)) continue;
 
 		found = armies.guids[other];
+		foundDist = dist;
+	}
+	return found;
+}
+
+static entity_guid order_find_closest_hostile_caravan(match_world_state& world, ui16 army_index, world_location center, ui16 radius, ui16 territory_of)
+{
+    const world_entity_caravans& caravans = world.entities->caravans;
+    entity_guid found = INVALID_ENTITY_GUID;
+
+	ui16 foundDist = 0;
+	for (ui32 other = 0; other < caravans.max_count; other++)
+	{
+		if (!order_is_hostile_entity(world, army_index, caravans.guids[other])) 
+            continue;
+
+		ui16 dist = vec2_dist_squared_i<ui16>(center, caravans.locations[other]);
+		if (dist > radius * radius)
+            continue;
+
+		if (found.is_valid() && dist >= foundDist)
+            continue;
+
+		if (territory_of != 0xFFFF 
+                && !world_tile_owned_by_settlement(world, caravans.locations[other], territory_of))
+            continue;
+
+		found = caravans.guids[other];
 		foundDist = dist;
 	}
 	return found;
@@ -159,7 +191,7 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 	if (order_is_hostile_entity(world, army_index, order.engaged))
 	{
 		world_location engagedLocation = world_entity_get_location(world, order.engaged);
-		if (world_location_within_tiles(order.location, engagedLocation, GAME_PARAMETERS.order_station_leash))
+		if (world_location_within_tiles(order.location, engagedLocation, GAME_PARAMETERS.order_station_acquire_radius))
 		{
 			armies.movements[army_index].destination = engagedLocation;
 			return;
@@ -169,13 +201,22 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 
 	world_army_travel_to(world, army_index, order.location, 0); // Arriving changes nothing: it keeps watching for hostile armies.
 
-	entity_guid found = order_find_hostile_army(world, army_index, armies.locations[army_index], (float)GAME_PARAMETERS.order_station_acquire_radius, 0xFFFF);
-	if (found.is_valid() && world_location_within_tiles(order.location, world_entity_get_location(world, found), GAME_PARAMETERS.order_station_leash))
+	entity_guid found = order_find_closest_hostile_army(world, army_index, armies.locations[army_index], GAME_PARAMETERS.order_station_acquire_radius, 0xFFFF);
+	if (found.is_valid())
 	{
 		order.engaged = found;
 		armies.movements[army_index].destination = world_entity_get_location(world, found);
-	}
-	// @TODO(Marc): Caravans (hostile or neutral) within the acquire radius should be attacked too. There is no caravan attack resolution yet.
+    }
+    else
+    {
+        // If no army is found, a caravan is targeted instead.
+        found = order_find_closest_hostile_caravan(world, army_index, armies.locations[army_index], GAME_PARAMETERS.order_station_acquire_radius, 0xFFFF);
+        if (found.is_valid())
+        {
+            order.engaged = found;
+            armies.movements[army_index].destination = world_entity_get_location(world, found);
+        }
+    }
 }
 
 // ATTACK
@@ -188,7 +229,7 @@ static void order_wait_outside(match_world_state& world, ui16 army_index, world_
 
 	i32 dx = (i32)armies.locations[army_index].x - (i32)center.x;
 	i32 dy = (i32)armies.locations[army_index].y - (i32)center.y;
-	i32 dist = (i32)ia_isqrt((ui64)(dx * dx + dy * dy));
+	i32 dist = (i32)ia_sqrt_i((ui64)(dx * dx + dy * dy));
 	i32 edge = (i32)radius + 1;
 	i32 x = dist == 0 ? (i32)center.x + edge : (i32)center.x + dx * edge / dist;
 	i32 y = dist == 0 ? (i32)center.y : (i32)center.y + dy * edge / dist;
@@ -341,7 +382,7 @@ static void army_order_defend_logic(match_world_state& world, ui16 army_index)
 			armies.movements[army_index].destination = world_entity_get_location(world, order.engaged);
 			return;
 		}
-		order.engaged = order_find_hostile_army(world, army_index, armies.locations[army_index], (float)GAME_PARAMETERS.order_station_acquire_radius, 0xFFFF);
+		order.engaged = order_find_closest_hostile_army(world, army_index, armies.locations[army_index], (float)GAME_PARAMETERS.order_station_acquire_radius, 0xFFFF);
 		if (order.engaged.is_valid()) armies.movements[army_index].destination = world_entity_get_location(world, order.engaged);
 		else world_army_travel_to(world, army_index, settlementLocation, 0);
 		return;
@@ -353,7 +394,8 @@ static void army_order_defend_logic(match_world_state& world, ui16 army_index)
 		armies.movements[army_index].destination = world_entity_get_location(world, order.engaged);
 		return;
 	}
-	order.engaged = order_find_hostile_army(world, army_index, armies.locations[army_index], 1e9f, settlementIndex);
+
+	order.engaged = order_find_closest_hostile_army(world, army_index, armies.locations[army_index], ~0, settlementIndex);
 	if (order.engaged.is_valid())
 	{
 		armies.movements[army_index].destination = world_entity_get_location(world, order.engaged);

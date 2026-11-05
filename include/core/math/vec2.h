@@ -71,7 +71,16 @@ static inline bool operator!=(const vec2<VecTypeA> vec_a, vec2<VecTypeB> vec_b)
 template<typename VecAType, typename VecBType>
 static inline float vec2_dist_squared(vec2<VecAType> vec_a, vec2<VecBType> vec_b)
 {
-	return ia_pow(vec_a.x - vec_b.x, 2) + ia_pow(vec_a.y - vec_b.y, 2);
+	return ia_pow<float>(vec_a.x - vec_b.x, 2) + ia_pow<float>(vec_a.y - vec_b.y, 2);
+}
+
+template<typename ResType, typename VecAType, typename VecBType>
+static inline ResType vec2_dist_squared_i(vec2<VecAType> vec_a, vec2<VecBType> vec_b)
+{
+    ResType xDiff = (vec_a.x - vec_b.x) * (vec_a.x > vec_b.x) + (vec_b.x - vec_a.x) * (vec_b.x > vec_a.x);
+    ResType yDiff = (vec_a.y - vec_b.y) * (vec_a.y > vec_b.y) + (vec_b.y - vec_a.y) * (vec_b.y > vec_a.y);
+
+    return ia_pow<ResType>(xDiff, 2) + ia_pow<ResType>(yDiff, 2);
 }
 
 template<typename VecAType, typename VecBType>

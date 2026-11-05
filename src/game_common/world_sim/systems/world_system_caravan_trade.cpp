@@ -39,7 +39,7 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     // Nowhere to go: walk back home to refund the value, or give up if there is no home.
     if (!originValid)
     {
-        world_destroy_entity_caravan(world, caravan);
+        world_destroy_caravan(world, caravan);
         return;
     }
 
@@ -108,7 +108,7 @@ static void caravan_deliver_to_army(match_world_state& world, ui32 caravanIndex)
 
     if (sold == value)
     {
-        world_destroy_entity_caravan(world, caravan);
+        world_destroy_caravan(world, caravan);
         return;
     }
     caravans.values[caravanIndex] = (ui16)(value - sold);
@@ -134,7 +134,7 @@ void world_system_caravan_trade(match_world_state& world)
             if (caravan_settlement_is_valid(world, origin) && caravans.locations[caravanIndex] == caravan_endpoint(world, caravans.flags[caravanIndex], origin.get_index()))
             {
                 settlement_market_add(settlements, origin.get_index(), caravans.values[caravanIndex]); // No profit.
-                world_destroy_entity_caravan(world, caravan);
+                world_destroy_caravan(world, caravan);
             }
             continue;
         }
@@ -173,6 +173,6 @@ void world_system_caravan_trade(match_world_state& world)
         settlement_trade_volume_add(settlements, destinationIndex, value + receiverProfit);
         if (originValid) settlement_trade_volume_add(settlements, origin.get_index(), value + profit - receiverProfit);
 
-        world_destroy_entity_caravan(world, caravan);
+        world_destroy_caravan(world, caravan);
     }
 }
