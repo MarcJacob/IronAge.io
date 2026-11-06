@@ -83,6 +83,7 @@ struct game_parameters
     ui8 tradepost_wagon_max_increase = 2; // How much the wagons max is increased per caravanserai (tradepost) in a settlement.
 
     // MILITARY
+    ui8 army_raising_cost_multiplier = 5; // How many days worth of consumption (in gold) must be given to an army on raising.
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
     ui32 levy_max_percent = 20; // Max levies of a settlement (garrison + raised), in percent of its total population. No ceiling.
     ui32 army_wrong_origin_owner_desertion_percent = 2; // Per day, share of the men of an army whose home settlement now has another owner that deserts (rounded up).
@@ -155,6 +156,7 @@ struct game_parameters
 
     // Speed of each entity kind with tile travel cost = 1, in thousandths of a tile per tick. 
     // Divided by the tile's travel cost.
+    // @TODO(Marc): Move this to troop type stats.
     ui32 army_travel_speed = 150;
     ui32 army_wagon_speed_divisor = 2; // An army containing at least one wagon moves at its normal speed divided by this (stopgap until the army speed rework).
     ui32 worker_travel_speed = 300;
@@ -163,6 +165,7 @@ struct game_parameters
 
     // ECONOMY
     // Daily army upkeep, in goods consumed from the army's supplies, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
+    // @TODO(Marc): Move this to troop type stats.
     ui32 upkeep_levy_per_mille = 1000;
     ui32 upkeep_men_at_arms = 3;
     ui32 upkeep_horseman = 4;
@@ -171,6 +174,7 @@ struct game_parameters
 
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
     // Gold is paid by the treasury inside the owner's territory, and buys supplies at a settlement the army stands in, up to it.
+    // @TODO(Marc): Move this to troop type stats.
     ui32 carry_levy = 10;
     ui32 carry_men_at_arms = 10;
     ui32 carry_horseman = 16;

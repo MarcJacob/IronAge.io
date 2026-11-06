@@ -39,28 +39,52 @@ struct campaign_objective
 };
 static_assert(sizeof(campaign_objective) == 16, "campaign_objective size changed.");
 
+// Discriminated union of state required by the campaign over its states.
+union campaign_state_data
+{
+    struct
+    {
+        ui64 _unused;
+    } waiting;
+
+    struct
+    {
+        entity_guid guide_army; // Army used as a "guide" for the others as the campaign members travel together to the objective.
+                                // Usually chosen as some combination of slowest and largest army, to lower the chances it or others will be left behind.
+    } marching;
+
+    struct
+    {
+
+    } on_objective;
+};
+
 // Property arrays for a world's campaigns. A campaign is a group of armies moving and acting together. Fixed size: it doesn't know its armies, armies point to it instead.
 // Its location follows its armies (world_system_campaigns). It ends when none of its armies is close enough to it.
 struct world_entity_campaigns : public world_entity_container
 {
 	world_location* location;
+
 	match_player_id* owner;
+
 	CAMPAIGN_STATE* state;
+    campaign_state_data* state_data;
+
 	ui32* troop_count; // Men in all the armies of the campaign (recomputed every tick).
-	campaign_objective* objective;
-	world_location* waypoint; // MARCHING: the point the armies were last sent around. A new one is picked once the campaign gets close to it.
+                       
+	campaign_objective* objective; // Current objective of the campaign.
 
 	struct view;
 
-	// Consolidated representation of a single campaign for viewing purposes.
+	// Consolidated data of a single campaign.
 	struct single
 	{
 		world_location location;
 		match_player_id owner;
 		CAMPAIGN_STATE state;
+        campaign_state_data state_data;
 		ui32 troop_count;
 		campaign_objective objective;
-		world_location waypoint;
 
 		ui8 join_radius; // Tiles. Not stored in the world: filled by world_entity_query_campaign (campaign_join_radius) for viewers.
 
@@ -74,27 +98,27 @@ struct world_entity_campaigns : public world_entity_container
 		world_location& location;
 		match_player_id& owner;
 		CAMPAIGN_STATE& state;
+        campaign_state_data& state_data;
 		ui32& troop_count;
 		campaign_objective& objective;
-		world_location& waypoint;
 
 		void copy_from(const single& source)
 		{
 			location = source.location;
 			owner = source.owner;
 			state = source.state;
+            state_data = source.state_data;
 			troop_count = source.troop_count;
 			objective = source.objective;
-			waypoint = source.waypoint;
 		}
 
 		view(world_entity_campaigns& collection, ui16 index)
 			: location(collection.location[index])
 			, owner(collection.owner[index])
 			, state(collection.state[index])
+            , state_data(collection.state_data[index])
 			, troop_count(collection.troop_count[index])
 			, objective(collection.objective[index])
-			, waypoint(collection.waypoint[index])
 		{}
 	};
 };
@@ -106,7 +130,6 @@ inline void world_entity_campaigns::single::copy_from(const world_entity_campaig
 	state = source.state;
 	troop_count = source.troop_count;
 	objective = source.objective;
-	waypoint = source.waypoint;
 	join_radius = 0;
 }
 
@@ -117,7 +140,6 @@ inline void world_entity_campaigns::single::copy_from(const world_entity_campaig
 	state = collection.state[index];
 	troop_count = collection.troop_count[index];
 	objective = collection.objective[index];
-	waypoint = collection.waypoint[index];
 	join_radius = 0;
 }
 
@@ -136,7 +158,6 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_campaign)
 	GAME_DATA_PROPERTY_PATH(objective_target, objective.target, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY_PATH(objective_location, objective.location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 
-	GAME_DATA_PROPERTY(waypoint, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY(join_radius, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 

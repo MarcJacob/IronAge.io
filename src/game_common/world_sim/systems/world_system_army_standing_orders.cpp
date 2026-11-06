@@ -1,6 +1,5 @@
 // Standing orders of armies: each tick, what an army moves towards and what it does on arrival, from its engagement or its order (ARMY_ORDER_TYPE).
-// An army in an engagement it cannot leave (or whose order wants it there) walks to the engagement's location (the order is not worked on meanwhile and goes on afterwards):
-// every order logic starts with its own handling of the army's engagement. Raising armies hold their order and start it once raised (except for that part).
+// Every order logic starts with its own handling of the army's engagement. Raising armies hold their order and start it once raised.
 // The order logic of each type is a row of ARMY_ORDER_DEFS.
 // Hostility is world_entity_is_hostile. Targets are found by scanning all armies (no spatial index yet). Tunables are in GAME_PARAMETERS (order_*).
 
@@ -28,16 +27,6 @@ struct army_order_def
 };
 
 // HELPERS
-
-// What an army in an engagement does while its order does not overwrite it: for now walks to the engagement's location, where it is pinned once close enough.
-// The order is not worked on meanwhile and goes on afterwards. @TODO(Marc): Later the default behavior for engagements an order does not take over.
-static void engagement_battle_logic(match_world_state& world, ui16 army_index)
-{
-	world_entity_armies& armies = world.entities->armies;
-	world_location engagementLocation = world.entities->engagements.location[armies.engagement[army_index].get_index()];
-	armies.movement[army_index].destination = vec2_dist_squared(armies.location[army_index], engagementLocation) > GAME_PARAMETERS.engagement_pin_distance_tiles * GAME_PARAMETERS.engagement_pin_distance_tiles
-		? engagementLocation : armies.location[army_index];
-}
 
 // An order that cannot go on: the army stands where it is.
 static void army_order_fall_back_to_station(match_world_state& world, ui16 army_index)
@@ -152,7 +141,6 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 		bool stationedInside = world_location_within_tiles(order.location, engagements.location[engagement.get_index()], engagement_join_radius(world, engagement));
 		if (stationedInside || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
@@ -171,7 +159,6 @@ static void army_order_station_logic(match_world_state& world, ui16 army_index)
 
 			if (world_army_join_engagement(world, armies.guids[army_index], engagement))
 			{
-				engagement_battle_logic(world, army_index);
 				return;
 			}
 		}
@@ -273,7 +260,6 @@ static void army_order_attack_logic(match_world_state& world, ui16 army_index)
 	{
 		if (armies.engagement[army_index] == engagement || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
@@ -334,7 +320,6 @@ static void army_order_defend_logic(match_world_state& world, ui16 army_index)
 		ui16 engagementIndex = armies.engagement[army_index].get_index();
 		if ((engagements.kind[engagementIndex] == ENGAGEMENT_KIND::SIEGE && engagements.main_target[engagementIndex] == settlement) || !world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
@@ -429,7 +414,6 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 	{
 		if (!world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
@@ -494,7 +478,6 @@ static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 	{
 		if (!world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
@@ -542,13 +525,13 @@ static void army_order_join_campaign_logic(match_world_state& world, ui16 army_i
 	{
 		if (!world_army_can_leave_current_engagement(world, armies.guids[army_index]))
 		{
-			engagement_battle_logic(world, army_index);
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
 		if (armies.raising[army_index]) return;
 	}
 
+    // If campaign is invalid / not a campaign entity, revert to stationing.
 	if (!world_entity_is_valid(world, campaign) || campaign.get_type() != ENTITY_TYPE::CAMPAIGN)
 	{
 		army_order_fall_back_to_station(world, army_index);
@@ -556,6 +539,58 @@ static void army_order_join_campaign_logic(match_world_state& world, ui16 army_i
 	}
 
 	world_army_travel_to(world, army_index, world.entities->campaigns.location[campaign.get_index()], 0);
+}
+
+// ACCOMPANY
+// Follow another army closely and help it in any engagement it joins.
+
+static void army_order_accompany_logic(match_world_state& world, ui16 army_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+
+    entity_guid accompaniedArmy = armies.order[army_index].target;
+
+    // If accompanied army is no longer valid or isn't an army at all, fallback to Stationing at current location.
+	if (!world_entity_is_valid(world, accompaniedArmy) || accompaniedArmy.get_type() != ENTITY_TYPE::ARMY)
+	{
+		army_order_fall_back_to_station(world, army_index);
+		return;
+	}
+
+    // Army only wants to be in an engagement if it's the same as the accompanied army's.
+    entity_guid myEngagement = armies.engagement[army_index];
+    entity_guid accompaniedEngagement = armies.engagement[accompaniedArmy.get_index()];
+	if (myEngagement.is_valid())
+	{
+		if (!world_army_can_leave_current_engagement(world, armies.guids[army_index]))
+		{
+            // Army is stuck fighting, don't do anything.
+			return;
+		}
+
+        // We're fighting while the accompanied army is either not fighting, or fighting in a different engagement.
+        if (myEngagement._value != accompaniedEngagement._value)
+        {
+            world_army_leave_current_engagement(world, armies.guids[army_index]);
+        }
+        else return; // Stay in the engagement.
+	}
+
+    // ... Otherwise run standard accompany follow logic.
+
+    ui8 arrivalRange = accompaniedEngagement.is_valid() ? 0 : 2;
+
+    // @TODO(Marc): Maintain some random offset with accompanied army, so that multiple armies
+    // accompanying the same one will be less likely to all pile up in the same location.
+	world_army_travel_to(world, army_index, armies.location[accompaniedArmy.get_index()], arrivalRange);
+
+    // If the accompanied army is fighting, join its engagement once we're close enough.
+    if (world_location_within_tiles(armies.location[army_index], 
+                world_entity_get_location(world, accompaniedArmy), engagement_join_radius(world, accompaniedEngagement)))
+    {
+        // Join engagement once in range.
+        world_army_attack_entity(world, armies.guids[army_index], accompaniedEngagement);
+    }
 }
 
 // One row per ARMY_ORDER_TYPE, in order.
@@ -567,6 +602,7 @@ static const army_order_def ARMY_ORDER_DEFS[ARMY_ORDER_TYPE_COUNT] =
 	{ "RAID", army_order_raid_logic },
 	{ "GO_HOME", army_order_go_home_logic },
 	{ "JOIN_CAMPAIGN", army_order_join_campaign_logic },
+    { "ACCOMPANY", army_order_accompany_logic },
 };
 
 void world_system_army_orders(match_world_state& world)

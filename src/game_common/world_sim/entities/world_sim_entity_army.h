@@ -4,6 +4,7 @@
 #define WORLD_SIM_ARMY_INCLUDED
 
 #include "game_common/match/game_parameters.h"
+#include "game_common/match/world/entities/world_entity_armies.h"
 #include "game_common/match/world/troop_types.h"
 #include "game_common/match/world/world_state.h"
 
@@ -32,6 +33,14 @@ static inline void army_order_defend_territory(world_entity_armies& armies, ui16
 	armies.order[index].type = ARMY_ORDER_DEFEND_TERRITORY;
 	armies.order[index].target = settlement;
 	armies.order[index].location = location;
+}
+
+// Gives the army an ACCOMPANY order for the target entity.
+static inline void army_order_accompany(world_entity_armies& armies, ui16 index, entity_guid accompanied)
+{
+    armies.order[index] = {};
+    armies.order[index].type = ARMY_ORDER_ACCOMPANY;
+    armies.order[index].target = accompanied;
 }
 
 // Spawns a new army in the world with the provided start state and returns its GUID.

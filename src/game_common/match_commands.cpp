@@ -1,6 +1,7 @@
 // Main implementation file for match input command functions.
 
 #include "game_common/match/commands.h"
+#include "game_common/match/game_parameters.h"
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_state.h"
 
@@ -205,7 +206,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 static ui32 raise_army_cost(const command_data_raise_army& command)
 {
 	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
-	return army_daily_consumption(targets);
+	return army_daily_consumption(targets) * GAME_PARAMETERS.army_raising_cost_multiplier;
 }
 
 static bool raise_army_can_afford(const match_world_state& world, const command_data_raise_army& command, match_command_validity_feedback* feedback)
@@ -222,7 +223,7 @@ static void raise_army_charge(match_world_state& world, const command_data_raise
 {
 	match_player_id owner = world.entities->settlements.owner[command.settlement.get_index()];
 	world_player_state& player = world.player_states[owner];
-	ui32 cost = raise_army_cost(command);
+	ui32 cost = raise_army_cost(command) * GAME_PARAMETERS.army_raising_cost_multiplier;
 	player.treasury -= cost;
 	player.expenses += cost;
 }
@@ -1024,7 +1025,6 @@ void command_campaign_begin_apply(match_world_state& world, match_player_id play
 	ui16 index = command.campaign.get_index();
 
 	campaigns.state[index] = CAMPAIGN_STATE_MARCHING;
-	campaigns.waypoint[index] = campaigns.location[index]; // Nothing to walk to yet: the system picks the first waypoint.
 }
 
 // CAMPAIGN DISBAND

@@ -19,15 +19,22 @@ enum ARMY_ORDER_TYPE : ui8
 	ARMY_ORDER_RAID, // Target = a hostile or neutral settlement: go to its territory, stay there, flee stronger forces.
 	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
 	ARMY_ORDER_JOIN_CAMPAIGN, // Target = a campaign: walk to it. Once within its join radius (world_system_campaigns) the campaign takes the army over: it becomes a member and its order becomes STATION where it stands.
+    ARMY_ORDER_ACCOMPANY, // Target = army entity. Accompany the target, sticking close to it and helping it in any engagement it joins.
+
 	ARMY_ORDER_TYPE_COUNT,
 };
 
 // Sub-state of an order, interpreted by its type (values overlap between types). Zero is the state an order starts in.
 enum ARMY_ORDER_STATE : ui8
 {
+    // COMMON
 	ARMY_ORDER_STATE_TRAVELLING = 0, // Common: going to the order's objective area before running the order-specific logic (never movement inside it).
+
+    // DEFEND
 	ARMY_ORDER_STATE_DEFEND_PATROL = 1, // Inside the territory, attacking intruders.
 	ARMY_ORDER_STATE_DEFEND_RETREATED = 2, // Stands on the settlement tile, fights what comes close.
+
+    // RAID
 	ARMY_ORDER_STATE_RAID_RAIDING = 1, // Inside the target's territory, standing (raiding).
 	ARMY_ORDER_STATE_RAID_FLEEING = 2, // Running to the home settlement from stronger forces.
 };

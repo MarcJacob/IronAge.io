@@ -6,9 +6,6 @@
 
 #include "../entities/world_sim_entity_engagement.h"
 #include "../entities/world_sim_entity_settlement.h"
-#include "../entities/world_sim_entity_caravan.h"
-
-#include "../world_movement.h"
 
 // Resolves an attack of an army that reached its target entity (called by the order logic, see world_system_standing_orders.cpp): starts or joins a siege / engagement,
 // or takes an undefended settlement.

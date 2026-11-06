@@ -113,14 +113,14 @@ bool world_alloc_campaigns(match_world_state& world, mem_arena& memory, ui32 cou
 	campaigns.state = memory.alloc<CAMPAIGN_STATE>(count);
 	if (campaigns.state == nullptr) return false;
 
+	campaigns.state_data = memory.alloc<campaign_state_data>(count);
+	if (campaigns.state_data == nullptr) return false;
+
 	campaigns.troop_count = memory.alloc<ui32>(count);
 	if (campaigns.troop_count == nullptr) return false;
 
 	campaigns.objective = memory.alloc<campaign_objective>(count);
 	if (campaigns.objective == nullptr) return false;
-
-	campaigns.waypoint = memory.alloc<world_location>(count);
-	if (campaigns.waypoint == nullptr) return false;
 
 	return true;
 }

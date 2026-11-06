@@ -487,15 +487,9 @@ ui32 engagement_join_radius(const match_world_state& world, entity_guid engageme
 
 	ui64 troops = army_total_manpower(engagements.attacker_troops[index]) + army_total_manpower(engagements.defender_troops[index]);
 
-	// A siege's defender side holds the garrison (inside the settlement) unless it is an outside clash, or the settlement is the attackers' already: not counted.
-	if (engagements.kind[index] == ENGAGEMENT_KIND::SIEGE && engagements.phase[index] != ENGAGEMENT_PHASE::SIEGE_OUTSIDE_BATTLE && world_entity_is_valid(world, mainTarget)
-		&& world.entities->settlements.owner[mainTarget.get_index()] != engagements.attacker_commander[index])
-	{
-		troops -= ia_min((ui64)army_total_manpower(world.entities->settlements.garrison[mainTarget.get_index()]), troops);
-	}
-
 	ui64 threshold = ia_max(GAME_PARAMETERS.engagement_join_troops_threshold, (ui32)1);
 	ui32 powersAbove = troops >= 2 * threshold ? ia_log2_q8(troops / threshold) / 256 : 0; // Integer part of log2.
+
 	return GAME_PARAMETERS.engagement_join_base_tiles + powersAbove;
 }
 
