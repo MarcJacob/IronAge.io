@@ -585,7 +585,7 @@ static void army_order_accompany_logic(match_world_state& world, ui16 army_index
 	world_army_travel_to(world, army_index, armies.location[accompaniedArmy.get_index()], arrivalRange);
 
     // If the accompanied army is fighting, join its engagement once we're close enough.
-    if (world_location_within_tiles(armies.location[army_index], 
+    if (accompaniedEngagement.is_valid() && world_location_within_tiles(armies.location[army_index],
                 world_entity_get_location(world, accompaniedArmy), engagement_join_radius(world, accompaniedEngagement)))
     {
         // Join engagement once in range.

@@ -900,6 +900,17 @@ bool command_campaign_join_validity_check(const match_world_state& world, match_
 	if (owner != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 	if (entityCampaign.is_valid() && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
 
+	if (type == ENTITY_TYPE::SETTLEMENT)
+	{
+		// The settlement must be able to raise its campaign army (see world_settlement_raise_campaign_army).
+		if (world_entity_is_valid(world, entities.settlements.campaign_army[index]) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
+		if (entities.armies.active_count >= entities.armies.max_count && command_add_error(feedback, COMMAND_ERROR_ENTITY_LIMIT_REACHED)) return false;
+
+		army_troop_count targets = world_settlement_campaign_army_targets(entities.settlements, index);
+		if ((army_total_manpower(targets) == 0 || army_daily_consumption(targets) > world.player_states[owner].treasury)
+			&& command_add_error(feedback, COMMAND_ERROR_NOT_ENOUGH_RESOURCES)) return false;
+	}
+
 	if (command.campaign.is_valid())
 	{
 		if (!world_entity_is_valid(world, command.campaign) || command.campaign.get_type() != ENTITY_TYPE::CAMPAIGN)
@@ -931,9 +942,11 @@ void command_campaign_join_apply(match_world_state& world, match_player_id playe
 	if (command.entity.get_type() == ENTITY_TYPE::SETTLEMENT)
 	{
 		// A new campaign is founded on the settlement, or the settlement joins the given one. It is never a member itself: it raises an army that joins the campaign.
-		entity_guid campaign = command.campaign.is_valid() ? command.campaign : world_spawn_campaign(world, player, entities.settlements.location[index]);
-		entities.settlements.campaign[index] = campaign;
-		world_settlement_raise_campaign_army(world, index, campaign);
+		// The settlement only gets the campaign if its army is raised (the validity check makes that the normal case); a campaign founded just for it is undone otherwise.
+		bool founded = !command.campaign.is_valid();
+		entity_guid campaign = founded ? world_spawn_campaign(world, player, entities.settlements.location[index]) : command.campaign;
+		if (world_settlement_raise_campaign_army(world, index, campaign)) entities.settlements.campaign[index] = campaign;
+		else if (founded) world_destroy_campaign(world, campaign);
 		return;
 	}
 

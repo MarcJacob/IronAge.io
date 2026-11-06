@@ -111,6 +111,7 @@ export enum ARMY_ORDER
     RAID = 3,
     GO_HOME = 4,
     JOIN_CAMPAIGN = 5,
+    ACCOMPANY = 6,
 }
 
 // Mirrors the C++ ENGAGEMENT_PHASE enum (same header as below), the engagement GDO's phase.

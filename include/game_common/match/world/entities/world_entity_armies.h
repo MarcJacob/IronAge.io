@@ -234,6 +234,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY_PATH(order_radius, order.radius,                         GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(order_target, order.target,                         GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY_PATH(order_location, order.location,                     GAME_DATA_PROP_TYPE::WORLD_LOCATION)
+	GAME_DATA_PROPERTY_PATH(order_hold_position, order.hold_position,           GAME_DATA_PROP_TYPE::UI8)
 
 	GAME_DATA_PROPERTY(engagement,                                                  GAME_DATA_PROP_TYPE::ENTITY_GUID)
     GAME_DATA_PROPERTY(engagement_side,                                             GAME_DATA_PROP_TYPE::UI8)

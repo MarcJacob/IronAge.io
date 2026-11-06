@@ -50,8 +50,11 @@ void world_destroy_army(match_world_state& world, entity_guid army);
 
 // A settlement that joined a campaign raises an army for it: campaign_army_garrison_percent of each type of its garrison, paid like the raise command (gold and goods),
 // raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army. Does nothing if that army already exists,
-// if the garrison gives no men, the treasury cannot pay, or there is no army slot left.
-void world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign);
+// if the garrison gives no men, the treasury cannot pay, or there is no army slot left. Returns whether the army was raised.
+bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign);
+
+// The troops such an army would be raised with.
+army_troop_count world_settlement_campaign_army_targets(const world_entity_settlements& settlements, ui16 settlement_index);
 
 // Allocates the armies' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);

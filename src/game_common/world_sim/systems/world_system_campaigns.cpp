@@ -1,6 +1,6 @@
 // Campaign decision-making: each tick, campaigns take over the armies joining them, follow the centroid of their member armies, end when none is close,
 // and work towards their objective (gather, march, work the objective, end once it is accomplished).
-// Integer math only, campaigns and armies in slot order. The world's random generator (deterministic) spreads the armies around waypoints.
+// Integer math only, campaigns and armies in slot order. While marching, member armies accompany a guide army that walks to the objective.
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/entities/world_entity_armies.h"
@@ -113,26 +113,7 @@ static bool campaign_has_joiners(const match_world_state& world, entity_guid cam
 	return false;
 }
 
-// A random land tile within the spread of the center (the center itself if none is found).
-static world_location campaign_spread_spot(match_world_state& world, world_location center, ui32 spread)
-{
-	const world_dimensions& size = world.terrain->size_tiles;
-	ui32 span = 2 * spread + 1;
-
-	for (ui8 attempt = 0; attempt < 8; attempt++)
-	{
-		i32 x = (i32)center.x + (i32)(world.rand_gen.next<ui32>() % span) - (i32)spread;
-		i32 y = (i32)center.y + (i32)(world.rand_gen.next<ui32>() % span) - (i32)spread;
-		if (x < 0 || y < 0 || x >= (i32)size.x || y >= (i32)size.y) continue;
-
-		world_location spot = { (ui16)x, (ui16)y };
-		if (world_tile_is_land(*world.terrain, spot)) return spot;
-	}
-	return center;
-}
-
-// MARCHING: the campaign goes on in steps. Each time it gets close to the last waypoint, a new one is picked a step ahead towards the objective,
-// and every member army is sent to its own random spot around it. Close enough to the objective, the campaign is ON_OBJECTIVE.
+// MARCHING: the guide army walks to the objective and every other member army accompanies it. Close enough to the objective, the campaign is ON_OBJECTIVE.
 static void campaign_march(match_world_state& world, ui16 campaign_index, entity_guid campaign, world_location destination)
 {
 	world_entity_campaigns& campaigns = world.entities->campaigns;
@@ -146,8 +127,6 @@ static void campaign_march(match_world_state& world, ui16 campaign_index, entity
 		campaigns.state[campaign_index] = CAMPAIGN_STATE_ON_OBJECTIVE;
 		return;
 	}
-
-    ui32 arriveRange = GAME_PARAMETERS.campaign_march_arrive_tiles;
 
     // Set all armies to accompany the guide army.
 	for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
@@ -167,11 +146,6 @@ static void campaign_march(match_world_state& world, ui16 campaign_index, entity
             army_order_station(armies, armyIndex, destination, true);
         }
 	}
-
-    // Keep marching so long as the guide army isn't at the target location.
-	if (!campaign_within_tiles(world_entity_get_location(world, campaigns.state_data[campaign_index].marching.guide_army),
-                destination,
-                GAME_PARAMETERS.campaign_march_arrive_tiles)) return; // Still walking to it.
 }
 
 // SYSTEM
@@ -259,8 +233,8 @@ void world_system_campaigns(match_world_state& world)
 			world_location destination;
 			if (objectiveDef->get_target_loc(world, objective, destination))
             {
-                // Make sure the guide army is always set.
-                if (!campaigns.state_data[campaignIndex].marching.guide_army.is_valid())
+                // Make sure the guide army is always set and alive (otherwise the first member takes over).
+                if (!world_entity_is_valid(world, campaigns.state_data[campaignIndex].marching.guide_army))
                 {
                     campaigns.state_data[campaignIndex].marching.guide_army = firstMember;
                 }

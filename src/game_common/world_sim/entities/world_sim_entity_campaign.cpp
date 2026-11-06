@@ -51,7 +51,10 @@ void world_destroy_campaign(match_world_state& world, entity_guid campaign)
 	world_entity_settlements& settlements = world.entities->settlements;
 	for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
 	{
-		if (settlements.campaign[settlementIndex] == campaign) settlements.campaign[settlementIndex] = INVALID_ENTITY_GUID;
+		if (!(settlements.campaign[settlementIndex] == campaign)) continue;
+
+		settlements.campaign[settlementIndex] = INVALID_ENTITY_GUID;
+		settlements.campaign_army[settlementIndex] = INVALID_ENTITY_GUID;
 	}
 
 	ui16 index = campaign.get_index();

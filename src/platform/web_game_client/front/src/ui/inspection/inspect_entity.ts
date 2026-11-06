@@ -234,6 +234,13 @@ function army_order_text(army: EntityData): string
     case Backend.ARMY_ORDER.RAID: return `Raid ${settlement_text(army.get_number("order_target"), "a lost settlement").toLowerCase()}`;
     case Backend.ARMY_ORDER.GO_HOME: return "Go home";
     case Backend.ARMY_ORDER.JOIN_CAMPAIGN: return "Join campaign";
+    case Backend.ARMY_ORDER.ACCOMPANY:
+    {
+        const target = query_entity(army.get_number("order_target"));
+        if (target === null) return "Accompany";
+        const location = target.get_location("location");
+        return `Accompany ${type_title(target).toLowerCase()} (${location.x}, ${location.y})`;
+    }
     default: return "Unknown";
     }
 }

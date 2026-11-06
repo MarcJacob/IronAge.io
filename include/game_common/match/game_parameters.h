@@ -108,10 +108,7 @@ struct game_parameters
     // CAMPAIGNS. Join and cluster radius (tiles) = base + per_member x the armies that are members. A campaign follows the centroid of its member armies within that radius.
     ui32 campaign_join_base_tiles = 4;
     ui32 campaign_join_per_member_tiles = 1;
-    ui32 campaign_move_cap_tiles = 1; // Most tiles the campaign's location moves along each axis per tick.
-    ui32 campaign_march_step_tiles = 4; // MARCHING: how far ahead of the campaign (along each axis) its armies are sent each time.
     ui32 campaign_march_arrive_tiles = 2; // MARCHING: the campaign picks a new waypoint once this close to the last one.
-    ui32 campaign_spread_tiles = 3; // MARCHING: each army is sent to a random spot within this many tiles of the waypoint, so they do not stack up.
     ui32 campaign_assault_distance_tiles = 10; // MARCHING ends (ON_OBJECTIVE) once the campaign is this close to the objective's location.
     ui32 campaign_army_garrison_percent = 50; // A settlement joining a campaign raises an army of this % of each of its garrison troop types.
 

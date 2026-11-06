@@ -56,6 +56,7 @@ when it finishes.
 - `work_units/ai_road_network_2026-10-28.md` [DONE]
 - `work_units/trade_ships_2026-10-29.md`
 - `work_units/entity_zoom_visibility_2026-10-29.md`
+- `work_units/territory_rendering_2026-11-06.md`
 
 Finished units are moved to `management/archive/` after a time.
 

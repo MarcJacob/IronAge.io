@@ -65,26 +65,32 @@ void world_destroy_army(match_world_state& world, entity_guid army)
 		world_campaign_army_left(world, campaign);
 }
 
-void world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign)
+// Targets: a share of each type of the garrison.
+army_troop_count world_settlement_campaign_army_targets(const world_entity_settlements& settlements, ui16 settlement_index)
 {
-	world_entity_settlements& settlements = world.entities->settlements;
-	world_entity_armies& armies = world.entities->armies;
-
-	if (world_entity_is_valid(world, settlements.campaign_army[settlement_index])) return;
-	if (armies.active_count >= armies.max_count) return;
-
-	// Targets: a share of each type of the garrison.
 	army_troop_count targets = {};
 	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 	{
 		targets.count[troopType] = (ui16)((ui32)settlements.garrison[settlement_index].count[troopType] * GAME_PARAMETERS.campaign_army_garrison_percent / 100);
 	}
-	if (army_total_manpower(targets) == 0) return;
+	return targets;
+}
+
+bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	world_entity_armies& armies = world.entities->armies;
+
+	if (world_entity_is_valid(world, settlements.campaign_army[settlement_index])) return false;
+	if (armies.active_count >= armies.max_count) return false;
+
+	army_troop_count targets = world_settlement_campaign_army_targets(settlements, settlement_index);
+	if (army_total_manpower(targets) == 0) return false;
 
 	// Same terms as the raise command: the army starts with a day of its troops' consumption as gold from the treasury, and as much of it in goods from the market (the settlement keeps a day of its own).
 	world_player_state& player = world.player_states[settlements.owner[settlement_index]];
 	ui32 cost = army_daily_consumption(targets);
-	if (cost > player.treasury) return;
+	if (cost > player.treasury) return false;
 
 	ui32 goodsKept = settlements.economy[settlement_index].consumption;
 	settlement_trading& trade = settlements.trade[settlement_index];
@@ -107,6 +113,7 @@ void world_settlement_raise_campaign_army(match_world_state& world, ui16 settlem
 	player.treasury -= cost;
 	player.expenses += cost;
 	trade.market_goods -= newArmy.supplies;
+	return true;
 }
 
 // Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (if it is still the owner's, lost otherwise). Call before destroying the army.
