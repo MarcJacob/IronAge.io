@@ -35,15 +35,13 @@ static void ai_decide(ai_context& ctx)
 
 	if (ai_layer_due(ctx, AI_STRATEGY_EVERY, 0)) ai_strategy_update(ctx);
 
-	if (ai_layer_due(ctx, AI_THREAT_EVERY, 0)) ai_tactics_defend(ctx);
 	ai_tactics_campaign(ctx);
 	ai_tactics_assault(ctx);
 
 	if (ai_layer_due(ctx, AI_TACTICS_EVERY, 1))
 	{
 		ai_tactics_taxes(ctx);
-		ai_tactics_raise_armies(ctx);
-		ai_tactics_disband_remnants(ctx);
+		ai_tactics_campaign_join(ctx);
 		ai_tactics_buildings(ctx);
 		ai_tactics_found_settlement(ctx);
 		ai_tactics_roads(ctx);

@@ -129,13 +129,14 @@ bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_in
 	return true;
 }
 
-// Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (if it is still the owner's, lost otherwise). Call before destroying the army.
-void army_homecoming(match_world_state& world, ui16 armyIndex)
+// Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (or to supplies_settlement if given), if it is still the owner's (lost otherwise).
+// Call before destroying the army.
+void army_homecoming(match_world_state& world, ui16 armyIndex, entity_guid supplies_settlement)
 {
 	world_entity_armies& armies = world.entities->armies;
 	world.player_states[armies.owner[armyIndex]].treasury += armies.gold[armyIndex];
 
-	entity_guid home = armies.home_settlement[armyIndex];
+	entity_guid home = supplies_settlement.is_valid() ? supplies_settlement : armies.home_settlement[armyIndex];
 	if (!home.is_valid() || home.get_type() != ENTITY_TYPE::SETTLEMENT || !world_entity_is_valid(world, home)) return;
 	if (world.entities->settlements.owner[home.get_index()] != armies.owner[armyIndex]) return;
 	settlement_market_add(world.entities->settlements, home.get_index(), armies.supplies[armyIndex]);
@@ -147,6 +148,19 @@ void world_disband_army(match_world_state& world, entity_guid army, entity_guid 
 	// Callers make sure the settlement is owned by the army's owner (the disband command refuses otherwise, GO_HOME deserts instead): the men enter its garrison.
 	ASSERT(world.entities->settlements.owner[settlement.get_index()] == world.entities->armies.owner[army.get_index()]);
 	army_troop_count men = world.entities->armies.composition[army.get_index()];
+
+	// A retinue disbands into the settlement it stands in (its men were taken out of the population of their origin, see settlement_raise_retinue_soldiers):
+	// they join that garrison and population, and its supplies go to that market.
+	if (world.entities->armies.is_retinue[army.get_index()])
+	{
+		for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
+		{
+			settlement_join_retinue_soldiers(world, settlement.get_index(), (TROOP_TYPE)troopType, men.count[troopType]);
+		}
+		army_homecoming(world, army.get_index(), settlement);
+		world_destroy_army(world, army);
+		return;
+	}
 
 	// Levies refill the garrison levy pool up to its max and the rest becomes unemployed population (settlement_release_raised), the other types rejoin the local troops (garrison).
 	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
@@ -166,6 +180,9 @@ void world_army_take_casualties(match_world_state& world, entity_guid army, cons
 	{
 		out_dead.count[unitType] = army_remove_troops(world, army.get_index(), (TROOP_TYPE)unitType, (ui16)ia_min(kills.count[unitType], (ui32)0xFFFF));
 	}
+
+	// Retinue men are not part of any settlement's population: nothing else to update.
+	if (armies.is_retinue[army.get_index()]) return;
 
 	// The dead also leave their home settlement (raised counts and total population), even if it changed owner. Skipped if the home is gone.
 	entity_guid home = armies.home_settlement[army.get_index()];
@@ -187,9 +204,9 @@ ui16 world_army_desertion(match_world_state& world, entity_guid army, TROOP_TYPE
 	entity_guid engagement = armies.engagement[army.get_index()];
 	if (engagement.is_valid()) world_engagement_remove_troops(world, engagement, armies.engagement_side[army.get_index()], troop_type, deserters);
 
-	// They go back to the home settlement, even if it changed owner. Gone if the home no longer exists.
+	// They go back to the home settlement, even if it changed owner. Gone if the home no longer exists. Retinue deserters just vanish.
 	entity_guid home = armies.home_settlement[army.get_index()];
-	if (home.is_valid() && home.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, home))
+	if (!armies.is_retinue[army.get_index()] && home.is_valid() && home.get_type() == ENTITY_TYPE::SETTLEMENT && world_entity_is_valid(world, home))
 	{
 		// Those the settlement cannot take back (raised count too low) are lost.
 		ui16 returned = settlement_release_raised(world, home.get_index(), troop_type, deserters);

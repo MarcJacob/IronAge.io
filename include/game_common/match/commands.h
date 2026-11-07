@@ -201,8 +201,7 @@ struct command_data_create_retinue
 {
 	entity_guid settlement;
 	world_location raise_location; // Where the army is stationed once raised (it is raised inside the settlement). Zero (0, 0) = none: the army defends the settlement.
-	ui16 target_levies; // Counts the army raises up to, per type.
-	ui16 target_men_at_arms;
+	ui16 target_men_at_arms; // Counts the retinue raises up to, per type (no levies in a retinue).
 	ui16 target_horsemen;
 	ui16 target_knights;
 	ui16 target_wagons; // At most the settlement's wagons max (troop_max.wagons) minus its raised wagons.
@@ -211,7 +210,6 @@ struct command_data_create_retinue
 GAME_DATA_OBJECT_DEF_BEGIN(command_data_create_retinue)
 	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(raise_location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
-	GAME_DATA_PROPERTY(target_levies, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_men_at_arms, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)

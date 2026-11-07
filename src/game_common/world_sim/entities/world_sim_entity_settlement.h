@@ -160,6 +160,34 @@ static inline ui16 settlement_raise_soldiers(match_world_state& world, ui16 sett
 	return moved;
 }
 
+// Retinue raising (CREATE_RETINUE). Moves up to count garrison soldiers of a type into a retinue: they LEAVE the settlement's population altogether (pop_total goes down, nothing is
+// added to `raised`). Wagons (and levies, which retinues do not have) are a subset of the strata: a person leaves a stratum too. Returns how many were moved.
+static inline ui16 settlement_raise_retinue_soldiers(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
+{
+	ui16& garrisonTroops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
+
+	ui16 moved = ia_min(count, garrisonTroops);
+	if (troop_type == TROOP_TYPE::LEVIES || troop_type == TROOP_TYPE::WAGONS) moved = (ui16)settlement_take_population(world, settlement_index, moved);
+
+	garrisonTroops -= moved;
+	ui32& total = world.entities->settlements.pop_total[settlement_index];
+	total -= ia_min((ui32)moved, total);
+	return moved;
+}
+
+// Retinue disbanding. The men join the garrison pool of the settlement (anywhere in the owner's territory, not only the origin) and count in its population.
+// The pool may go above its max: nothing trims it here (see the daily troop growth). The only limit is the pool's own ui16 range (men beyond it vanish). Returns how many joined.
+static inline ui16 settlement_join_retinue_soldiers(match_world_state& world, ui16 settlement_index, TROOP_TYPE troop_type, ui16 count)
+{
+	ui16& garrisonTroops = world.entities->settlements.garrison[settlement_index].access_troop_count(troop_type);
+
+	ui16 moved = (ui16)ia_min((ui32)count, (ui32)0xFFFF - garrisonTroops);
+	garrisonTroops += moved;
+	world.entities->settlements.pop_total[settlement_index] += moved;
+	if (troop_type == TROOP_TYPE::LEVIES || troop_type == TROOP_TYPE::WAGONS) world.entities->settlements.pop_unemployed[settlement_index] += moved; // Pool is a subset of the strata.
+	return moved;
+}
+
 // Standing down. Moves up to count raised soldiers of a type back to the settlement: they rejoin the garrison. Returns how many were moved.
 // Levies and wagons come back as unemployed population instead. Returning levies also fill the garrison levy pool up to the levy max
 // (the pool is a subset of the strata, so the pool count rises without any further population change); the rest is plain unemployed pop.

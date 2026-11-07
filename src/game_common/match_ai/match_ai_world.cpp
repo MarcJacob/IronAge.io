@@ -44,6 +44,7 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.caravanserai = settlement.buildings.building_counts[AI_BUILDING_CARAVANSERAI];
 	out.trade_depots = settlement.buildings.building_counts[AI_BUILDING_TRADE_DEPOT];
 	out.maa_ceiling = settlement.troop_ceilings.men_at_arms;
+	out.campaign = settlement.campaign;
 	return true;
 }
 
@@ -71,6 +72,23 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	out.idle = !out.raising && !armies.engagement[slot].is_valid() && (orderType == ARMY_ORDER_STATION || orderType == ARMY_ORDER_DEFEND_TERRITORY)
 		&& armies.location[slot] == armies.movement[slot].destination;
 	return true;
+}
+
+static bool ai_view_own_campaign(const match_world_state& world, match_player_id player, ai_campaign_view& out)
+{
+	const world_entity_campaigns& campaigns = world.entities->campaigns;
+	for (ui16 slot = 0; slot < campaigns.max_count; slot++)
+	{
+		if (!campaigns.guids[slot].is_valid() || campaigns.owner[slot] != player) continue;
+
+		out.guid = campaigns.guids[slot];
+		out.state = campaigns.state[slot];
+		out.objective_type = campaigns.objective[slot].type;
+		out.objective_target = campaigns.objective[slot].target;
+		out.troops = campaigns.troop_count[slot];
+		return true;
+	}
+	return false;
 }
 
 static ui16 ai_world_engagement_slots(const match_world_state& world) { return world.entities->engagements.max_count; }

@@ -95,19 +95,20 @@ static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index,
 	return removed;
 }
 
-// Destroys an army and returns its men to the settlement: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
+// Destroys an army and returns its men to the settlement. A retinue joins the garrison pool and population of the given settlement (any in the owner's territory, pool not clamped).
+// A standing army: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
-// Homecoming: the army's gold goes to its owner's treasury, its supplies to the home settlement's goods (if still the owner's, lost otherwise). Call before destroying an army
+// Homecoming: the army's gold goes to its owner's treasury, its supplies to the home settlement's goods (or supplies_settlement, if still the owner's, lost otherwise). Call before destroying an army
 // that is not disbanded (world_disband_army and the last deserter do it themselves). The army keeps its gold and supplies: destroy it right after.
-void army_homecoming(match_world_state& world, ui16 army_index);
+void army_homecoming(match_world_state& world, ui16 army_index, entity_guid supplies_settlement = INVALID_ENTITY_GUID);
 
 // Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as unemployed pop, the others in the local pool), even if it changed owner,
-// or vanish if the home is invalid. Returns how many left the army.
+// or vanish if the home is invalid. Retinue deserters always vanish. Returns how many left the army.
 // @TODO(Marc): The further from home the army is, the less likely deserters should be to make it back.
 ui16 world_army_desertion(match_world_state& world, entity_guid army, TROOP_TYPE troop_type, ui16 count);
 
-// Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid).
+// Kills up to kills[type] men of each unit type of an army, returns the dead per unit type, and removes them from the home settlement's raised counts and total population (skipped if the home is invalid, and for retinues: their men are not in its population).
 void world_army_take_casualties(match_world_state& world, entity_guid army, const army_troop_count& kills, army_troop_count& out_dead);
 
 // Raiding. The army loots the settlement it raids: production (gold and supplies), peasants killed (gold), goods (supplies). Each is the min of the daily potential left on the

@@ -1,4 +1,5 @@
-// Military tactics: raising armies, defending against nearby foreign armies, and the campaign (gather at the rally settlement, then attack the target together).
+// Military tactics: the AI uses the campaign system only (settlements join a campaign and raise its armies, the campaign gets an objective and is begun), and begins assaults of its sieges.
+// Defense is left to the garrisons and the campaign armies the sim already runs.
 
 #include "match_ai_internal.h"
 
@@ -24,116 +25,97 @@ static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat)
 	return found;
 }
 
-static bool ai_push_attack(ai_context& ctx, entity_guid attacker, entity_guid target)
+// A campaign army's troops: campaign_army_garrison_percent of each type of the settlement's garrison (what the sim raises for a settlement joining a campaign).
+static army_troop_count ai_campaign_army_targets(const ai_settlement_view& settlement)
 {
-	auto* order = ai_push<command_data_set_army_order>(ctx, MATCH_COMMAND_TYPE::SET_ARMY_ORDER);
-	if (order == nullptr) return false;
-	order->army = attacker;
-	order->order_type = ARMY_ORDER_ATTACK;
-	order->target = target;
-	return true;
+	army_troop_count targets = {};
+	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
+	{
+		targets.count[troopType] = (ui16)((ui32)settlement.home_troops.count[troopType] * GAME_PARAMETERS.campaign_army_garrison_percent / 100);
+	}
+	return targets;
 }
 
-// Idle armies near a foreign army that threatens us all attack it together, if together they clearly outnumber it (1.3x).
-static void ai_tactics_defend(ai_context& ctx)
+// The AI's military is its campaign (one at a time). In EXPAND the campaign is disbanded (its armies go home and disband). Otherwise, until the armies reach the wanted strength
+// (the target's attack need, at least AI_MIN_ARMY_STRENGTH), up to two settlements of the window that are in no campaign and have the peasants join it: the first one founds it
+// (the others join it on a later decision, once it exists), and each raises its campaign army (or sends the one it kept).
+static void ai_tactics_campaign_join(ai_context& ctx)
 {
-	ai_army_view threat;
-	if (!ai_find_threat(ctx, threat)) return;
+	ai_campaign_view campaign;
+	bool hasCampaign = ai_view_own_campaign(ctx.world, ctx.player, campaign);
 
-	ui32 strength = 0;
-	for (ui16 index = 0; index < ctx.army_count; index++)
+	if (ctx.state.mode == AI_MODE_EXPAND)
 	{
-		const ai_army_view& army = ctx.armies[index];
-		if (army.idle && ai_dist_sq(army.location, threat.location) <= AI_DEFEND_GATHER_RADIUS * AI_DEFEND_GATHER_RADIUS) strength += army.troops;
-	}
-	if (strength * 10 < threat.troops * 13 + 50) return;
+		if (!hasCampaign) return;
 
-	ui32 orders = 0;
-	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
-	{
-		const ai_army_view& army = ctx.armies[index];
-		if (!army.idle || ai_dist_sq(army.location, threat.location) > AI_DEFEND_GATHER_RADIUS * AI_DEFEND_GATHER_RADIUS) continue;
-		if (!ai_push_attack(ctx, army.guid, threat.guid)) return;
-		orders++;
+		auto* disband = ai_push<command_data_campaign_disband>(ctx, MATCH_COMMAND_TYPE::CAMPAIGN_DISBAND);
+		if (disband != nullptr) disband->campaign = campaign.guid;
+		return;
 	}
-}
-
-static bool ai_settlement_is_raising(const ai_context& ctx, entity_guid settlement)
-{
-	for (ui16 index = 0; index < ctx.army_count; index++)
-	{
-		if (ctx.armies[index].raising && ctx.armies[index].home == settlement) return true;
-	}
-	return false;
-}
-
-// Outside of EXPAND, until the armies reach the wanted strength (the target's attack need, at least AI_MIN_ARMY_STRENGTH), raises an army from
-// up to two settlements of the window that have the peasants and no raise going on: a share of the peasants as levies, plus the whole men at arms pool.
-static void ai_tactics_raise_armies(ai_context& ctx)
-{
-	if (ctx.state.mode == AI_MODE_EXPAND || ctx.army_count + 8 > AI_MAX_OWNED_ARMIES) return;
+	if (ctx.army_count + 8 > AI_MAX_OWNED_ARMIES) return;
 
 	ai_settlement_view target;
 	ui32 wanted = ia_max(AI_MIN_ARMY_STRENGTH, ai_target_is_valid(ctx, target) ? ai_attack_need(target) : 0);
-	ui32 raised = 0, raises = 0;
-	ui32 treasury = ctx.treasury; // What the raises of this turn leave in the treasury.
-	for (ui32 index = 0; index < ai_window_size(ctx) && raises < 2 && ctx.army_strength + raised < wanted; index++)
+	ui32 joined = 0, joins = 0;
+	ui32 treasury = ctx.treasury; // What the joins of this turn leave in the treasury.
+	for (ui32 index = 0; index < ai_window_size(ctx) && joins < 2 && ctx.army_strength + joined < wanted; index++)
 	{
 		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
-		if (settlement.peasants < AI_MIN_RAISE_PEASANTS || ai_settlement_is_raising(ctx, settlement.guid)) continue;
+		if (settlement.peasants < AI_MIN_RAISE_PEASANTS || settlement.campaign.is_valid()) continue;
 
-		army_troop_count targets = {};
-		targets.levies = (ui16)ia_min((ui32)settlement.home_troops.levies, 400u); // Levies are a garrison pool now, not taken from the peasants.
-		targets.men_at_arms = settlement.home_troops.men_at_arms;
+		army_troop_count targets = ai_campaign_army_targets(settlement);
+		if (ai_troops_sum(targets) == 0) continue;
 
-		// Raising costs gold taken from the treasury (the army starts with it as gold).
+		// A new campaign army costs gold taken from the treasury (the army starts with it as gold).
 		ui32 cost = ai_world_raising_cost(targets);
 		if (treasury < cost) break;
 
-		auto* raise = ai_push<command_data_create_retinue>(ctx, MATCH_COMMAND_TYPE::CREATE_RETINUE);
-		if (raise == nullptr) return;
-		raise->settlement = settlement.guid;
-		raise->raise_location = settlement.location;
-		raise->target_levies = targets.levies;
-		raise->target_men_at_arms = targets.men_at_arms;
+		auto* join = ai_push<command_data_campaign_join>(ctx, MATCH_COMMAND_TYPE::CAMPAIGN_JOIN);
+		if (join == nullptr) return;
+		join->entity = settlement.guid;
+		join->campaign = hasCampaign ? campaign.guid : INVALID_ENTITY_GUID; // Invalid: founds a campaign.
 		treasury -= cost;
-		raised += raise->target_levies + raise->target_men_at_arms;
-		raises++;
+		joined += ai_troops_sum(targets);
+		joins++;
+		if (!hasCampaign) break;
 	}
 }
 
-// In ATTACK: idle armies walk to the rally settlement; once the idle armies around it add up to the target's attack need, they all attack the target.
+// In ATTACK: once the campaign's armies add up to the target's attack need, it gets its objective (conquer the target) and is begun. Out of ATTACK a campaign that
+// had an objective is abandoned (disbanded).
 static void ai_tactics_campaign(ai_context& ctx)
 {
-	if (ctx.state.mode != AI_MODE_ATTACK) return;
+	ai_campaign_view campaign;
+	if (!ai_view_own_campaign(ctx.world, ctx.player, campaign)) return;
 
-	ai_settlement_view target, rally;
-	if (!ai_target_is_valid(ctx, target) || !ai_view_settlement_by_guid(ctx.world, ctx.state.rally_settlement, rally)) return;
-
-	ui32 gathered = 0, orders = 0;
-	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
+	if (ctx.state.mode != AI_MODE_ATTACK)
 	{
-		const ai_army_view& army = ctx.armies[index];
-		if (!army.idle || army.troops == 0) continue;
+		if (campaign.objective_type == CAMPAIGN_OBJECTIVE_NONE) return;
 
-		if (ai_dist_sq(army.location, rally.location) <= AI_RALLY_RADIUS * AI_RALLY_RADIUS) { gathered += army.troops; continue; }
-
-		auto* order = ai_push<command_data_set_army_order>(ctx, MATCH_COMMAND_TYPE::SET_ARMY_ORDER);
-		if (order == nullptr) return;
-		order->army = army.guid;
-		order->order_type = ARMY_ORDER_STATION;
-		order->location = rally.location;
-		orders++;
+		auto* disband = ai_push<command_data_campaign_disband>(ctx, MATCH_COMMAND_TYPE::CAMPAIGN_DISBAND);
+		if (disband != nullptr) disband->campaign = campaign.guid;
+		return;
 	}
-	if (gathered < ai_attack_need(target)) return;
 
-	for (ui16 index = 0; index < ctx.army_count && orders < AI_MAX_ORDERS; index++)
+	ai_settlement_view target;
+	if (!ai_target_is_valid(ctx, target)) return;
+
+	if (campaign.objective_type == CAMPAIGN_OBJECTIVE_NONE)
 	{
-		const ai_army_view& army = ctx.armies[index];
-		if (!army.idle || army.troops == 0 || ai_dist_sq(army.location, rally.location) > AI_RALLY_RADIUS * AI_RALLY_RADIUS) continue;
-		if (!ai_push_attack(ctx, army.guid, target.guid)) return;
-		orders++;
+		if (campaign.troops < ai_attack_need(target)) return;
+
+		auto* objective = ai_push<command_data_set_campaign_objective>(ctx, MATCH_COMMAND_TYPE::SET_CAMPAIGN_OBJECTIVE);
+		if (objective == nullptr) return;
+		objective->campaign = campaign.guid;
+		objective->objective_type = CAMPAIGN_OBJECTIVE_CONQUER_SETTLEMENT;
+		objective->target = target.guid;
+		return; // Begun on the next decision, once the objective is set.
 	}
+
+	if (campaign.state != CAMPAIGN_STATE_GATHERING) return;
+
+	auto* begin = ai_push<command_data_campaign_begin>(ctx, MATCH_COMMAND_TYPE::CAMPAIGN_BEGIN);
+	if (begin != nullptr) begin->campaign = campaign.guid;
 }
 
 // Sieges this player commands that are only besieging: begin the assault if the besiegers outnumber the defenders enough, or run low on supplies.
@@ -148,31 +130,5 @@ static void ai_tactics_assault(ai_context& ctx)
 		auto* assault = ai_push<command_data_begin_assault>(ctx, MATCH_COMMAND_TYPE::BEGIN_ASSAULT);
 		if (assault == nullptr) return;
 		assault->engagement = siege.guid;
-	}
-}
-
-static bool ai_is_next_to_own_settlement(const ai_context& ctx, const ai_army_view& army)
-{
-	for (ui16 index = 0; index < ctx.settlement_count; index++)
-	{
-		if (ctx.settlements[index].guid == army.home) return ai_dist_sq(army.location, ctx.settlements[index].location) <= 3 * 3;
-	}
-	return false;
-}
-
-// Idle remnants of engagements standing next to their home settlement are disbanded into it (a few per run). In EXPAND every idle army
-// at home is: its levies go back to work the land and it stops costing supplies.
-static void ai_tactics_disband_remnants(ai_context& ctx)
-{
-	ui32 disbands = 0;
-	for (ui16 index = 0; index < ctx.army_count && disbands < 3; index++)
-	{
-		bool remnant = ctx.armies[index].troops < AI_TINY_ARMY || ctx.state.mode == AI_MODE_EXPAND;
-		if (!ctx.armies[index].idle || !remnant || !ai_is_next_to_own_settlement(ctx, ctx.armies[index])) continue;
-
-		auto* disband = ai_push<command_data_disband_army>(ctx, MATCH_COMMAND_TYPE::DISBAND_ARMY);
-		if (disband == nullptr) return;
-		disband->army = ctx.armies[index].guid;
-		disbands++;
 	}
 }

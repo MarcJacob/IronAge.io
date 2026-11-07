@@ -207,7 +207,7 @@ void command_found_settlement_apply(match_world_state& world, match_player_id pl
 // from the treasury. It also starts with up to that many goods, taken from the settlement's market goods. The troops are the raise targets.
 static ui32 create_retinue_cost(const command_data_create_retinue& command)
 {
-	army_troop_count targets = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
+	army_troop_count targets = { 0, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons }; // No levies in a retinue.
 	return army_raising_cost(targets);
 }
 
@@ -252,7 +252,7 @@ bool command_create_retinue_validity_check(const match_world_state& world, match
 
 	if (settlements.owner[settlementIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
+	if (command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
 		&& command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
 	// A besieged settlement raises nothing.
@@ -291,7 +291,7 @@ void command_create_retinue_apply(match_world_state& world, match_player_id play
 	world_entity_armies::single newArmy = {};
 	newArmy.owner = settlements.owner[settlementIndex];
 	newArmy.location = settlements.location[settlementIndex]; // The spawn function defaults the destination to the location.
-	newArmy.raised_troops = { command.target_levies, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
+	newArmy.raised_troops = { 0, command.target_men_at_arms, command.target_horsemen, command.target_knights, command.target_wagons };
 	newArmy.home_settlement = command.settlement;
 	newArmy.raising = 1;
 	newArmy.is_retinue = 1; // Created by the player: the only kind of army the player orders (see army_takes_player_orders).
@@ -571,7 +571,8 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	// No dedicated error for an army that is not raising: reported as unspecified.
 	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
-	if (command.target_levies == 0 && command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
+	if (command.target_levies != 0 && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false; // No levies in a retinue.
+	if (command.target_men_at_arms == 0 && command.target_horsemen == 0 && command.target_knights == 0 && command.target_wagons == 0
 		&& command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
 	// The home settlement must still exist.
@@ -582,10 +583,10 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 		return false;
 	}
 
-	// Wagons: the army's target may not exceed the room under the wagons max, counting the wagons it already has (they are in the settlement's raised count).
+	// Wagons: the army's target may not exceed the room under the wagons max (retinue wagons are not in the settlement's raised count).
 	const world_entity_settlements& settlements = world.entities->settlements;
 	ui16 homeIndex = home.get_index();
-	ui32 wagonRoom = (ui32)ia_max(settlements.troop_max[homeIndex].wagons, settlements.raised[homeIndex].wagons) - settlements.raised[homeIndex].wagons + armies.composition[armyIndex].wagons;
+	ui32 wagonRoom = (ui32)ia_max(settlements.troop_max[homeIndex].wagons, settlements.raised[homeIndex].wagons) - settlements.raised[homeIndex].wagons;
 	if (command.target_wagons > wagonRoom && command_add_error(feedback, COMMAND_ERROR_VALUE_OUT_OF_RANGE)) return false;
 
 	return command_is_valid(feedback);
@@ -650,6 +651,19 @@ void command_stop_raising_army_apply(match_world_state& world, match_player_id p
 
 // DISBAND ARMY
 
+// The settlement whose territory the army stands in, if it is a valid settlement owned by the army's owner. INVALID otherwise.
+static entity_guid command_disband_local_settlement(const match_world_state& world, ui16 armyIndex)
+{
+	ui16 regionIndex, tileIndex;
+	world_get_tile(*world.terrain, world.entities->armies.location[armyIndex], regionIndex, tileIndex);
+	ui16 settlementIndex = world.terrain->regions[regionIndex].owners[tileIndex];
+	if (settlementIndex >= world.entities->settlements.max_count) return INVALID_ENTITY_GUID;
+
+	entity_guid settlement = world.entities->settlements.guids[settlementIndex];
+	if (!world_entity_is_valid(world, settlement) || world.entities->settlements.owner[settlementIndex] != world.entities->armies.owner[armyIndex]) return INVALID_ENTITY_GUID;
+	return settlement;
+}
+
 bool command_disband_army_validity_check(const match_world_state& world, match_player_id player, const match_command_header& command_header,
 	match_command_validity_feedback* feedback)
 {
@@ -671,21 +685,8 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 	// An army in a engagement is counted in it: no dedicated error, reported as unspecified.
 	if (armies.engagement[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
 
-	// The men go back to the home settlement, which must still exist.
-	entity_guid home = armies.home_settlement[armyIndex];
-	if (!home.is_valid() || !world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
-	{
-		command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY);
-		return false;
-	}
-
-	// The home settlement must still belong to the army's owner (otherwise the men would join another player's garrison).
-	if (world.entities->settlements.owner[home.get_index()] != armies.owner[armyIndex] && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
-
-	// The army must stand on a tile of its home settlement's territory.
-	ui16 regionIndex, tileIndex;
-	world_get_tile(*world.terrain, armies.location[armyIndex], regionIndex, tileIndex);
-	if (world.terrain->regions[regionIndex].owners[tileIndex] != home.get_index() && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
+	// The men join the garrison of the settlement whose territory the army stands in (not necessarily its origin), which must be a settlement of the army's owner.
+	if (!command_disband_local_settlement(world, armyIndex).is_valid() && command_add_error(feedback, COMMAND_ERROR_TARGET_OUT_OF_BOUNDS)) return false;
 
 	return command_is_valid(feedback);
 }
@@ -695,7 +696,7 @@ void command_disband_army_apply(match_world_state& world, match_player_id player
 	if (!command_disband_army_validity_check(world, player, command_header, nullptr)) return;
 
 	const command_data_disband_army& command = command_header.get_command_data<command_data_disband_army>();
-	world_disband_army(world, command.army, world.entities->armies.home_settlement[command.army.get_index()]);
+	world_disband_army(world, command.army, command_disband_local_settlement(world, command.army.get_index()));
 }
 
 // SET EXPORT RATIO

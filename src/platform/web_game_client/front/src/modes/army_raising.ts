@@ -16,6 +16,12 @@ export function raise_target_props(targets: number[]): { target_levies: number, 
     return { target_levies: targets[0], target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3], target_wagons: targets[4] };
 }
 
+// The same without levies: a retinue has none (CREATE_RETINUE has no target_levies).
+function retinue_target_props(targets: number[]): { target_men_at_arms: number, target_horsemen: number, target_knights: number, target_wagons: number }
+{
+    return { target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3], target_wagons: targets[4] };
+}
+
 // Whether the path preview is drawn as acceptable (green) or refused (red), from the validity feedback of the order.
 // Example of using the feedback: each flag can be given its own treatment here (for now every error makes it red).
 function is_preview_valid(feedback: CommandFeedback, points: { x: number, y: number }[]): boolean
@@ -33,7 +39,7 @@ function is_preview_valid(feedback: CommandFeedback, points: { x: number, y: num
 
 export class ArmyRaising extends Core.Mode
 {
-    // Troops to raise per type (levies, men-at-arms, horsemen, knights, wagons), set with the panel's sliders. At least one must be nonzero to raise.
+    // Troops to raise per type (levies unused: none in a retinue, men-at-arms, horsemen, knights, wagons), set with the panel's sliders. At least one must be nonzero to raise.
     private targets = [0, 0, 0, 0, 0];
 
     // exit_key: code of the key that entered the mode, pressing it again leaves the mode.
@@ -80,7 +86,7 @@ export class ArmyRaising extends Core.Mode
         // Whether the order is acceptable comes from the validity feedback, not from the path.
         const start = view.get_location("location");
         const points = Backend.query_path(start, hovered);
-        const feedback = get_command_feedback("CREATE_RETINUE", { settlement: this.settlement_guid, raise_location: hovered, ...raise_target_props(this.targets) });
+        const feedback = get_command_feedback("CREATE_RETINUE", { settlement: this.settlement_guid, raise_location: hovered, ...retinue_target_props(this.targets) });
         Render.RENDER_CONFIG.path_preview = { start, points, valid: is_preview_valid(feedback, points) };
     }
 
@@ -109,7 +115,7 @@ export class ArmyRaising extends Core.Mode
         if (!Render.is_tile_in_world(tile)) return true;
 
         // Refused orders (including no troops to raise) are not sent and the mode stays.
-        const raiseArmy = { settlement: this.settlement_guid, raise_location: tile, ...raise_target_props(this.targets) };
+        const raiseArmy = { settlement: this.settlement_guid, raise_location: tile, ...retinue_target_props(this.targets) };
         if (!this.targets.some(target => target > 0) || !is_command_valid("CREATE_RETINUE", raiseArmy)) return true;
 
         send_command("CREATE_RETINUE", raiseArmy);

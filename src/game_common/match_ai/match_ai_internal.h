@@ -13,10 +13,8 @@
 constexpr ui32 AI_DECISION_PERIOD_TICKS = 20;
 constexpr ui32 AI_STRATEGY_EVERY = 5; // Strategy: opinions, target, mode. Slow.
 constexpr ui32 AI_TACTICS_EVERY = 3; // Economy and expansion tactics, on a few settlements at a time.
-constexpr ui32 AI_THREAT_EVERY = 2; // Threat scan and defense.
 constexpr ui32 AI_SETTLEMENTS_PER_TACTICS = 6; // Settlements handled per tactics run (round-robin).
 constexpr ui32 AI_SITE_SAMPLES = 24; // Candidate tiles tested per site search.
-constexpr ui32 AI_MAX_ORDERS = 12; // Army orders per decision.
 
 // OWNED ENTITIES LOOKED AT PER DECISION (more are ignored)
 constexpr ui16 AI_MAX_OWNED_SETTLEMENTS = 48;
@@ -41,7 +39,6 @@ constexpr i32 AI_SITE_MIN_LAND_SCORE = 60; // See ai_site_land_score: about 90 o
 constexpr i32 AI_SITE_SPOKE_PROBE = 3; // Tiles from a site where its road spokes are probed for buildable land.
 constexpr ui32 AI_MIN_SITE_DISTANCE_ENEMY = 26; // Tiles between a new site and any foreign settlement.
 constexpr ui32 AI_THREAT_RADIUS = 24; // Foreign armies this close to one of our settlements are a threat.
-constexpr ui32 AI_RALLY_RADIUS = 12;
 constexpr ui32 AI_MIN_ARMY_STRENGTH = 150; // Army strength the build up aims for at least.
 constexpr ui32 AI_MIN_RAISE_PEASANTS = 150;
 constexpr ui32 AI_RAISE_PERCENT_OF_PEASANTS = 25;
@@ -67,8 +64,6 @@ constexpr i32 AI_TAX_NORMAL = 5;
 constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
 constexpr ui32 AI_TREASURY_COMFORT = 1500;
 constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
-constexpr ui32 AI_TINY_ARMY = 10; // Idle armies under this are disbanded.
-constexpr ui32 AI_DEFEND_GATHER_RADIUS = 40; // Own idle armies this close to a threat help against it.
 constexpr ui32 AI_ASSAULT_OUTNUMBER = 3; // Begin the assault when the besiegers have this many times the defenders' men (total men)...
 constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
 
@@ -110,6 +105,7 @@ struct ai_settlement_view
 	army_troop_count home_troops;
 	ui16 barracks, caravanserai, trade_depots;
 	ui16 maa_ceiling; // Raw men at arms ceiling.
+	entity_guid campaign; // The campaign the settlement is part of, INVALID if none.
 };
 
 struct ai_army_view
@@ -123,6 +119,16 @@ struct ai_army_view
 	ui32 supply_days; // Days of its own consumption the army carries.
 	ui8 raising;
 	ui8 idle; // Not raising, not in a engagement, not chasing and not walking anywhere.
+};
+
+// A campaign of the AI's player (campaign entity).
+struct ai_campaign_view
+{
+	entity_guid guid;
+	ui8 state; // CAMPAIGN_STATE.
+	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
+	entity_guid objective_target;
+	ui32 troops; // Men in its member armies.
 };
 
 // A siege (engagement entity of kind SIEGE) still besieging, as the attacker commander sees it.
@@ -181,6 +187,7 @@ static bool ai_world_has_room_to_found(const match_world_state& world); // Free 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out); // False if the slot is empty.
 static bool ai_view_settlement_by_guid(const match_world_state& world, entity_guid guid, ai_settlement_view& out); // False if gone.
 static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view& out);
+static bool ai_view_own_campaign(const match_world_state& world, match_player_id player, ai_campaign_view& out); // The player's first campaign. False if none.
 static ui16 ai_world_engagement_slots(const match_world_state& world);
 static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out); // False if the slot is not a siege in its SIEGE_IDLE phase.
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement); // settlement invalid = any of the player's.
@@ -238,10 +245,8 @@ static void ai_tactics_taxes(ai_context& ctx);
 static void ai_tactics_buildings(ai_context& ctx);
 static void ai_tactics_found_settlement(ai_context& ctx);
 static void ai_tactics_roads(ai_context& ctx);
-static void ai_tactics_raise_armies(ai_context& ctx);
-static void ai_tactics_disband_remnants(ai_context& ctx);
+static void ai_tactics_campaign_join(ai_context& ctx);
 static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat); // Biggest foreign army near one of our settlements.
-static void ai_tactics_defend(ai_context& ctx);
 static void ai_tactics_campaign(ai_context& ctx);
 
 #endif // MATCH_AI_INTERNAL_INCLUDED

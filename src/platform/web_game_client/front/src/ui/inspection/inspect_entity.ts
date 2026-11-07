@@ -256,6 +256,7 @@ function army_panel_state(army: EntityData, edit_raise_targets: boolean, note: s
         const raised = army.get_number(`raised_${troop.name}`); // Original counts, or the raise targets while raising.
         if (!raising) return { current, max: Math.max(raised, current), target: raised, losses: Math.max(raised - current, 0) };
 
+        if (i === 0 && raising && army.get_number("is_retinue") === 1) return null; // No levies in a retinue.
         // A type with nothing available, no troops in the army and no target is left out (nothing to set).
         const max = home === null ? current : raise_available(home, i);
         if (max === 0 && current === 0 && raised === 0) return null;
@@ -324,6 +325,7 @@ function raise_army_panel_state(settlement: EntityData, targets: number[]): Rais
 {
     return {
         troops: TROOPS.map((_, i): RaiseArmyPanelUI.RaiseArmyTroopState | null => {
+            if (i === 0) return null; // No levies in a retinue.
             const max = raise_available(settlement, i);
             if (max === 0 && targets[i] === 0) return null;
             return { max: Math.min(max, MAX_COUNT), target: targets[i] };

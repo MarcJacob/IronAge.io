@@ -271,7 +271,8 @@ void world_system_economy_troop_growth(match_world_state& world)
         ui16& wagons = settlements.garrison[settlementIndex].wagons;
         ui16 wagonMax = settlements.troop_max[settlementIndex].wagons;
         ui32 wagonRoom = wagonMax > settlements.raised[settlementIndex].wagons ? wagonMax - settlements.raised[settlementIndex].wagons : 0;
-        wagons = (ui16)ia_min((ui32)wagons + (training ? GAME_PARAMETERS.wagon_training_per_day : 0), wagonRoom);
+        // Never below what it holds: disbanded retinues can leave the pool above its max, which is not trimmed.
+        wagons = (ui16)ia_max((ui32)wagons, ia_min((ui32)wagons + (training ? GAME_PARAMETERS.wagon_training_per_day : 0), wagonRoom));
 
         if (!training) continue; // Training progress of the other types pauses too.
 

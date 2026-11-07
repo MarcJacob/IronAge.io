@@ -52,7 +52,8 @@ void world_system_armies_upkeep(match_world_state& world)
 		// Men of an army whose home settlement now belongs to someone else desert: army_wrong_origin_owner_desertion_percent of each type per day, rounded up.
 		// They go back to the home settlement. The army is destroyed when its last man leaves: stop at once, its slot is free.
 		entity_guid originSettlement = armies.home_settlement[armyIndex];
-		if (world_entity_is_valid(world, originSettlement) && originSettlement.get_type() == ENTITY_TYPE::SETTLEMENT
+		// Retinues do not: their men are no part of the origin's population.
+		if (!armies.is_retinue[armyIndex] && world_entity_is_valid(world, originSettlement) && originSettlement.get_type() == ENTITY_TYPE::SETTLEMENT
 			&& world.entities->settlements.owner[originSettlement.get_index()] != owner)
 		{
 			entity_guid originArmy = armies.guids[armyIndex];
