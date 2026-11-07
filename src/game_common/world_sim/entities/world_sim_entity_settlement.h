@@ -28,6 +28,13 @@ static inline bool settlement_is_besieged(const match_world_state& world, ui16 s
 	return world.entities->settlements.siege[settlement_index].is_valid();
 }
 
+// True if the settlement's siege has troops fighting (assault, sally or outside clash). False for an idle siege or no siege.
+static inline bool settlement_is_in_active_clash(const match_world_state& world, ui16 settlement_index)
+{
+	entity_guid siege = world.entities->settlements.siege[settlement_index];
+	return siege.is_valid() && world.entities->engagements.fighting_active[siege.get_index()];
+}
+
 // SETTLEMENT POPULATION PRIMITIVES
 // Every change to a settlement's peasants / home / raised counts and population_total goes through these (taking the settlement's index).
 // They keep pop_total = unemployed + peasants + workers + garrison (men at arms, horsemen, knights) + raised (all types), never underflow (they return what was actually moved) and do not touch the player stats.

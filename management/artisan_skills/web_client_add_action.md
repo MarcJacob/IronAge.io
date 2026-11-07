@@ -5,7 +5,7 @@ order, an interactive mode) that sends a match command and/or shows UI. Covers t
 only. If the command does not exist yet, read `add_match_command.md` first and add it
 (step 1 below needs it), then come back here.
 
-Precedents: FOUND_SETTLEMENT (button, no mode: `army_selected.ts`), RAISE_ARMY (hotkey +
+Precedents: FOUND_SETTLEMENT (button, no mode: `army_selected.ts`), CREATE_RETINUE (hotkey +
 mode with preview: `army_raising.ts`), BUILD_ROAD (hotkey + mode: `road_building.ts`),
 SET_ENTITY_MOVE_TARGET / SET_ENTITY_ATTACK_TARGET (right-click orders: `army_selected.ts`).
 Rewritten 2026-10-18; re-verify symbols against code.

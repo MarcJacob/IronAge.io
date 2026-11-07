@@ -127,7 +127,7 @@ Builder survey done; code map in `src/game_common/world_sim/.ai_imprint/military
   - Engagement storage full: assert (never expected).
   - Engagement fields use explicit attacker_* / defender_* names, not 2-element arrays.
   - Caravans cannot enter a besieged settlement: origin besieged -> wait some distance away; destination besieged -> only within 30 tiles re-check, pick a new target if still besieged.
-  - Training, construction, trade decay continue during a siege. Growth: only positive growth suppressed.
+  - Construction, trade decay continue during a siege. Garrison training stops while the settlement's engagement is `fighting_active` (assault, sally, outside clash); idle BESIEGING still trains (revised; unbuilt). Growth: only positive growth suppressed.
   - All engagement actions (begin assault, sally out, lift siege) live on the engagement entity; only army-specific actions (withdraw) on armies.
   - Siege engagement located between the besieging army and settlement; selectable; significance / size equals the settlement's (TS uses the same formula).
   - A foreign army joins the defender side only by attacking besiegers (stationing in settlements later).
@@ -200,8 +200,24 @@ Survey findings: Accompany missing in `front/src` (`backend.ts` ARMY_ORDER enum,
   - Shared supply: transient pool, no accumulation, supplies only (no gold). Free extra source on top of existing mechanics; each army stays an individual trade target with its own gold and pay. Armies above a threshold (half carry capacity, or days left; TBD) contribute; armies below it may draw if close enough to the campaign entity. Distribution: needy armies first, then the rest.
   - User reworks `military_design.md` as these evolve.
 
+## Raise rework (builder session, unbuilt)
+
+- Armies always raise inside the home settlement; `raise_location` = post-raising station point, zero = DEFEND home (quirk: tile 0,0 unusable; individual army raising to be redesigned or replaced by campaigns). One-click raise in the UI.
+- Raise cost / starting payout = min(1 day of consumption, supplies carry capacity); one shared function. 5x multiplier removed (it caused treasury underflow via a double multiply).
+- Armies never hold more than carry capacity: every add path clamps; capacity shrink drops the excess (engagement loot pool if engaged, else vanishes); UI gauges clamp at 100%.
+- Besieged settlement refuses raise / `CAMPAIGN_JOIN`; its re-raise waits.
+- Settlement re-raises a lost campaign army while the campaign has members. Campaign dies when no members / none in range; raising / joining armies then GO_HOME and a raising army disbands instantly.
+- Re-raise happens at least one tick after the loss is noticed (campaign system resets the stale pointer first, raises on a later tick), so the old engagement can end first. Distance gate / cooldown rejected; watch in playtest for a re-raise death loop near a long-running engagement.
+- `settlements.campaign_army` survives campaign end (cleared only when the army is found dead): a new campaign joined from that settlement grabs the surviving army (any state, no cost) instead of raising; `world_settlement_raise_campaign_army` renamed `world_settlement_join_campaign`. Pending user answer: owner-change reset + not-in-another-campaign guard.
+- Campaign army share of the garrison: `campaign_army_garrison_percent` = 75.
+- Raising armies accept orders (stored, run after raising) except campaign members / holders of JOIN_CAMPAIGN.
+- Also fixed: banditry capacity wrap, stuck WAITING campaign, dead file / param, `CAMPAIGN_BEGIN` button in the selected-campaign bar, homecoming on stop-raising destroys.
+- Open: `army_order_go_home_logic` owner assert vs future neutral owners; `world_army_loot_caravan` bypasses `settlement_market_add`; targeted-order hotkeys disabled while raising; stale lines in `game_mechanics.imprint.md`, `economy_design.md` (user).
+
 ## Next step
 
 Everything through P3e is tested and committed (0031653).
-Status: R0, R1, cleanup, R2a, R2b done and committed. R2c (active-fighting flag) and R2d (levies back to pool on disband) done and tested; user commits. R3 design done and decided; R3 done, tested, committed. R4 done, tested, committed. P4 campaign: tested, working reasonably well as a first implementation (base committed 4091417; later changes in "P4 outcome" tested, commit pending by user). P4 close-out done and tested (see "P4 close-out / P5 design"). Next: P5 (multi-objective list, defense objective, shared supply pool, match AI using campaigns), after user updates `military_design.md`.
+Status: R0-R4 done, tested, committed. P4 campaign + close-out committed (HEAD 12919f9). P5 first slice done: Accompany order (campaign AI basic marching, guide army = first member by index; frontend recognizes it).
+Cleanup + raise rework [DONE in code, unbuilt / untested, uncommitted] (decisions in "Raise rework" below).
+Next: user builds and hand-tests, then commit; then P5 rest (multi-objective list, defense objective, shared supply pool, match AI using campaigns), after user updates `military_design.md`.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

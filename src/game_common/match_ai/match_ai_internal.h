@@ -193,7 +193,7 @@ static bool ai_tile_owned_by(const match_world_state& world, world_location loc,
 static bool ai_road_connected(const match_world_state& world, world_location a, world_location b); // A path over road tiles only (roads of any owner) joins the two tiles.
 static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b); // Path cost of the route a road crew from a to b builds (existing roads at road cost). 0 = no route.
 static world_dimensions ai_world_size(const match_world_state& world);
-static ui32 ai_world_troops_daily_consumption(const army_troop_count& troops); // What these soldiers consume per day (same rule as army supplies).
+static ui32 ai_world_raising_cost(const army_troop_count& targets); // Gold raising an army with these targets costs (same rule as the raise command).
 static void ai_gather_own(ai_context& ctx);
 
 // SMALL HELPERS

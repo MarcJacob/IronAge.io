@@ -7,7 +7,7 @@
 #include "../entities/world_sim_entity_engagement.h"
 #include "../entities/world_sim_entity_settlement.h"
 
-// Resolves an attack of an army that reached its target entity (called by the order logic, see world_system_standing_orders.cpp): starts or joins a siege / engagement,
+// Resolves an attack of an army that reached its target entity (called by the order logic, see world_system_army_standing_orders.cpp): starts or joins a siege / engagement,
 // or takes an undefended settlement.
 void world_army_attack_entity(match_world_state& world, entity_guid attacker, entity_guid target)
 {
@@ -100,7 +100,12 @@ void world_system_armies_raising(match_world_state& world)
 		if (!world_entity_is_valid(world, home) || homeOwner != armies.owner[armyIndex])
 		{
 			armies.raising[armyIndex] = 0;
-			if (army_total_manpower(armies.composition[armyIndex]) == 0) world_destroy_army(world, armies.guids[armyIndex]); // Nothing was raised.
+			army_enforce_carry_capacity(world, (ui16)armyIndex);
+			if (army_total_manpower(armies.composition[armyIndex]) == 0) // Nothing was raised.
+			{
+				army_homecoming(world, (ui16)armyIndex);
+				world_destroy_army(world, armies.guids[armyIndex]);
+			}
 			continue;
 		}
 

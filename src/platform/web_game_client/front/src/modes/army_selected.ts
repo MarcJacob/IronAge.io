@@ -23,6 +23,7 @@ export class ArmySelected extends Core.Mode
 
     private raising: boolean | null = null; // Whether the bar currently offers to stop raising (null: no bar submitted yet).
     private can_disband: boolean | null = null; // Whether the bar currently shows Disband as selectable.
+    private orderable: boolean | null = null; // Whether the army is a retinue (the only kind the player orders). A standing army is display only: no bar, no hotkeys, no clicks.
 
     private stop_item: ActionBarUI.ActionBarItem = { id: "stop_raising", name: "Stop raising", state: 'selectable' };
 
@@ -32,7 +33,7 @@ export class ArmySelected extends Core.Mode
     private can_withdraw: boolean | null = null; // Whether the bar currently shows Withdraw (army that can leave its engagement, see WITHDRAW_ARMY).
     private withdraw_item: ActionBarUI.ActionBarItem = { id: "withdraw", name: "Withdraw", state: 'selectable' };
 
-    // Go home: walk to the home settlement and disband.
+    // Go home: walk to the home settlement and stop there.
     private go_home_item: ActionBarUI.ActionBarItem = { id: "go_home", name: "Go home", state: 'selectable' };
 
     // Targeted orders: each enters the territory targeting mode with its preset (shown selected while it is the active one).
@@ -104,11 +105,13 @@ export class ArmySelected extends Core.Mode
     private update_panel(army: EntityData): void
     {
         const raising = army.get_number("raising") === 1;
+        const orderable = army.get_number("is_retinue") === 1;
         const canDisband = is_command_valid("DISBAND_ARMY", { army: this.army_guid });
         const canWithdraw = is_command_valid("WITHDRAW_ARMY", { army: this.army_guid });
 
-        if (raising !== this.raising || canDisband !== this.can_disband || canWithdraw !== this.can_withdraw)
+        if (raising !== this.raising || canDisband !== this.can_disband || canWithdraw !== this.can_withdraw || orderable !== this.orderable)
         {
+            this.orderable = orderable;
             this.raising = raising;
             this.can_disband = canDisband;
             this.can_withdraw = canWithdraw;
@@ -116,12 +119,18 @@ export class ArmySelected extends Core.Mode
             this.submit_bar();
         }
 
-        show_entity(army, { edit_raise_targets: true });
+        show_entity(army, { edit_raise_targets: orderable });
     }
 
     // The bar: stop raising / disband while raising, otherwise the targeted orders, go home, disband, and withdraw when possible.
     private submit_bar(): void
     {
+        if (!this.orderable)
+        {
+            ActionBarUI.submit(null);
+            return;
+        }
+
         const items = this.raising ? [this.stop_item, this.disband_item] : [...this.targeted_items.map(targeted => targeted.item), this.go_home_item, this.disband_item];
         if (this.can_withdraw) items.push(this.withdraw_item);
         ActionBarUI.submit({ items });
@@ -130,7 +139,7 @@ export class ArmySelected extends Core.Mode
     // Enters the targeting mode with the preset (replacing the mode of another preset). Its own hotkey / button leaves the mode.
     private activate(targeted: { item: ActionBarUI.ActionBarItem, preset: TargetingPreset }): void
     {
-        if (this.raising) return;
+        if (this.raising || !this.orderable) return;
 
         if (targeted.item.state === 'selected')
         {
@@ -147,7 +156,7 @@ export class ArmySelected extends Core.Mode
     on_key_down(event: KeyboardEvent): boolean
     {
         const targeted = this.targeted_items.find(candidate => candidate.item.hotkey === event.code);
-        if (targeted === undefined || this.raising) return false;
+        if (targeted === undefined || this.raising || !this.orderable) return false;
 
         if (!event.repeat) this.activate(targeted);
         return true;
@@ -167,7 +176,7 @@ export class ArmySelected extends Core.Mode
     on_context_menu(event: MouseEvent): boolean
     {
         const localPlayerId = get_local_player_id();
-        if (localPlayerId === null) return true;
+        if (localPlayerId === null || !this.orderable) return true;
 
         // An engagement under the cursor: attack it (the army joins it if it can, or waits next to it).
         const ownGuid = Render.pick_entity_at(event.clientX, event.clientY, null, null);

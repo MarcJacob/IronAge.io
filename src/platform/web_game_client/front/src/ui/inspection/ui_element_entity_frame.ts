@@ -1,5 +1,5 @@
 // UI module (new style): the entity frame, bottom center of the HUD. Shared by the panels (ui_element_*_panel.ts: one per entity type,
-// plus the settlement's Raise army and Found settlement panels), which live inside it: a title, a small grey owner line, and the container of the panels.
+// plus the settlement's Create retinue and Found settlement panels), which live inside it: a title, a small grey owner line, and the container of the panels.
 // Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it. Emits nothing.
 // Which panel shows inside it is decided by the routing in inspect_entity.ts, not here.
 

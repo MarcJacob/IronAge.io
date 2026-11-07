@@ -35,6 +35,13 @@ static inline void army_order_defend_territory(world_entity_armies& armies, ui16
 	armies.order[index].location = location;
 }
 
+// Whether the player can give the army orders (move, attack, order, raise-target, stop-raising, withdraw, join-campaign commands): only retinues can, and not while they are members of a campaign.
+// Standing armies (created by a settlement for its campaign) are controlled by the campaign logic only.
+static inline bool army_takes_player_orders(const world_entity_armies& armies, ui16 index)
+{
+	return armies.is_retinue[index] && !armies.campaign[index].is_valid();
+}
+
 // Gives the army an ACCOMPANY order for the target entity.
 static inline void army_order_accompany(world_entity_armies& armies, ui16 index, entity_guid accompanied)
 {
@@ -49,15 +56,22 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 void world_destroy_army(match_world_state& world, entity_guid army);
 
 // A settlement that joined a campaign raises an army for it: campaign_army_garrison_percent of each type of its garrison, paid like the raise command (gold and goods),
-// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army. Does nothing if that army already exists,
-// if the garrison gives no men, the treasury cannot pay, or there is no army slot left. Returns whether the army was raised.
-bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign);
+// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army (kept after the campaign ends), a standing army (not a retinue).
+// If the settlement still has its campaign_army alive, that army is sent to the campaign instead (JOIN_CAMPAIGN order, nothing raised or paid).
+// Does nothing if the settlement is besieged or the kept army's owner is not the settlement's; otherwise, when raising, if the garrison gives no men, the treasury cannot pay, or there is no army slot left.
+// Returns whether the settlement now has an army on its way to the campaign.
+bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_index, entity_guid campaign);
 
 // The troops such an army would be raised with.
 army_troop_count world_settlement_campaign_army_targets(const world_entity_settlements& settlements, ui16 settlement_index);
 
 // Allocates the armies' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
+
+// An army cannot carry more gold or supplies than its capacity (army_supply_capacity): call after anything that can lower the capacity (men removed, raise targets lowered,
+// raising stopped). The excess goes into the loot pool of the army's engagement if it is in one, otherwise it vanishes. Skipped for a non-raising army without men:
+// it is about to be destroyed, and its gold goes home or into the loot pool then.
+void army_enforce_carry_capacity(match_world_state& world, ui16 army_index);
 
 // ARMY PRIMITIVES
 // Army composition changes. Take the army's index. They only touch the army: the home settlement's counts and the player stats are the caller's business.
@@ -71,17 +85,22 @@ static inline ui16 army_add_troops(match_world_state& world, ui16 army_index, TR
 	return added;
 }
 
-// Removes up to count men of a type from the army's composition. Returns how many were removed.
+// Removes up to count men of a type from the army's composition (and drops the gold and supplies it can no longer carry). Returns how many were removed.
 static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index, TROOP_TYPE troop_type, ui16 count)
 {
 	ui16& troops = world.entities->armies.composition[army_index].access_troop_count(troop_type);
 	ui16 removed = ia_min(count, troops);
 	troops -= removed;
+	if (removed > 0) army_enforce_carry_capacity(world, army_index);
 	return removed;
 }
 
 // Destroys an army and returns its men to the settlement: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
+
+// Homecoming: the army's gold goes to its owner's treasury, its supplies to the home settlement's goods (if still the owner's, lost otherwise). Call before destroying an army
+// that is not disbanded (world_disband_army and the last deserter do it themselves). The army keeps its gold and supplies: destroy it right after.
+void army_homecoming(match_world_state& world, ui16 army_index);
 
 // Removes up to count deserters of a type from the army. They go back to the army's home settlement (levies as unemployed pop, the others in the local pool), even if it changed owner,
 // or vanish if the home is invalid. Returns how many left the army.

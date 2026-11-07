@@ -262,14 +262,18 @@ void world_system_economy_troop_growth(match_world_state& world)
         ui16 levyMax = settlement_levy_max(population);
         settlements.troop_max[settlementIndex].levies = levyMax;
         ui32 levyRoom = levyMax > settlements.raised[settlementIndex].levies ? levyMax - settlements.raised[settlementIndex].levies : 0;
-        ui32 levyTrained = ia_max((ui32)1, (ui32)((ui64)population * GAME_PARAMETERS.levy_training_per_mille / 1000));
+        // No training during an active clash (the max and the clamp still apply).
+        bool training = !settlement_is_in_active_clash(world, (ui16)settlementIndex);
+        ui32 levyTrained = training ? ia_max((ui32)1, (ui32)((ui64)population * GAME_PARAMETERS.levy_training_per_mille / 1000)) : 0;
         levies = (ui16)ia_min((ui32)levies + levyTrained, levyRoom); // Also dismisses what is above the room.
 
         // Wagons: same, with a fixed rate (wagon_training_per_day, whatever the population) and the max from the caravanserais (kept by their events).
         ui16& wagons = settlements.garrison[settlementIndex].wagons;
         ui16 wagonMax = settlements.troop_max[settlementIndex].wagons;
         ui32 wagonRoom = wagonMax > settlements.raised[settlementIndex].wagons ? wagonMax - settlements.raised[settlementIndex].wagons : 0;
-        wagons = (ui16)ia_min((ui32)wagons + GAME_PARAMETERS.wagon_training_per_day, wagonRoom);
+        wagons = (ui16)ia_min((ui32)wagons + (training ? GAME_PARAMETERS.wagon_training_per_day : 0), wagonRoom);
+
+        if (!training) continue; // Training progress of the other types pauses too.
 
         army_troop_count ceilings = settlement_troop_effective_ceilings(settlements.troop_max[settlementIndex], settlements.troop_ceilings[settlementIndex]);
 

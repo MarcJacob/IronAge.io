@@ -4,7 +4,7 @@ Derive a new match command from existing ones: the command itself, its validity 
 its apply. Game common only.
 
 Precedents: FOUND_SETTLEMENT (one guid), SET_ENTITY_ATTACK_TARGET (two guids),
-SET_ENTITY_MOVE_TARGET (guid + location), RAISE_ARMY (guid + location, population cost,
+SET_ENTITY_MOVE_TARGET (guid + location), CREATE_RETINUE (guid + location, population cost,
 feedback), BUILD_ROAD (guid + two locations, path reasons, feedback).
 Rewritten 2026-10-18; re-verify symbols against code.
 

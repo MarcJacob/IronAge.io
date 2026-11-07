@@ -12,7 +12,7 @@ entity_guid world_spawn_campaign(match_world_state& world, match_player_id owner
 // Destroys a campaign: its armies and settlements stop pointing at it.
 void world_destroy_campaign(match_world_state& world, entity_guid campaign);
 
-// Ends a campaign: its member armies are given a GO_HOME order and it is destroyed. Used when its objective is accomplished, or when its owner disbands it.
+// Ends a campaign: its member armies are given their campaign-over order (standing armies GO_HOME, retinues STATION where they stand) and it is destroyed. Used when its objective is accomplished, or when its owner disbands it.
 void world_campaign_end_and_send_home(match_world_state& world, entity_guid campaign);
 
 // To call after an army left a campaign (was destroyed...): ends the campaign if no army is a member anymore. Does nothing for invalid guids.

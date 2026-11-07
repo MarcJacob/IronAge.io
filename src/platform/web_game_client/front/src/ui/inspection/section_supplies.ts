@@ -26,7 +26,7 @@ export function supplies_color(fraction: number): string
 }
 
 // Daily consumption of the given troops (levies, men-at-arms, horsemen, knights, wagons), from the game parameters. Same rule as the simulation.
-// Raising an army costs one day of it in gold, taken from the treasury and put in the army's gold.
+// Raising an army costs a day of it in gold (at most the troops' carry capacity, see raising_cost), taken from the treasury and put in the army's gold.
 export function troops_consumption(targets: number[]): number
 {
     const parameters = get_game_parameters();
@@ -35,4 +35,21 @@ export function troops_consumption(targets: number[]): number
         + targets[2] * parameters.get_number("upkeep_horseman")
         + targets[3] * parameters.get_number("upkeep_knight")
         + targets[4] * parameters.get_number("upkeep_wagon");
+}
+
+// What the given troops carry at most in each pool (supplies, gold), from the game parameters. Same rule as the simulation (army_troops_carry_capacity).
+export function troops_carry_capacity(targets: number[]): number
+{
+    const parameters = get_game_parameters();
+    return targets[0] * parameters.get_number("carry_levy")
+        + targets[1] * parameters.get_number("carry_men_at_arms")
+        + targets[2] * parameters.get_number("carry_horseman")
+        + targets[3] * parameters.get_number("carry_knight")
+        + targets[4] * parameters.get_number("carry_wagon");
+}
+
+// Gold raising an army with these targets costs: a day of their consumption, at most their carry capacity. Same rule as the simulation (army_raising_cost).
+export function raising_cost(targets: number[]): number
+{
+    return Math.min(troops_consumption(targets), troops_carry_capacity(targets));
 }

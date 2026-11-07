@@ -1,5 +1,6 @@
 #include "world_sim_entity_campaign.h"
 #include "../world_sim.h"
+#include "world_sim_entity_army.h"
 
 entity_guid world_spawn_campaign(match_world_state& world, match_player_id owner, world_location location)
 {
@@ -24,6 +25,20 @@ entity_guid world_spawn_campaign(match_world_state& world, match_player_id owner
 	return newID;
 }
 
+// What an army does when its campaign is over: a standing army goes home (and disbands there, or is taken by its settlement for the next campaign),
+// a retinue stays where it is.
+static void army_campaign_over_order(world_entity_armies& armies, ui32 armyIndex)
+{
+	if (armies.is_retinue[armyIndex])
+	{
+		army_order_station(armies, (ui16)armyIndex, armies.location[armyIndex]);
+		return;
+	}
+
+	armies.order[armyIndex] = {};
+	armies.order[armyIndex].type = ARMY_ORDER_GO_HOME;
+}
+
 void world_campaign_end_and_send_home(match_world_state& world, entity_guid campaign)
 {
 	world_entity_armies& armies = world.entities->armies;
@@ -31,8 +46,7 @@ void world_campaign_end_and_send_home(match_world_state& world, entity_guid camp
 	{
 		if (!(armies.campaign[armyIndex] == campaign)) continue;
 
-		armies.order[armyIndex] = {};
-		armies.order[armyIndex].type = ARMY_ORDER_GO_HOME;
+		army_campaign_over_order(armies, armyIndex);
 	}
 	world_destroy_campaign(world, campaign);
 }
@@ -45,7 +59,15 @@ void world_destroy_campaign(match_world_state& world, entity_guid campaign)
 	world_entity_armies& armies = world.entities->armies;
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
-		if (armies.campaign[armyIndex] == campaign) armies.campaign[armyIndex] = INVALID_ENTITY_GUID;
+		if (armies.campaign[armyIndex] == campaign)
+		{
+			armies.campaign[armyIndex] = INVALID_ENTITY_GUID;
+			continue;
+		}
+
+		// Armies still on their way to join (or raising, holding their JOIN_CAMPAIGN order) get their campaign-over order.
+		if (armies.guids[armyIndex].is_valid() && armies.order[armyIndex].type == ARMY_ORDER_JOIN_CAMPAIGN && armies.order[armyIndex].target == campaign)
+			army_campaign_over_order(armies, armyIndex);
 	}
 
 	world_entity_settlements& settlements = world.entities->settlements;
@@ -53,8 +75,8 @@ void world_destroy_campaign(match_world_state& world, entity_guid campaign)
 	{
 		if (!(settlements.campaign[settlementIndex] == campaign)) continue;
 
+		// campaign_army stays: if that army is still walking home, the settlement's next campaign takes it over (world_settlement_join_campaign).
 		settlements.campaign[settlementIndex] = INVALID_ENTITY_GUID;
-		settlements.campaign_army[settlementIndex] = INVALID_ENTITY_GUID;
 	}
 
 	ui16 index = campaign.get_index();

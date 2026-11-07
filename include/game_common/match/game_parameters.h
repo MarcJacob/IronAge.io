@@ -47,6 +47,7 @@ struct game_trade_parameters
     // Caravan Spawning. A caravan takes up to max_caravan_export_pool_percent of the export pool. A candidate destination is eligible if its score
     // (total profit x 100 / tile distance) reaches this, in %. One is picked among the eligible, at random weighted by score.
     ui32 min_profit_per_travel_dist_percent = 50;
+    ui32 caravan_spawn_period_ticks = 20; // Each settlement checks for a caravan / ship spawn when its age (ticks since founding) is a multiple of this. 0 is read as 1.
     ui32 max_caravan_export_pool_percent = 50; // A caravan takes at most this % of its origin's export pool. Clamped to 100.
     ui32 max_ship_export_pool_percent = 80; // Same for ships (shared export pool, ships spawn after land caravans). Clamped to 100.
 
@@ -83,13 +84,12 @@ struct game_parameters
     ui8 tradepost_wagon_max_increase = 2; // How much the wagons max is increased per caravanserai (tradepost) in a settlement.
 
     // MILITARY
-    ui8 army_raising_cost_multiplier = 5; // How many days worth of consumption (in gold) must be given to an army on raising.
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
     ui32 levy_max_percent = 20; // Max levies of a settlement (garrison + raised), in percent of its total population. No ceiling.
     ui32 army_wrong_origin_owner_desertion_percent = 2; // Per day, share of the men of an army whose home settlement now has another owner that deserts (rounded up).
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
 
-    // ARMY STANDING ORDERS (distances in tiles). See world_system_standing_orders.cpp.
+    // ARMY STANDING ORDERS (distances in tiles). See world_system_army_standing_orders.cpp.
     ui32 order_attack_reach_tiles = 2; // An army resolves its attack (or chase) on a target within this many tiles.
     ui32 order_station_acquire_radius = 10; // STATION / DEFEND (retreated): hostile armies this close to the army are attacked.
                                             // Army returns to station location if target goes beyond that radius.
@@ -108,9 +108,8 @@ struct game_parameters
     // CAMPAIGNS. Join and cluster radius (tiles) = base + per_member x the armies that are members. A campaign follows the centroid of its member armies within that radius.
     ui32 campaign_join_base_tiles = 4;
     ui32 campaign_join_per_member_tiles = 1;
-    ui32 campaign_march_arrive_tiles = 2; // MARCHING: the campaign picks a new waypoint once this close to the last one.
     ui32 campaign_assault_distance_tiles = 10; // MARCHING ends (ON_OBJECTIVE) once the campaign is this close to the objective's location.
-    ui32 campaign_army_garrison_percent = 50; // A settlement joining a campaign raises an army of this % of each of its garrison troop types.
+    ui32 campaign_army_garrison_percent = 75; // A settlement joining a campaign raises an army of this % of each of its garrison troop types.
 
     // ENGAGEMENT LOOT. A conquered settlement adds gold to the engagement's loot pool: people killed, 1 gold each.
     ui32 conquest_loot_peasants_percent = 20; // Of its peasants.
@@ -275,7 +274,8 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY_PATH(trade_start_export_ratio_percent, trade.start_export_ratio_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_start_caravan_slots, trade.start_caravan_slots, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_min_profit_per_travel_dist_percent, trade.min_profit_per_travel_dist_percent, GAME_DATA_PROP_TYPE::UI32)
-    GAME_DATA_PROPERTY_PATH(trade_max_caravan_export_pool_percent, trade.max_caravan_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_caravan_spawn_period_ticks, trade.caravan_spawn_period_ticks, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_max_caravan_export_pool_percent,trade.max_caravan_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_max_ship_export_pool_percent, trade.max_ship_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)

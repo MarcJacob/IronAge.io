@@ -41,7 +41,7 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::SET_ENTITY_MOVE_TARGET: return gdo_buffer_place<gdo_command_data_set_entity_move_target>(command_type);
 	case MATCH_COMMAND_TYPE::SET_ENTITY_ATTACK_TARGET: return gdo_buffer_place<gdo_command_data_set_entity_attack_target>(command_type);
 	case MATCH_COMMAND_TYPE::FOUND_SETTLEMENT: return gdo_buffer_place<gdo_command_data_found_settlement>(command_type);
-	case MATCH_COMMAND_TYPE::RAISE_ARMY: return gdo_buffer_place<gdo_command_data_raise_army>(command_type);
+	case MATCH_COMMAND_TYPE::CREATE_RETINUE: return gdo_buffer_place<gdo_command_data_create_retinue>(command_type);
 	case MATCH_COMMAND_TYPE::BUILD_ROAD: return gdo_buffer_place<gdo_command_data_build_road>(command_type);
 	case MATCH_COMMAND_TYPE::SET_SETTLEMENT_TROOP_CEILING: return gdo_buffer_place<gdo_command_data_set_settlement_troop_ceiling>(command_type);
 	case MATCH_COMMAND_TYPE::SET_ARMY_RAISE_TARGETS: return gdo_buffer_place<gdo_command_data_set_army_raise_targets>(command_type);

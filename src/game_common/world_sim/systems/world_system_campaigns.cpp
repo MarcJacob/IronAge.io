@@ -101,6 +101,34 @@ static void campaign_take_over_joiners(match_world_state& world, entity_guid cam
 	}
 }
 
+// A settlement of the campaign whose campaign army is gone (destroyed in battle or otherwise) raises a new one, through the same path as joining (world_settlement_join_campaign).
+// The raise happens at least one tick after the loss is noticed (see below). Quietly retried every tick while it cannot (no treasury, no men, no army slot...).
+// A settlement that changed owner leaves the campaign.
+static void campaign_replace_lost_armies(match_world_state& world, entity_guid campaign)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	for (ui16 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
+	{
+		if (!settlements.guids[settlementIndex].is_valid() || !(settlements.campaign[settlementIndex] == campaign)) continue;
+		if (world_entity_is_valid(world, settlements.campaign_army[settlementIndex])) continue;
+
+		if (settlements.owner[settlementIndex] != world.entities->campaigns.owner[campaign.get_index()])
+		{
+			settlements.campaign[settlementIndex] = INVALID_ENTITY_GUID;
+			continue;
+		}
+
+		// The loss is only noticed here: a destroyed army leaves its (now invalid) guid in campaign_army. The first tick that sees it resets the pointer to INVALID and raises nothing;
+		// the replacement is raised on a later tick, whatever the order of the systems and of the destruction within the tick. (A settlement of a campaign has INVALID there only in that state.)
+		if (!(settlements.campaign_army[settlementIndex] == INVALID_ENTITY_GUID))
+		{
+			settlements.campaign_army[settlementIndex] = INVALID_ENTITY_GUID;
+			continue;
+		}
+		world_settlement_join_campaign(world, settlementIndex, campaign);
+	}
+}
+
 // Whether some army is still on its way to join the campaign.
 static bool campaign_has_joiners(const match_world_state& world, entity_guid campaign)
 {
@@ -191,10 +219,15 @@ void world_system_campaigns(match_world_state& world)
 
 		if (inRange == 0)
 		{
-			// A campaign still waiting for its first army stays where it was founded. Otherwise no army is close enough: the campaign is over.
-			if (campaigns.state[campaignIndex] != CAMPAIGN_STATE_WAITING) world_destroy_campaign(world, campaign);
+			// A campaign still waiting for its first army stays where it was founded, as long as an army is on its way (or being raised) to join it: if that army is gone
+			// (raising stopped before any man), the campaign is over, otherwise it would stay forever and keep its settlement from joining anything.
+			// Otherwise no army is close enough: the campaign is over.
+			if (campaigns.state[campaignIndex] != CAMPAIGN_STATE_WAITING || (members == 0 && !campaign_has_joiners(world, campaign))) world_destroy_campaign(world, campaign);
 			continue;
 		}
+
+		// The campaign has members: its settlements replace the armies they lost.
+		campaign_replace_lost_armies(world, campaign);
 
 		if (campaigns.state[campaignIndex] == CAMPAIGN_STATE_WAITING) campaigns.state[campaignIndex] = CAMPAIGN_STATE_GATHERING;
 		campaigns.troop_count[campaignIndex] = (ui32)ia_min(troops, (ui64)0xFFFFFFFF);

@@ -22,7 +22,7 @@ interface SettlementAction extends ActionBarUI.ActionBarItem
 
 export class SettlementSelected extends Core.Mode
 {
-    private raise_item = this.make_item("raise_army", "Raise Army", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
+    private raise_item = this.make_item("raise_army", "Create Retinue", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
 
     private found_item = this.make_item("found_settlement", "Found Settlement", 'Digit3', (guid, key) => new SettlementFounding(guid, key));
 
@@ -82,7 +82,7 @@ export class SettlementSelected extends Core.Mode
             return;
         }
 
-        // The panel belongs to the raise army and found settlement modes while they are active.
+        // The panel belongs to the create retinue and found settlement modes while they are active.
         if (this.raise_item.state === 'selected' || this.found_item.state === 'selected') return;
 
         // Own settlement: editable panel (events subscribed in on_entry), build buttons enabled when the project would be accepted.

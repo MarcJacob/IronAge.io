@@ -86,15 +86,14 @@ static void ai_tactics_raise_armies(ai_context& ctx)
 		targets.levies = (ui16)ia_min((ui32)settlement.home_troops.levies, 400u); // Levies are a garrison pool now, not taken from the peasants.
 		targets.men_at_arms = settlement.home_troops.men_at_arms;
 
-		// Raising costs one day of the army's consumption in gold, taken from the treasury (the army starts with it as gold).
-		ui32 cost = ai_world_troops_daily_consumption(targets);
+		// Raising costs gold taken from the treasury (the army starts with it as gold).
+		ui32 cost = ai_world_raising_cost(targets);
 		if (treasury < cost) break;
 
-		auto* raise = ai_push<command_data_raise_army>(ctx, MATCH_COMMAND_TYPE::RAISE_ARMY);
+		auto* raise = ai_push<command_data_create_retinue>(ctx, MATCH_COMMAND_TYPE::CREATE_RETINUE);
 		if (raise == nullptr) return;
 		raise->settlement = settlement.guid;
 		raise->raise_location = settlement.location;
-		raise->start_order = RAISE_START_ORDER_STATION; // The AI moves its armies itself: they stand where raised until the campaign orders them.
 		raise->target_levies = targets.levies;
 		raise->target_men_at_arms = targets.men_at_arms;
 		treasury -= cost;

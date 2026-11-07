@@ -467,7 +467,8 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 
 // GO_HOME
 
-// Walk to the home settlement. Close enough to it (and inside its territory, like the disband command requires), the army disbands into it.
+// Walk to the home settlement. Close enough to it (and inside its territory, like the disband command requires), a standing army disbands into it
+// and a retinue stops there (STATION). A retinue whose home was lost or changed owner stands where it is.
 static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 {
 	world_entity_armies& armies = world.entities->armies;
@@ -481,11 +482,10 @@ static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 			return;
 		}
 		world_army_leave_current_engagement(world, armies.guids[army_index]);
-		if (armies.raising[army_index]) return;
 	}
 
     bool originIsHostile = world_entity_is_hostile(world, home, armies.owner[army_index]);
-	if (!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT)
+	if (!world_entity_is_valid(world, home) || home.get_type() != ENTITY_TYPE::SETTLEMENT || (armies.is_retinue[army_index] && originIsHostile))
 	{
 		army_order_fall_back_to_station(world, army_index);
 		return;
@@ -493,10 +493,18 @@ static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 
 	ui16 homeIndex = home.get_index();
 	world_location homeLocation = world.entities->settlements.location[homeIndex];
-	// Always travelling: arriving ends the order.
-	if (world_army_travel_to(world, army_index, homeLocation, GAME_PARAMETERS.order_go_home_disband_tiles)
-		&& world_tile_owned_by_settlement(world, armies.location[army_index], homeIndex))
+	// Always travelling: arriving ends the order. A raising army is inside its home settlement: it is home already and arrives at once.
+	bool arrived = armies.raising[army_index]
+		|| (world_army_travel_to(world, army_index, homeLocation, GAME_PARAMETERS.order_go_home_disband_tiles)
+			&& world_tile_owned_by_settlement(world, armies.location[army_index], homeIndex));
+	if (arrived)
 	{
+		if (armies.is_retinue[army_index])
+		{
+			army_order_fall_back_to_station(world, army_index);
+			return;
+		}
+
 		if (!originIsHostile)
 		{
 			world_disband_army(world, armies.guids[army_index], home);
@@ -614,7 +622,8 @@ void world_system_army_orders(match_world_state& world)
 		if (!armies.guids[armyIndex].is_valid()) continue;
 
 		// Raising armies stay where they were raised: their order (set by the raise command) starts when raising ends. Unless engaged: the order logic handles that.
-		if (armies.raising[armyIndex] && !armies.engagement[armyIndex].is_valid()) continue;
+		// Exception: GO_HOME takes effect at once (the army is inside its home settlement, it disbands without walking).
+		if (armies.raising[armyIndex] && !armies.engagement[armyIndex].is_valid() && armies.order[armyIndex].type != ARMY_ORDER_GO_HOME) continue;
 
 		const army_order_def* def = armies.order[armyIndex].type < ARMY_ORDER_TYPE_COUNT ? &ARMY_ORDER_DEFS[armies.order[armyIndex].type] : nullptr;
 		if (def == nullptr || def->logic == nullptr)

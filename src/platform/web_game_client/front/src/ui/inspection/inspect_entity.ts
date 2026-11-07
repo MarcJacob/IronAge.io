@@ -1,6 +1,6 @@
 // Entity inspection: the entry points modes call to show something in the bottom center of the HUD (the entity frame and one panel inside it).
 //   show_entity(view, context)                   the panel of the entity's type. show_entity(null) hides everything.
-//   show_raise_army_panel(settlement, targets)   the settlement's "Raise army" panel (Raise army mode).
+//   show_raise_army_panel(settlement, targets)   the settlement's "Create retinue" panel (Create retinue mode).
 //   show_found_settlement_panel(state)           the settlement's "Found settlement" panel (Found settlement mode).
 // Routing (show below) is the one place deciding what that area shows: every panel is submitted on every call, all but the shown one with null,
 // so panels never conflict. Modes never submit the frame or a panel directly.
@@ -22,7 +22,7 @@ import { RENDER_CONFIG } from "../../render.js"
 import * as RaiseArmyPanelUI from "./ui_element_raise_army_panel.js"
 import * as FoundSettlementPanelUI from "./ui_element_found_settlement_panel.js"
 import { raise_available, TROOPS, MAX_COUNT } from "./section_troops.js"
-import { troops_consumption } from "./section_supplies.js"
+import { raising_cost } from "./section_supplies.js"
 import { settlement_text } from "./section_trade.js"
 
 export interface InspectionContext
@@ -318,7 +318,7 @@ function worker_title(worker: EntityData): string
     }
 }
 
-// "Raise army" panel: what the settlement can give now per troop type against the targets, and the cost against the treasury.
+// "Create retinue" panel: what the settlement can give now per troop type against the targets, and the cost against the treasury.
 // A type with nothing available and no target is left out (nothing to set).
 function raise_army_panel_state(settlement: EntityData, targets: number[]): RaiseArmyPanelUI.RaiseArmyPanelState
 {
@@ -328,7 +328,7 @@ function raise_army_panel_state(settlement: EntityData, targets: number[]): Rais
             if (max === 0 && targets[i] === 0) return null;
             return { max: Math.min(max, MAX_COUNT), target: targets[i] };
         }),
-        cost: troops_consumption(targets),
+        cost: raising_cost(targets),
         treasury: get_local_player_state().get_number("treasury"),
     };
 }
@@ -392,11 +392,11 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
     }
 }
 
-// Shows the settlement's "Raise army" panel against the targets (troop order). The target sliders are interactive:
+// Shows the settlement's "Create retinue" panel against the targets (troop order). The target sliders are interactive:
 // the Raise army mode subscribes to RaiseArmyPanelUI "raise_targets". Hidden by show_entity(null) or any other show_*.
 export function show_raise_army_panel(settlement: EntityData, targets: number[]): void
 {
-    show({ title: "Raise army", subtitle: owner_name(settlement), raise_army: raise_army_panel_state(settlement, targets) });
+    show({ title: "Create retinue", subtitle: owner_name(settlement), raise_army: raise_army_panel_state(settlement, targets) });
 }
 
 // Shows the settlement's "Found settlement" panel (state built by the Found settlement mode). Hidden by show_entity(null) or any other show_*.

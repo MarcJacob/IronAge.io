@@ -116,6 +116,7 @@ void world_system_armies_upkeep(match_world_state& world)
 		if (armies.raising[armyIndex])
 		{
 			armies.raising[armyIndex] = 0;
+			army_enforce_carry_capacity(world, (ui16)armyIndex);
 			continue;
 		}
 

@@ -21,7 +21,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 	SET_ENTITY_MOVE_TARGET, // Orders an entity to move to a target location if it can.
 	SET_ENTITY_ATTACK_TARGET, // Orders an army to chase and attack another entity (not owned by the same player) until the attack resolves.
 	FOUND_SETTLEMENT, // Has a settlement send colonists (a worker) to a target tile, where they found a new settlement.
-	RAISE_ARMY, // Spawns an empty army that moves to a raise location, then draws the target counts from its settlement.
+	CREATE_RETINUE, // Spawns an empty army (a retinue: the only kind of army players order) that moves to a raise location, then draws the target counts from its settlement.
 
     // SERVER COMMANDS
 
@@ -196,28 +196,19 @@ bool command_found_settlement_validity_check(const match_world_state& world, mat
 void command_found_settlement_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
-// RAISE ARMY
-struct command_data_raise_army
+// CREATE RETINUE
+struct command_data_create_retinue
 {
 	entity_guid settlement;
-	world_location raise_location; // Tile the new army moves to, then raises at.
+	world_location raise_location; // Where the army is stationed once raised (it is raised inside the settlement). Zero (0, 0) = none: the army defends the settlement.
 	ui16 target_levies; // Counts the army raises up to, per type.
 	ui16 target_men_at_arms;
 	ui16 target_horsemen;
 	ui16 target_knights;
 	ui16 target_wagons; // At most the settlement's wagons max (troop_max.wagons) minus its raised wagons.
-	ui8 start_order; // Order the army gets once its raising ends: RAISE_START_ORDER_*.
 };
 
-// Values of command_data_raise_army::start_order.
-enum RAISE_START_ORDER : ui8
-{
-	RAISE_START_ORDER_DEFEND = 0, // Default: DEFEND_TERRITORY of the raising settlement.
-	RAISE_START_ORDER_STATION = 1, // STATION at the raise location.
-	RAISE_START_ORDER_COUNT,
-};
-
-GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
+GAME_DATA_OBJECT_DEF_BEGIN(command_data_create_retinue)
 	GAME_DATA_PROPERTY(settlement, GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY(raise_location, GAME_DATA_PROP_TYPE::WORLD_LOCATION)
 	GAME_DATA_PROPERTY(target_levies, GAME_DATA_PROP_TYPE::UI16)
@@ -225,13 +216,12 @@ GAME_DATA_OBJECT_DEF_BEGIN(command_data_raise_army)
 	GAME_DATA_PROPERTY(target_horsemen, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_knights, GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(target_wagons, GAME_DATA_PROP_TYPE::UI16)
-	GAME_DATA_PROPERTY(start_order, GAME_DATA_PROP_TYPE::UI8)
 GAME_DATA_OBJECT_DEF_END()
 
-bool command_raise_army_validity_check(const match_world_state& world, match_player_id player,
+bool command_create_retinue_validity_check(const match_world_state& world, match_player_id player,
 	const match_command_header& command_header, match_command_validity_feedback* feedback);
 
-void command_raise_army_apply(match_world_state& world, match_player_id player,
+void command_create_retinue_apply(match_world_state& world, match_player_id player,
 	const match_command_header& command_header);
 
 // BUILD ROAD
@@ -658,8 +648,8 @@ static constexpr match_command_def MATCH_COMMAND_TABLE[] =
 		command_set_entity_attack_target_validity_check, command_set_entity_attack_target_apply },
 	{ "FOUND_SETTLEMENT", MATCH_COMMAND_TYPE::FOUND_SETTLEMENT, sizeof(command_data_found_settlement),
 		command_found_settlement_validity_check, command_found_settlement_apply },
-	{ "RAISE_ARMY", MATCH_COMMAND_TYPE::RAISE_ARMY, sizeof(command_data_raise_army),
-		command_raise_army_validity_check, command_raise_army_apply },
+	{ "CREATE_RETINUE", MATCH_COMMAND_TYPE::CREATE_RETINUE, sizeof(command_data_create_retinue),
+		command_create_retinue_validity_check, command_create_retinue_apply },
 	{ "SERVER_SPAWN_PLAYER", MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER, sizeof(command_data_server_spawn_player),
 		command_server_spawn_player_validity_check, command_server_spawn_player_apply },
 	{ "BUILD_ROAD", MATCH_COMMAND_TYPE::BUILD_ROAD, sizeof(command_data_build_road),

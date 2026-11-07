@@ -1,4 +1,4 @@
-// UI module (new style): the settlement's "Raise army" panel, inside the entity frame (ui_element_entity_frame.ts). One compact gauge per troop type
+// UI module (new style): the settlement's "Create retinue" panel, inside the entity frame (ui_element_entity_frame.ts). One compact gauge per troop type
 // (target slider against what the settlement can give now) and the cost of raising (red when the treasury cannot pay it).
 // Static markup in index.html (ids below), extracted once by init. submit(state) shows it, submit(null) hides it.
 // Emits "raise_targets" with all four targets (troop order), the released one updated, when a target slider is released.
@@ -24,7 +24,7 @@ export interface RaiseArmyTroopState
 export interface RaiseArmyPanelState
 {
     troops: (RaiseArmyTroopState | null)[]; // Troop order (levies, men-at-arms, horsemen, knights, wagons). Null hides the gauge.
-    cost: number; // One day of the troops' consumption, taken from the treasury.
+    cost: number; // A day of the troops' consumption (at most their carry capacity), taken from the treasury.
     treasury: number;
 }
 

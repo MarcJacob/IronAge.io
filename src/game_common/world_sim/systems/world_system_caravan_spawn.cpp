@@ -1,11 +1,11 @@
-// Daily caravan spawn system.
+// Periodic caravan spawn system.
 
 #include "../world_movement.h"
 #include "../entities/world_sim_entity_caravan.h"
 #include "../entities/world_sim_entity_settlement.h"
 
 static constexpr ui32 CARAVAN_MIN_SIZE_FLOOR = 10; // No caravan carries less, whatever the export pool.
-static constexpr ui32 CARAVAN_SPAWN_ATTEMPTS = 3; // Destinations picked per settlement per day (an unreachable one is dropped and another is picked).
+static constexpr ui32 CARAVAN_SPAWN_ATTEMPTS = 3; // Destinations picked per settlement per check (an unreachable one is dropped and another is picked).
 
 // Spawns at most one caravan (or ship) from the settlement, if it has a free slot of that kind. Ships use their own slots, export pool percent, speed,
 // water pathing and dock tiles (caravan_endpoint); the trade logic is the same.
@@ -75,18 +75,19 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
     }
 }
 
-// Daily: every settlement with a free caravan slot looks for a trade opportunity and spawns at most one caravan, sized to it, from its export goods.
+// Every trade.caravan_spawn_period_ticks ticks of each settlement's age (staggered by its founding tick): if it has a free caravan slot it looks for a trade
+// opportunity and spawns at most one caravan, sized to it, from its export goods.
 // Then the same for ships with a free ship slot (Trade Ports), from the export goods left by the land caravan.
 // A destination is eligible if its spawn score reaches min_profit_per_travel_dist_percent (see caravan_spawn_score), picked at random weighted by score.
 void world_system_caravan_spawn(match_world_state& world)
 {
-    if (!world_is_daily_tick(world)) return;
-
     world_entity_settlements& settlements = world.entities->settlements;
+    ui64 period = ia_max(GAME_PARAMETERS.trade.caravan_spawn_period_ticks, (ui32)1);
 
     for (ui32 settlementIndex = 0; settlementIndex < settlements.max_count; settlementIndex++)
     {
         if (!settlements.guids[settlementIndex].is_valid()) continue;
+        if (world.age < settlements.founding_tick[settlementIndex] || (world.age - settlements.founding_tick[settlementIndex]) % period != 0) continue;
 
         caravan_try_spawn(world, (ui16)settlementIndex, false);
         caravan_try_spawn(world, (ui16)settlementIndex, true);

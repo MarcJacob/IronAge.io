@@ -9,7 +9,7 @@
 #include "../troop_types.h"
 
 // Standing orders of an army: what it does by itself. An army in an engagement it cannot leave (or that its order wants) is pinned there instead, see the order logic.
-// Zero = STATION, a functional default. The logic of each type is in world_system_standing_orders.cpp.
+// Zero = STATION, a functional default. The logic of each type is in world_system_army_standing_orders.cpp.
 enum ARMY_ORDER_TYPE : ui8
 {
 	ARMY_ORDER_STATION = 0, // Go to the order's location and stand there.
@@ -17,7 +17,7 @@ enum ARMY_ORDER_TYPE : ui8
 	                   // A target army inside an engagement stands for that engagement (the order's location is then the engagement's); a neutral one is not joined, the army waits next to it.
 	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: stand on it (no patrolling for now), attack intruders in its territory, retreat to the settlement from stronger forces.
 	ARMY_ORDER_RAID, // Target = a hostile or neutral settlement: go to its territory, stay there, flee stronger forces.
-	ARMY_ORDER_GO_HOME, // Walk to the home settlement and disband.
+	ARMY_ORDER_GO_HOME, // Walk to the home settlement: a standing army disbands there, a retinue (is_retinue) stops there (STATION).
 	ARMY_ORDER_JOIN_CAMPAIGN, // Target = a campaign: walk to it. Once within its join radius (world_system_campaigns) the campaign takes the army over: it becomes a member and its order becomes STATION where it stands.
     ARMY_ORDER_ACCOMPANY, // Target = army entity. Accompany the target, sticking close to it and helping it in any engagement it joins.
 
@@ -72,6 +72,7 @@ struct world_entity_armies : public world_entity_container
 
 	army_troop_count* raised_troops; // Raise target when raising, "Original" / "Max" counts after that.
 	ui8* raising; // 1 while the army is raising.
+	ui8* is_retinue; // 1 for armies created by the player's CREATE_RETINUE command, 0 for standing armies (created by a settlement for a campaign). Only retinues take player orders.
 
 	entity_guid* home_settlement; // Settlement this army was raised from.
 	army_order* order; // Standing order (see ARMY_ORDER_TYPE).
@@ -92,6 +93,7 @@ struct world_entity_armies : public world_entity_container
 		army_troop_count composition;
 		army_troop_count raised_troops;
 		ui8 raising;
+		ui8 is_retinue;
 
 		entity_guid home_settlement;
 		army_order order;
@@ -118,6 +120,7 @@ struct world_entity_armies : public world_entity_container
 		army_troop_count& composition;
 		army_troop_count& raised_troops;
 		ui8& raising;
+		ui8& is_retinue;
 		entity_guid& home_settlement;
 		army_order& order;
 		entity_guid& engagement;
@@ -135,6 +138,7 @@ struct world_entity_armies : public world_entity_container
 			composition = source.composition;
 			raised_troops = source.raised_troops;
 			raising = source.raising;
+			is_retinue = source.is_retinue;
 			home_settlement = source.home_settlement;
 			order = source.order;
 			engagement = source.engagement;
@@ -152,6 +156,7 @@ struct world_entity_armies : public world_entity_container
 			, composition(collection.composition[index])
 			, raised_troops(collection.raised_troops[index])
 			, raising(collection.raising[index])
+			, is_retinue(collection.is_retinue[index])
 			, home_settlement(collection.home_settlement[index])
 			, order(collection.order[index])
 			, engagement(collection.engagement[index])
@@ -172,6 +177,7 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies::vi
 	composition = source.composition;
 	raised_troops = source.raised_troops;
 	raising = source.raising;
+	is_retinue = source.is_retinue;
 	home_settlement = source.home_settlement;
 	order = source.order;
 	engagement = source.engagement;
@@ -192,6 +198,7 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies& co
 	composition = collection.composition[index];
 	raised_troops = collection.raised_troops[index];
 	raising = collection.raising[index];
+	is_retinue = collection.is_retinue[index];
 	home_settlement = collection.home_settlement[index];
 	order = collection.order[index];
 	engagement = collection.engagement[index];
@@ -228,6 +235,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(world_entity_army)
 	GAME_DATA_PROPERTY_PATH(raised_knights, raised_troops.knights,              GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY_PATH(raised_wagons, raised_troops.wagons,                GAME_DATA_PROP_TYPE::UI16)
 	GAME_DATA_PROPERTY(raising,                                                 GAME_DATA_PROP_TYPE::UI8)
+	GAME_DATA_PROPERTY(is_retinue,                                                GAME_DATA_PROP_TYPE::UI8)
 
 	GAME_DATA_PROPERTY(home_settlement,                                         GAME_DATA_PROP_TYPE::ENTITY_GUID)
 	GAME_DATA_PROPERTY_PATH(order_type, order.type,                             GAME_DATA_PROP_TYPE::UI8)
@@ -256,6 +264,13 @@ ui32 army_daily_consumption(const army_troop_count& troops);
 
 // The troops supplies are sized for: the raise targets while the army is raising, its composition after that.
 const army_troop_count& army_supply_basis(const match_world_state& world, ui16 army_index);
+
+// What the given soldiers carry at most in each pool: sum of count x per-type carry capacity (GAME_PARAMETERS.carry_*).
+ui32 army_troops_carry_capacity(const army_troop_count& troops);
+
+// What raising an army with these targets costs in gold, and what it starts with in gold and goods (the latter as far as the market gives):
+// one day of the targets' consumption, at most their carry capacity. The single cost used by every raise path (command, campaign army, AI).
+ui32 army_raising_cost(const army_troop_count& targets);
 
 // What the army carries at most in each pool (supplies and gold, separate): its men x per-type carry capacity (GAME_PARAMETERS.carry_*), on its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index);

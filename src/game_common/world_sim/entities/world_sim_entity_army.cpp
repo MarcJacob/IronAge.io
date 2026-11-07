@@ -76,20 +76,33 @@ army_troop_count world_settlement_campaign_army_targets(const world_entity_settl
 	return targets;
 }
 
-bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlement_index, entity_guid campaign)
+bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_index, entity_guid campaign)
 {
 	world_entity_settlements& settlements = world.entities->settlements;
 	world_entity_armies& armies = world.entities->armies;
 
-	if (world_entity_is_valid(world, settlements.campaign_army[settlement_index])) return false;
+	if (settlement_is_besieged(world, settlement_index)) return false;
+
+	// The settlement kept the army of its previous campaign (campaign_army): it is sent to the new one with what it has (no cost, no new men).
+	if (world_entity_is_valid(world, settlements.campaign_army[settlement_index]))
+	{
+		ui16 armyIndex = settlements.campaign_army[settlement_index].get_index();
+		if (armies.owner[armyIndex] != settlements.owner[settlement_index]) return false; // Kept from before the settlement changed hands: not ours to send.
+		armies.order[armyIndex] = {};
+		armies.order[armyIndex].type = ARMY_ORDER_JOIN_CAMPAIGN;
+		armies.order[armyIndex].target = campaign;
+		armies.order[armyIndex].location = armies.location[armyIndex];
+		return true;
+	}
+
 	if (armies.active_count >= armies.max_count) return false;
 
 	army_troop_count targets = world_settlement_campaign_army_targets(settlements, settlement_index);
 	if (army_total_manpower(targets) == 0) return false;
 
-	// Same terms as the raise command: the army starts with a day of its troops' consumption as gold from the treasury, and as much of it in goods from the market (the settlement keeps a day of its own).
+	// Same terms as the raise command: the army starts with army_raising_cost of gold from the treasury, and as much of it in goods from the market (the settlement keeps a day of its own).
 	world_player_state& player = world.player_states[settlements.owner[settlement_index]];
-	ui32 cost = army_daily_consumption(targets);
+	ui32 cost = army_raising_cost(targets);
 	if (cost > player.treasury) return false;
 
 	ui32 goodsKept = settlements.economy[settlement_index].consumption;
@@ -100,7 +113,7 @@ bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlem
 	newArmy.location = settlements.location[settlement_index];
 	newArmy.raised_troops = targets;
 	newArmy.home_settlement = settlements.guids[settlement_index];
-	newArmy.raising = 1;
+	newArmy.raising = 1; // is_retinue stays 0: a standing army, controlled by the campaign logic only.
 	newArmy.gold = cost;
 	newArmy.supplies = ia_min(cost, trade.market_goods > goodsKept ? trade.market_goods - goodsKept : 0);
 
@@ -117,7 +130,7 @@ bool world_settlement_raise_campaign_army(match_world_state& world, ui16 settlem
 }
 
 // Homecoming: gold goes to the owner's treasury, supplies back to the home settlement's goods (if it is still the owner's, lost otherwise). Call before destroying the army.
-static void army_homecoming(match_world_state& world, ui16 armyIndex)
+void army_homecoming(match_world_state& world, ui16 armyIndex)
 {
 	world_entity_armies& armies = world.entities->armies;
 	world.player_states[armies.owner[armyIndex]].treasury += armies.gold[armyIndex];
@@ -264,6 +277,9 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.raising = memory.alloc<ui8>(count);
 	if (armies.raising == nullptr) return false;
 
+	armies.is_retinue = memory.alloc<ui8>(count);
+	if (armies.is_retinue == nullptr) return false;
+
 	armies.home_settlement = memory.alloc<entity_guid>(count);
 	if (armies.home_settlement == nullptr) return false;
 
@@ -303,7 +319,33 @@ const army_troop_count& army_supply_basis(const match_world_state& world, ui16 a
 // What the army carries at most, in each of its two pools (supplies, gold): sum of count x per-type carry capacity of its supply basis.
 ui32 army_supply_capacity(const match_world_state& world, ui16 army_index)
 {
-	const army_troop_count& troops = army_supply_basis(world, army_index);
+	return army_troops_carry_capacity(army_supply_basis(world, army_index));
+}
+
+void army_enforce_carry_capacity(match_world_state& world, ui16 army_index)
+{
+	world_entity_armies& armies = world.entities->armies;
+	if (!armies.raising[army_index] && army_total_manpower(armies.composition[army_index]) == 0) return;
+
+	ui32 capacity = army_supply_capacity(world, army_index);
+	ui32 excessGold = armies.gold[army_index] > capacity ? armies.gold[army_index] - capacity : 0;
+	ui32 excessSupplies = armies.supplies[army_index] > capacity ? armies.supplies[army_index] - capacity : 0;
+	if (excessGold == 0 && excessSupplies == 0) return;
+
+	armies.gold[army_index] -= excessGold;
+	armies.supplies[army_index] -= excessSupplies;
+
+	entity_guid engagement = armies.engagement[army_index];
+	if (world_entity_is_valid(world, engagement)) world_engagement_loot_add(world, engagement, excessGold, excessSupplies);
+}
+
+ui32 army_raising_cost(const army_troop_count& targets)
+{
+	return ia_min(army_daily_consumption(targets), army_troops_carry_capacity(targets));
+}
+
+ui32 army_troops_carry_capacity(const army_troop_count& troops)
+{
 	ui64 capacity = (ui64)troops.levies * GAME_PARAMETERS.carry_levy
 		+ (ui64)troops.men_at_arms * GAME_PARAMETERS.carry_men_at_arms
 		+ (ui64)troops.horsemen * GAME_PARAMETERS.carry_horseman
@@ -406,8 +448,10 @@ void world_army_loot_caravan(match_world_state& world, entity_guid army, entity_
     ui16 goldLoot = caravanValue / 2;
     ui16 supplyLoot = caravanValue - goldLoot;
 
-    ui16 takenGold = ia_min(army_supply_capacity(world, army.get_index()) - armyView.gold, goldLoot);
-    ui16 takenSupplies = ia_min(army_supply_capacity(world, army.get_index()) - armyView.supplies, supplyLoot);
+    // Gold and supplies can exceed the capacity (raising gives several days of both): room floors at 0.
+    ui32 capacity = army_supply_capacity(world, army.get_index());
+    ui16 takenGold = (ui16)ia_min(capacity > armyView.gold ? capacity - armyView.gold : 0, (ui32)goldLoot);
+    ui16 takenSupplies = (ui16)ia_min(army_supplies_room(world, army.get_index()), (ui32)supplyLoot);
 
     armyView.gold += takenGold;
     armyView.supplies += takenSupplies;

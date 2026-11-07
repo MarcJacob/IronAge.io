@@ -1,6 +1,5 @@
-// Raising an army from a settlement. The player picks the raise location (in its territory) the new army will move to.
-// The raise location must be in the settlement's territory, and the preview is limited to it. The path to the hovered tile is previewed, red if the order would be refused.
-// A click sends the order and leaves the mode. Escape leaves without raising.
+// Creating a retinue (raising an army) from a settlement. The army is raised inside the settlement; the player picks the destination (any land tile) it is stationed at once raised.
+// The path to the hovered tile is previewed, red if the order would be refused. A click sends the order and leaves the mode. Escape leaves without raising.
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
@@ -11,7 +10,7 @@ import { show_entity, show_raise_army_panel } from "../ui/inspection/inspect_ent
 import { query_entity } from "../gdo.js"
 import { is_own_settlement } from "../main.js"
 
-// Targets in troop order as the target_* properties of RAISE_ARMY and SET_ARMY_RAISE_TARGETS.
+// Targets in troop order as the target_* properties of CREATE_RETINUE and SET_ARMY_RAISE_TARGETS.
 export function raise_target_props(targets: number[]): { target_levies: number, target_men_at_arms: number, target_horsemen: number, target_knights: number, target_wagons: number }
 {
     return { target_levies: targets[0], target_men_at_arms: targets[1], target_horsemen: targets[2], target_knights: targets[3], target_wagons: targets[4] };
@@ -77,11 +76,11 @@ export class ArmyRaising extends Core.Mode
             return;
         }
 
-        // The path is computed to any hovered tile (no territory limit), so the player sees where an order outside the territory would go.
+        // The path is computed to any hovered tile, so the player sees where the army would go.
         // Whether the order is acceptable comes from the validity feedback, not from the path.
         const start = view.get_location("location");
         const points = Backend.query_path(start, hovered);
-        const feedback = get_command_feedback("RAISE_ARMY", { settlement: this.settlement_guid, raise_location: hovered, ...raise_target_props(this.targets) });
+        const feedback = get_command_feedback("CREATE_RETINUE", { settlement: this.settlement_guid, raise_location: hovered, ...raise_target_props(this.targets) });
         Render.RENDER_CONFIG.path_preview = { start, points, valid: is_preview_valid(feedback, points) };
     }
 
@@ -111,9 +110,9 @@ export class ArmyRaising extends Core.Mode
 
         // Refused orders (including no troops to raise) are not sent and the mode stays.
         const raiseArmy = { settlement: this.settlement_guid, raise_location: tile, ...raise_target_props(this.targets) };
-        if (!this.targets.some(target => target > 0) || !is_command_valid("RAISE_ARMY", raiseArmy)) return true;
+        if (!this.targets.some(target => target > 0) || !is_command_valid("CREATE_RETINUE", raiseArmy)) return true;
 
-        send_command("RAISE_ARMY", raiseArmy);
+        send_command("CREATE_RETINUE", raiseArmy);
         Core.pop_mode();
         return true;
     }

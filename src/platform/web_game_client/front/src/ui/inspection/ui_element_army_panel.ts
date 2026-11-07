@@ -126,7 +126,8 @@ export function submit(state: ArmyPanelState | null): void
 
     set_text(el.origin, state.origin);
     set_text(el.order, state.order);
-    set_text(el.gold, `${state.gold} / ${state.supplies_capacity}`); // Same capacity as the supplies.
+    // Same capacity as the supplies. Display safety net: an army never holds more than it carries, but a shrunk army (casualties, stopped raising) can briefly.
+    set_text(el.gold, `${state.supplies_capacity > 0 ? Math.min(state.gold, state.supplies_capacity) : state.gold} / ${state.supplies_capacity}`);
     set_text(el.note, state.note);
 
     for (let i = 0; i < el.troops.length; i++)
@@ -141,10 +142,10 @@ export function submit(state: ArmyPanelState | null): void
     const capacity = state.supplies_capacity;
     const consumption = state.supplies_consumption;
     el.supplies.submit({
-        color: supplies_color(capacity > 0 ? supplies / capacity : 1),
-        current: supplies,
+        color: supplies_color(capacity > 0 ? Math.min(supplies / capacity, 1) : 1),
+        current: capacity > 0 ? Math.min(supplies, capacity) : supplies, // Gauge clamped at 100%.
         max: capacity > 0 ? capacity : undefined,
-        scale: Math.max(supplies, 1),
+        scale: Math.max(capacity > 0 ? Math.min(supplies, capacity) : supplies, 1),
         editable: false,
     });
 
