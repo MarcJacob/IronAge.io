@@ -13,6 +13,7 @@
 
 #include "../entities/world_sim_entity_army.h"
 #include "../entities/world_sim_entity_campaign.h"
+#include "../entities/world_sim_entity_engagement.h"
 
 #include "../world_movement.h"
 
@@ -52,19 +53,29 @@ static bool conquer_accomplished(const match_world_state& world, match_player_id
 	return !conquer_target_is_unconquered(world, owner, objective);
 }
 
-// Every member army attacks the settlement (the siege and assault logic of the standing orders does the rest).
+// Every member army attacks the settlement (the siege logic of the standing orders does the rest). Once the settlement is under an idle siege that the campaign's owner commands
+// and member armies take part in, the campaign begins the assault when world_siege_assault_advisable says so (the same function as the BEGIN_ASSAULT command).
+// It cannot repeat: the siege leaves SIEGE_IDLE at once, and only returns to it after an outside battle (then the rule is evaluated again, once more).
 static void conquer_on_objective(match_world_state& world, entity_guid campaign)
 {
 	world_entity_armies& armies = world.entities->armies;
 	entity_guid target = world.entities->campaigns.objective[campaign.get_index()].target;
+	bool besiegedByMember = false;
 
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!(armies.campaign[armyIndex] == campaign)) continue;
-		if (armies.order[armyIndex].type == ARMY_ORDER_ATTACK && armies.order[armyIndex].target == target) continue;
+		if (!(armies.order[armyIndex].type == ARMY_ORDER_ATTACK && armies.order[armyIndex].target == target)) army_order_attack(armies, (ui16)armyIndex, target);
 
-		army_order_attack(armies, (ui16)armyIndex, target);
+		entity_guid siege = target.get_type() == ENTITY_TYPE::SETTLEMENT ? world.entities->settlements.siege[target.get_index()] : INVALID_ENTITY_GUID;
+		if (siege.is_valid() && armies.engagement[armyIndex] == siege && armies.engagement_side[armyIndex] == ENGAGEMENT_SIDE::ATTACKER) besiegedByMember = true;
 	}
+
+	if (!besiegedByMember) return;
+
+	entity_guid siege = world.entities->settlements.siege[target.get_index()];
+	if (world.entities->engagements.attacker_commander[siege.get_index()] != world.entities->campaigns.owner[campaign.get_index()]) return;
+	if (world_siege_assault_advisable(world, siege)) world_engagement_siege_begin_assault(world, siege);
 }
 
 // OBJECTIVES

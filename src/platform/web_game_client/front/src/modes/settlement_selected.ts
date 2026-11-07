@@ -22,7 +22,7 @@ interface SettlementAction extends ActionBarUI.ActionBarItem
 
 export class SettlementSelected extends Core.Mode
 {
-    private raise_item = this.make_item("raise_army", "Create Retinue", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
+    private raise_item = this.make_item("raise_army", "Raise Retinue", 'Digit2', (guid, key) => new ArmyRaising(guid, key));
 
     private found_item = this.make_item("found_settlement", "Found Settlement", 'Digit3', (guid, key) => new SettlementFounding(guid, key));
 

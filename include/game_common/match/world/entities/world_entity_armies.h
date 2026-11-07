@@ -17,7 +17,7 @@ enum ARMY_ORDER_TYPE : ui8
 	                   // A target army inside an engagement stands for that engagement (the order's location is then the engagement's); a neutral one is not joined, the army waits next to it.
 	ARMY_ORDER_DEFEND_TERRITORY, // Target = a settlement of the army's owner: stand on it (no patrolling for now), attack intruders in its territory, retreat to the settlement from stronger forces.
 	ARMY_ORDER_RAID, // Target = a hostile or neutral settlement: go to its territory, stay there, flee stronger forces.
-	ARMY_ORDER_GO_HOME, // Walk to the home settlement: a standing army disbands there, a retinue (is_retinue) stops there (STATION).
+	ARMY_ORDER_GO_HOME, // Walk to the home settlement: a campaign army disbands there, a retinue (is_retinue) stops there (STATION).
 	ARMY_ORDER_JOIN_CAMPAIGN, // Target = a campaign: walk to it. Once within its join radius (world_system_campaigns) the campaign takes the army over: it becomes a member and its order becomes STATION where it stands.
     ARMY_ORDER_ACCOMPANY, // Target = army entity. Accompany the target, sticking close to it and helping it in any engagement it joins.
 
@@ -72,7 +72,7 @@ struct world_entity_armies : public world_entity_container
 
 	army_troop_count* raised_troops; // Raise target when raising, "Original" / "Max" counts after that.
 	ui8* raising; // 1 while the army is raising.
-	ui8* is_retinue; // 1 for armies created by the player's CREATE_RETINUE command, 0 for standing armies (created by a settlement for a campaign). Only retinues take player orders.
+	ui8* is_retinue; // 1 for armies created by the player's CREATE_RETINUE command, 0 for campaign armies (created by a settlement for a campaign). Only retinues take player orders.
 
 	entity_guid* home_settlement; // Settlement this army was raised from.
 	army_order* order; // Standing order (see ARMY_ORDER_TYPE).

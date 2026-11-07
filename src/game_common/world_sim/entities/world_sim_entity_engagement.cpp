@@ -213,6 +213,29 @@ void world_engagement_siege_begin_assault(match_world_state& world, entity_guid 
 	engagements.fighting_active[index] = true;
 }
 
+bool world_siege_assault_advisable(const match_world_state& world, entity_guid engagement)
+{
+	const world_entity_engagements& engagements = world.entities->engagements;
+	const world_entity_armies& armies = world.entities->armies;
+	if (!world_entity_is_valid(world, engagement) || engagement.get_type() != ENTITY_TYPE::ENGAGEMENT) return false;
+
+	ui16 index = engagement.get_index();
+	if (engagements.kind[index] != ENGAGEMENT_KIND::SIEGE || engagements.phase[index] != ENGAGEMENT_PHASE::SIEGE_IDLE) return false;
+
+	ui64 attackers = army_total_manpower(engagements.attacker_troops[index]);
+	ui64 defenders = army_total_manpower(engagements.defender_troops[index]);
+	if (attackers >= defenders * GAME_PARAMETERS.campaign_assault_outnumber) return true;
+
+	for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!armies.guids[armyIndex].is_valid() || !(armies.engagement[armyIndex] == engagement) || armies.engagement_side[armyIndex] != ENGAGEMENT_SIDE::ATTACKER) continue;
+
+		ui32 supplyDays = armies.supplies[armyIndex] / ia_max(army_daily_consumption(armies.composition[armyIndex]), (ui32)1);
+		if (supplyDays < GAME_PARAMETERS.campaign_assault_min_supply_days) return true;
+	}
+	return false;
+}
+
 void world_engagement_siege_sally_out(match_world_state& world, entity_guid engagement)
 {
 	ASSERT(world_entity_is_valid(world, engagement) && engagement.get_type() == ENTITY_TYPE::ENGAGEMENT);

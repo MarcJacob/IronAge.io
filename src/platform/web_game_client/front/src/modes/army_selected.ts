@@ -23,7 +23,7 @@ export class ArmySelected extends Core.Mode
 
     private raising: boolean | null = null; // Whether the bar currently offers to stop raising (null: no bar submitted yet).
     private can_disband: boolean | null = null; // Whether the bar currently shows Disband as selectable.
-    private orderable: boolean | null = null; // Whether the army is a retinue (the only kind the player orders). A standing army is display only: no bar, no hotkeys, no clicks.
+    private orderable: boolean | null = null; // Whether the army is a retinue (the only kind the player orders). A campaign army is display only: no bar, no hotkeys, no clicks.
 
     private stop_item: ActionBarUI.ActionBarItem = { id: "stop_raising", name: "Stop raising", state: 'selectable' };
 

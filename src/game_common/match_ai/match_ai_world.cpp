@@ -19,6 +19,22 @@ static bool ai_world_has_room_to_found(const match_world_state& world)
 }
 static world_dimensions ai_world_size(const match_world_state& world) { return world.terrain->size_tiles; }
 static ui32 ai_world_raising_cost(const army_troop_count& targets) { return army_raising_cost(targets); }
+static ui32 ai_world_free_army_slots(const match_world_state& world) { return world.entities->armies.max_count - world.entities->armies.active_count; }
+
+// Runs the real validity check of CAMPAIGN_JOIN (besieged settlement, kept army of another owner, no army or campaign slot, no men or gold...) on a command built here, so the AI cannot drift from it.
+static bool ai_world_join_is_valid(const match_world_state& world, match_player_id player, entity_guid settlement, entity_guid campaign)
+{
+	alignas(8) ui8 buffer[sizeof(match_command_header) + sizeof(command_data_campaign_join)] = {};
+	match_command_header& header = *(match_command_header*)buffer;
+#ifdef MATCH_COMMAND_DEBUG
+	header._data_size = sizeof(command_data_campaign_join);
+#endif
+	header.type = MATCH_COMMAND_TYPE::CAMPAIGN_JOIN;
+	command_data_campaign_join& payload = header.get_command_data<command_data_campaign_join>();
+	payload.entity = settlement;
+	payload.campaign = campaign;
+	return command_campaign_join_validity_check(world, player, header, nullptr);
+}
 
 static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_settlement_view& out)
 {
@@ -66,7 +82,9 @@ static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view
 	out.troops = ai_troops_sum(armies.composition[slot]);
 	out.raising = armies.raising[slot];
 	out.troops_target = out.raising ? ia_max(out.troops, ai_troops_sum(armies.raised_troops[slot])) : out.troops;
-	out.supply_days = armies.supplies[slot] / ia_max(army_daily_consumption(armies.composition[slot]), (ui32)1);
+	ui32 consumption = ia_max(army_daily_consumption(armies.composition[slot]), (ui32)1);
+	out.supply_days = armies.supplies[slot] / consumption;
+	out.supply_capacity_days = army_supply_capacity(world, slot) / consumption;
 	// Available: standing (STATION) or defending, not engaged, and arrived. ATTACK / RAID / GO_HOME are busy.
 	const ui8 orderType = armies.order[slot].type;
 	out.idle = !out.raising && !armies.engagement[slot].is_valid() && (orderType == ARMY_ORDER_STATION || orderType == ARMY_ORDER_DEFEND_TERRITORY)
@@ -89,31 +107,6 @@ static bool ai_view_own_campaign(const match_world_state& world, match_player_id
 		return true;
 	}
 	return false;
-}
-
-static ui16 ai_world_engagement_slots(const match_world_state& world) { return world.entities->engagements.max_count; }
-
-static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out)
-{
-	const world_entity_engagements& engagements = world.entities->engagements;
-	const world_entity_armies& armies = world.entities->armies;
-	if (slot >= engagements.max_count || !engagements.guids[slot].is_valid()) return false;
-
-	if (engagements.kind[slot] != ENGAGEMENT_KIND::SIEGE || engagements.phase[slot] != ENGAGEMENT_PHASE::SIEGE_IDLE) return false;
-
-	out.guid = engagements.guids[slot];
-	out.attacker_commander = engagements.attacker_commander[slot];
-	out.attacker_men = 0;
-	out.defender_men = 0;
-	out.min_supply_days = 0xFFFFFFFF;
-	out.attacker_men = (ui32)army_total_manpower(engagements.attacker_troops[slot]);
-	out.defender_men = (ui32)army_total_manpower(engagements.defender_troops[slot]);
-	for (ui16 army = 0; army < armies.max_count; army++)
-	{
-		if (!armies.guids[army].is_valid() || armies.engagement[army]._value != out.guid._value || armies.engagement_side[army] != ENGAGEMENT_SIDE::ATTACKER) continue;
-		out.min_supply_days = ia_min(out.min_supply_days, armies.supplies[army] / ia_max(army_daily_consumption(armies.composition[army]), (ui32)1));
-	}
-	return true;
 }
 
 // Counts the work projects of a type tied to the player's settlements (or to one settlement).
@@ -262,6 +255,7 @@ static void ai_gather_own(ai_context& ctx)
 
 		ctx.settlements[ctx.settlement_count++] = settlement;
 		ctx.population += settlement.population;
+		ctx.garrison_upkeep += ai_garrison_upkeep(settlement.home_troops);
 	}
 
 	ai_army_view army;
@@ -271,6 +265,7 @@ static void ai_gather_own(ai_context& ctx)
 
 		ctx.armies[ctx.army_count++] = army;
 		ctx.army_strength += army.troops_target;
-		if (!army.raising && army.supply_days >= AI_ATTACK_MIN_SUPPLY_DAYS) ctx.army_ready_strength += army.troops;
+		// Ready = supplied for AI_ATTACK_MIN_SUPPLY_DAYS, or full if it cannot carry that much (a men at arms heavy army holds 3 days at most).
+		if (!army.raising && army.supply_days >= ia_clamped(army.supply_capacity_days, (ui32)1, AI_ATTACK_MIN_SUPPLY_DAYS)) ctx.army_ready_strength += army.troops;
 	}
 }

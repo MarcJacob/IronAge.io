@@ -48,27 +48,36 @@ static i32 ai_pick_building(const ai_context& ctx, const ai_settlement_view& set
 }
 
 // One new building project at a time per settlement and AI_MAX_BUILD_PROJECTS overall, once the treasury holds a few days of its cost.
-// Barracks also get their men at arms ceiling opened (it is 0 by default, so nothing is trained).
+// The treasury must still hold the cost of the next campaign army after paying (outside of EXPAND, with a target: ai_next_campaign_army_cost).
+// Barracks also get their men at arms ceiling opened (it is 0 by default, so nothing is trained) while the garrisons' daily upkeep does not exceed the daily income
+// (ctx.garrison_upkeep <= ctx.income), and closed again (training stops, nobody is dismissed) while it does.
 static void ai_tactics_buildings(ai_context& ctx)
 {
 	ui32 projects = ai_count_projects(ctx.world, WORK_TYPE::BUILD_SETTLEMENT_BUILDING, ctx.player, INVALID_ENTITY_GUID);
+
+	ai_settlement_view target;
+	ui32 armyReserve = (ctx.state.mode != AI_MODE_EXPAND && ai_target_is_valid(ctx, target)) ? ai_next_campaign_army_cost(ctx) : 0;
+	bool upkeepAffordable = ctx.garrison_upkeep <= ctx.income;
 
 	for (ui32 index = 0; index < ai_window_size(ctx); index++)
 	{
 		const ai_settlement_view& settlement = ai_window_settlement(ctx, index);
 
-		if (settlement.barracks > 0 && settlement.maa_ceiling == 0)
+		bool openCeiling = settlement.barracks > 0 && settlement.maa_ceiling == 0 && upkeepAffordable;
+		bool closeCeiling = settlement.maa_ceiling != 0 && !upkeepAffordable;
+		if (openCeiling || closeCeiling)
 		{
 			auto* ceiling = ai_push<command_data_set_settlement_troop_ceiling>(ctx, MATCH_COMMAND_TYPE::SET_SETTLEMENT_TROOP_CEILING);
 			if (ceiling == nullptr) return;
 			ceiling->settlement = settlement.guid;
 			ceiling->troop_type = 0;
-			ceiling->ceiling = 0xFFFF;
+			ceiling->ceiling = openCeiling ? 0xFFFF : 0;
 		}
 
 		i32 building = ai_pick_building(ctx, settlement);
 		if (building < 0 || projects >= AI_MAX_BUILD_PROJECTS + ctx.treasury / AI_TREASURY_PER_EXTRA_PROJECT) continue;
-		if (ctx.treasury < SETTLEMENT_BUILDING_TABLE[building].cost_per_day * AI_BUILD_RESERVE_DAYS) continue;
+		ui32 buildingCost = SETTLEMENT_BUILDING_TABLE[building].cost_per_day * AI_BUILD_RESERVE_DAYS;
+		if (ctx.treasury < buildingCost || ctx.treasury - buildingCost < armyReserve) continue;
 		if (settlement.peasants < SETTLEMENT_BUILDING_TABLE[building].workers + 20u) continue;
 		if (ai_count_projects(ctx.world, WORK_TYPE::BUILD_SETTLEMENT_BUILDING, ctx.player, settlement.guid) > 0) continue;
 

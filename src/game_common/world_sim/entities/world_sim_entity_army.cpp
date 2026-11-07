@@ -113,7 +113,7 @@ bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_in
 	newArmy.location = settlements.location[settlement_index];
 	newArmy.raised_troops = targets;
 	newArmy.home_settlement = settlements.guids[settlement_index];
-	newArmy.raising = 1; // is_retinue stays 0: a standing army, controlled by the campaign logic only.
+	newArmy.raising = 1; // is_retinue stays 0: a campaign army, controlled by the campaign logic only.
 	newArmy.gold = cost;
 	newArmy.supplies = ia_min(cost, trade.market_goods > goodsKept ? trade.market_goods - goodsKept : 0);
 

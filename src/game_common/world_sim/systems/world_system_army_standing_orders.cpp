@@ -467,7 +467,7 @@ static void army_order_raid_logic(match_world_state& world, ui16 army_index)
 
 // GO_HOME
 
-// Walk to the home settlement. Close enough to it (and inside its territory, like the disband command requires), a standing army disbands into it
+// Walk to the home settlement. Close enough to it (and inside its territory, like the disband command requires), a campaign army disbands into it
 // and a retinue stops there (STATION). A retinue whose home was lost or changed owner stands where it is.
 static void army_order_go_home_logic(match_world_state& world, ui16 army_index)
 {

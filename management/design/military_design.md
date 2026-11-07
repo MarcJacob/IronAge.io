@@ -23,7 +23,7 @@ The shape of fighting over the course of the game is this:
 
 # Armies
 
-Armies are the fundamental military entity in the world. An army is tied to a specific settlement it was trained in: Armies can't be comprised of men from different settlements.
+Armies are the fundamental military entity in the world. An army is made of men from a single settlement: armies can't be comprised of men from different settlements. Campaign armies stay tied to their origin settlement; retinues are independent from it once raised (see [## Two kinds of army]).
 
 They move around using the standard movement mechanics, benefiting from road and struggling off roads depending on terrain.
 
@@ -33,11 +33,18 @@ Armies are controlled through a Standing Order which can either be specifically 
 
 The Standing Order and its parameters then determine / influence the Army's behavior.
 
-## Raising an army
+## Two kinds of army
 
-Any settlement can raise any number of armies. Those armies are considered to be "lone operators" and must be directed by the player. Envisioned common practice is to use this to raise a militia that defends the settlement, and small armies used for specific missions like small scale raids, or quick intervention forces.
+- **Retinues**: armies created directly by the player. They are "lone operators" directed by the player, and the only armies that take direct orders. Envisioned common practice: a militia that defends the settlement, and small armies for specific missions like small scale raids or quick intervention forces. A retinue can also be sent to join a campaign by order; if the campaign ends, it stays where it is.
+- **Campaign armies**: armies raised by a settlement for a campaign (see [# Campaigns]). No direct orders: only the campaign logic controls them. They are the armies that go home and disband automatically.
 
-When raising an army, the player is prompted to choose the army's composition ([## Troop Types]). The troops are taken from the garrison.
+## Retinues
+
+Any settlement can raise any number of retinues ("Raise Retinue", the `CREATE_RETINUE` command). The player chooses the composition ([## Troop Types]); levies are not allowed, only professionals (men at arms, horsemen, knights) and wagons. The troops are taken from the garrison.
+
+The retinue is raised inside the settlement and stays still until all troops are in. Its destination is then the chosen location, or, if none was chosen, it defends its settlement. Its raising cost is a day of its consumption (at most what it can carry); the rest of its supplies it accumulates through the normal supply mechanics while raising. A settlement under siege cannot raise one.
+
+A retinue is independent from its origin settlement: its men no longer count in its population, casualties and deserters do not lower it, and conquest of the origin has no effect on it. It can disband anywhere in territory the owner owns: its men join the local garrison (and population; a full pool is simply exceeded for now), its gold goes to the owner's treasury and its supplies to the local settlement's market. The Go Home order sends it to its origin settlement, where it stops (it does not disband).
 
 ## Garrison
 
@@ -46,6 +53,8 @@ By default, every settlement has a single army within it that has special treatm
 When the garrison lacks troops, it uses the settlement's facilities to train more. Those facilities also determine how many can be trained at the maximum, counting existing troops both in the garrison still and raised in an army.
 
 Levies in garrison remain part of the working population.
+
+A settlement does not train new soldiers while its siege or clash is actively fought (assault, sally, outside clash). An idle siege still allows training.
 
 # Battles
 
@@ -120,10 +129,12 @@ A player can call a campaign at any time, involving at least one army or settlem
 
 Involved armies immediately get the standing order to join the campaign, then get controlled by the Campaign AI once they are close enough.
 
-Involved settlements turn a portion of their garrison into an army that is then sent to join the campaign. Such armies are known as *campaign armies* and have some special properties:
-- They replace losses automatically when in friendly territory.
-- They go home automatically when the campaign ends.
-- They never outlive the campaign itself - if the campaign ends, they return home and rejoin the garrison. They also cannot be controlled manually, the Campaign AI is in full control of their standing order.
+Involved settlements turn 75% of their garrison into a campaign army that is then sent to join the campaign. Such armies are known as *campaign armies* and have some special properties:
+- A settlement can only have one campaign army at a time. If it is destroyed while the campaign lives on, the settlement notices on the next tick and raises a replacement (if affordable and not under siege).
+- They go home automatically when the campaign ends (a raising one disbands at once), and disband at home.
+- They never outlive the campaign itself. If a settlement joins a new campaign while its previous campaign army is still walking home, that army is taken back into the new campaign instead of raising a new one.
+- They cannot be controlled manually, the Campaign AI is in full control of their standing order. They still count in their origin settlement's population.
+- A campaign ends when it has no members left or none within range; armies still raising or joining then go home.
 
 Allied / Vassal players can join the campaign as well with their own armies and settlements. Overlords can force this process on their vassal's settlements (but not armies), including making them join someone else's campaign.
 
@@ -155,6 +166,10 @@ Possible objectives:
     - Similar to defend regions, except the focus is specifically to stop one or more enemy campaigns from making progress by opposing them in the field and breaking sieges.
 
 It does so by assigning standing orders to armies participating in the campaign.
+
+When its armies besiege the objective settlement, the Campaign AI also decides when to launch the assault: when the besiegers outnumber the garrison 3 to 1, or when the besieging armies are about to run out of supplies (under 2 days). This applies to every campaign; the manual Begin Assault command stays available.
+
+A campaign is founded together with its objective (the player flow: found it on a settlement, then set the objective and join the other settlements in one go; the player AI does the same).
 
 # Raiding & Looting
 
@@ -191,6 +206,10 @@ Distribution: among the victorious armies, by manpower and limited by each army'
 # Supply system
 
 Armies require a certain amount of goods to maintain themselves. They get goods directly by raiding / looting, and indirectly through caravans reaching them to sell.
+
+Armies never hold more gold or supplies than their carrying capacity: anything above it is dropped (into the loot pool when engaged).
+
+**Known weakness, redesign planned** (see `management/work_units/army_supply_redesign_2026-11-07.md`): it is too easy for an army to walk off owned territory, run out of gold and stop getting resupplied.
 
 Armies carry gold. That gold is obtained either through standard pay (when standing in friendly territory and set to be paid, and of course when the owner has the required funds) daily (the army's daily consumption worth of it) or though raiding and looting.
 

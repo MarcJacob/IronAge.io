@@ -398,7 +398,7 @@ export function show_entity(view: EntityData | null, context: InspectionContext 
 // the Raise army mode subscribes to RaiseArmyPanelUI "raise_targets". Hidden by show_entity(null) or any other show_*.
 export function show_raise_army_panel(settlement: EntityData, targets: number[]): void
 {
-    show({ title: "Create retinue", subtitle: owner_name(settlement), raise_army: raise_army_panel_state(settlement, targets) });
+    show({ title: "Raise Retinue", subtitle: owner_name(settlement), raise_army: raise_army_panel_state(settlement, targets) });
 }
 
 // Shows the settlement's "Found settlement" panel (state built by the Found settlement mode). Hidden by show_entity(null) or any other show_*.

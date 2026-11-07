@@ -21,6 +21,7 @@ static ui32 ai_expand_goal(const ai_context& ctx)
 }
 
 // Target player: the hostile-est (lowest opinion) one with a settlement within campaign distance of ours.
+// If every player is further away, the nearest one at any distance.
 static void ai_pick_target_player(ai_context& ctx, const ai_player_scan& scan)
 {
 	ctx.state.has_target = 0;
@@ -34,15 +35,23 @@ static void ai_pick_target_player(ai_context& ctx, const ai_player_scan& scan)
 		ctx.state.target_player = player;
 		ctx.state.has_target = 1;
 	}
+	if (ctx.state.has_target) return;
+
+	ui32 bestDistance = 0xFFFFFFFF;
+	for (ui8 player = 0; player < AI_MAX_TRACKED_PLAYERS; player++)
+	{
+		if (scan.settlements[player] == 0 || scan.nearest_dist_sq[player] >= bestDistance) continue;
+
+		bestDistance = scan.nearest_dist_sq[player];
+		ctx.state.target_player = player;
+		ctx.state.has_target = 1;
+	}
 }
 
 // Target settlement: the weakest one of the target player near our land (score = 4 x defense + distance), and our closest settlement to it as rally point.
-static void ai_pick_target_settlement(ai_context& ctx)
+// Only settlements within maxDistanceSq of one of ours count.
+static void ai_pick_target_settlement_within(ai_context& ctx, ui32 maxDistanceSq)
 {
-	ctx.state.target_settlement = INVALID_ENTITY_GUID;
-	ctx.state.rally_settlement = INVALID_ENTITY_GUID;
-	if (!ctx.state.has_target || ctx.settlement_count == 0) return;
-
 	ui32 bestScore = 0xFFFFFFFF;
 	ai_settlement_view settlement;
 	for (ui16 slot = 0; slot < ai_world_settlement_slots(ctx.world); slot++)
@@ -56,7 +65,7 @@ static void ai_pick_target_settlement(ai_context& ctx)
 			ui32 distance = ai_dist_sq(settlement.location, ctx.settlements[own].location);
 			if (distance < rallyDist) { rallyDist = distance; rally = &ctx.settlements[own]; }
 		}
-		if (rallyDist > AI_CAMPAIGN_MAX_DISTANCE * AI_CAMPAIGN_MAX_DISTANCE) continue;
+		if (rallyDist > maxDistanceSq) continue;
 
 		ui32 manhattan = (ui32)(ia_abs((i32)settlement.location.x - rally->location.x) + ia_abs((i32)settlement.location.y - rally->location.y));
 		ui32 score = ai_estimate_defense(settlement) * 4 + manhattan;
@@ -66,6 +75,17 @@ static void ai_pick_target_settlement(ai_context& ctx)
 		ctx.state.target_settlement = settlement.guid;
 		ctx.state.rally_settlement = rally->guid;
 	}
+}
+
+// Prefers settlements within campaign distance; if the target player has none (it was picked as the nearest at any distance), any distance.
+static void ai_pick_target_settlement(ai_context& ctx)
+{
+	ctx.state.target_settlement = INVALID_ENTITY_GUID;
+	ctx.state.rally_settlement = INVALID_ENTITY_GUID;
+	if (!ctx.state.has_target || ctx.settlement_count == 0) return;
+
+	ai_pick_target_settlement_within(ctx, AI_CAMPAIGN_MAX_DISTANCE * AI_CAMPAIGN_MAX_DISTANCE);
+	if (!ctx.state.target_settlement.is_valid()) ai_pick_target_settlement_within(ctx, 0xFFFFFFFF);
 }
 
 static bool ai_target_is_valid(const ai_context& ctx, ai_settlement_view& out_target)

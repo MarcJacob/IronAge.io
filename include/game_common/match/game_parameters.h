@@ -109,6 +109,8 @@ struct game_parameters
     ui32 campaign_join_base_tiles = 4;
     ui32 campaign_join_per_member_tiles = 1;
     ui32 campaign_assault_distance_tiles = 10; // MARCHING ends (ON_OBJECTIVE) once the campaign is this close to the objective's location.
+    ui32 campaign_assault_outnumber = 3; // A campaign begins the assault of the siege of its objective when the besiegers have this many times the defenders' men (total men)...
+    ui32 campaign_assault_min_supply_days = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
     ui32 campaign_army_garrison_percent = 75; // A settlement joining a campaign raises an army of this % of each of its garrison troop types.
 
     // ENGAGEMENT LOOT. A conquered settlement adds gold to the engagement's loot pool: people killed, 1 gold each.

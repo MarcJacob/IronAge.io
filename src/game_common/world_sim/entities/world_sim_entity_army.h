@@ -36,7 +36,7 @@ static inline void army_order_defend_territory(world_entity_armies& armies, ui16
 }
 
 // Whether the player can give the army orders (move, attack, order, raise-target, stop-raising, withdraw, join-campaign commands): only retinues can, and not while they are members of a campaign.
-// Standing armies (created by a settlement for its campaign) are controlled by the campaign logic only.
+// Campaign armies (created by a settlement for its campaign) are controlled by the campaign logic only.
 static inline bool army_takes_player_orders(const world_entity_armies& armies, ui16 index)
 {
 	return armies.is_retinue[index] && !armies.campaign[index].is_valid();
@@ -56,7 +56,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 void world_destroy_army(match_world_state& world, entity_guid army);
 
 // A settlement that joined a campaign raises an army for it: campaign_army_garrison_percent of each type of its garrison, paid like the raise command (gold and goods),
-// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army (kept after the campaign ends), a standing army (not a retinue).
+// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army (kept after the campaign ends), a campaign army (not a retinue).
 // If the settlement still has its campaign_army alive, that army is sent to the campaign instead (JOIN_CAMPAIGN order, nothing raised or paid).
 // Does nothing if the settlement is besieged or the kept army's owner is not the settlement's; otherwise, when raising, if the garrison gives no men, the treasury cannot pay, or there is no army slot left.
 // Returns whether the settlement now has an army on its way to the campaign.
@@ -96,7 +96,7 @@ static inline ui16 army_remove_troops(match_world_state& world, ui16 army_index,
 }
 
 // Destroys an army and returns its men to the settlement. A retinue joins the garrison pool and population of the given settlement (any in the owner's territory, pool not clamped).
-// A standing army: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
+// A campaign army: levies become unemployed pop, the other types rejoin the local troops (raised count down, home count up).
 void world_disband_army(match_world_state& world, entity_guid army, entity_guid settlement);
 
 // Homecoming: the army's gold goes to its owner's treasury, its supplies to the home settlement's goods (or supplies_settlement, if still the owner's, lost otherwise). Call before destroying an army

@@ -200,7 +200,23 @@ Survey findings: Accompany missing in `front/src` (`backend.ts` ARMY_ORDER enum,
   - Shared supply: transient pool, no accumulation, supplies only (no gold). Free extra source on top of existing mechanics; each army stays an individual trade target with its own gold and pay. Armies above a threshold (half carry capacity, or days left; TBD) contribute; armies below it may draw if close enough to the campaign entity. Distribution: needy armies first, then the rest.
   - User reworks `military_design.md` as these evolve.
 
-## Raise rework (builder session, unbuilt)
+## Retinues vs campaign armies (committed 02b923c, 906d013; unbuilt, untested)
+
+- Flag `is_retinue`. Retinues = created by the player (`CREATE_RETINUE`, button "Raise Retinue"); campaign armies = raised by a settlement for a campaign, no flag.
+- Only retinues take player orders (incl. `DISBAND_ARMY`, join a campaign by order); campaign armies and campaign members refuse; campaign armies are driven by campaign logic only. Engagement commands unchanged (act on the engagement).
+- Campaign end: campaign armies GO_HOME and disband (a raising one at once; settlement can grab one still alive); retinues STATION where they are.
+- Retinue GO_HOME walks to origin and stops (no disband); lost origin = stand in place.
+- Retinue pop: men leave origin pop at creation, no levies (wagons allowed), casualties / deserters (vanish) don't touch origin pop, no desertion on origin conquest. Disband anywhere on an owned settlement's territory: men join that garrison + pop (pool may exceed max, no clamp), gold to treasury, supplies to local market. Standing armies keep the old pop rules.
+- `settlements.campaign_army` survives campaign end; join by a settlement refused if the kept army's owner differs; grab = the surviving army re-joins the new campaign (no cost). `world_settlement_join_campaign` is the raise-or-grab function.
+- Player AI: no retinues, no army orders; uses `CAMPAIGN_JOIN`, `SET_CAMPAIGN_OBJECTIVE` (CONQUER_SETTLEMENT), `CAMPAIGN_BEGIN`, `CAMPAIGN_DISBAND`, `BEGIN_ASSAULT`. Defense / rally / remnant disband removed.
+- AI founds a campaign only with a target: CAMPAIGN_JOIN (found), then one batch SET_CAMPAIGN_OBJECTIVE + member joins (mirrors the client `campaign_start` flow); no longer disbands on leaving ATTACK.
+- Assault decision moved from the AI to the campaign logic (`conquer_on_objective` calls the begin-assault function): outnumber 3:1 or besiegers under 2 days of supplies (`campaign_assault_outnumber`, `campaign_assault_min_supply_days`); all campaigns, human too; `BEGIN_ASSAULT` kept for humans.
+- AI passivity fixes (unbuilt, uncommitted): joins/founding checked with the real `command_campaign_join_validity_check` read-only; buildings keep a reserve for the next campaign army; men-at-arms ceiling closes while garrison upkeep > income; ATTACK supply gate capped by carry capacity; EXPAND only blocks founding; AI campaigns with an objective disbanded after `AI_ATTACK_MAX_DAYS` or under 1/3 of the need (new `campaign_seen` / `campaign_seen_day` on `ai_player_state`); target fallback at any distance. Watch: ceiling flapping, 80-day rule cutting long marches, `campaign_replace_lost_armies` re-raise gold sink (sim, unchanged).
+- Retinue creation works (earlier denial was a missing force reload). Note: a new settlement garrison holds only levies until Barracks / ceilings, so retinues need professionals trained first.
+- Supply redesign (gold reserve too easy to run out): work unit `army_supply_redesign_2026-11-07.md`.
+- Open: retinue wagons not counted in `raised` (wagon max bounds only the pool); retinue destroyed in battle loses gold / supplies; AI `army_ready_strength` needs 5 days of supplies (fresh campaign army starts with ~1 day); raising retinue ends if home changes owner; user to rework raising of retinues / maybe replace with campaigns; stale lines in `military_design.md` / design doc (user).
+
+## Raise rework (builder session; superseded in parts by the section above)
 
 - Armies always raise inside the home settlement; `raise_location` = post-raising station point, zero = DEFEND home (quirk: tile 0,0 unusable; individual army raising to be redesigned or replaced by campaigns). One-click raise in the UI.
 - Raise cost / starting payout = min(1 day of consumption, supplies carry capacity); one shared function. 5x multiplier removed (it caused treasury underflow via a double multiply).
@@ -218,6 +234,6 @@ Survey findings: Accompany missing in `front/src` (`backend.ts` ARMY_ORDER enum,
 
 Everything through P3e is tested and committed (0031653).
 Status: R0-R4 done, tested, committed. P4 campaign + close-out committed (HEAD 12919f9). P5 first slice done: Accompany order (campaign AI basic marching, guide army = first member by index; frontend recognizes it).
-Cleanup + raise rework [DONE in code, unbuilt / untested, uncommitted] (decisions in "Raise rework" below).
-Next: user builds and hand-tests, then commit; then P5 rest (multi-objective list, defense objective, shared supply pool, match AI using campaigns), after user updates `military_design.md`.
+Cleanup, raise rework, retinue / campaign-army split, AI on campaigns and AI passivity fixes [DONE, tested, committed up to cc8d39d] (see "Retinues vs campaign armies", "Raise rework").
+Next: campaign AI supply / supply-line intelligence (especially before crossing water), tied to the army supply redesign (work unit `army_supply_redesign_2026-11-07.md`) and the shared supply pool; then P5 rest (multi-objective list, defense objective, shared supply pool, match AI using campaigns), after user updates `military_design.md`.
 Remaining: P3b scope check; P3c leftovers (caravan attacks, conquest looting, trade malus, army-to-army looting, live off the land); re-add withdrawing from engagements properly; `SET_ENTITY_ATTACK_TARGET` wrapper refuses engagements; engagement rendering vision (bars, fighting animation; bars on map vs panel undecided); stale `commands.h` comments (RAID target, WITHDRAW_ARMY) and `world_sim/.ai_imprint/military_state.md` lines 3-10; then P4 (campaign), P5. `management/design/military_design.md` still lacks Troop Types, Battles, Sieges, Standing Orders sections (decisions above stand in; user may write them in). User decides what is next.

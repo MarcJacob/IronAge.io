@@ -36,6 +36,8 @@ struct ai_player_state
 	ui16 settlement_cursor; // Round-robin position in the owned settlements for per-settlement tactics.
 	entity_guid target_settlement; // Settlement the campaign aims at.
 	entity_guid rally_settlement; // Own settlement the armies gather at before attacking.
+	entity_guid campaign_seen; // Campaign the AI last saw, and the day it first saw it (the campaign has no age of its own): stuck campaigns are disbanded after a while.
+	ui32 campaign_seen_day;
 
 	// Road network: a sweep over the pairs of own settlements keeps the cheapest one not joined by roads, which then becomes the link to build.
 	ui16 link_sweep_first, link_sweep_second; // Pair the sweep checks next (indices in the owned settlements).

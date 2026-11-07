@@ -26,9 +26,9 @@ constexpr ui32 AI_GOAL_SETTLEMENTS_MAX = 8; // Settlement count the expansion go
 constexpr ui32 AI_GOAL_DAYS_PER_SETTLEMENT = 8; // Goal = AI_GOAL_SETTLEMENTS_START + day / this.
 constexpr ui32 AI_EXPAND_RETRY_DAYS = 20; // Failed site searches are forgotten every this many days.
 constexpr ui32 AI_BUILD_UP_MIN_POPULATION = 1500; // Own total population before armies are built (unless threatened).
-constexpr ui32 AI_ATTACK_MIN_SUPPLY_DAYS = 5; // Only armies carrying this many days of supplies count towards starting a campaign.
+constexpr ui32 AI_ATTACK_MIN_SUPPLY_DAYS = 5; // Only armies carrying this many days of supplies (or all they can carry, if less) count towards starting a campaign.
 constexpr ui32 AI_CAMPAIGN_MAX_DISTANCE = 250; // Tiles: players further than this from all our settlements are not targets.
-constexpr ui32 AI_ATTACK_MAX_DAYS = 80; // Days after which a campaign is abandoned.
+constexpr ui32 AI_ATTACK_MAX_DAYS = 80; // Days after which a campaign is abandoned (counted from the day the AI first saw it), and the longest ATTACK mode.
 constexpr ui32 AI_BUILD_UP_MIN_DAYS = 15; // Rest between two campaigns.
 constexpr i32 AI_OPINION_LIMIT = 300;
 
@@ -64,8 +64,6 @@ constexpr i32 AI_TAX_NORMAL = 5;
 constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
 constexpr ui32 AI_TREASURY_COMFORT = 1500;
 constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
-constexpr ui32 AI_ASSAULT_OUTNUMBER = 3; // Begin the assault when the besiegers have this many times the defenders' men (total men)...
-constexpr ui32 AI_ASSAULT_MIN_SUPPLY_DAYS = 2; // ...or when one of the besieging armies has fewer days of supplies than this (P5 replaces this rule).
 
 // Rows of SETTLEMENT_BUILDING_TABLE the AI knows, looked up by row name at compile time (the table has no enum), so inserting or reordering rows cannot break them.
 // Returns SETTLEMENT_BUILDING_TYPE_COUNT if there is no such row (caught by the static_asserts below).
@@ -117,6 +115,7 @@ struct ai_army_view
 	ui32 troops;
 	ui32 troops_target; // Raise targets while raising, else troops.
 	ui32 supply_days; // Days of its own consumption the army carries.
+	ui32 supply_capacity_days; // Days of its own consumption the army can carry at most (its men's carry capacity).
 	ui8 raising;
 	ui8 idle; // Not raising, not in a engagement, not chasing and not walking anywhere.
 };
@@ -129,15 +128,6 @@ struct ai_campaign_view
 	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
 	entity_guid objective_target;
 	ui32 troops; // Men in its member armies.
-};
-
-// A siege (engagement entity of kind SIEGE) still besieging, as the attacker commander sees it.
-struct ai_siege_view
-{
-	entity_guid guid;
-	match_player_id attacker_commander;
-	ui32 attacker_men, defender_men;
-	ui32 min_supply_days; // Fewest days of supplies among the armies on the attacker side (0xFFFFFFFF if none).
 };
 
 // Per other player figures gathered by the strategy scan.
@@ -165,7 +155,8 @@ struct ai_context
 	ui16 army_count = 0;
 	ai_army_view armies[AI_MAX_OWNED_ARMIES] = {};
 	ui32 army_strength = 0; // Troops of the owned armies, raising ones at their target.
-	ui32 army_ready_strength = 0; // Troops of the armies done raising and carrying AI_ATTACK_MIN_SUPPLY_DAYS of supplies.
+	ui32 army_ready_strength = 0; // Troops of the armies done raising and carrying min(AI_ATTACK_MIN_SUPPLY_DAYS, what they can carry) days of supplies.
+	ui32 garrison_upkeep = 0; // Gold per day the owned garrisons cost (men at arms, horsemen, knights; levies and wagons are free): see ai_garrison_upkeep.
 };
 
 // Pushes a command into the decision's sequence with a zeroed payload (the arena memory is not). Returns nullptr when the budget is spent.
@@ -188,8 +179,6 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 static bool ai_view_settlement_by_guid(const match_world_state& world, entity_guid guid, ai_settlement_view& out); // False if gone.
 static bool ai_view_army(const match_world_state& world, ui16 slot, ai_army_view& out);
 static bool ai_view_own_campaign(const match_world_state& world, match_player_id player, ai_campaign_view& out); // The player's first campaign. False if none.
-static ui16 ai_world_engagement_slots(const match_world_state& world);
-static bool ai_view_idle_siege(const match_world_state& world, ui16 slot, ai_siege_view& out); // False if the slot is not a siege in its SIEGE_IDLE phase.
 static ui16 ai_count_projects(const match_world_state& world, WORK_TYPE type, match_player_id player, entity_guid settlement); // settlement invalid = any of the player's.
 static bool ai_site_is_valid(const match_world_state& world, world_location loc, match_player_id player);
 static i32 ai_site_land_score(const match_world_state& world, world_location loc); // Compared to AI_SITE_MIN_LAND_SCORE.
@@ -201,6 +190,8 @@ static bool ai_road_connected(const match_world_state& world, world_location a, 
 static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b); // Path cost of the route a road crew from a to b builds (existing roads at road cost). 0 = no route.
 static world_dimensions ai_world_size(const match_world_state& world);
 static ui32 ai_world_raising_cost(const army_troop_count& targets); // Gold raising an army with these targets costs (same rule as the raise command).
+static ui32 ai_world_free_army_slots(const match_world_state& world);
+static bool ai_world_join_is_valid(const match_world_state& world, match_player_id player, entity_guid settlement, entity_guid campaign); // Whether CAMPAIGN_JOIN would pass the real validity check now (campaign invalid = founding).
 static void ai_gather_own(ai_context& ctx);
 
 // SMALL HELPERS
@@ -213,6 +204,12 @@ static inline ui32 ai_dist_sq(world_location a, world_location b)
 static inline ui32 ai_troops_sum(const army_troop_count& troops)
 {
 	return (ui32)troops.levies + troops.men_at_arms + troops.horsemen + troops.knights;
+}
+
+// Gold per day a garrison costs the treasury (what world_system_local_troops_pay charges): levies and wagons are free.
+static inline ui32 ai_garrison_upkeep(const army_troop_count& troops)
+{
+	return (ui32)troops.men_at_arms * GAME_PARAMETERS.upkeep_men_at_arms + (ui32)troops.horsemen * GAME_PARAMETERS.upkeep_horseman + (ui32)troops.knights * GAME_PARAMETERS.upkeep_knight;
 }
 
 // Troops a settlement can put against a siege: its garrison (levies included).
@@ -245,8 +242,8 @@ static void ai_tactics_taxes(ai_context& ctx);
 static void ai_tactics_buildings(ai_context& ctx);
 static void ai_tactics_found_settlement(ai_context& ctx);
 static void ai_tactics_roads(ai_context& ctx);
-static void ai_tactics_campaign_join(ai_context& ctx);
 static bool ai_find_threat(const ai_context& ctx, ai_army_view& out_threat); // Biggest foreign army near one of our settlements.
 static void ai_tactics_campaign(ai_context& ctx);
+static ui32 ai_next_campaign_army_cost(const ai_context& ctx); // Gold the cheapest settlement able to join a campaign would pay for its army. 0 = none can.
 
 #endif // MATCH_AI_INTERNAL_INCLUDED

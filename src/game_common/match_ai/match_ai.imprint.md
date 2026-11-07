@@ -14,14 +14,14 @@ AI players for matches. Server side only: the web client never calls it (its cod
 
 - The server calls `ai_update` for every AI every tick, before `match_tick` (the world is then the previous tick's result: this is the "post-tick" operation, and the commands land in the very next tick).
 - An AI decides every `AI_DECISION_PERIOD_TICKS` ticks, on `tick % period == player % period`: work per tick is about players / period decisions, whatever the player count.
-- Inside a decision layers run on sub-cadences counted by `ai_player_state::decision_index` (zero-init friendly): reactive (campaign orders) every decision, threat / defense every 2nd, tactics (taxes, raising, buildings, founding, roads) every 3rd on a round-robin window of a few settlements, strategy (opinions, target, mode) every 5th.
+- Inside a decision layers run on sub-cadences counted by `ai_player_state::decision_index` (zero-init friendly): campaign step (found with its objective, join, begin, disband; the assault itself is decided by the sim's campaign logic) every decision, tactics (taxes, buildings, founding, roads) every 3rd on a round-robin window of a few settlements, strategy (opinions, target, mode) every 5th.
 - Per-decision budgets: owned entities looked at are capped (`AI_MAX_OWNED_*`), site search is `AI_SITE_SAMPLES` tries, orders are capped, and the command sequence is limited to the room left in the tick commands (a full budget just ends the decision).
 
 ## Design
 
 - **State machine** (`ai_player_state::mode`): EXPAND -> BUILD_UP -> ATTACK -> BUILD_UP ... see *match_ai_strategy.cpp* header for the transitions.
 - **Opinions** (`i16` per other player, negative = hostile): one update function in *match_ai_opinion.cpp*. The most hostile player in campaign range is the target player; its weakest nearby settlement is the target, our closest settlement the rally point.
-- **Layers**: strategy (mode, target) -> tactics (economy: taxes / buildings / troop ceilings; expansion: founding, roads; military: raising, defense, campaign).
+- **Layers**: strategy (mode, target) -> tactics (economy: taxes / buildings / troop ceilings; expansion: founding, roads; military: campaign joins and campaign commands only; the AI creates no retinues and gives no army orders).
 
 ## Decisions
 

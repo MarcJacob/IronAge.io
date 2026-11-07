@@ -25,7 +25,7 @@ entity_guid world_spawn_campaign(match_world_state& world, match_player_id owner
 	return newID;
 }
 
-// What an army does when its campaign is over: a standing army goes home (and disbands there, or is taken by its settlement for the next campaign),
+// What an army does when its campaign is over: a campaign army goes home (and disbands there, or is taken by its settlement for the next campaign),
 // a retinue stays where it is.
 static void army_campaign_over_order(world_entity_armies& armies, ui32 armyIndex)
 {

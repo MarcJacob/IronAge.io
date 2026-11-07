@@ -81,7 +81,7 @@ static void raise_draw_from_pool(match_world_state& world, ui16 army_index, ui16
 	ui16 wanted = army_count < target ? target - army_count : 0;
 	if (wanted > GAME_PARAMETERS.raise_pool_draw_per_tick) wanted = GAME_PARAMETERS.raise_pool_draw_per_tick;
 
-	// Retinue men leave the settlement's population, standing army men stay in it as raised.
+	// Retinue men leave the settlement's population, campaign army men stay in it as raised.
 	ui16 drawn = world.entities->armies.is_retinue[army_index] ? settlement_raise_retinue_soldiers(world, settlement_index, troop_type, wanted)
 		: settlement_raise_soldiers(world, settlement_index, troop_type, wanted);
 	army_add_troops(world, army_index, troop_type, drawn);

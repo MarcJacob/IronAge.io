@@ -566,7 +566,7 @@ bool command_set_army_raise_targets_validity_check(const match_world_state& worl
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owner[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
-	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Standing armies are not player-controlled.
+	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Campaign armies are not player-controlled.
 
 	// No dedicated error for an army that is not raising: reported as unspecified.
 	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
@@ -621,7 +621,7 @@ bool command_stop_raising_army_validity_check(const match_world_state& world, ma
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owner[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
-	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Standing armies are not player-controlled.
+	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Campaign armies are not player-controlled.
 
 	// No dedicated error for an army that is not raising: reported as unspecified.
 	if (!armies.raising[armyIndex] && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
@@ -680,7 +680,7 @@ bool command_disband_army_validity_check(const match_world_state& world, match_p
 
 	if (armies.owner[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 
-	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Standing armies disband by themselves at home.
+	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Campaign armies disband by themselves at home.
 
 	// An army in a engagement is counted in it: no dedicated error, reported as unspecified.
 	if (armies.engagement[armyIndex].is_valid() && command_add_error(feedback, COMMAND_ERROR_UNSPECIFIED)) return false;
@@ -906,7 +906,7 @@ bool command_campaign_join_validity_check(const match_world_state& world, match_
 	if (owner != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
 	if (entityCampaign.is_valid() && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
 
-	// Only retinues are ordered by the player: standing armies are sent by their settlement.
+	// Only retinues are ordered by the player: campaign armies are sent by their settlement.
 	if (type == ENTITY_TYPE::ARMY && !army_takes_player_orders(entities.armies, index) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
 
 	if (type == ENTITY_TYPE::SETTLEMENT)
@@ -1152,7 +1152,7 @@ bool command_withdraw_army_validity_check(const match_world_state& world, match_
 	ui16 armyIndex = command.army.get_index();
 
 	if (armies.owner[armyIndex] != player && command_add_error(feedback, COMMAND_ERROR_NOT_OWNER)) return false;
-	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Standing armies are not player-controlled.
+	if (!army_takes_player_orders(armies, armyIndex) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false; // Campaign armies are not player-controlled.
 
 	// The army must be in an engagement it can leave: an idle siege (fighting engagements pin their armies until concluded).
 	if (!world_army_can_leave_current_engagement(world, command.army) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;

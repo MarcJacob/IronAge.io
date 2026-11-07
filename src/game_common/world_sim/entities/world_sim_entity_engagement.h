@@ -90,6 +90,9 @@ entity_guid world_engagement_start_field_battle(match_world_state& world, entity
 // Siege commands. The engagement must be a siege (asserted, along with the phase each one is allowed in).
 // The attackers begin the assault of an idle siege (SIEGE_IDLE -> SIEGE_ASSAULT, fighting_active on).
 void world_engagement_siege_begin_assault(match_world_state& world, entity_guid engagement);
+// Whether the attackers of an idle siege should begin the assault: false if it is not a siege in SIEGE_IDLE. Otherwise true when they have campaign_assault_outnumber times the men of
+// the defender side, or when one of the armies on the attacker side carries fewer than campaign_assault_min_supply_days days of supplies. Deterministic, reads the world only.
+bool world_siege_assault_advisable(const match_world_state& world, entity_guid engagement);
 // The garrison sallies out of an idle (SIEGE_IDLE) or SIEGE_OUTSIDE_BATTLE siege (-> SIEGE_SALLY, fighting_active on).
 void world_engagement_siege_sally_out(match_world_state& world, entity_guid engagement);
 // The attackers lift an idle (SIEGE_IDLE) siege: every army in it gets a STATION order where it stands, then the siege ends.
