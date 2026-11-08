@@ -23,28 +23,18 @@ The shape of fighting over the course of the game is this:
 
 # Armies
 
-Armies are the fundamental military entity in the world. An army is made of men from a single settlement: armies can't be comprised of men from different settlements. Campaign armies stay tied to their origin settlement; retinues are independent from it once raised (see [## Two kinds of army]).
+Armies are the fundamental military entity in the world. An army is made of troops of various types (see [# Troop Types]).
 
 They move around using the standard movement mechanics, benefiting from road and struggling off roads depending on terrain.
 
 Armies can attack pretty much any other kind of entity they can reach: other armies ([# Battles]), Caravans ([# Raiding & Looting]), Settlements ([# Sieges]) and Workers ([# Raiding & Looting]).
 
-Armies are controlled through a Standing Order which can either be specifically targeted (Station at X position, attack Y entity) or be more abstract objectives (Defend region, attack / raid region, follow other army...).
+Armies are controlled through a *Standing Order*, which defines that army's current objective. Based on this, the lowest-level control of armies is an automated decision-making systems that seeks to accomlish the given objective while letting the army perform basic self-preservation actions like gathering supplies, and fleeing from overly dangerous forces (unless explicitly told to engage it).
 
-The Standing Order and its parameters then determine / influence the Army's behavior.
+There are two types of armies:
 
-## Two kinds of army
-
-- **Retinues**: armies created directly by the player. They are "lone operators" directed by the player, and the only armies that take direct orders. Envisioned common practice: a militia that defends the settlement, and small armies for specific missions like small scale raids or quick intervention forces. A retinue can also be sent to join a campaign by order; if the campaign ends, it stays where it is.
-- **Campaign armies**: armies raised by a settlement for a campaign (see [# Campaigns]). No direct orders: only the campaign logic controls them. They are the armies that go home and disband automatically.
-
-## Retinues
-
-Any settlement can raise any number of retinues ("Raise Retinue", the `CREATE_RETINUE` command). The player chooses the composition ([## Troop Types]); levies are not allowed, only professionals (men at arms, horsemen, knights) and wagons. The troops are taken from the garrison.
-
-The retinue is raised inside the settlement and stays still until all troops are in. Its destination is then the chosen location, or, if none was chosen, it defends its settlement. Its raising cost is a day of its consumption (at most what it can carry); the rest of its supplies it accumulates through the normal supply mechanics while raising. A settlement under siege cannot raise one.
-
-A retinue is independent from its origin settlement: its men no longer count in its population, casualties and deserters do not lower it, and conquest of the origin has no effect on it. It can disband anywhere in territory the owner owns: its men join the local garrison (and population; a full pool is simply exceeded for now), its gold goes to the owner's treasury and its supplies to the local settlement's market. The Go Home order sends it to its origin settlement, where it stops (it does not disband).
+- **Retinues**: armies created directly by the player. They are "lone operators" directed by the player, and the only armies that take direct orders. Envisioned common practice: Small armies for specific missions like small scale raids or quick intervention forces. A retinue can also be sent to join a campaign by order; if the campaign ends, it stays where it is. Retinues are only loosely tied to their home settlement, and can reinforce from anywhere. They are only made up "professional" troops, which are all troop types other than levies.
+- **Campaign armies**: armies raised by a settlement for a campaign (see [# Campaigns]). No direct orders: only the campaign logic controls them. They are the armies that go home and disband automatically, mostly made up of levies. They are the backbone of major military operations, used for direct conquest / frontal defense against opposing campaigns.
 
 ## Garrison
 
@@ -52,9 +42,7 @@ By default, every settlement has a single army within it that has special treatm
 
 When the garrison lacks troops, it uses the settlement's facilities to train more. Those facilities also determine how many can be trained at the maximum, counting existing troops both in the garrison still and raised in an army.
 
-Levies in garrison remain part of the working population.
-
-A settlement does not train new soldiers while its siege or clash is actively fought (assault, sally, outside clash). An idle siege still allows training.
+Levies in garrison are not actual standing troops but an indication of how many levies will oppose assaults on the settlement, as a function of the non-soldier home population.
 
 # Battles
 
@@ -66,6 +54,8 @@ While inside a battle, an army's normal supply mechanics are frozen (*intention:
 
 Battles end when an entire side has died or withdrawn.
 
+Within a battle, armies keep maneuvering. @TODO(Marc): Positional system for inflicting damage & retreating. Would make ranged units meaningful, and make some systems like bonus damage more natural to implement. Maybe the entire damage system could be army-to-army instead of pooled and applied to entire sides ? A "physicallity" to battles could be neat.
+
 ## Battle Rounds
 
 Every N ticks once a battle has begun, a "battle round" runs during which armies on either side inflict damage on the other.
@@ -74,10 +64,10 @@ The damage is spread uniformly between the armies according to their troop count
 
 Damage is then spread between each troop type, also by their numbers in the army. The formula goes like this:
 
-    Casualties = (Incoming damage - rand(0, Incoming damage / troop type defense skill)) / rand(1, troop type armor). Both defense values are always at least 1.
+    Casualties = (Incoming damage / rand(1, troop type defense skill)) / rand(1, troop type armor). Both defense values are always at least 1.
 
     - Defense skill represents the troop's ability to deflect damage actively and "make it harmless". At high values, the effective damage inflicted is often low.
-    - Armor represents the troop's resistance to damage that has connected with it, effectively the number of damage required per casualty. At high values, few troops will die even with high inflicted damage.
+    - Armor represents the troop's resistance to damage that has connected with it, effectively the amount of damage required per casualty. At high values, few troops will die even with high inflicted damage.
 
 Various bonuses / maluses can apply as additive percentages.
 Examples of bonuses include:
@@ -88,40 +78,44 @@ Examples of bonuses include:
 
 The intention behind this system is to keep it relatively simple - sheer mass of units will work for winning a battle reliably, but high quality troops in a good defense location can be deceptively difficult to kill, not to mention that fewer troops means higher speed. Higher quality troops thus get much greater survivability unless they get overwhelmed.
 
+Further, the types of bonuses an army can get as it fights interacts with the damage, defense and armor stats differently, making different troop types emergently weaker / stronger in specific circumstances.
+    - Example: Siege defense slightly lowers defense skill but doubles armor. In this case, high-armor troops like men at arms and knights are far better than high-skill troops like horsemen.
+    - Example: A higher total troop count will add a damage bonus due to overwhelming the defenders. That bonus matters less if the defending troops have a high defense skill, while extra armors just "delays the inevitable" linearly.
+
 The combat stats of various unit types also combine with their economic / out-of-battle characteristics: speed, carry capacity and so on.
 
-## Troop types
+## Troop types (WIP)
 
-- Levies: Weak against everything. Good carry capacity. Medium speed.
+- Levies: Cheap. Weak against everything. Good carry capacity. Medium speed.
     - Damage: 2
-    - Defense skill: 1
-    - Armor: 1
+    - Defense skill: 2
+    - Armor: 2
     - Upkeep: 1 good / day
     - Carry capacity: 10 goods
 - Men at arms: Good all-rounder. +50% Bonus damage against horsemen. Medium speed.
     - Damage: 6
     - Defense skill: 4
-    - Armor: 4
-    - Upkeep: 3 goods / day
+    - Armor: 8
+    - Upkeep: 5 goods / day
     - Carry capacity: 10 goods
 - Horsemen: Particularly effective on their own for maneuvering. High speed. +50% bonus against levies.
-    - Damage: 4
-    - Defense skill: 4
+    - Damage: 8
+    - Defense skill: 5
     - Armor: 2
     - Upkeep: 4 goods / day.
     - Carry capacity: 16 goods
 - Knights: Good against everything. Expensive. High speed. Reliant on other units to carry supplies.
-    - Damage: 12
+    - Damage: 16
     - Defense skill: 6
-    - Armor: 10
+    - Armor: 12
     - Upkeep: 15 goods / day
     - Carry capacity: 15 goods
 - Wagons: Ineffective in combat but difficult to kill. Slow speed. Necessary for larger armies to carry enough goods for prolonged sieges / campaigns.
-    - Damage: 0
+    - Damage: 1
     - Defense skill: 0
     - Armor: 30
     - Upkeep: 1 good / day
-    - Carry capacity: 100 goods
+    - Carry capacity: 500 goods
 
 # Campaigns
 
@@ -129,14 +123,14 @@ A player can call a campaign at any time, involving at least one army or settlem
 
 Involved armies immediately get the standing order to join the campaign, then get controlled by the Campaign AI once they are close enough.
 
-Involved settlements turn 75% of their garrison into a campaign army that is then sent to join the campaign. Such armies are known as *campaign armies* and have some special properties:
+Involved settlements turn a certain percentage of their garrison into a campaign army that is then sent to join the campaign. Such armies are known as *campaign armies* and have some special properties:
 - A settlement can only have one campaign army at a time. If it is destroyed while the campaign lives on, the settlement notices on the next tick and raises a replacement (if affordable and not under siege).
-- They go home automatically when the campaign ends (a raising one disbands at once), and disband at home.
-- They never outlive the campaign itself. If a settlement joins a new campaign while its previous campaign army is still walking home, that army is taken back into the new campaign instead of raising a new one.
-- They cannot be controlled manually, the Campaign AI is in full control of their standing order. They still count in their origin settlement's population.
-- A campaign ends when it has no members left or none within range; armies still raising or joining then go home.
+- They go home automatically when the campaign ends, and disband at home.
+- They never outlive the campaign itself unless assigned to a new one.
+- They cannot be controlled manually, the Campaign AI is in full control of their standing order.
+- They still count in their origin settlement's population.
 
-Allied / Vassal players can join the campaign as well with their own armies and settlements. Overlords can force this process on their vassal's settlements (but not armies), including making them join someone else's campaign.
+Allied / Vassal players can join the campaign as well with their own retinues and settlements. Overlords can force this process on their vassal's settlements (but not retinues), including making them join someone else's campaign.
 
 Campaigns exist as their own entity on the map, centered on the "leader army", the army the campaign was started from. When member armies are close enough, they are "joined" in the campaign, and the campaign AI can use them to accomplish its objective(s):
 - Conquering / Raizing a set of regions.
@@ -147,27 +141,29 @@ Campaigns are beneficial in multiple ways:
 - Streamline the process of raising armies throughout the realm and having them collaborate.
 - Easier collaboration between players.
 - Limit how messy wars can get with many players by organizing pushes / defenses.
-- Campaigns are valid trading targets, allowing caravans to resupply a common supply pool every army joined with the campaign can draw from.
+- Shared supply pool that even retinues can take advantage of.
 
-The intention behind the campaign mechanic is to reward multi-player collaboration (since players are limited to one campaign at a time, and each settlement can also only join one at a time), streamline the war process for large players so micro isn't too intensive, and pace wars so that they alternate between moments of quiet and major battles / sieges as campaigns start / stop.
+The intention behind the campaign mechanic is to reward multi-player collaboration (@TODO(Marc): Some cost to discourage one player having many campaigns at a time), streamline the war process for large players so micro isn't too intensive, and pace wars so that they alternate between moments of quiet and major battles / sieges as campaigns start / stop.
 
 When an army joins a campaign, it is set to JOIN CAMPAIGN standing order, which has it travel as fast as possible to the campaign / leader army. Once within a radius made of a constant + extra with more armies having joined, it is considered to have joined the campaign. For simplicity, from there an army is never considered out of the campaign if it gets too far away. The campaign is aware of armies that are joining: they are already part of the campaign, but in the "joining" state, so the Campaign AI may elect to wait for armies to arrive.
 
+Campaigns are loosely controllable by the commander (the player who started the campaign), changing its objectives / ending it early.
+
 ## Campaign AI
 
-Campaigns are created with a specific objective which cannot be changed.
+Campaigns are created with a specific set of objectives. They can be changed as the campaign goes on.
 
 Possible objectives:
-- Conquer Regions, with up to 16 regions selected.
+- Conquer Regions
     - The Campaign AI will move to the area, choosing a start point in friendly territory, gathering enough supplies, and move onto the closest target, sieging them down one by own. It may dispatch armies to conquer other targets in parallel if it believes it is possible.
-- Defend regions, with up to 16 regions selected.
+- Defend regions
     - The Campaign AI will move to the area, choosing a base of operation to start with that is as close as possible to all defense targets, then dispatch armies as needed (or the entire campaign) to counter attackers.
 - Defense Campaign, selecting an opposing offensive campaign (or multiple) ?
     - Similar to defend regions, except the focus is specifically to stop one or more enemy campaigns from making progress by opposing them in the field and breaking sieges.
+- Raid Regions
+    - The Campaign AI will act similarly to the Conquer objective but will only seek to raid and fill the participating armies' gold reserves.
 
-It does so by assigning standing orders to armies participating in the campaign.
-
-When its armies besiege the objective settlement, the Campaign AI also decides when to launch the assault: when the besiegers outnumber the garrison 3 to 1, or when the besieging armies are about to run out of supplies (under 2 days). This applies to every campaign; the manual Begin Assault command stays available.
+It does so by assigning standing orders to armies participating in the campaign, and controlling the state of active engagements.
 
 A campaign is founded together with its objective (the player flow: found it on a settlement, then set the objective and join the other settlements in one go; the player AI does the same).
 
@@ -189,32 +185,31 @@ Armies can be sent to Raid specific territories as a standing order. They will t
 
 ## Banditry
 
-Armies will, when possible and if their standing order allows it, attack enemy caravans and worker groups. Doing so they will destroy the caravan or worker entity, and get some gold and supply from it. Caravans are considered valid targets according to their origin, meaning an army might attack and despoil a caravan that was heading for the player's own territory.
+Armies will, when possible and if their standing order allows it, attack enemy caravans and worker groups. Doing so they will destroy the caravan or interrupt the worker entity (killing the population working on it), and get some gold and supply from it. Caravans are considered valid targets according to their origin, meaning an army might attack and despoil a caravan that was heading for the player's own territory.
 
 Caravans that end up in range of an army are intercepted even if the army is not actively chasing them. Active chasing depends on the standing order (Station within leash, Raid, Defend). Loot is capped by the army's carrying capacity. Workers are not targets for now.
 
 ## Looting
 
-Every engagement has a Loot Pool (gold + supplies reserve), shared among the victorious armies when the engagement ends.
+Every engagement has loot pool (gold + supplies reserve), shared among the victorious armies when the engagement ends.
 
 Pool sources:
 - Every army destroyed in the engagement drops all of its gold and supplies into the pool.
+- Dying soldiers add to the pool.
 - A conquered settlement adds to the pool: 20% of its peasants and 30% of its urban population are killed, each yielding one gold. Buildings are not destroyed for now.
 
 Distribution: among the victorious armies, by manpower and limited by each army's carrying capacity. Leftover loot becomes goods / trade volume for the settlement where the engagement is located (the local population loots the battlefield).
 
 # Supply system
 
-Armies require a certain amount of goods to maintain themselves. They get goods directly by raiding / looting, and indirectly through caravans reaching them to sell.
+Armies require a certain amount of goods to maintain themselves. They get goods directly by raiding / looting, and indirectly through caravans reaching them to deliver.
 
 Armies never hold more gold or supplies than their carrying capacity: anything above it is dropped (into the loot pool when engaged).
 
-**Known weakness, redesign planned** (see `management/work_units/army_supply_redesign_2026-11-07.md`): it is too easy for an army to walk off owned territory, run out of gold and stop getting resupplied.
+In order to get goods, armies have two options: directly buying from the settlement they're stationed in (in which case the treasury pays into the settlement directly, turning into trade volume for it), or through caravan deliveries.
 
-Armies carry gold. That gold is obtained either through standard pay (when standing in friendly territory and set to be paid, and of course when the owner has the required funds) daily (the army's daily consumption worth of it) or though raiding and looting.
+## Supply caravans
 
-Gold carried by an army can be used in two ways: bringing it back home in the form of goods upon disbanding (some of it going directly to the owner's treasury), or buying supplies from incoming caravans, or the settlement the army is stationned in.
+Armies, under some circumstances like campaigns, are recognized as trading targets by settlements, allowing caravans to be dispatched to deliver goods.
 
-In both cases, goods are taken from the settlement, adding to its trade volume, and added to the army. In exchange, each good is paid for for a specific amount of gold per good, some proportion of it going straight to the settlement's owner's treasury. This is a way a local economy can benefit or suffer from the presence of an army: selling goods to armies creates less profit than selling to settlements, but it still does create some. However, if a settlement is already struggling for goods, feeding an army may put it over the edge: sending a caravan to an army gets a much less severe malus from local scarcity, meaning a settlement close to starvation may still send a caravan out.
-
-Otherwise, armies work as trade targets much the same way settlements do, with the exception that the profit to be gotten from them does not increase with distance to origin, meaning faraway settlements will pretty much never send a caravan towards an army directly. However, consuming goods in a specific area will increase how attractive that area is to trade, creating dynamic supply lines.
+Delivering goods to an army is an altermative mean for a settlement to increase its trade volume, with a slightly different profit margin formula which does not reward distance. This means that armies tend to be supplied by nearby settlements. When a caravan departs to deliver supplies, the supplies are paid for immediately from the army owner's treasury. This allows armies to be resupplied through a naturally occuring supply lines system, which can of course be cut by enterprising opposing players and well-positioned retinues. It is also why it is a poor idea to bypass enemy settlements on the way to conquering the main target, as they may harbor enemy retinues that will prevent supply caravans from reaching the armies.
