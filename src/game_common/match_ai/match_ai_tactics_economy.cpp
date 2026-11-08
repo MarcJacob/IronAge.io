@@ -35,15 +35,41 @@ static void ai_tactics_taxes(ai_context& ctx)
 	}
 }
 
+// Once per day, over all owned settlements (not the round-robin window), tunes the export ratio: down by AI_EXPORT_STEP while peasants are below
+// their cap (this wins), up by it while unemployed are over AI_EXPORT_UNEMPLOYED_PERCENT of the population. A full command budget just ends the pass.
+static void ai_tactics_export(ai_context& ctx)
+{
+	if (ctx.day == ctx.state.export_check_day) return;
+	ctx.state.export_check_day = ctx.day;
+
+	i32 maxRatio = (i32)ia_min(GAME_PARAMETERS.trade.export_ratio_max_percent, (ui32)100);
+	for (ui16 index = 0; index < ctx.settlement_count; index++)
+	{
+		const ai_settlement_view& settlement = ctx.settlements[index];
+
+		i32 desired = settlement.export_ratio;
+		if (settlement.peasants < settlement.peasant_jobs) desired -= AI_EXPORT_STEP;
+		else if (settlement.unemployed * 100 > settlement.population * AI_EXPORT_UNEMPLOYED_PERCENT) desired += AI_EXPORT_STEP;
+		desired = ia_clamped(desired, 0, maxRatio);
+		if (desired == settlement.export_ratio) continue;
+
+		auto* ratio = ai_push<command_data_set_export_ratio>(ctx, MATCH_COMMAND_TYPE::SET_EXPORT_RATIO);
+		if (ratio == nullptr) return;
+		ratio->settlement = settlement.guid;
+		ratio->export_ratio = (ui8)desired;
+	}
+}
+
 // Row of SETTLEMENT_BUILDING_TABLE to build in the settlement, or -1. Housing first when the urban population nears its cap (growth stalls above it),
-// then trade: caravanserais (caravans bring goods beyond the land output), then a trade depot in big trading settlements
+// in the capital, or elsewhere only while barracks are wanted there (they add men at arms to the urban population), then trade: caravanserais (caravans bring goods beyond the land output), then a trade depot in big trading settlements
 // (more capacity: caravans pay more there), then barracks outside of EXPAND.
 static i32 ai_pick_building(const ai_context& ctx, const ai_settlement_view& settlement)
 {
-	if (settlement.urban_pop * 100 >= settlement.urban_cap * AI_HOUSING_URBAN_PERCENT) return AI_BUILDING_HOUSING;
+	bool wantsBarracks = ctx.state.mode != AI_MODE_EXPAND && settlement.barracks < settlement.population / AI_POPULATION_PER_BARRACKS;
+	if (settlement.urban_pop * 100 >= settlement.urban_cap * AI_HOUSING_URBAN_PERCENT && (settlement.guid == ctx.state.capital || wantsBarracks)) return AI_BUILDING_HOUSING;
 	if (settlement.caravanserai < ia_min(AI_MAX_CARAVANSERAI, settlement.population / AI_POPULATION_PER_CARAVANSERAI)) return AI_BUILDING_CARAVANSERAI;
 	if (settlement.population >= AI_TRADE_DEPOT_MIN_POPULATION && settlement.caravanserai > 0 && settlement.trade_depots == 0) return AI_BUILDING_TRADE_DEPOT;
-	if (ctx.state.mode != AI_MODE_EXPAND && settlement.barracks < settlement.population / AI_POPULATION_PER_BARRACKS) return AI_BUILDING_BARRACKS;
+	if (wantsBarracks) return AI_BUILDING_BARRACKS;
 	return -1;
 }
 

@@ -49,6 +49,8 @@ static bool ai_view_settlement(const match_world_state& world, ui16 slot, ai_set
 	out.population = settlement.pop_total;
 	out.peasants = settlement.pop_peasants;
 	out.workers = settlement.pop_workers;
+	out.unemployed = settlement.pop_unemployed;
+	out.export_ratio = settlement.trade.export_ratio;
 	out.local_wealth = settlement.trade.market_goods;
 	out.peasant_jobs = settlement.pop_peasants_cap;
 	out.growth_per_mille = settlement.pop_growth_per_mille;

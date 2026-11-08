@@ -11,7 +11,7 @@
 // An AI decides every AI_DECISION_PERIOD_TICKS ticks, on the tick given by its player index (so work per tick is about players / period decisions).
 // Inside a decision, layers run every N decisions (counted by ai_player_state::decision_index).
 constexpr ui32 AI_DECISION_PERIOD_TICKS = 20;
-constexpr ui32 AI_STRATEGY_EVERY = 5; // Strategy: opinions, target, mode. Slow.
+constexpr ui32 AI_STRATEGY_EVERY = 5; // Strategy: target, mode. Slow.
 constexpr ui32 AI_TACTICS_EVERY = 3; // Economy and expansion tactics, on a few settlements at a time.
 constexpr ui32 AI_SETTLEMENTS_PER_TACTICS = 6; // Settlements handled per tactics run (round-robin).
 constexpr ui32 AI_SITE_SAMPLES = 24; // Candidate tiles tested per site search.
@@ -27,10 +27,14 @@ constexpr ui32 AI_GOAL_DAYS_PER_SETTLEMENT = 8; // Goal = AI_GOAL_SETTLEMENTS_ST
 constexpr ui32 AI_EXPAND_RETRY_DAYS = 20; // Failed site searches are forgotten every this many days.
 constexpr ui32 AI_BUILD_UP_MIN_POPULATION = 1500; // Own total population before armies are built (unless threatened).
 constexpr ui32 AI_ATTACK_MIN_SUPPLY_DAYS = 5; // Only armies carrying this many days of supplies (or all they can carry, if less) count towards starting a campaign.
-constexpr ui32 AI_CAMPAIGN_MAX_DISTANCE = 250; // Tiles: players further than this from all our settlements are not targets.
 constexpr ui32 AI_ATTACK_MAX_DAYS = 80; // Days after which a campaign is abandoned (counted from the day the AI first saw it), and the longest ATTACK mode.
 constexpr ui32 AI_BUILD_UP_MIN_DAYS = 15; // Rest between two campaigns.
-constexpr i32 AI_OPINION_LIMIT = 300;
+
+// TARGET CHOICE (see ai_pick_target). Score = population x POPULATION - owner strength (troops) x STRENGTH - route cost x ROUTE_COST. The route cost is about 25 per plains tile.
+constexpr ui32 AI_TARGET_SHORTLIST = 6; // Closest (straight line) settlements of other players that get a path search; the only path searches of a target choice.
+constexpr i32 AI_TARGET_WEIGHT_POPULATION = 1;
+constexpr i32 AI_TARGET_WEIGHT_STRENGTH = 4;
+constexpr i32 AI_TARGET_WEIGHT_ROUTE_COST = 1;
 
 // TACTICS
 constexpr ui32 AI_COLONIST_RESERVE = 50; // Peasants a settlement keeps after sending colonists.
@@ -62,6 +66,8 @@ constexpr ui16 AI_PATH_MAX_WAYPOINTS = 256; // Same as the world's path store: a
 constexpr i32 AI_TAX_HIGH = 9; // While the treasury is under AI_TREASURY_COMFORT.
 constexpr i32 AI_TAX_NORMAL = 5;
 constexpr i32 AI_TAX_STEP = 2; // Tax changes per tactics run.
+constexpr i32 AI_EXPORT_STEP = 5; // Export ratio change (percentage points) per daily check.
+constexpr ui32 AI_EXPORT_UNEMPLOYED_PERCENT = 10; // Above this % of unemployed, the export ratio goes up (unless peasants are below their cap).
 constexpr ui32 AI_TREASURY_COMFORT = 1500;
 constexpr ui32 AI_RICH_TREASURY = 4000; // Above this, taxes drop to 1 (the money is not being spent anyway).
 
@@ -95,7 +101,8 @@ struct ai_settlement_view
 	entity_guid guid;
 	match_player_id owner;
 	world_location location;
-	ui32 population, peasants, workers, local_wealth;
+	ui32 population, peasants, workers, unemployed, local_wealth;
+	ui8 export_ratio; // % of incoming goods sent to the export pool.
 	ui32 peasant_jobs; // Peasants the land employs at full efficiency (pop_peasants_cap).
 	ui32 urban_pop, urban_cap; // Non-peasant population (unemployed + workers + home soldiers) and its cap (Housing raises it).
 	i32 growth_per_mille;
@@ -128,14 +135,6 @@ struct ai_campaign_view
 	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
 	entity_guid objective_target;
 	ui32 troops; // Men in its member armies.
-};
-
-// Per other player figures gathered by the strategy scan.
-struct ai_player_scan
-{
-	ui32 troops[AI_MAX_TRACKED_PLAYERS]; // Armies and home pools.
-	ui16 settlements[AI_MAX_TRACKED_PLAYERS];
-	ui32 nearest_dist_sq[AI_MAX_TRACKED_PLAYERS]; // To the closest of our settlements. 0xFFFFFFFF = none.
 };
 
 // Everything one decision works with.
@@ -235,10 +234,9 @@ static inline bool ai_layer_due(const ai_context& ctx, ui32 every, ui32 offset)
 }
 
 // LAYERS
-static void ai_scan_players(const ai_context& ctx, ai_player_scan& out); // out must be zeroed.
-static void ai_update_opinions(ai_context& ctx, const ai_player_scan& scan, ui32 own_troops, match_player_id threat_owner);
 static void ai_strategy_update(ai_context& ctx);
 static void ai_tactics_taxes(ai_context& ctx);
+static void ai_tactics_export(ai_context& ctx);
 static void ai_tactics_buildings(ai_context& ctx);
 static void ai_tactics_found_settlement(ai_context& ctx);
 static void ai_tactics_roads(ai_context& ctx);

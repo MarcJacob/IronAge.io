@@ -14,14 +14,14 @@ AI players for matches. Server side only: the web client never calls it (its cod
 
 - The server calls `ai_update` for every AI every tick, before `match_tick` (the world is then the previous tick's result: this is the "post-tick" operation, and the commands land in the very next tick).
 - An AI decides every `AI_DECISION_PERIOD_TICKS` ticks, on `tick % period == player % period`: work per tick is about players / period decisions, whatever the player count.
-- Inside a decision layers run on sub-cadences counted by `ai_player_state::decision_index` (zero-init friendly): campaign step (found with its objective, join, begin, disband; the assault itself is decided by the sim's campaign logic) every decision, tactics (taxes, buildings, founding, roads) every 3rd on a round-robin window of a few settlements, strategy (opinions, target, mode) every 5th.
+- Inside a decision layers run on sub-cadences counted by `ai_player_state::decision_index` (zero-init friendly): campaign step (found with its objective, join, begin, disband; the assault itself is decided by the sim's campaign logic) every decision, tactics (taxes, buildings, founding, roads) every 3rd on a round-robin window of a few settlements, strategy (target, mode) every 5th.
 - Per-decision budgets: owned entities looked at are capped (`AI_MAX_OWNED_*`), site search is `AI_SITE_SAMPLES` tries, orders are capped, and the command sequence is limited to the room left in the tick commands (a full budget just ends the decision).
 
 ## Design
 
 - **State machine** (`ai_player_state::mode`): EXPAND -> BUILD_UP -> ATTACK -> BUILD_UP ... see *match_ai_strategy.cpp* header for the transitions.
-- **Opinions** (`i16` per other player, negative = hostile): one update function in *match_ai_opinion.cpp*. The most hostile player in campaign range is the target player; its weakest nearby settlement is the target, our closest settlement the rally point.
-- **Layers**: strategy (mode, target) -> tactics (economy: taxes / buildings / troop ceilings; expansion: founding, roads; military: campaign joins and campaign commands only; the AI creates no retinues and gives no army orders).
+- **Target choice** (no relations / opinions system; proper diplomacy comes later): `ai_pick_target` in *match_ai_strategy.cpp* scores settlements of other players (population, minus owner strength, minus route cost from pathfinding) over a shortlist of the nearest by straight line. The target is kept until invalid. Weights and shortlist size are `AI_TARGET_*` in *match_ai_internal.h*.
+- **Layers**: strategy (mode, target) -> tactics (economy: taxes / buildings / troop ceilings, plus a daily pass over all settlements tuning the export ratio by 5 points from unemployed and peasants vs cap; Housing outside the capital (first owned settlement) only while barracks are wanted there; expansion: founding, roads; military: campaign joins and campaign commands only; the AI creates no retinues and gives no army orders).
 
 ## Decisions
 
@@ -39,7 +39,7 @@ AI players for matches. Server side only: the web client never calls it (its cod
 
 - *include/game_common/match/ai/match_ai.h*: public header (`ai_player_state`, modes, `ai_update`).
 - *match_ai_internal.h*: constants, views, context, declarations. *match_ai_main.cpp*: cadence, scratch sequence, validated push, layer order (unity entry).
-- *match_ai_world.cpp*, *_opinion.cpp*, *_strategy.cpp*, *_tactics_economy.cpp*, *_tactics_expansion.cpp*, *_tactics_military.cpp*.
+- *match_ai_world.cpp*, *_strategy.cpp*, *_tactics_economy.cpp*, *_tactics_expansion.cpp*, *_tactics_military.cpp*.
 
 ## Adding a behavior
 

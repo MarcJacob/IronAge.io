@@ -4,7 +4,6 @@
 #include "match_ai_internal.h"
 
 #include "match_ai_world.cpp"
-#include "match_ai_opinion.cpp"
 #include "match_ai_strategy.cpp"
 #include "match_ai_tactics_economy.cpp"
 #include "match_ai_tactics_expansion.cpp"
@@ -33,7 +32,14 @@ static void ai_decide(ai_context& ctx)
 {
 	if (ctx.settlement_count == 0) return;
 
+	// The capital is the first owned settlement, until it is lost.
+	bool capitalOwned = false;
+	for (ui16 index = 0; index < ctx.settlement_count; index++) capitalOwned |= ctx.settlements[index].guid == ctx.state.capital;
+	if (!capitalOwned) ctx.state.capital = ctx.settlements[0].guid;
+
 	if (ai_layer_due(ctx, AI_STRATEGY_EVERY, 0)) ai_strategy_update(ctx);
+
+	ai_tactics_export(ctx);
 
 	ai_tactics_campaign(ctx);
 
