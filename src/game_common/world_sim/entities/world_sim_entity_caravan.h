@@ -44,13 +44,13 @@ static inline world_location caravan_destination_tile(const match_world_state& w
     return caravan_endpoint(world, flags, destination.get_index());
 }
 
-// Volume profit of delivering size goods to an army, from its current state (the selector's prediction and the delivery's actual profit).
+// Volume profit of delivering size goods to an army, from its current state (the selector's prediction and the profit counted at dispatch).
 ui64 caravan_army_trade_profit(const match_world_state& world, ui16 army_index, match_player_id origin_owner, ui32 origin_capacity, ui32 size, ui32 trade_dist);
 
 // Picks a destination settlement for a caravan travelling from source (any location), excluding origin (may be INVALID_ENTITY_GUID; its capacity scales the profit).
 // Candidates are the other active settlements (no reachability check) except destination_excludes (optional, e.g. destinations that just failed).
 // For ships (caravan_flags IS_SHIP) only coastal ones (settlement_dock_tile). Distances stay between the settlement tiles.
-// Armies are also candidates (land caravans with a valid origin only): army_is_trade_target, size min(value, supplies room, buy power), see caravan_army_candidate_weight.
+// Armies are also candidates when spawning (land caravans with a valid origin only, never when retargeting): army_is_trade_target, size min(value, supplies need, buy power), see caravan_army_candidate_weight.
 // Caravan size per candidate: caravan_value (at most 0xFFFF), with size_to_room at most the candidate's room (capacity - local and export pools). Sizes below min_value are not candidates.
 // Weight = ((size + exporter share of trade_volume_profit) x 1000 / tile distance) ^ 2 (see the weight helper), picked at random with world.rand_gen
 // (not advanced without candidates). With size_to_room (a spawn, origin valid) it is instead the spawn score (profit x 100 / tile distance), only candidates
@@ -61,10 +61,20 @@ bool world_caravan_select_destination(match_world_state& world, world_location s
 
 // Gives a caravan a new destination (its current one is invalid or unreachable), selected from its origin (or its own tile if the origin is gone).
 // With none available it returns home (flag RETURNING_HOME) if the origin is valid, otherwise it is destroyed and its value is lost.
+// A caravan whose destination is an army (already paid for) never gets another target: it goes home, or is destroyed without an origin.
 void world_caravan_retarget(match_world_state& world, entity_guid caravan);
 
+// Spawning a caravan adds its value to its destination's counter (army: incoming_supplies, settlement: trade.incoming_goods). Destroying it (or caravan_release_destination)
+// takes it back off, exactly once.
 entity_guid world_spawn_entity_caravan(match_world_state& world, const world_entity_caravan& start_state);
 void world_destroy_caravan(match_world_state& world, const entity_guid& caravan);
+
+// Adds value to the destination's incoming counter (nothing if it is not a valid settlement / army). Used by the spawn and by retargeting, which sets a new destination.
+void caravan_add_incoming(match_world_state& world, entity_guid destination, ui32 value);
+
+// Removes the caravan's value from its destination's incoming counter (clamped at 0, nothing if the destination is no longer valid) and clears the destination.
+// Call it whenever a caravan loses or leaves its destination without being destroyed (retarget, delivery).
+void caravan_release_destination(match_world_state& world, ui16 caravan_index);
 
 // Allocates the caravans' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_caravans(match_world_state& world, mem_arena& memory, ui32 count);

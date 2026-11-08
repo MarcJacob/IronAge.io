@@ -77,9 +77,10 @@ struct world_entity_armies : public world_entity_container
 	entity_guid* home_settlement; // Settlement this army was raised from.
 	army_order* order; // Standing order (see ARMY_ORDER_TYPE).
 
-	ui32* gold; // Gold the army carries (pay from the owner's treasury, raid loot). Buys supplies at the settlement it stands in. Goes to the owner's treasury when the army disbands.
-	ui32* supplies; // Goods the army carries (1 per good). Consumed daily by its soldiers, bought with gold from the settlement it stands in. See world_system_armies_upkeep.
+	ui32* gold; // Gold the army carries (raid loot, never spent). Goes to the owner's treasury when the army disbands.
+	ui32* supplies; // Goods the army carries (1 per good). Consumed daily by its soldiers, delivered by caravans (campaign members) or bought by the owner's treasury at the settlement the army stands on. See world_system_armies_upkeep.
 	ui16* desertions; // Men who deserted at the last daily tick (reset by every daily tick).
+	ui32* incoming_supplies; // Total value of the paid caravans in flight towards this army. Kept by caravan spawn / retarget / destroy (see world_sim_entity_caravan.cpp).
 
 	struct view;
 
@@ -106,6 +107,7 @@ struct world_entity_armies : public world_entity_container
 		ui32 supplies_consumption; // Computed by the query: what the army's soldiers consume per day. Not stored.
 		ui32 supplies_capacity; // Computed by the query: what the army carries at most in its supplies and in its gold (army_supply_capacity). Not stored.
 		ui16 desertions;
+		ui32 incoming_supplies;
 
 		void copy_from(const view& source);
 		void copy_from(const world_entity_armies& collection, ui16 index);
@@ -129,6 +131,7 @@ struct world_entity_armies : public world_entity_container
 		ui32& gold;
 		ui32& supplies;
 		ui16& desertions;
+		ui32& incoming_supplies;
 
 		void copy_from(const single& source)
 		{
@@ -147,6 +150,7 @@ struct world_entity_armies : public world_entity_container
 			gold = source.gold;
 			supplies = source.supplies;
 			desertions = source.desertions;
+			incoming_supplies = source.incoming_supplies;
 		}
 
 		view(world_entity_armies& collection, ui16 index)
@@ -165,6 +169,7 @@ struct world_entity_armies : public world_entity_container
 			, gold(collection.gold[index])
 			, supplies(collection.supplies[index])
 			, desertions(collection.desertions[index])
+			, incoming_supplies(collection.incoming_supplies[index])
 		{}
 	};
 };
@@ -188,6 +193,7 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies::vi
 	supplies_consumption = 0;
 	supplies_capacity = 0;
 	desertions = source.desertions;
+	incoming_supplies = source.incoming_supplies;
 }
 
 inline void world_entity_armies::single::copy_from(const world_entity_armies& collection, ui16 index)
@@ -209,6 +215,7 @@ inline void world_entity_armies::single::copy_from(const world_entity_armies& co
 	supplies_consumption = 0;
 	supplies_capacity = 0;
 	desertions = collection.desertions[index];
+	incoming_supplies = collection.incoming_supplies[index];
 }
 
 using world_entity_army = world_entity_armies::single;

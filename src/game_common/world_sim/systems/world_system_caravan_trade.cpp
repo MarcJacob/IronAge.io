@@ -24,13 +24,20 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     bool originValid = caravan_settlement_is_valid(world, origin);
     world_location source = originValid ? settlements.location[origin.get_index()] : caravans.location[index];
 
+    // A caravan paid for by an army's owner loses that army: it goes home, never to another target.
+    // Either way the caravan leaves its previous destination: its value stops counting as incoming there (the destination is cleared, so it is released exactly once).
+    entity_guid previousDestination = caravans.destination[index];
+    bool wasForArmy = previousDestination.get_type() == ENTITY_TYPE::ARMY;
+    caravan_release_destination(world, index);
+
     entity_guid newDestination;
     ui32 size; // Always the caravan's value: not sized to room.
     // The previous destination is excluded: it was invalid or unreachable, picking it again would loop.
-    if (world_caravan_select_destination(world, source, origin, caravans.value[index], 0, false, caravans.flags[index], newDestination, size,
-        &caravans.destination[index], 1))
+    if (!wasForArmy && world_caravan_select_destination(world, source, origin, caravans.value[index], 0, false, caravans.flags[index], newDestination, size,
+        &previousDestination, 1))
     {
         caravans.destination[index] = newDestination;
+        caravan_add_incoming(world, newDestination, caravans.value[index]);
         world_movement_stop(caravans.movement[index], caravans.location[index]);
         caravans.movement[index].destination = caravan_destination_tile(world, caravans.flags[index], newDestination);
         return;
@@ -44,14 +51,13 @@ void world_caravan_retarget(match_world_state& world, entity_guid caravan)
     }
 
     caravans.flags[index] = (WORLD_ENTITY_CARAVAN_FLAGS)((ui8)caravans.flags[index] | (ui8)WORLD_ENTITY_CARAVAN_FLAGS::RETURNING_HOME);
-    caravans.destination[index] = INVALID_ENTITY_GUID;
     world_movement_stop(caravans.movement[index], caravans.location[index]);
     caravans.movement[index].destination = caravan_endpoint(world, caravans.flags[index], origin.get_index());
 }
 
-// Delivery to an army destination, once the caravan is within 1 tile of it (army in an engagement: within its join radius + 1, and not fighting). The army buys what it has room and gold for (even in an engagement); goods only go to its supplies,
-// never to a market. Gold: army -> origin owner's treasury and income (even if same owner). Trade volume: exporter sold + profit (no receiver share), the settlement whose
-// territory the army stands in gains sold. Whatever cannot be sold (invalid army, hostile, no room / gold, remainder) is retargeted.
+// Delivery to an army destination, once the caravan is within 1 tile of it (army in an engagement: within its join radius + 1, and not fighting). The goods were paid at dispatch
+// (caravan spawn): the army takes what it has room for (even in an engagement), only into its supplies, never to a market. Trade volume: the settlement whose
+// territory the army stands in gains sold. Any delivery destroys the caravan (the remainder is lost). With none (invalid army, hostile, no room) the caravan goes home (world_caravan_retarget).
 static void caravan_deliver_to_army(match_world_state& world, ui32 caravanIndex)
 {
     world_entity_caravans& caravans = world.entities->caravans;
@@ -75,8 +81,7 @@ static void caravan_deliver_to_army(match_world_state& world, ui32 caravanIndex)
         else if (!world_location_within_tiles(caravans.location[caravanIndex], armies.location[destination.get_index()], 1)) return; // Still travelling.
     }
     ui16 armyIndex = destination.get_index();
-    ui16 originIndex = origin.get_index();
-    match_player_id originOwner = settlements.owner[originIndex];
+    match_player_id originOwner = settlements.owner[origin.get_index()]; // Only valid when the origin is (the check below handles the other case).
     if (!valid || !army_is_trade_target(world, armyIndex, originOwner))
     {
         world_caravan_retarget(world, caravan);
@@ -84,35 +89,20 @@ static void caravan_deliver_to_army(match_world_state& world, ui32 caravanIndex)
     }
 
     ui32 value = caravans.value[caravanIndex];
-    ui32 sold = ia_min(value, ia_min(army_supplies_room(world, armyIndex), army_supplies_buy_power(world, armyIndex)));
+    // Already paid at dispatch: the army takes what it has room for.
+    ui32 sold = ia_min(value, army_supplies_room(world, armyIndex));
     if (sold == 0)
     {
         world_caravan_retarget(world, caravan);
         return;
     }
 
-    // Profit is measured before delivery, as the selector does.
-    ui64 profit = caravan_army_trade_profit(world, armyIndex, originOwner, settlement_market_capacity(settlements, originIndex), sold,
-        trade_tile_distance(settlements.location[originIndex], armies.location[armyIndex]));
     ui16 territory = army_tile_owner(world, armyIndex);
-
-    ui32 cost = sold * ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1); // sold <= gold / price: no underflow.
     armies.supplies[armyIndex] += sold;
-    armies.gold[armyIndex] -= cost;
-    world_player_state& seller = world.player_states[originOwner];
-    seller.treasury += cost;
-    seller.income += cost;
-
-    settlement_trade_volume_add(settlements, originIndex, sold + profit);
     if (territory != world_terrain::UNOWNED_TILE) settlement_trade_volume_add(settlements, territory, sold);
 
-    if (sold == value)
-    {
-        world_destroy_caravan(world, caravan);
-        return;
-    }
-    caravans.value[caravanIndex] = (ui16)(value - sold);
-    world_caravan_retarget(world, caravan); // The army is excluded as the previous destination.
+    // Any delivery ends the caravan (it would hold its origin's caravan slot for too long otherwise): what the army had no room for is lost. Destroying releases its incoming supplies.
+    world_destroy_caravan(world, caravan);
 }
 
 // Caravans standing on their destination settlement (ships: its dock tile) deliver their goods to it (split by the destination's export ratio), both ends gain trade volume,
@@ -157,12 +147,15 @@ void world_system_caravan_trade(match_world_state& world)
         bool originValid = caravan_settlement_is_valid(world, origin);
         ui32 value = caravans.value[caravanIndex];
 
+        // The caravan stops being incoming: the profit scarcity below only counts the other caravans on their way.
+        caravan_release_destination(world, (ui16)caravanIndex);
+
         // Profit is measured before delivery, from the destination's current state. Homeless caravans have no origin to measure from: no profit.
         ui64 profit = 0;
         if (originValid)
         {
             ui16 originIndex = origin.get_index();
-            profit = trade_volume_profit(value, settlement_market_total(settlements, destinationIndex), settlement_market_capacity(settlements, destinationIndex),
+            profit = trade_volume_profit(value, settlement_market_pool_with_incoming(settlements, destinationIndex), settlement_market_capacity(settlements, destinationIndex),
                 settlement_market_capacity(settlements, originIndex), settlement_trade_volume_fraction(settlements, destinationIndex),
                 trade_tile_distance(settlements.location[originIndex], settlements.location[destinationIndex]), GAME_PARAMETERS.trade);
         }

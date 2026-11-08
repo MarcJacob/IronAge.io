@@ -29,7 +29,7 @@ const TROOP_COLORS = ["#c7cbd1", "#4aa3ff", "#f0b040", "#c060e0", "#a0764a"]; //
 
 const CONSUMPTION_TOOLTIP = [
     "Soldiers consume supplies every day.",
-    "Inside their territory armies are paid gold, which buys goods when they stand in the settlement itself.",
+    "Supplies come from caravans, paid for by the owner's treasury. The gold an army carries is loot to bring home.",
     "Missing supplies make soldiers desert.",
 ];
 

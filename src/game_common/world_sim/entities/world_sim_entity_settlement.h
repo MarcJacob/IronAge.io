@@ -306,6 +306,13 @@ static inline ui32 settlement_market_total(const world_entity_settlements& settl
 	return (ui32)ia_min((ui64)trade.market_goods + trade.export_goods, (ui64)0xFFFFFFFF);
 }
 
+// Pool used for the scarcity of caravan profit and weights: goods in both pools plus incoming_goods x incoming_goods_scarcity_percent / 100 (goods already on their way).
+static inline ui32 settlement_market_pool_with_incoming(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	ui64 incoming = (ui64)settlements.trade[settlement_index].incoming_goods * GAME_PARAMETERS.trade.incoming_goods_scarcity_percent / 100;
+	return (ui32)ia_min((ui64)settlement_market_total(settlements, settlement_index) + incoming, (ui64)0xFFFFFFFF);
+}
+
 // Cap of the export pool = capacity x export ratio (clamped to 100) / 100, rounded down.
 static inline ui32 settlement_export_cap(const world_entity_settlements& settlements, ui16 settlement_index)
 {

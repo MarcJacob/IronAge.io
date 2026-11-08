@@ -54,6 +54,7 @@ struct game_trade_parameters
     // Profit (trade volume, never goods). Scarcity rate r% of the caravan value, r linear in the destination's fill: max at 0% fill, min at 100%. Clamped to 10000.
     ui32 scarcity_value_min_percent = 25;
     ui32 scarcity_value_max_percent = 150;
+    ui32 incoming_goods_scarcity_percent = 50; // Goods in flight towards a settlement (incoming_goods) count this % as already in its pool, for the scarcity of profit and caravan weight.
     // Profit scaling by (destination capacity - origin capacity) / origin capacity, in %, clamped to [-malus, +bonus]. Malus clamped to 100.
     ui32 capacity_ratio_max_bonus_percent = 100;
     ui32 capacity_ratio_max_malus_percent = 75;
@@ -87,6 +88,7 @@ struct game_parameters
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
     ui32 levy_max_percent = 20; // Max levies of a settlement (garrison + raised), in percent of its total population. No ceiling.
     ui32 army_wrong_origin_owner_desertion_percent = 2; // Per day, share of the men of an army whose home settlement now has another owner that deserts (rounded up).
+    ui32 army_low_supply_desertion_percent = 10; // Per day, share of an army's max count (raised_troops, per troop type) that deserts when it has no supplies at all, scaled by the share of its consumption supplies could not cover (rounded up, at most its current men). Clamped to 100.
     ui32 levy_training_per_mille = 20; // Levies trained per day, in per mille of the total population (at least 1), up to the max.
 
     // ARMY STANDING ORDERS (distances in tiles). See world_system_army_standing_orders.cpp.
@@ -171,7 +173,7 @@ struct game_parameters
     ui32 upkeep_wagon = 1;
 
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
-    // Gold is paid by the treasury inside the owner's territory, and buys supplies at a settlement the army stands in, up to it.
+    // Gold is loot only (never spent), supplies are delivered by caravans (campaign armies) or bought where the army stands, both paid by the owner's treasury, up to it.
     // @TODO(Marc): Move this to troop type stats.
     ui32 carry_levy = 10;
     ui32 carry_men_at_arms = 10;
@@ -184,7 +186,7 @@ struct game_parameters
     ui32 raid_production_gold_percent = 50; // Share of the production taken that goes to the army's gold (the rest goes to its supplies, as goods).
     ui32 raid_peasants_percent = 10; // Of its peasants, killed (1 gold each).
     ui32 raid_goods_percent = 20; // Of its local + export goods (become supplies 1:1).
-    ui32 good_price_gold = 1; // Gold price of one good (armies buy goods with their gold, see world_system_armies_upkeep).
+    ui32 good_price_gold = 1; // Gold price of one good for army supplies, paid by the army owner's treasury (caravan dispatch, purchase where the army stands).
     ui32 army_friendly_trade_bonus_percent = 25; // Caravans: profit bonus (%) for a friendly army target over a neutral one.
 
     // CONSTRUCTION
@@ -224,6 +226,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY(raise_min_population_left, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_max_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(army_wrong_origin_owner_desertion_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY(army_low_supply_desertion_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY(levy_training_per_mille, GAME_DATA_PROP_TYPE::UI32)
 
     GAME_DATA_PROPERTY(engagement_join_base_tiles, GAME_DATA_PROP_TYPE::UI32)
@@ -281,6 +284,7 @@ GAME_DATA_OBJECT_DEF_BEGIN(game_parameters)
     GAME_DATA_PROPERTY_PATH(trade_max_ship_export_pool_percent, trade.max_ship_export_pool_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_min_percent, trade.scarcity_value_min_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_scarcity_value_max_percent, trade.scarcity_value_max_percent, GAME_DATA_PROP_TYPE::UI32)
+    GAME_DATA_PROPERTY_PATH(trade_incoming_goods_scarcity_percent, trade.incoming_goods_scarcity_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_capacity_ratio_max_bonus_percent, trade.capacity_ratio_max_bonus_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_capacity_ratio_max_malus_percent, trade.capacity_ratio_max_malus_percent, GAME_DATA_PROP_TYPE::UI32)
     GAME_DATA_PROPERTY_PATH(trade_incoming_profit_bonus_percent_max, trade.incoming_profit_bonus_percent_max, GAME_DATA_PROP_TYPE::UI32)

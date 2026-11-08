@@ -16,7 +16,7 @@
 // State of one player, indexed by match_player_id in the world state.
 struct world_player_state
 {
-    ui32 treasury; // Wealth held by the player. Deposits: daily tax. Spending: worker pay, local soldier pay, army pay (gold), army raising.
+    ui32 treasury; // Wealth held by the player. Deposits: daily tax. Spending: worker pay, local soldier pay, army raising, army supplies (caravans paid at dispatch, purchases where armies stand).
     ui32 income; // Last day's deposits into the treasury.
     ui32 expenses; // Last day's spending from the treasury. Reset by the daily economy tick, so spenders must run after it.
     

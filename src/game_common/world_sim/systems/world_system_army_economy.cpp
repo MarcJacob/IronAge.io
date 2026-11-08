@@ -1,9 +1,7 @@
-// Army economy systems: soldiers consume goods every day, and armies buy them with gold.
-// Armies carry gold and supplies (goods). Their soldiers consume the supplies daily (per-type upkeep rates).
-// Inside territory its owner owns (pay only; purchases need the settlement itself), an army is paid gold by the treasury (a day of consumption at the goods price per day), up to its carry capacity.
-// An army standing in a settlement itself (at its location) buys goods from its market goods with its gold, up to its carry capacity. The owner of the settlement gets the gold.
-// Consumption that supplies cannot cover makes troops desert, in which case they go back home. A raising army stops raising instead.
-// Outside of the owner's territory armies are not paid: they must be back regularly, or find *alternative* means of financing themselves (later).
+// Army economy systems: soldiers consume goods every day.
+// Armies carry gold (loot only, never spent) and supplies (goods). Their soldiers consume the supplies daily (per-type upkeep rates).
+// Supplies come from caravans, paid for by the army owner's treasury at dispatch (see caravan spawn). Only campaign members are caravan targets. Every army also buys at the settlement it stands on, also with the treasury.
+// Consumption that supplies cannot cover makes troops desert (army_low_supply_desertion_percent of the max count, scaled by the share that supplies could not cover), in which case they go back home. A raising army stops raising instead.
 // Soldiers waiting in a settlement (local pool) are paid from the treasury instead.
 
 #include "game_common/match/game_parameters.h"
@@ -22,15 +20,7 @@ ui16 army_tile_owner(const match_world_state& world, ui16 army_index)
 	return world.terrain->regions[regionIndex].owners[tileIndex];
 }
 
-// True if the army stands on a tile claimed by a settlement of its owner.
-static bool army_is_in_owner_territory(const match_world_state& world, ui16 army_index)
-{
-	ui16 tileOwner = army_tile_owner(world, army_index);
-	return tileOwner != world_terrain::UNOWNED_TILE && world.entities->settlements.owner[tileOwner] == world.entities->armies.owner[army_index];
-}
-
-// Runs daily. Pays the armies inside their owner's territory (the treasury pays as much as it can: never below 0, no debt), then they buy goods with their gold
-// from the settlement they stand in, then every army consumes. What supplies could not cover is the share of the army that deserts.
+// Runs daily. Every army consumes. An army whose supplies could not cover it loses men (see the desertion rule below).
 void world_system_armies_upkeep(match_world_state& world)
 {
 	if (!world_is_daily_tick(world)) return;
@@ -44,7 +34,6 @@ void world_system_armies_upkeep(match_world_state& world)
 		match_player_id owner = armies.owner[armyIndex];
 		if (owner >= world.player_count) continue;
 
-		world_player_state& player = world.player_states[owner];
 		ui32& supplies = armies.supplies[armyIndex];
 
 		armies.desertions[armyIndex] = 0; // Counts the last day only.
@@ -72,38 +61,21 @@ void world_system_armies_upkeep(match_world_state& world)
         if (armyCurrentEngagement.is_valid() && world.entities->engagements.fighting_active[armyCurrentEngagement.get_index()]) continue;
 
 		ui32 consumption = army_daily_consumption(armies.composition[armyIndex]);
-		ui32 capacity = army_supply_capacity(world, (ui16)armyIndex);
-		ui32 price = GAME_PARAMETERS.good_price_gold;
+		// Every army buys goods from the market goods of the settlement they stand on (their location equals the settlement's; besieged or not), up to their supplies room,
+		// as far as their owner's treasury goes (never their own gold). The payment is a gold sink (nobody is credited), the goods sold only count as trade volume. Same owner only for now.
 		ui16 settlementIndex = army_tile_owner(world, (ui16)armyIndex);
-		bool inOwnerTerritory = army_is_in_owner_territory(world, (ui16)armyIndex);
-
-		// Pay: Two days of the supply basis's consumption at the goods price, up to the gold capacity, as far as the treasury can afford.
-        // Two days so that armies can accumulate supplies and gold if enough is available.
-		ui32& gold = armies.gold[armyIndex];
-		if (inOwnerTerritory && gold < capacity)
+		world_entity_settlements& settlements = world.entities->settlements;
+		if (settlementIndex != world_terrain::UNOWNED_TILE && settlements.owner[settlementIndex] == owner
+			&& armies.location[armyIndex] == settlements.location[settlementIndex])
 		{
-			ui64 payment = (ui64)army_daily_consumption(army_supply_basis(world, (ui16)armyIndex)) * price * 2;
-			ui32 paid = (ui32)ia_min(ia_min(payment, (ui64)(capacity - gold)), (ui64)player.treasury);
-			player.treasury -= paid;
-			player.expenses += paid;
-			gold += paid;
-		}
-
-		// Purchase: goods from the market goods of the settlement the army stands in (its location equals the settlement's; besieged or not), up to the supplies capacity, as far as its gold goes.
-		// Same owner only for now (friendly stub). The seller's owner gets the whole payment, and the goods sold count as trade volume.
-		if (inOwnerTerritory && supplies < capacity && armies.location[armyIndex] == world.entities->settlements.location[settlementIndex])
-		{
-			world_entity_settlements& settlements = world.entities->settlements;
-			ui32& marketGoods = settlements.trade[settlementIndex].market_goods;
-			ui64 affordable = price > 0 ? gold / price : 0xFFFFFFFF;
-			ui32 bought = (ui32)ia_min(ia_min((ui64)(capacity - supplies), affordable), (ui64)marketGoods);
+			ui32 price = ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1);
+			world_player_state& player = world.player_states[owner];
+			ui32 bought = ia_min(ia_min(army_supplies_room(world, (ui16)armyIndex), player.treasury / price), settlements.trade[settlementIndex].market_goods);
 			ui32 cost = bought * price;
-			marketGoods -= bought;
+			settlements.trade[settlementIndex].market_goods -= bought;
 			settlement_trade_volume_add(settlements, settlementIndex, bought);
-			gold -= cost;
-			world_player_state& seller = world.player_states[settlements.owner[settlementIndex]];
-			seller.treasury += cost;
-			seller.income += cost;
+			player.treasury -= cost; // A pure gold sink: nobody is credited.
+			player.expenses += cost;
 			supplies += bought;
 		}
 
@@ -121,14 +93,18 @@ void world_system_armies_upkeep(match_world_state& world)
 			continue;
 		}
 
-		// Desertion: each troop type loses the unfunded fraction of the day's consumption (rounded down).
-
+		// Desertion: each troop type loses army_low_supply_desertion_percent x the unfunded share of the consumption (100% when no supply is left) of its max count (what the army was
+		// raised to, raised_troops, or its current count if higher), rounded up, never more than the men it has now.
 		// The army is destroyed when its last man leaves: stop at once, its slot is free.
 		entity_guid army = armies.guids[armyIndex];
 		army_troop_count troops = armies.composition[armyIndex];
+		army_troop_count raised = armies.raised_troops[armyIndex];
+		ui64 percent = ia_min(GAME_PARAMETERS.army_low_supply_desertion_percent, (ui32)100);
 		for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
 		{
-			ui16 deserters = (ui16)((ui64)troops.count[troopType] * unfunded / consumption);
+			ui64 maxCount = ia_max(raised.count[troopType], troops.count[troopType]);
+			ui64 deserting = (maxCount * percent * unfunded + 100 * (ui64)consumption - 1) / (100 * (ui64)consumption);
+			ui16 deserters = (ui16)ia_min(deserting, (ui64)troops.count[troopType]);
 			ui16 left = world_army_desertion(world, army, (TROOP_TYPE)troopType, deserters);
 
 			if (!world_entity_is_valid(world, army)) 

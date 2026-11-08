@@ -28,6 +28,7 @@ entity_guid world_spawn_army(match_world_state& world, const world_entity_armies
 	newArmy.engagement = INVALID_ENTITY_GUID;
 	newArmy.campaign = INVALID_ENTITY_GUID;
 	newArmy.desertions = 0;
+	newArmy.incoming_supplies = 0;
 
 	// Init default values if they weren't specified by start state.
 	SET_DEFAULT_VAL(newArmy.movement.travel_speed, (ui16)GAME_PARAMETERS.army_travel_speed);
@@ -312,6 +313,9 @@ bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count)
 	armies.desertions = memory.alloc<ui16>(count);
 	if (armies.desertions == nullptr) return false;
 
+	armies.incoming_supplies = memory.alloc<ui32>(count);
+	if (armies.incoming_supplies == nullptr) return false;
+
 	return true;
 }
 
@@ -382,7 +386,16 @@ ui32 army_supplies_room(const match_world_state& world, ui16 army_index)
 
 ui32 army_supplies_buy_power(const match_world_state& world, ui16 army_index)
 {
-	return world.entities->armies.gold[army_index] / ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1);
+	match_player_id owner = world.entities->armies.owner[army_index];
+	if (owner >= world.player_count) return 0;
+	return world.player_states[owner].treasury / ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1);
+}
+
+ui32 army_supplies_need(const match_world_state& world, ui16 army_index)
+{
+	ui32 room = army_supplies_room(world, army_index);
+	ui32 incoming = world.entities->armies.incoming_supplies[army_index];
+	return room > incoming ? room - incoming : 0;
 }
 
 PLAYER_DIPLOMATIC_STATUS army_trade_status(const match_world_state& world, ui16 army_index, match_player_id origin_owner)
@@ -394,7 +407,11 @@ PLAYER_DIPLOMATIC_STATUS army_trade_status(const match_world_state& world, ui16 
 
 bool army_is_trade_target(const match_world_state& world, ui16 army_index, match_player_id origin_owner)
 {
-	return army_trade_status(world, army_index, origin_owner) != PLAYER_DIPLOMATIC_STATUS_HOSTILE;
+	const world_entity_armies& armies = world.entities->armies;
+	bool inCampaign = world_entity_is_valid(world, armies.campaign[army_index]);
+	// TEMPORARY: armies still joining a campaign (JOIN_CAMPAIGN order targeting it) are targets too, so they get supplied while they gather. Remove once campaigns handle it.
+	bool joining = armies.order[army_index].type == ARMY_ORDER_JOIN_CAMPAIGN && world_entity_is_valid(world, armies.order[army_index].target);
+	return (inCampaign || joining) && army_trade_status(world, army_index, origin_owner) != PLAYER_DIPLOMATIC_STATUS_HOSTILE;
 }
 
 // RAID LOOT (temporary: becomes tile-based raiding later)

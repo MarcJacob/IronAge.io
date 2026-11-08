@@ -1,6 +1,8 @@
 // Periodic caravan spawn system.
 
+#include "game_common/match/world/world_trade.h"
 #include "../world_movement.h"
+#include "../entities/world_sim_entity_army.h"
 #include "../entities/world_sim_entity_caravan.h"
 #include "../entities/world_sim_entity_settlement.h"
 
@@ -52,7 +54,8 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         world_location destinationLocation = caravan_destination_tile(world, caravan.flags, destination);
         path_result path;
         world_request_path(world, startLocation, destinationLocation, caravan_path_params(caravan.flags), path);
-        if (path.count == 0 || path.partial)
+        // Start == destination (an army standing on the origin): the request returns no path, but there is nothing to walk.
+        if (startLocation != destinationLocation && (path.count == 0 || path.partial))
         {
             unreachable[attempt] = destination;
             continue;
@@ -60,6 +63,21 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
 
         // The investment leaves the export pool only now (size <= investable <= export goods).
         settlementTrade.export_goods -= size;
+
+        // Supplies for an army are paid now by the army owner's treasury (size <= its buy power): a pure gold sink, nobody is credited. The settlement only gains
+        // trade volume (size + profit). The army's own gold is never touched.
+        if (destination.get_type() == ENTITY_TYPE::ARMY)
+        {
+            ui16 armyIndex = destination.get_index();
+            match_player_id originOwner = settlements.owner[settlement_index];
+            ui32 cost = size * ia_max(GAME_PARAMETERS.good_price_gold, (ui32)1);
+            world_player_state& payer = world.player_states[world.entities->armies.owner[armyIndex]];
+            payer.treasury -= cost;
+            payer.expenses += cost;
+            ui64 profit = caravan_army_trade_profit(world, armyIndex, originOwner, settlement_market_capacity(settlements, settlement_index), size,
+                trade_tile_distance(originLocation, world.entities->armies.location[armyIndex]));
+            settlement_trade_volume_add(settlements, settlement_index, size + profit);
+        }
 
         caravan.origin_settlement = origin;
         caravan.destination = destination;

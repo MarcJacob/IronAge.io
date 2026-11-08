@@ -111,6 +111,8 @@ struct settlement_trading
     ui32 market_capacity_buildings; // Buildings' part of the capacity, kept by their added / removed events (constants there).
     // Trade volume: absolute, may exceed its max (settlement_trade_volume_max); only the part up to the max is effective. Decays daily.
     ui32 trade_volume;
+    // Total value of the caravans in flight towards this settlement (one kind of goods). Kept by caravan spawn / retarget / delivery / destroy, never derived (see world_sim_entity_caravan.cpp).
+    ui32 incoming_goods;
 };
 
 // Raiding of a settlement by armies (temporary system, see world_system_raid_loot). Zero is a valid (not raided) value.
