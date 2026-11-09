@@ -165,14 +165,14 @@ void world_system_entity_movement(match_world_state& world)
 	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!armies.guids[armyIndex].is_valid()) continue;
-		world_path_store_move_entity(world, armies.movement[armyIndex], armies.location[armyIndex]);
+		world_path_store_move_entity(world, armies.location[armyIndex], armies.movement[armyIndex]);
 	}
 
     world_entity_workers& workers = world.entities->workers;
     for (ui32 workerIndex = 0; workerIndex < workers.max_count; workerIndex++)
     {
         if (!workers.guids[workerIndex].is_valid()) continue;
-        world_path_store_move_entity(world, workers.movement[workerIndex], workers.location[workerIndex]);
+		world_path_store_move_entity(world, workers.location[workerIndex], workers.movement[workerIndex]);
     }
 
     world_entity_caravans& caravans = world.entities->caravans;
@@ -181,6 +181,6 @@ void world_system_entity_movement(match_world_state& world)
         if (!caravans.guids[caravanIndex].is_valid()) continue;
 
         // The result (false = arrived or impossible) is not used yet: no unreachable-destination handling for now.
-        world_path_store_move_entity(world, caravans.movement[caravanIndex], caravans.location[caravanIndex]);
+		world_path_store_move_entity(world, caravans.location[caravanIndex], caravans.movement[caravanIndex]);
     }
 }

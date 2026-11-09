@@ -5,6 +5,7 @@
 
 #include "core.h"
 
+#include "game_common/match/world/entities/world_entity_common.h"
 #include "game_common/match/world/world_terrain.h"
 #include "game_common/match/world/world_pathing.h"
 
@@ -56,8 +57,8 @@ static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region
     if (params.mode == PATH_MODE_LAND_ROADS_ONLY) return 0;
 
     // If a valid "within settlement territory" guid was given, prevent pathing through any tile that isn't in the settlement.
-    if (params.within_settlement_territory.is_valid() 
-            && params.within_settlement_territory.get_index() != terrain.regions[region_index].owners[tile_index]) return 0;
+    if (params.opt_settlement_territory.is_valid() 
+            && params.opt_settlement_territory.get_index() != terrain.regions[region_index].owners[tile_index]) return 0;
 
     // Default case: "native" terrain travel cost.
     return TILE_TERRAIN_TRAVEL_COST[(ui8)type];
@@ -67,7 +68,7 @@ static inline ui8 world_tile_move_cost(const world_terrain& terrain, ui16 region
 static inline void world_movement_stop(world_entity_movement& movement, world_location location)
 {
     movement.destination = location;
-    movement.path_handle = INVALID_PATH_HANDLE;
+    movement.path_handle = INVALID_PATH_HANDLE.value;
 }
 
 // Moves the entity one step in a straight line towards the center of the given target tile, at travel_speed divided by the cost of the tile it stands on.
@@ -77,23 +78,19 @@ bool world_entity_step_towards(const match_world_state& world, world_entity_move
 // Size of the store's search memory. Fixed, as it limits how far a search goes and so must be the same on every machine.
 static constexpr ui64 WORLD_PATH_STORE_SCRATCH_SIZE = KiB(256);
 
-// The world's path store. SKELETON: only the search memory for now. The three functions below are the only ones the rest of the simulation uses.
-struct world_path_store
-{
-    mem_arena scratch; // Search memory.
-};
-
 // Allocates and initializes a path store from the given memory. Returns nullptr if there isn't enough.
 world_path_store* world_path_store_init(mem_arena& memory);
 
-// (a) Gets a path from start to end for the given mode. Returns a handle to it, INVALID_PATH_HANDLE if there is none.
-ui32 world_path_store_get_path(match_world_state& world, world_location start, world_location end, PATH_MODE mode);
+// Gets a path from start to end for the given parameters. 
+// Returns a handle to it, or INVALID_PATH_HANDLE if none can be built (target unreachable or invalid parameters).
+world_path_store::path_handle world_path_store_get_path(match_world_state& world, const path_params& parameters);
 
-// (b) Entity movement: moves the entity along its path (movement.path_handle) towards movement.destination, updating its tile and sub-tile location.
+// Entity movement: moves the entity along its path (movement.path_handle) towards movement.destination,
+// updating its tile and sub-tile location.
 // Returns true while it is moving / has a path, false when movement is over (arrived) or impossible.
-bool world_path_store_move_entity(match_world_state& world, world_entity_movement& movement, world_location& location);
+bool world_path_store_move_entity(match_world_state& world, world_location& location, world_entity_movement& entity_movement);
 
-// (c) Returns the tile following "from" on the path path_handle towards destination, or "from" if there is none. Used by road construction.
-world_location world_path_store_next_tile(match_world_state& world, ui32 path_handle, world_location from, world_location destination);
+// Returns the tile following "from" on the path path_handle towards destination, or "from" if there is none / at destination.
+world_location world_path_store_next_tile(match_world_state& world, world_path_store::path_handle path_handle, world_location location, world_location destination);
 
 #endif // WORLD_MOVEMENT_INCLUDED

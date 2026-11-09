@@ -85,7 +85,4 @@ inline static bool world_get_neighbour_tile(const world_terrain& terrain, world_
     return true;
 }
 
-// Identifies a path kept by the world's path store. 0 = no path.
-static constexpr ui32 INVALID_PATH_HANDLE = 0;
-
 #endif // WORLD_TERRAIN_INCLUDED

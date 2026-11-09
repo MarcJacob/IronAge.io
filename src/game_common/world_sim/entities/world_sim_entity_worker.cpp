@@ -35,7 +35,7 @@ entity_guid world_spawn_worker(match_world_state& world, const world_entity_work
 	movement = {};
 	movement.travel_speed = (ui16)GAME_PARAMETERS.worker_travel_speed;
 	movement.destination = start;
-	movement.path_handle = INVALID_PATH_HANDLE;
+	movement.path_handle = INVALID_PATH_HANDLE.value;
 
 	return newID;
 }

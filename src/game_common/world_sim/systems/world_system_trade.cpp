@@ -55,10 +55,16 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         }
 
         world_location destinationLocation = caravan_destination_tile(world, caravan.flags, destination);
-        ui32 pathHandle = world_path_store_get_path(world, startLocation, destinationLocation, 
-                caravan_is_ship(caravan.flags) ? PATH_MODE_SEA : PATH_MODE_LAND);
+
+        path_params pathParams {
+            .start = startLocation,
+            .end = destinationLocation,
+            .mode = caravan_is_ship(caravan.flags) ? PATH_MODE_SEA : PATH_MODE_LAND,
+        };
+
+        world_path_store::path_handle pathHandle = world_path_store_get_path(world, pathParams);
         // Start == destination (an army standing on the origin): the request returns no path, but there is nothing to walk.
-        if (startLocation != destinationLocation && pathHandle != INVALID_PATH_HANDLE)
+        if (startLocation != destinationLocation && world.path_store->is_valid_handle(pathHandle))
         {
             unreachable[attempt] = destination;
             continue;
@@ -88,7 +94,7 @@ static void caravan_try_spawn(match_world_state& world, ui16 settlement_index, b
         caravan.location = startLocation;
         caravan.movement.travel_speed = (ui16)(ship ? GAME_PARAMETERS.ship_travel_speed : GAME_PARAMETERS.caravan_travel_speed);
         caravan.movement.destination = destinationLocation;
-        caravan.movement.path_handle = pathHandle;
+        caravan.movement.path_handle = pathHandle.value;
 
         world_spawn_entity_caravan(world, caravan); // Increments the origin's caravan_count (ships: ship_count).
         return;

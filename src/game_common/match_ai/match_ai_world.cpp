@@ -216,12 +216,14 @@ static path ai_path_find(const match_world_state& world, world_location start, w
 	mem_arena scratch = mem_arena_create(AI_PATH_SCRATCH, sizeof(AI_PATH_SCRATCH));
 	path found = {};
 	found.points = AI_PATH_POINTS;
-	found.points_capacity = AI_PATH_MAX_WAYPOINTS;
+	found.point_count = AI_PATH_MAX_WAYPOINTS;
+
 	path_params params = {};
 	params.start = start;
 	params.end = end;
 	params.mode = mode;
-	world_path_find(*world.terrain, params, scratch, found);
+
+	world_path_find(world, params, scratch, found);
 	return found;
 }
 
@@ -230,14 +232,14 @@ static bool ai_road_connected(const match_world_state& world, world_location a, 
 	if (a == b) return true;
 
 	path found = ai_path_find(world, a, b, PATH_MODE_LAND_ROADS_ONLY);
-	return found.count > 0 && !found.partial;
+	return found.length > 0;
 }
 
 static ui32 ai_road_route_cost(const match_world_state& world, world_location a, world_location b)
 {
 	// The road crews' mode (world_system_worker_construction.cpp).
 	path found = ai_path_find(world, a, b, PATH_MODE_LAND);
-	return found.count > 0 ? found.cost : 0;
+	return found.length > 0 ? found.cost : 0;
 }
 
 // Fills the context's owned settlements and armies (up to the caps), treasury, income, population and army strengths.

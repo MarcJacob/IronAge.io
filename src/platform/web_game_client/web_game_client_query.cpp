@@ -227,8 +227,8 @@ WASM_EXPORT ui32 client_query_path(ui32 start_x, ui32 start_y, ui32 end_x, ui32 
 
 	path result = {};
 	result.points = (world_location*)PATH_BUFFER;
-	result.points_capacity = PATH_BUFFER_CAPACITY;
+	result.point_count = PATH_BUFFER_CAPACITY;
 
 	game_client_query_path(*WEB_CLIENT.backend, { (ui16)start_x, (ui16)start_y }, { (ui16)end_x, (ui16)end_y }, result, entity_guid{ territory_guid }, path_mode < PATH_MODE_COUNT ? (PATH_MODE)path_mode : PATH_MODE_LAND);
-	return result.count;
+	return result.point_count;
 }

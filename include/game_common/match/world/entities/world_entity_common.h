@@ -90,7 +90,7 @@ struct world_entity_movement
 	ui16 travel_speed; // Speed in thousandths of a tile per tick (fractional units per tick), along an axis. Diagonal moves split it between the axes.
 	vec2<i16> fractional_loc; // "In-tile location" of the entity, centered on 0, in thousandths of a tile (range [-500, 500]). Affects movement.
 	world_location destination; // Tile the entity wants to reach. Set by orders and decisions.
-	ui32 path_handle; // Path the entity is following, INVALID_PATH_HANDLE if none.
+	ui32 path_handle; // Handle to path the entity is following, if any.
 };
 
 bool            world_entity_is_valid(const match_world_state& world, entity_guid entity);

@@ -50,8 +50,9 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
     if (world_is_daily_tick(world) || workers.work_time[worker_index] == 0) data.funded = worker_pay_day(world, worker_index);
     if (!data.funded) return false; // Stalled until a day can be paid.
 
-    path_params params = {};
-    params.mode = PATH_MODE_LAND;
+    path_params params {};
+    params.start = data.head;
+    params.end = data.destination;
 
     // Find the next tile to build, skipping the ones that are already roads.
     world_location next;
@@ -61,14 +62,15 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
         if (data.head == data.destination) return true;
 
         // The path is requested once and kept. No path (an unreachable destination) ends the project.
-        if (data.path_handle == INVALID_PATH_HANDLE)
+        if (!world.path_store->is_valid_handle(data.path_handle))
         {
-            data.path_handle = world_path_store_get_path(world, data.head, data.destination, params.mode);
-            if (data.path_handle == INVALID_PATH_HANDLE) return true;
+            data.path_handle = world_path_store_get_path(world, params);
+            if (!world.path_store->is_valid_handle(data.path_handle)) return true;
         }
 
         next = world_path_store_next_tile(world, data.path_handle, data.head, data.destination);
         if (next == data.head) return true; // No progress possible.
+
         world_get_tile(*world.terrain, next, regionIndex, tileIndex);
         if (!world.terrain->regions[regionIndex].status[tileIndex].is_road) break;
 
@@ -76,7 +78,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
         data.ticks_left = 0;
     }
 
-    // Walk to the tile.
+    // Walk to the construction tile.
     world_entity_movement& movement = workers.movement[worker_index];
     world_location& location = workers.location[worker_index];
     movement.destination = next;
@@ -97,6 +99,7 @@ static bool worker_logic_build_road_tick(match_world_state& world, ui16 worker_i
 
     if (data.ticks_left == 0)
     {
+        // Construction done on tile. Set road flag and move on.
         world_tile_set_road(world, next);
         data.head = next;
     }

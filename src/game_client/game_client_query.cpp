@@ -35,20 +35,21 @@ bool game_client_query_command_valid(game_client& backend, ui8 command_type, con
 
 void game_client_query_path(game_client& backend, world_location start, world_location end, path& out_path, entity_guid within_settlement_territory, PATH_MODE mode)
 {
-	out_path.count = 0;
-	out_path.partial = true;
+	out_path.length = 0;
 
 	if (backend.local_match == nullptr) return;
+
 	const world_terrain& terrain = *backend.local_match->world->terrain;
 	if (start.x >= terrain.size_tiles.x || start.y >= terrain.size_tiles.y || end.x >= terrain.size_tiles.x || end.y >= terrain.size_tiles.y) return;
+
+	backend.path_scratch.clear();
 
 	path_params params = {};
 	params.start = start;
 	params.end = end;
 	params.mode = mode;
-	params.within_settlement_territory = within_settlement_territory;
-	backend.path_scratch.clear();
-	world_path_find(terrain, params, backend.path_scratch, out_path);
+	params.opt_settlement_territory = within_settlement_territory;
+	world_path_find(*backend.local_match->world, params, backend.path_scratch, out_path);
 }
 
 ia_string_view game_client_get_player_name(game_client& backend, match_player_id player_id)
