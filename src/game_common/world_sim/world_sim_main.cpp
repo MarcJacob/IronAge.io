@@ -21,13 +21,12 @@
 // Systems.
 #include "systems/world_system_settlement_territory.cpp"
 #include "systems/world_system_settlement_economy.cpp"
-#include "systems/world_system_army.cpp"
+#include "systems/world_system_combat.cpp"
 #include "systems/world_system_army_economy.cpp"
 #include "systems/world_system_army_standing_orders.cpp"
 #include "systems/world_system_campaigns.cpp"
 #include "systems/world_system_worker_construction.cpp"
-#include "systems/world_system_caravan_spawn.cpp"
-#include "systems/world_system_caravan_trade.cpp"
+#include "systems/world_system_trade.cpp"
 #include "systems/world_system_movement.cpp"
 
 #include "world_pathing.cpp"
@@ -235,7 +234,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
     }
     else
     {
-        world_terrain_generate(*newWorld->terrain);
+        // @TODO(Marc): Image-based map generation.
     }
 
 	world_update_player_stats(*newWorld);

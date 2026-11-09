@@ -55,16 +55,6 @@ static inline void army_order_accompany(world_entity_armies& armies, ui16 index,
 entity_guid world_spawn_army(match_world_state& world, const world_entity_armies::single& start_state);
 void world_destroy_army(match_world_state& world, entity_guid army);
 
-// A settlement that joined a campaign raises an army for it: campaign_army_garrison_percent of each type of its garrison, paid like the raise command (gold and goods),
-// raised at the settlement, with a JOIN_CAMPAIGN order it follows once raised. It becomes the settlement's campaign_army (kept after the campaign ends), a campaign army (not a retinue).
-// If the settlement still has its campaign_army alive, that army is sent to the campaign instead (JOIN_CAMPAIGN order, nothing raised or paid).
-// Does nothing if the settlement is besieged or the kept army's owner is not the settlement's; otherwise, when raising, if the garrison gives no men, the treasury cannot pay, or there is no army slot left.
-// Returns whether the settlement now has an army on its way to the campaign.
-bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_index, entity_guid campaign);
-
-// The troops such an army would be raised with.
-army_troop_count world_settlement_campaign_army_targets(const world_entity_settlements& settlements, ui16 settlement_index);
-
 // Allocates the armies' property arrays from the given memory. Returns false if there isn't enough.
 bool world_alloc_armies(match_world_state& world, mem_arena& memory, ui32 count);
 

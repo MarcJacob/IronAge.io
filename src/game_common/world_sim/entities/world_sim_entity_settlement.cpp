@@ -216,6 +216,70 @@ bool world_is_valid_settlement_location(const match_world_state& world, world_lo
 	return true;
 }
 
+// Targets: a share of each type of the garrison.
+army_troop_count world_settlement_campaign_army_targets(const world_entity_settlements& settlements, ui16 settlement_index)
+{
+	army_troop_count targets = {};
+	for (ui8 troopType = 0; troopType < (ui8)TROOP_TYPE::TROOP_TYPE_COUNT; troopType++)
+	{
+		targets.count[troopType] = (ui16)((ui32)settlements.garrison[settlement_index].count[troopType] * GAME_PARAMETERS.campaign_army_garrison_percent / 100);
+	}
+	return targets;
+}
+
+bool world_settlement_join_campaign(match_world_state& world, ui16 settlement_index, entity_guid campaign)
+{
+	world_entity_settlements& settlements = world.entities->settlements;
+	world_entity_armies& armies = world.entities->armies;
+
+	if (settlement_is_besieged(world, settlement_index)) return false;
+
+	// The settlement kept the army of its previous campaign (campaign_army): it is sent to the new one with what it has (no cost, no new men).
+	if (world_entity_is_valid(world, settlements.campaign_army[settlement_index]))
+	{
+		ui16 armyIndex = settlements.campaign_army[settlement_index].get_index();
+		if (armies.owner[armyIndex] != settlements.owner[settlement_index]) return false; // Kept from before the settlement changed hands: not ours to send.
+		armies.order[armyIndex] = {};
+		armies.order[armyIndex].type = ARMY_ORDER_JOIN_CAMPAIGN;
+		armies.order[armyIndex].target = campaign;
+		armies.order[armyIndex].location = armies.location[armyIndex];
+		return true;
+	}
+
+	if (armies.active_count >= armies.max_count) return false;
+
+	army_troop_count targets = world_settlement_campaign_army_targets(settlements, settlement_index);
+	if (army_total_manpower(targets) == 0) return false;
+
+	// Same terms as the raise command: the army starts with army_raising_cost of gold from the treasury, and as much of it in goods from the market (the settlement keeps a day of its own).
+	world_player_state& player = world.player_states[settlements.owner[settlement_index]];
+	ui32 cost = army_raising_cost(targets);
+	if (cost > player.treasury) return false;
+
+	ui32 goodsKept = settlements.economy[settlement_index].consumption;
+	settlement_trading& trade = settlements.trade[settlement_index];
+
+	world_entity_armies::single newArmy = {};
+	newArmy.owner = settlements.owner[settlement_index];
+	newArmy.location = settlements.location[settlement_index];
+	newArmy.raised_troops = targets;
+	newArmy.home_settlement = settlements.guids[settlement_index];
+	newArmy.raising = 1; // is_retinue stays 0: a campaign army, controlled by the campaign logic only.
+	newArmy.gold = cost;
+	newArmy.supplies = ia_min(cost, trade.market_goods > goodsKept ? trade.market_goods - goodsKept : 0);
+
+	// The order it follows once it is raised (raising armies ignore their order): walk to the campaign.
+	newArmy.order.type = ARMY_ORDER_JOIN_CAMPAIGN;
+	newArmy.order.target = campaign;
+	newArmy.order.location = newArmy.location;
+
+	settlements.campaign_army[settlement_index] = world_spawn_army(world, newArmy);
+	player.treasury -= cost;
+	player.expenses += cost;
+	trade.market_goods -= newArmy.supplies;
+	return true;
+}
+
 
 // SETTLEMENT BUILDING TYPES
 // Type-specific event functions (see SETTLEMENT_BUILDING_TABLE in world_entities.h).
