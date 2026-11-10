@@ -15,50 +15,30 @@ Detailed design / progress for in-flight, coherent task groups lives in
 index. Add an entry here when a unit starts, flag it `[DONE]` at the end of the line
 when it finishes.
 
-- `work_units/platform_list_resource_files_2026-09-20.md` [DONE]
 - `work_units/web_server_file_auto_reload_2026-09-20.md`
 - `work_units/server_dev_mode_2026-10-03.md`
-- `work_units/build_system_revamp_2026-10-03.md` [DONE]
 - `work_units/dev_iteration_loop_2026-10-03.md`
-- `work_units/string_pass_2026-10-03.md` [DONE]
-- `work_units/blit_canvas_2026-09-26.md` [DONE]
-- `work_units/village_influence_2026-10-03.md` [DONE]
-- `work_units/game_server_match_lifecycle_2026-10-03.md` [DONE]
 - `work_units/lobby_system_2026-09-27.md`
-- `work_units/start_location_choice_2026-10-03.md` [DONE]
-- `work_units/road_construction_2026-10-03.md` [DONE]
 - `work_units/straight_line_movement_2026-10-15.md`
 - `work_units/road_system_2026-10-21.md`
-- `work_units/command_wiring_simplification_2026-10-18.md` [DONE]
-- `work_units/world_sim_reorganization_2026-10-18.md` [DONE]
 - `work_units/world_sim_simplification_2026-10-19.md`
-- `work_units/basic_world_economy_2026-10-18.md` [DONE]
-- `work_units/trade_caravans_2026-10-22.md` [DONE]
-- `work_units/economy_revamp_2026-10-22.md` [DONE]
 - `work_units/alpha_troops_recruitment_2026-10-18.md`
 - `work_units/alpha_war_extensions_2026-10-18.md`
 - `work_units/alpha_diplomacy_chat_2026-10-18.md`
 - `work_units/alpha_vassalization_2026-10-18.md`
 - `work_units/alpha_victory_score_2026-10-18.md`
-- `work_units/placement_pick_validity_2026-10-13.md` [DONE]
-- `work_units/public_hosting_2026-10-15.md` [DONE]
-- `work_units/basic_army_battle_system_2026-10-15.md` [DONE]
-- `work_units/map_gen_2026-10-22.md` [DONE]
 - `work_units/match_ai_2026-10-22.md`
-- `work_units/entity_player_colors_2026-10-23.md` [DONE]
 - `work_units/army_supplies_2026-10-23.md`
-- `work_units/web_ui_static_modules_2026-10-23.md` [DONE]
 - `work_units/trade_market_goods_2026-10-24.md`
-- `work_units/server_test_mode_2026-10-25.md` [DONE]
 - `work_units/path_commitment_rewrite_2026-10-22.md`
 - `work_units/territory_economy_redesign_2026-10-27.md`
 - `work_units/trade_network_redesign_2026-10-28.md`
-- `work_units/ai_road_network_2026-10-28.md` [DONE]
 - `work_units/trade_ships_2026-10-29.md`
 - `work_units/entity_zoom_visibility_2026-10-29.md`
 - `work_units/territory_rendering_2026-11-06.md`
 - `work_units/army_supply_redesign_2026-11-07.md`
 - `work_units/army_autonomy_2026-11-08.md`
+- `work_units/campaign_objectives_2026-11-09.md`
 
 Finished units are moved to `management/archive/` after a time.
 

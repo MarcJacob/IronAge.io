@@ -11,7 +11,7 @@ The shape of fighting over the course of the game is this:
 
 # DESIGN CONCEPTS:
 
-#Projection: The military system seeks to make it difficult to send armies far away from owned / friendly territory past a certain scale. Small armies can live off the land or through raiding, while larger armies cannot only sustain themselves that way and must resupply through other means, usually by spending some of their carried gold (or a lot of raiding).
+#Projection: The military system seeks to make it difficult to send armies far away from owned / friendly territory past a certain scale. Small armies can live off the land or through raiding, while larger armies cannot only sustain themselves that way and must resupply through other means, usually through campaign supply caravans (or a lot of raiding).
 
 #Decentralization: While it is possible to control armies directly, doing so is made intentionally tedious and encourages the use of some powerful mechanics like the Campaign system. Furthermore, groups of players are advantaged against individual players if both are of equal overall power, through hard limitations like one player = one Campaign, and one settlement = one campaign participation.
 
@@ -206,10 +206,16 @@ Armies require a certain amount of goods to maintain themselves. They get goods 
 
 Armies never hold more gold or supplies than their carrying capacity: anything above it is dropped (into the loot pool when engaged).
 
-In order to get goods, armies have two options: directly buying from the settlement they're stationed in (in which case the treasury pays into the settlement directly, turning into trade volume for it), or through caravan deliveries.
+Armies never spend their carried gold on supplies (carried gold is loot only). All supply costs are paid by the owner's treasury.
+
+In order to get goods, armies have two options: directly buying from the settlement they're stationed in (any army, own-owner settlement, exact tile), or through caravan deliveries (campaign members only). Either way the treasury payment is a pure gold sink: no income to any settlement owner and no trade tax, the settlement only gains trade volume (size and profit).
 
 ## Supply caravans
 
-Armies, under some circumstances like campaigns, are recognized as trading targets by settlements, allowing caravans to be dispatched to deliver goods.
+Caravan resupply is a campaign feature: an army is recognized as a trading target by settlements only if it is a campaign member (or is joining one). The campaign coordinates the supply line. Armies outside a campaign that are away from settlements get no supply.
 
-Delivering goods to an army is an altermative mean for a settlement to increase its trade volume, with a slightly different profit margin formula which does not reward distance. This means that armies tend to be supplied by nearby settlements. When a caravan departs to deliver supplies, the supplies are paid for immediately from the army owner's treasury. This allows armies to be resupplied through a naturally occuring supply lines system, which can of course be cut by enterprising opposing players and well-positioned retinues. It is also why it is a poor idea to bypass enemy settlements on the way to conquering the main target, as they may harbor enemy retinues that will prevent supply caravans from reaching the armies.
+Delivering goods to an army is an altermative mean for a settlement to increase its trade volume, with a slightly different profit margin formula which does not reward distance. This means that armies tend to be supplied by nearby settlements. When a caravan departs to deliver supplies, the supplies are paid for immediately from the army owner's treasury. Settlements send exactly enough caravans for what the army needs, counting caravans already in flight; goods in flight count at 50% in the origin's scarcity. A caravan that loses its army target goes home (it never retargets to another army), and a delivery consumes the caravan.
+
+## Out of supplies
+
+An army with no supplies loses troops to desertion each day, per troop type, in proportion to how unfunded its consumption is. The full rate (10% of the army's maximum troops of that type per day) applies only at zero supplies. This allows armies to be resupplied through a naturally occuring supply lines system, which can of course be cut by enterprising opposing players and well-positioned retinues. It is also why it is a poor idea to bypass enemy settlements on the way to conquering the main target, as they may harbor enemy retinues that will prevent supply caravans from reaching the armies.
