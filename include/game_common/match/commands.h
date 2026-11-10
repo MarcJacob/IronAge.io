@@ -57,7 +57,7 @@ enum class MATCH_COMMAND_TYPE : ui8
 
 	CAMPAIGN_JOIN, // An own settlement or army, not in a campaign yet, joins a campaign. With no campaign given, a settlement founds a new one.
 
-	SET_CAMPAIGN_OBJECTIVE, // Gives an own campaign its objective (CAMPAIGN_OBJECTIVE_TYPE) with its target.
+	SET_CAMPAIGN_OBJECTIVE, // Gives an own campaign its objective (CAMPAIGN_GOAL_TYPE) with its target.
 
 	CAMPAIGN_BEGIN, // Has an own, gathering campaign with an objective march now, without waiting for the armies still joining it.
 
@@ -418,7 +418,7 @@ void command_campaign_join_apply(match_world_state& world, match_player_id playe
 struct command_data_set_campaign_objective
 {
 	entity_guid campaign; // An own campaign.
-	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
+	ui8 objective_type; // CAMPAIGN_GOAL_TYPE.
 	entity_guid target; // CONQUER_SETTLEMENT: a hostile or neutral settlement.
 };
 

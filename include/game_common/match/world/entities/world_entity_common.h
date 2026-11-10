@@ -21,6 +21,7 @@ enum ENTITY_TYPE : ui8
 	ENGAGEMENT,
     CARAVAN,
 	CAMPAIGN,
+	CAMPAIGN_OBJECTIVE, // Objective on the campaigns' shared board. Sim only: no query / render / GDO.
 	// ...
 };
 

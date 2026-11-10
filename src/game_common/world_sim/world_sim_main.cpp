@@ -17,6 +17,7 @@
 #include "entities/world_sim_entity_worker.cpp"
 #include "entities/world_sim_entity_caravan.cpp"
 #include "entities/world_sim_entity_campaign.cpp"
+#include "entities/world_sim_entity_campaign_objective.cpp"
 
 // Systems.
 #include "systems/world_system_settlement_territory.cpp"
@@ -24,6 +25,7 @@
 #include "systems/world_system_combat.cpp"
 #include "systems/world_system_army_economy.cpp"
 #include "systems/world_system_army_standing_orders.cpp"
+#include "systems/world_system_campaign_objectives.cpp"
 #include "systems/world_system_campaigns.cpp"
 #include "systems/world_system_worker_construction.cpp"
 #include "systems/world_system_trade.cpp"
@@ -56,6 +58,9 @@ bool world_entity_is_valid(const match_world_state& world, entity_guid entity)
 	case ENTITY_TYPE::CAMPAIGN:
 		container = &world.entities->campaigns;
 		break;
+	case ENTITY_TYPE::CAMPAIGN_OBJECTIVE:
+		container = &world.entities->campaign_objectives;
+		break;
     case ENTITY_TYPE::CARAVAN:
         container = &world.entities->caravans;
 		break;
@@ -84,6 +89,8 @@ world_location world_entity_get_location(const match_world_state& world, entity_
 		return world.entities->engagements.location[entity.get_index()];
 	case ENTITY_TYPE::CAMPAIGN:
 		return world.entities->campaigns.location[entity.get_index()];
+	case ENTITY_TYPE::CAMPAIGN_OBJECTIVE:
+		return world.entities->campaign_objectives.location[entity.get_index()];
     case ENTITY_TYPE::CARAVAN:
         return world.entities->caravans.location[entity.get_index()];
 	default:
@@ -225,6 +232,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		if (!world_alloc_engagements(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
         if (!world_alloc_caravans(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 		if (!world_alloc_campaigns(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
+		if (!world_alloc_campaign_objectives(*newWorld, memory, micro_entity_count)) goto WORLD_INIT_FAIL;
 	}
 
     if (start_params.procedural_map)
@@ -292,6 +300,7 @@ void world_state_tick(match_world_state& world)
     world_system_army_orders(world); // Before movement: sets each army's destination from its engagement or standing order, and resolves arrivals.
     world_system_entity_movement_decision(world);
     world_system_entity_movement(world);
+    world_system_campaign_objectives(world); // Before the campaigns: they rank what is on the board.
     world_system_campaigns(world); // After movement: campaigns take over the armies that reached them and follow their armies' new positions.
     world_system_caravan_trade(world); // After movement: caravans that just arrived trade this tick.
 

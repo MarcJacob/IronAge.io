@@ -104,7 +104,7 @@ static void ai_tactics_campaign(ai_context& ctx)
 
 	if (hasCampaign)
 	{
-		bool hasObjective = campaign.objective_type != CAMPAIGN_OBJECTIVE_NONE;
+		bool hasObjective = campaign.objective_type != CAMPAIGN_GOAL_NONE;
 		if ((!hasObjective && (expanding || !hasTarget)) || (hasObjective && ai_campaign_is_stuck(ctx, campaign)))
 		{
 			auto* disband = ai_push<command_data_campaign_disband>(ctx, MATCH_COMMAND_TYPE::CAMPAIGN_DISBAND);
@@ -140,12 +140,12 @@ static void ai_tactics_campaign(ai_context& ctx)
 	}
 
 	ui32 need = ai_attack_need(target);
-	if (campaign.objective_type == CAMPAIGN_OBJECTIVE_NONE)
+	if (campaign.objective_type == CAMPAIGN_GOAL_NONE)
 	{
 		auto* objective = ai_push<command_data_set_campaign_objective>(ctx, MATCH_COMMAND_TYPE::SET_CAMPAIGN_OBJECTIVE);
 		if (objective == nullptr) return;
 		objective->campaign = campaign.guid;
-		objective->objective_type = CAMPAIGN_OBJECTIVE_CONQUER_SETTLEMENT;
+		objective->objective_type = CAMPAIGN_GOAL_CONQUER_SETTLEMENT;
 		objective->target = target.guid;
 	}
 	else if (campaign.state == CAMPAIGN_STATE_GATHERING && campaign.troops >= need)

@@ -71,6 +71,45 @@ struct game_trade_parameters
     ui16 good_val_markup_increase_dist = 1024;
 };
 
+// Campaign decision making: objectives on the board, and the scores campaigns rank them with (world_system_campaign_objectives.cpp). Placeholder values, tunable.
+// Scores are integers. All fields are 4 bytes.
+struct campaign_ai_parameters
+{
+    ui32 scan_radius_tiles = 100; // Campaigns generate, and consider, objectives within this many tiles of them.
+    ui32 campaign_decision_period_ticks = 60; // A campaign ranks its objectives again every this many ticks. 0 is read as 1.
+
+    // Spawning and despawning of each type, every this many ticks (0 is read as 1). An objective despawns once no campaign is committed to it and nothing renewed it
+    // (a campaign having it in its scan radius, at a spawn run) for idle_checks despawn runs in a row. Keep the despawn period at least the spawn period.
+    ui32 conquer_spawn_period_ticks = 60;
+    ui32 conquer_despawn_period_ticks = 60;
+    ui32 conquer_despawn_idle_checks = 5;
+    ui32 travel_spawn_period_ticks = 60;
+    ui32 travel_despawn_period_ticks = 60;
+    ui32 travel_despawn_idle_checks = 5;
+
+    ui32 stickiness = 200; // Added to the score of the objective a campaign is already on.
+
+    // Trips (any objective that needs to be walked to, within the scan radius). Time: the cost of the path armies would take, at the army travel speed; the penalty per day applies to all of it,
+    // and the low supply one per day of the trip that the supplies of all the member armies together do not cover. A place with no path is not an option.
+    ui32 time_penalty_per_day = 50;
+    ui32 low_supply_penalty_per_day = 300;
+
+    // WAIT: base, plus per army still on its way to join, plus per day the supplies are short of the comfort value.
+    ui32 wait_base = 100;
+    ui32 wait_per_joiner = 500;
+    ui32 wait_supply_comfort_days = 5;
+    ui32 wait_low_supply_per_day = 100;
+
+    // CONQUER_SETTLEMENT: base, minus the trip penalties, minus per % of the campaign's men that the settlement's garrison amounts to,
+    // minus per other campaign already pursuing the same objective.
+    ui32 conquer_base = 1000;
+    ui32 conquer_defender_ratio_penalty = 2;
+    ui32 conquer_per_other_campaign_penalty = 200;
+
+    // TRAVEL_TO_SETTLEMENT: per tile the settlement brings the campaign closer to the place of its goal (a campaign without one never travels), minus the trip penalties.
+    ui32 travel_progress_weight = 15;
+};
+
 // Per mille = thousandths (20 = 2%). Ratios are per mille too (1000 = 100%).
 // All fields are 4 bytes on purpose: no padding, and the GDO below reads them as UI32 / I32.
 struct game_parameters
@@ -215,6 +254,9 @@ struct game_parameters
 
     // TRADE
     game_trade_parameters trade;
+
+    // CAMPAIGN AI
+    campaign_ai_parameters campaign_ai;
 };
 
 static constexpr game_parameters GAME_PARAMETERS = {};

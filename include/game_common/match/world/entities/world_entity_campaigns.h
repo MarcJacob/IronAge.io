@@ -7,28 +7,29 @@
 #include "world_entity_common.h"
 
 // Where a campaign stands. Zero = WAITING, the state of a new campaign. Once it has armies it ends when none is close to it, whatever the state.
+// Derived from the campaign's decision (current_objective) by world_system_campaigns, for display and for readers that only care about the broad picture.
 enum CAMPAIGN_STATE : ui8
 {
 	CAMPAIGN_STATE_WAITING = 0, // Founded on a settlement: stays on it, waiting for its first army to join. Does not end while it has no army.
-	CAMPAIGN_STATE_GATHERING, // Has armies, which stand where they are. Waits for every joining army to arrive, or for the begin command, then marches.
-	CAMPAIGN_STATE_MARCHING, // Moves towards the objective's location, its armies spread around waypoints ahead of it.
-	CAMPAIGN_STATE_ON_OBJECTIVE, // At the objective: the objective's own logic runs (e.g. assaulting a settlement) until it is accomplished.
+	CAMPAIGN_STATE_GATHERING, // Has armies, and its decision is WAIT (no objective): they stand where they are, gathering men and supplies.
+	CAMPAIGN_STATE_MARCHING, // Pursuing an objective, moving towards its location, its armies accompanying a guide army.
+	CAMPAIGN_STATE_ON_OBJECTIVE, // At the objective: the objective's own logic runs (e.g. assaulting a settlement) until the campaign decides on something else.
 };
 
-// What a campaign is trying to achieve. Zero = none, a functional default: the campaign then does nothing but gather. The logic of each type is in world_system_campaigns.cpp.
+// What a campaign was assigned (to become its goals; unused by the campaigns' choice of objective, see world_entity_campaign_objectives.h). Zero = none, a functional default.
 // FUTURE: objectives should become more abstract (concern a whole area), and a campaign should have several, ending when all are accomplished.
-enum CAMPAIGN_OBJECTIVE_TYPE : ui8
+enum CAMPAIGN_GOAL_TYPE : ui8
 {
-	CAMPAIGN_OBJECTIVE_NONE = 0,
-	CAMPAIGN_OBJECTIVE_CONQUER_SETTLEMENT, // target = the settlement to conquer: accomplished once it is no longer hostile or neutral to the campaign's owner.
-	CAMPAIGN_OBJECTIVE_TYPE_COUNT,
+	CAMPAIGN_GOAL_NONE = 0,
+	CAMPAIGN_GOAL_CONQUER_SETTLEMENT, // target = the settlement to conquer: accomplished once it is no longer hostile or neutral to the campaign's owner.
+	CAMPAIGN_GOAL_TYPE_COUNT,
 };
 
-// A campaign's objective: its type and a small fixed data buffer interpreted by the type (not every field is used by every type), like army_order.
+// A campaign's assignment: its type and a small fixed data buffer interpreted by the type (not every field is used by every type), like army_order.
 // FUTURE: several targets (up to ~32) instead of one.
-struct campaign_objective
+struct campaign_goal
 {
-	CAMPAIGN_OBJECTIVE_TYPE type;
+	CAMPAIGN_GOAL_TYPE type;
 	ui8 state; // Sub-state of the type, interpreted by it. Zero when the objective is given.
 
 	ui16 radius; // Tiles, for objectives working on an area.
@@ -37,7 +38,7 @@ struct campaign_objective
 
 	ui32 reserved;
 };
-static_assert(sizeof(campaign_objective) == 16, "campaign_objective size changed.");
+static_assert(sizeof(campaign_goal) == 16, "campaign_goal size changed.");
 
 // Discriminated union of state required by the campaign over its states.
 union campaign_state_data
@@ -72,7 +73,9 @@ struct world_entity_campaigns : public world_entity_container
 
 	ui32* troop_count; // Men in all the armies of the campaign (recomputed every tick).
                        
-	campaign_objective* objective; // Current objective of the campaign.
+	campaign_goal* objective; // What the campaign was assigned (named objective for now: the GDO / client read it by that name).
+
+	entity_guid* current_objective; // The campaign objective (world_entity_campaign_objectives.h) the campaign is pursuing, INVALID_ENTITY_GUID = WAIT. Not exposed to the GDO.
 
 	struct view;
 
@@ -84,7 +87,8 @@ struct world_entity_campaigns : public world_entity_container
 		CAMPAIGN_STATE state;
         campaign_state_data state_data;
 		ui32 troop_count;
-		campaign_objective objective;
+		campaign_goal objective;
+		entity_guid current_objective;
 
 		ui8 join_radius; // Tiles. Not stored in the world: filled by world_entity_query_campaign (campaign_join_radius) for viewers.
 
@@ -100,7 +104,8 @@ struct world_entity_campaigns : public world_entity_container
 		CAMPAIGN_STATE& state;
         campaign_state_data& state_data;
 		ui32& troop_count;
-		campaign_objective& objective;
+		campaign_goal& objective;
+		entity_guid& current_objective;
 
 		void copy_from(const single& source)
 		{
@@ -110,6 +115,7 @@ struct world_entity_campaigns : public world_entity_container
             state_data = source.state_data;
 			troop_count = source.troop_count;
 			objective = source.objective;
+			current_objective = source.current_objective;
 		}
 
 		view(world_entity_campaigns& collection, ui16 index)
@@ -119,6 +125,7 @@ struct world_entity_campaigns : public world_entity_container
             , state_data(collection.state_data[index])
 			, troop_count(collection.troop_count[index])
 			, objective(collection.objective[index])
+			, current_objective(collection.current_objective[index])
 		{}
 	};
 };
@@ -130,6 +137,7 @@ inline void world_entity_campaigns::single::copy_from(const world_entity_campaig
 	state = source.state;
 	troop_count = source.troop_count;
 	objective = source.objective;
+	current_objective = source.current_objective;
 	join_radius = 0;
 }
 
@@ -140,6 +148,7 @@ inline void world_entity_campaigns::single::copy_from(const world_entity_campaig
 	state = collection.state[index];
 	troop_count = collection.troop_count[index];
 	objective = collection.objective[index];
+	current_objective = collection.current_objective[index];
 	join_radius = 0;
 }
 

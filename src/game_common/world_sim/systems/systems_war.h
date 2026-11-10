@@ -28,4 +28,26 @@ void world_system_engagements(match_world_state& world);
 // Runs the full state machine of campaign entities.
 void world_system_campaigns(match_world_state& world);
 
+// CAMPAIGN OBJECTIVES (world_system_campaign_objectives.cpp)
+
+// Every tick: spawns and despawns the objectives of each type on that type's own period (see campaign_ai_parameters). Runs before world_system_campaigns.
+void world_system_campaign_objectives(match_world_state& world);
+
+// What a campaign decided to do: pursue an objective, or WAIT (objective INVALID_ENTITY_GUID). Higher score is better.
+struct campaign_decision
+{
+	entity_guid objective;
+	i32 score;
+};
+
+// The best decision for the campaign, among WAIT and every objective that is valid for it. Deterministic (ties go to the lowest slot).
+// current_objective: what the campaign is pursuing now (gets the stickiness bonus, and is counted in its committed number without lowering its own score).
+campaign_decision world_campaign_rank_objectives(match_world_state& world, entity_guid campaign, entity_guid current_objective);
+
+// Tiles from the objective's location within which a campaign runs its logic instead of travelling to it.
+ui32 campaign_objective_range_tiles(const match_world_state& world, entity_guid objective);
+
+// Runs the logic of the objective's type for the campaign (called every tick while the campaign is within range of it).
+void campaign_objective_run_logic(match_world_state& world, entity_guid campaign, entity_guid objective);
+
 #endif // WORLD_SYSTEMS_WAR_INCLUDED

@@ -1,10 +1,14 @@
 // Campaign decision-making: each tick, campaigns take over the armies joining them, follow the centroid of their member armies, end when none is close,
-// and work towards their objective (gather, march, work the objective, end once it is accomplished).
-// Integer math only, campaigns and armies in slot order. While marching, member armies accompany a guide army that walks to the objective.
+// and act on their decision: pursue an objective of the board (travel to it, then run its logic) or WAIT (armies stand where they are, gathering men and supplies).
+// The decision is the best-ranked option (world_campaign_rank_objectives), chosen again every campaign_decision_period_ticks. A campaign never ends by accomplishing something:
+// it ends when disbanded or when it has no members.
+// Integer math only, campaigns and armies in slot order. While travelling, member armies accompany a guide army that walks to the objective.
+// The campaign's state is derived from its decision, for display: GATHERING = WAIT, MARCHING = travelling to the objective, ON_OBJECTIVE = running its logic.
 
 #include "game_common/match/game_parameters.h"
 #include "game_common/match/world/entities/world_entity_armies.h"
 #include "game_common/match/world/entities/world_entity_campaigns.h"
+#include "game_common/match/world/entities/world_entity_campaign_objectives.h"
 #include "game_common/match/world/entities/world_entity_common.h"
 #include "game_common/match/world/world_state.h"
 
@@ -16,75 +20,6 @@
 #include "../entities/world_sim_entity_engagement.h"
 
 #include "../world_movement.h"
-
-// Defines a campaign objective's decision making policy while the campaign AI is actively executing it.
-struct campaign_objective_def
-{
-	const char* name;
-
-	// Where the campaign has to go. False if there is nowhere (e.g. its target is gone).
-	bool (*get_target_loc)(const match_world_state& world, const campaign_objective& objective, world_location& out_location);
-
-	// Whether the objective is accomplished. The campaign then ends.
-	bool (*get_is_accomplished)(const match_world_state& world, match_player_id owner, const campaign_objective& objective);
-
-	// Runs every tick while the campaign is ON_OBJECTIVE.
-	void (*on_objective_logic)(match_world_state& world, entity_guid campaign);
-};
-
-// CONQUER_SETTLEMENT
-
-// The target is a settlement that is still hostile or neutral to the owner.
-static bool conquer_target_is_unconquered(const match_world_state& world, match_player_id owner, const campaign_objective& objective)
-{
-	return world_entity_is_valid(world, objective.target) && objective.target.get_type() == ENTITY_TYPE::SETTLEMENT
-		&& (world_entity_is_hostile(world, objective.target, owner) || world_entity_is_neutral(world, objective.target, owner));
-}
-
-static bool conquer_location(const match_world_state& world, const campaign_objective& objective, world_location& out_location)
-{
-	if (!world_entity_is_valid(world, objective.target) || objective.target.get_type() != ENTITY_TYPE::SETTLEMENT) return false;
-	out_location = world.entities->settlements.location[objective.target.get_index()];
-	return true;
-}
-
-static bool conquer_accomplished(const match_world_state& world, match_player_id owner, const campaign_objective& objective)
-{
-	return !conquer_target_is_unconquered(world, owner, objective);
-}
-
-// Every member army attacks the settlement (the siege logic of the standing orders does the rest). Once the settlement is under an idle siege that the campaign's owner commands
-// and member armies take part in, the campaign begins the assault when world_siege_assault_advisable says so (the same function as the BEGIN_ASSAULT command).
-// It cannot repeat: the siege leaves SIEGE_IDLE at once, and only returns to it after an outside battle (then the rule is evaluated again, once more).
-static void conquer_on_objective(match_world_state& world, entity_guid campaign)
-{
-	world_entity_armies& armies = world.entities->armies;
-	entity_guid target = world.entities->campaigns.objective[campaign.get_index()].target;
-	bool besiegedByMember = false;
-
-	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
-	{
-		if (!(armies.campaign[armyIndex] == campaign)) continue;
-		if (!(armies.order[armyIndex].type == ARMY_ORDER_ATTACK && armies.order[armyIndex].target == target)) army_order_attack(armies, (ui16)armyIndex, target);
-
-		entity_guid siege = target.get_type() == ENTITY_TYPE::SETTLEMENT ? world.entities->settlements.siege[target.get_index()] : INVALID_ENTITY_GUID;
-		if (siege.is_valid() && armies.engagement[armyIndex] == siege && armies.engagement_side[armyIndex] == ENGAGEMENT_SIDE::ATTACKER) besiegedByMember = true;
-	}
-
-	if (!besiegedByMember) return;
-
-	entity_guid siege = world.entities->settlements.siege[target.get_index()];
-	if (world.entities->engagements.attacker_commander[siege.get_index()] != world.entities->campaigns.owner[campaign.get_index()]) return;
-	if (world_siege_assault_advisable(world, siege)) world_engagement_siege_begin_assault(world, siege);
-}
-
-// OBJECTIVES
-// One row per CAMPAIGN_OBJECTIVE_TYPE, in order. NONE has no logic: the campaign only gathers.
-static const campaign_objective_def CAMPAIGN_OBJECTIVE_DEFS[CAMPAIGN_OBJECTIVE_TYPE_COUNT] =
-{
-	{ "NONE", nullptr, nullptr, nullptr },
-	{ "CONQUER_SETTLEMENT", conquer_location, conquer_accomplished, conquer_on_objective },
-};
 
 // HELPERS
 
@@ -152,38 +87,57 @@ static bool campaign_has_joiners(const match_world_state& world, entity_guid cam
 	return false;
 }
 
-// MARCHING: the guide army walks to the objective and every other member army accompanies it. Close enough to the objective, the campaign is ON_OBJECTIVE.
+// The campaign now pursues the objective (INVALID = WAIT): the old objective has one campaign less, the new one one more.
+static void campaign_set_current_objective(match_world_state& world, ui16 campaign_index, entity_guid objective)
+{
+	world_entity_campaigns& campaigns = world.entities->campaigns;
+	world_entity_campaign_objectives& objectives = world.entities->campaign_objectives;
+
+	entity_guid old = campaigns.current_objective[campaign_index];
+	if (world_entity_is_valid(world, old) && objectives.committed[old.get_index()] > 0) objectives.committed[old.get_index()]--;
+
+	campaigns.current_objective[campaign_index] = objective;
+	if (world_entity_is_valid(world, objective)) objectives.committed[objective.get_index()]++;
+
+	campaigns.state_data[campaign_index] = {}; // The guide army is chosen again.
+}
+
+// WAIT: every member army stands where it is.
+static void campaign_stand_still(match_world_state& world, entity_guid campaign)
+{
+	world_entity_armies& armies = world.entities->armies;
+	for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+	{
+		if (!(armies.campaign[armyIndex] == campaign)) continue;
+
+		army_order_station(armies, (ui16)armyIndex, armies.location[armyIndex], true);
+		world_movement_stop(armies.movement[armyIndex], armies.location[armyIndex]);
+	}
+}
+
+// TRAVELLING: the guide army walks to the objective and every other member army accompanies it.
 static void campaign_march(match_world_state& world, ui16 campaign_index, entity_guid campaign, world_location destination)
 {
 	world_entity_campaigns& campaigns = world.entities->campaigns;
 	world_entity_armies& armies = world.entities->armies;
-	world_location location = campaigns.location[campaign_index];
 
-    ASSERT(campaigns.state[campaign_index] == CAMPAIGN_STATE_MARCHING);
-
-	if (campaign_within_tiles(location, destination, GAME_PARAMETERS.campaign_assault_distance_tiles))
-	{
-		campaigns.state[campaign_index] = CAMPAIGN_STATE_ON_OBJECTIVE;
-		return;
-	}
-
-    // Set all armies to accompany the guide army.
+	// Set all armies to accompany the guide army.
 	for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
 		if (!(armies.campaign[armyIndex] == campaign))
-            continue;
-        if (armies.order[armyIndex].type == ARMY_ORDER_ACCOMPANY && armies.order[armyIndex].target == campaigns.state_data[campaign_index].marching.guide_army)
-            continue;
+			continue;
+		if (armies.order[armyIndex].type == ARMY_ORDER_ACCOMPANY && armies.order[armyIndex].target == campaigns.state_data[campaign_index].marching.guide_army)
+			continue;
 
-        if (armies.guids[armyIndex]._value != campaigns.state_data[campaign_index].marching.guide_army._value)
-        {
-		    army_order_accompany(armies, armyIndex, campaigns.state_data[campaign_index].marching.guide_army);
-        }
-        else
-        {
-            // Guide army goes to the destination.
-            army_order_station(armies, armyIndex, destination, true);
-        }
+		if (armies.guids[armyIndex]._value != campaigns.state_data[campaign_index].marching.guide_army._value)
+		{
+			army_order_accompany(armies, armyIndex, campaigns.state_data[campaign_index].marching.guide_army);
+		}
+		else
+		{
+			// Guide army goes to the destination.
+			army_order_station(armies, armyIndex, destination, true);
+		}
 	}
 }
 
@@ -193,6 +147,8 @@ void world_system_campaigns(match_world_state& world)
 {
 	world_entity_campaigns& campaigns = world.entities->campaigns;
 	world_entity_armies& armies = world.entities->armies;
+
+	ui64 decisionPeriod = GAME_PARAMETERS.campaign_ai.campaign_decision_period_ticks > 0 ? GAME_PARAMETERS.campaign_ai.campaign_decision_period_ticks : 1;
 
 	for (ui32 campaignIndex = 0; campaignIndex < campaigns.max_count; campaignIndex++)
 	{
@@ -210,14 +166,14 @@ void world_system_campaigns(match_world_state& world)
 		ui32 members = 0;
 		ui32 inRange = 0;
 
-        // @TEMP(Marc): Cache first member army to be used as guide army when marching.
-        entity_guid firstMember {};
+		// @TEMP(Marc): Cache first member army to be used as guide army when marching.
+		entity_guid firstMember {};
 
 		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 		{
 			if (!(armies.campaign[armyIndex] == campaign)) continue;
 
-            if (firstMember._value == 0) firstMember = armies.guids[armyIndex];
+			if (firstMember._value == 0) firstMember = armies.guids[armyIndex];
 
 			members++;
 			troops += army_total_manpower(armies.composition[armyIndex]);
@@ -240,65 +196,54 @@ void world_system_campaigns(match_world_state& world)
 		// The campaign has members: its settlements replace the armies they lost.
 		campaign_replace_lost_armies(world, campaign);
 
-		if (campaigns.state[campaignIndex] == CAMPAIGN_STATE_WAITING) campaigns.state[campaignIndex] = CAMPAIGN_STATE_GATHERING;
 		campaigns.troop_count[campaignIndex] = (ui32)ia_min(troops, (ui64)0xFFFFFFFF);
 
 		world_location& location = campaigns.location[campaignIndex];
 		location.x = sumX / inRange;
 		location.y = sumY / inRange;
 
-		// Objective. Without one (or an unknown one) the campaign just gathers.
-		const campaign_objective& objective = campaigns.objective[campaignIndex];
-		const campaign_objective_def* objectiveDef = objective.type < CAMPAIGN_OBJECTIVE_TYPE_COUNT ? &CAMPAIGN_OBJECTIVE_DEFS[objective.type] : nullptr;
+		// Decision. An objective that is gone (despawned, its counter with it) is forgotten at once and a new decision is made; otherwise on this campaign's turn of the period.
+		bool objectiveChanged = false;
+		bool objectiveLost = campaigns.current_objective[campaignIndex].is_valid() && !world_entity_is_valid(world, campaigns.current_objective[campaignIndex]);
+		if (objectiveLost) campaigns.current_objective[campaignIndex] = INVALID_ENTITY_GUID;
 
-		if (objectiveDef == nullptr || objectiveDef->get_target_loc == nullptr) continue;
-
-		if (objectiveDef->get_is_accomplished(world, campaigns.owner[campaignIndex], objective))
+		if (objectiveLost || (world.age + campaignIndex) % decisionPeriod == 0)
 		{
-			world_campaign_end_and_send_home(world, campaign);
+			campaign_decision decision = world_campaign_rank_objectives(world, campaign, campaigns.current_objective[campaignIndex]);
+			if (!(decision.objective == campaigns.current_objective[campaignIndex]))
+			{
+				campaign_set_current_objective(world, (ui16)campaignIndex, decision.objective);
+				objectiveChanged = true;
+				if (!decision.objective.is_valid()) campaign_stand_still(world, campaign);
+			}
+		}
+
+		// Action.
+		entity_guid current = campaigns.current_objective[campaignIndex];
+		if (!current.is_valid())
+		{
+			campaigns.state[campaignIndex] = CAMPAIGN_STATE_GATHERING;
 			continue;
 		}
 
-		switch (campaigns.state[campaignIndex])
-		{
-		case CAMPAIGN_STATE_GATHERING:
-			// Marches off once every army has arrived and stands close (the begin command skips the wait).
-			if (!campaign_has_joiners(world, campaign) && members == inRange)
-			{
-				campaigns.state[campaignIndex] = CAMPAIGN_STATE_MARCHING;
+		world_location destination = world_entity_get_location(world, current);
 
-                // Choose a guide army. @TEMP(Marc): Just pick the first army.
-                campaigns.state_data[campaignIndex] = {};
-                campaigns.state_data[campaignIndex].marching.guide_army = firstMember;
-			}
-			break;
-		case CAMPAIGN_STATE_MARCHING:
+		// Once on the objective the campaign stays on it (its armies may be fighting there) until it chooses something else.
+		bool onObjective = campaign_within_tiles(location, destination, campaign_objective_range_tiles(world, current))
+			|| (campaigns.state[campaignIndex] == CAMPAIGN_STATE_ON_OBJECTIVE && !objectiveChanged);
+
+		if (onObjective)
 		{
-			world_location destination;
-			if (objectiveDef->get_target_loc(world, objective, destination))
-            {
-                // Make sure the guide army is always set and alive (otherwise the first member takes over).
-                if (!world_entity_is_valid(world, campaigns.state_data[campaignIndex].marching.guide_army))
-                {
-                    campaigns.state_data[campaignIndex].marching.guide_army = firstMember;
-                }
-                campaign_march(world, (ui16)campaignIndex, campaign, destination);
-            }
-            else
-            {
-                // Campaign objective has no location logic, so switch straight to "on objective" logic where, 
-                // presumably, alternative movement logic will be provided.
-                campaigns.state[campaignIndex] = CAMPAIGN_STATE_ON_OBJECTIVE;
-            }
-			break;
+			campaigns.state[campaignIndex] = CAMPAIGN_STATE_ON_OBJECTIVE;
+			campaign_objective_run_logic(world, campaign, current);
 		}
-		case CAMPAIGN_STATE_ON_OBJECTIVE:
-            // Execute on objective logic.
-            // Every objective definition must have a logic function defined, so we don't mind crashing here.
-			objectiveDef->on_objective_logic(world, campaign);
-			break;
-		default:
-			break;
+		else
+		{
+			campaigns.state[campaignIndex] = CAMPAIGN_STATE_MARCHING;
+
+			// Make sure the guide army is always set and alive (otherwise the first member takes over).
+			if (!world_entity_is_valid(world, campaigns.state_data[campaignIndex].marching.guide_army)) campaigns.state_data[campaignIndex].marching.guide_army = firstMember;
+			campaign_march(world, (ui16)campaignIndex, campaign, destination);
 		}
 	}
 }

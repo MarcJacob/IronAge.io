@@ -1001,7 +1001,7 @@ bool command_set_campaign_objective_validity_check(const match_world_state& worl
 
 	switch (command.objective_type)
 	{
-	case CAMPAIGN_OBJECTIVE_CONQUER_SETTLEMENT:
+	case CAMPAIGN_GOAL_CONQUER_SETTLEMENT:
 		if (!command_is_military_target(world, command.target, player) && command_add_error(feedback, COMMAND_ERROR_INVALID_ENTITY)) return false;
 		break;
 	default:
@@ -1022,7 +1022,7 @@ void command_set_campaign_objective_apply(match_world_state& world, match_player
 	ui16 index = command.campaign.get_index();
 
 	campaigns.objective[index] = {};
-	campaigns.objective[index].type = (CAMPAIGN_OBJECTIVE_TYPE)command.objective_type;
+	campaigns.objective[index].type = (CAMPAIGN_GOAL_TYPE)command.objective_type;
 	campaigns.objective[index].target = command.target;
 
 	// A campaign already at its previous objective goes marching towards the new one.
@@ -1040,21 +1040,14 @@ bool command_campaign_begin_validity_check(const match_world_state& world, match
 
 	const world_entity_campaigns& campaigns = world.entities->campaigns;
 	ui16 index = command.campaign.get_index();
-	if ((campaigns.state[index] != CAMPAIGN_STATE_GATHERING || campaigns.objective[index].type == CAMPAIGN_OBJECTIVE_NONE) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
+	if ((campaigns.state[index] != CAMPAIGN_STATE_GATHERING || campaigns.objective[index].type == CAMPAIGN_GOAL_NONE) && command_add_error(feedback, COMMAND_ERROR_ENTITY_UNAVAILABLE)) return false;
 
 	return command_is_valid(feedback);
 }
 
 void command_campaign_begin_apply(match_world_state& world, match_player_id player, const match_command_header& command_header)
 {
-	// Checked again: earlier commands in the same tick may have changed the campaign.
-	if (!command_campaign_begin_validity_check(world, player, command_header, nullptr)) return;
-
-	const command_data_campaign_begin& command = command_header.get_command_data<command_data_campaign_begin>();
-	world_entity_campaigns& campaigns = world.entities->campaigns;
-	ui16 index = command.campaign.get_index();
-
-	campaigns.state[index] = CAMPAIGN_STATE_MARCHING;
+	// Does nothing for now: campaigns decide by themselves when to leave (see world_system_campaigns). Its role is to be revisited (e.g. stop waiting).
 }
 
 // CAMPAIGN DISBAND

@@ -132,7 +132,7 @@ struct ai_campaign_view
 {
 	entity_guid guid;
 	ui8 state; // CAMPAIGN_STATE.
-	ui8 objective_type; // CAMPAIGN_OBJECTIVE_TYPE.
+	ui8 objective_type; // CAMPAIGN_GOAL_TYPE.
 	entity_guid objective_target;
 	ui32 troops; // Men in its member armies.
 };

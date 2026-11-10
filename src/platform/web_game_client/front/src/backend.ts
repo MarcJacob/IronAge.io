@@ -95,7 +95,7 @@ export enum CAMPAIGN_STATE
     ON_OBJECTIVE = 3,
 }
 
-// Mirrors CAMPAIGN_OBJECTIVE_TYPE (same header), the campaign GDO's objective_type.
+// Mirrors CAMPAIGN_GOAL_TYPE (same header), the campaign GDO's objective_type.
 export enum CAMPAIGN_OBJECTIVE
 {
     NONE = 0,

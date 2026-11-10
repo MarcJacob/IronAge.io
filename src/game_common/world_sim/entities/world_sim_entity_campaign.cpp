@@ -80,6 +80,15 @@ void world_destroy_campaign(match_world_state& world, entity_guid campaign)
 	}
 
 	ui16 index = campaign.get_index();
+
+	// The objective it was pursuing has one campaign less.
+	entity_guid currentObjective = campaigns.current_objective[index];
+	if (world_entity_is_valid(world, currentObjective))
+	{
+		ui32& committed = world.entities->campaign_objectives.committed[currentObjective.get_index()];
+		if (committed > 0) committed--;
+	}
+
 	world_entity_campaign_view destroyedCampaign { campaigns, index };
 	destroyedCampaign.copy_from(world_entity_campaign {});
 	campaigns.guids[index] = INVALID_ENTITY_GUID;
@@ -144,8 +153,11 @@ bool world_alloc_campaigns(match_world_state& world, mem_arena& memory, ui32 cou
 	campaigns.troop_count = memory.alloc<ui32>(count);
 	if (campaigns.troop_count == nullptr) return false;
 
-	campaigns.objective = memory.alloc<campaign_objective>(count);
+	campaigns.objective = memory.alloc<campaign_goal>(count);
 	if (campaigns.objective == nullptr) return false;
+
+	campaigns.current_objective = memory.alloc<entity_guid>(count);
+	if (campaigns.current_objective == nullptr) return false;
 
 	return true;
 }
