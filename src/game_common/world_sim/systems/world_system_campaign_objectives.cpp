@@ -27,6 +27,7 @@ struct campaign_score_context
 	world_location location;
 	ui32 troops;
 	ui32 supply_days_x100; // Supplies of all the member armies together / their daily consumption, in hundredths of days.
+	ui32 supply_capacity_days_x100; // The same with their carry capacity instead of their supplies: the most waiting can ever bring. Supply thresholds are never above it.
 	ui32 joiners; // Armies still on their way to join.
 
 	entity_guid current_objective;
@@ -58,7 +59,8 @@ static bool campaign_ai_period_elapsed(const match_world_state& world, ui32 peri
 
 // Penalty of a trip of the given path cost: per day of the trip, and more per day the supplies do not cover. The path cost is converted to time:
 // a tile step takes 1000 * terrain cost / speed ticks, and the path cost is the terrain cost * TRAVEL_DIST_WEIGHT_ORTHOGONAL per tile. Never decreases with the cost.
-static i64 campaign_ai_trip_penalty_from_cost(const campaign_score_context& ctx, ui32 path_cost)
+// Returns false (not an option) when the trip is longer than the armies' supplies could ever last, even full (carry capacity): they would never have enough.
+static bool campaign_ai_trip_penalty_from_cost(const campaign_score_context& ctx, ui32 path_cost, i64& out_penalty)
 {
 	const campaign_ai_parameters& params = GAME_PARAMETERS.campaign_ai;
 
@@ -67,13 +69,16 @@ static i64 campaign_ai_trip_penalty_from_cost(const campaign_score_context& ctx,
 	ui64 ticks = (ui64)path_cost * (1000 / TRAVEL_DIST_WEIGHT_ORTHOGONAL) / speed;
 	ui32 tripDays = (ui32)ia_min(ticks * 100 / ticksPerDay, (ui64)CAMPAIGN_SUPPLY_DAYS_X100_MAX);
 
-	i64 penalty = (i64)tripDays * params.time_penalty_per_day / 100;
-	if (tripDays > ctx.supply_days_x100) penalty += (i64)(tripDays - ctx.supply_days_x100) * params.low_supply_penalty_per_day / 100;
-	return penalty;
+	if (tripDays > ctx.supply_capacity_days_x100) return false;
+
+	out_penalty = (i64)tripDays * params.time_penalty_per_day / 100;
+	if (tripDays > ctx.supply_days_x100) out_penalty += (i64)(tripDays - ctx.supply_days_x100) * params.low_supply_penalty_per_day / 100;
+	return true;
 }
 
 // Penalty of walking from the campaign to the place. Exact: the path armies would take (same crossable terrain as the movement system), one path search; returns false if there is
-// no complete path. Not exact: a lower bound of it, from the chamfer distance at the cheapest tile cost (1, a road) which no path can beat: no search, never fails.
+// no complete path, or if the trip is longer than the supplies could ever last. Not exact: a lower bound of it, from the chamfer distance at the cheapest tile cost (1, a road) which
+// no path can beat: no search, and it only fails when the exact one would too.
 static bool campaign_ai_trip_penalty(match_world_state& world, const campaign_score_context& ctx, world_location to, bool exact, i64& out_penalty)
 {
 	if (!exact)
@@ -81,8 +86,7 @@ static bool campaign_ai_trip_penalty(match_world_state& world, const campaign_sc
 		ui32 dx = ia_abs((i32)to.x - (i32)ctx.location.x);
 		ui32 dy = ia_abs((i32)to.y - (i32)ctx.location.y);
 		ui32 diagonal = dx < dy ? dx : dy;
-		out_penalty = campaign_ai_trip_penalty_from_cost(ctx, TRAVEL_DIST_WEIGHT_ORTHOGONAL * (dx + dy - 2 * diagonal) + TRAVEL_DIST_WEIGHT_DIAGONAL * diagonal);
-		return true;
+		return campaign_ai_trip_penalty_from_cost(ctx, TRAVEL_DIST_WEIGHT_ORTHOGONAL * (dx + dy - 2 * diagonal) + TRAVEL_DIST_WEIGHT_DIAGONAL * diagonal, out_penalty);
 	}
 
 	path_params pathParams = {};
@@ -93,8 +97,7 @@ static bool campaign_ai_trip_penalty(match_world_state& world, const campaign_sc
 	world_request_path(world, ctx.location, to, pathParams, path);
 	if (path.partial || (path.count == 0 && !(ctx.location == to))) return false;
 
-	out_penalty = campaign_ai_trip_penalty_from_cost(ctx, path.cost);
-	return true;
+	return campaign_ai_trip_penalty_from_cost(ctx, path.cost, out_penalty);
 }
 
 static i32 campaign_ai_clamp_score(i64 score)
@@ -117,11 +120,55 @@ static bool campaign_objective_is_abandoned(world_entity_campaign_objectives& ob
 
 // CONQUER_SETTLEMENT
 
-// The target is a settlement that is still hostile or neutral to the owner.
-static bool objective_conquer_target_is_valid(const match_world_state& world, match_player_id owner, entity_guid target)
+// Whether the owner's campaigns are on the target's side. The one place that decides it: only the owner's own settlements for now (allies, vassals, overlords later).
+// Evaluated whenever needed, never stored: an ownership flip changes how the objective is read at the next reconsideration.
+static bool campaign_ai_is_friendly(const match_world_state& world, match_player_id owner, entity_guid target)
 {
-	return world_entity_is_valid(world, target) && target.get_type() == ENTITY_TYPE::SETTLEMENT
-		&& (world_entity_is_hostile(world, target, owner) || world_entity_is_neutral(world, target, owner));
+	return world_entity_is_friendly(world, target, owner);
+}
+
+static bool objective_conquer_target_is_settlement(const match_world_state& world, entity_guid target)
+{
+	return world_entity_is_valid(world, target) && target.get_type() == ENTITY_TYPE::SETTLEMENT;
+}
+
+// A settlement that is still hostile or neutral to the owner: something to conquer (a spawn rule). A friendly one is read as a defense objective instead.
+static bool objective_conquer_target_is_conquerable(const match_world_state& world, match_player_id owner, entity_guid target)
+{
+	return objective_conquer_target_is_settlement(world, target) && !campaign_ai_is_friendly(world, owner, target);
+}
+
+// Recomputes the sides of every conquer objective from the campaigns pursuing it. A defender is a campaign friendly to the target, an attacker any other.
+static void objective_conquer_refresh(match_world_state& world)
+{
+	world_entity_campaign_objectives& objectives = world.entities->campaign_objectives;
+	const world_entity_campaigns& campaigns = world.entities->campaigns;
+
+	for (ui16 index = 0; index < objectives.max_count; index++)
+	{
+		if (objectives.guids[index].is_valid() && objectives.type[index] == CAMPAIGN_OBJECTIVE_TYPE::CONQUER_SETTLEMENT) objectives.data[index].conquer = {};
+	}
+
+	for (ui16 campaignIndex = 0; campaignIndex < campaigns.max_count; campaignIndex++)
+	{
+		entity_guid objective = campaigns.current_objective[campaignIndex];
+		if (!campaigns.guids[campaignIndex].is_valid() || !world_entity_is_valid(world, objective)) continue;
+
+		ui16 index = objective.get_index();
+		if (objectives.type[index] != CAMPAIGN_OBJECTIVE_TYPE::CONQUER_SETTLEMENT || !objective_conquer_target_is_settlement(world, objectives.target[index])) continue;
+
+		auto& data = objectives.data[index].conquer;
+		if (campaign_ai_is_friendly(world, campaigns.owner[campaignIndex], objectives.target[index]))
+		{
+			data.defender_campaigns++;
+			data.defender_troops += campaigns.troop_count[campaignIndex];
+		}
+		else
+		{
+			data.attacker_campaigns++;
+			data.attacker_troops += campaigns.troop_count[campaignIndex];
+		}
+	}
 }
 
 // Every settlement hostile (or neutral) to a campaign within its scan radius has a conquest objective. An existing one is renewed.
@@ -140,7 +187,7 @@ static void objective_conquer_spawn(match_world_state& world)
 		{
 			entity_guid settlement = settlements.guids[settlementIndex];
 			if (!settlement.is_valid() || campaign_ai_tile_distance(campaigns.location[campaignIndex], settlements.location[settlementIndex]) > radius) continue;
-			if (!objective_conquer_target_is_valid(world, campaigns.owner[campaignIndex], settlement)) continue;
+			if (!objective_conquer_target_is_conquerable(world, campaigns.owner[campaignIndex], settlement)) continue;
 
 			entity_guid existing = world_find_campaign_objective(world, CAMPAIGN_OBJECTIVE_TYPE::CONQUER_SETTLEMENT, settlement);
 			if (existing.is_valid()) objectives.idle_intervals[existing.get_index()] = 0;
@@ -170,7 +217,12 @@ static i32 objective_conquer_score(match_world_state& world, const campaign_scor
 	const world_entity_campaign_objectives& objectives = world.entities->campaign_objectives;
 
 	entity_guid target = objectives.target[objective_index];
-	if (!objective_conquer_target_is_valid(world, ctx.owner, target)) return CAMPAIGN_SCORE_INVALID;
+	if (!objective_conquer_target_is_settlement(world, target)) return CAMPAIGN_SCORE_INVALID;
+
+	// Friendly target: a defense objective, only while others (not friendly to the target) are pursuing it.
+	bool defending = campaign_ai_is_friendly(world, ctx.owner, target);
+	const auto& data = objectives.data[objective_index].conquer;
+	if (defending && data.attacker_campaigns == 0) return CAMPAIGN_SCORE_INVALID;
 
 	ui32 distance = campaign_ai_tile_distance(ctx.location, objectives.location[objective_index]);
 	if (distance > params.scan_radius_tiles) return CAMPAIGN_SCORE_INVALID;
@@ -178,26 +230,51 @@ static i32 objective_conquer_score(match_world_state& world, const campaign_scor
 	i64 tripPenalty;
 	if (!campaign_ai_trip_penalty(world, ctx, objectives.location[objective_index], exact, tripPenalty)) return CAMPAIGN_SCORE_INVALID;
 
-	ui64 troops = ctx.troops > 0 ? ctx.troops : 1;
-	ui64 defenders = world.entities->settlements.soldiers_home(target.get_index());
+	// Other campaigns on the same side as this one (not counting this campaign if it is on the objective).
+	ui32 others = defending ? data.defender_campaigns : data.attacker_campaigns;
+	if (objectives.guids[objective_index] == ctx.current_objective && others > 0) others--;
 
-	ui32 others = objectives.committed[objective_index];
-	if (objectives.guids[objective_index] == ctx.current_objective && others > 0) others--; // Not counting this campaign.
+	i64 score;
+	if (defending)
+	{
+		score = (i64)params.defend_base + (i64)data.attacker_campaigns * params.defend_per_attacker_campaign - tripPenalty;
+		if (world.entities->settlements.siege[target.get_index()].is_valid()) score += params.defend_siege_relief_bonus;
+	}
+	else
+	{
+		ui64 troops = ctx.troops > 0 ? ctx.troops : 1;
+		ui64 defenders = world.entities->settlements.soldiers_home(target.get_index());
 
-	i64 score = (i64)params.conquer_base - tripPenalty;
-	score -= (i64)(defenders * 100 / troops) * params.conquer_defender_ratio_penalty;
+		score = (i64)params.conquer_base - tripPenalty;
+		score -= (i64)(defenders * 100 / troops) * params.conquer_defender_ratio_penalty;
+	}
+
 	score -= (i64)others * params.conquer_per_other_campaign_penalty;
 	return campaign_ai_clamp_score(score);
 }
 
-// Every member army attacks the settlement (the siege logic of the standing orders does the rest). Once the settlement is under an idle siege that the campaign's owner commands
+// Friendly target (defense): every member army defends the settlement (the DEFEND_TERRITORY order stands on it, fights intruders and opposes its siege), as long as attackers are pursuing the objective.
+// Otherwise, every member army attacks the settlement (the siege logic of the standing orders does the rest). Once the settlement is under an idle siege that the campaign's owner commands
 // and member armies take part in, the campaign begins the assault when world_siege_assault_advisable says so (the same function as the BEGIN_ASSAULT command).
 // It cannot repeat: the siege leaves SIEGE_IDLE at once, and only returns to it after an outside battle (then the rule is evaluated again, once more).
 static void objective_conquer_logic(match_world_state& world, entity_guid campaign, entity_guid objective)
 {
 	world_entity_armies& armies = world.entities->armies;
 	entity_guid target = world.entities->campaign_objectives.target[objective.get_index()];
-	if (!world_entity_is_valid(world, target) || target.get_type() != ENTITY_TYPE::SETTLEMENT) return;
+	if (!objective_conquer_target_is_settlement(world, target)) return;
+
+	if (campaign_ai_is_friendly(world, world.entities->campaigns.owner[campaign.get_index()], target))
+	{
+		if (world.entities->campaign_objectives.data[objective.get_index()].conquer.attacker_campaigns == 0) return;
+
+		for (ui32 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
+		{
+			if (!(armies.campaign[armyIndex] == campaign)) continue;
+			if (!(armies.order[armyIndex].type == ARMY_ORDER_DEFEND_TERRITORY && armies.order[armyIndex].target == target))
+				army_order_defend_territory(armies, (ui16)armyIndex, target, world.entities->settlements.location[target.get_index()]);
+		}
+		return;
+	}
 
 	bool besiegedByMember = false;
 
@@ -322,6 +399,8 @@ void world_system_campaign_objectives(match_world_state& world)
 {
 	const campaign_ai_parameters& params = GAME_PARAMETERS.campaign_ai;
 
+	objective_conquer_refresh(world); // Every tick: the scorers and logic read the sides.
+
 	if (campaign_ai_period_elapsed(world, params.conquer_spawn_period_ticks)) objective_conquer_spawn(world);
 	if (campaign_ai_period_elapsed(world, params.conquer_despawn_period_ticks)) objective_conquer_despawn(world);
 
@@ -350,6 +429,7 @@ static campaign_score_context campaign_build_score_context(const match_world_sta
 
 	// All the member armies together.
 	ui64 supplies = 0;
+	ui64 capacity = 0;
 	ui64 consumption = 0;
 	for (ui16 armyIndex = 0; armyIndex < armies.max_count; armyIndex++)
 	{
@@ -358,11 +438,13 @@ static campaign_score_context campaign_build_score_context(const match_world_sta
 		if (armies.campaign[armyIndex] == campaign)
 		{
 			supplies += armies.supplies[armyIndex];
+			capacity += army_supply_capacity(world, armyIndex);
 			consumption += army_daily_consumption(army_supply_basis(world, armyIndex));
 		}
 		else if (!armies.campaign[armyIndex].is_valid() && armies.order[armyIndex].type == ARMY_ORDER_JOIN_CAMPAIGN && armies.order[armyIndex].target == campaign) ctx.joiners++;
 	}
 	ctx.supply_days_x100 = consumption == 0 ? CAMPAIGN_SUPPLY_DAYS_X100_MAX : (ui32)ia_min(supplies * 100 / consumption, (ui64)CAMPAIGN_SUPPLY_DAYS_X100_MAX);
+	ctx.supply_capacity_days_x100 = consumption == 0 ? CAMPAIGN_SUPPLY_DAYS_X100_MAX : (ui32)ia_min(capacity * 100 / consumption, (ui64)CAMPAIGN_SUPPLY_DAYS_X100_MAX);
 
 	return ctx;
 }
@@ -370,7 +452,7 @@ static campaign_score_context campaign_build_score_context(const match_world_sta
 static i32 campaign_wait_score(const campaign_score_context& ctx)
 {
 	const campaign_ai_parameters& params = GAME_PARAMETERS.campaign_ai;
-	ui32 comfort = params.wait_supply_comfort_days * 100;
+	ui32 comfort = ia_min(params.wait_supply_comfort_days * 100, ctx.supply_capacity_days_x100); // Never above what the armies can carry, or waiting could never be satisfied.
 
 	i64 score = (i64)params.wait_base + (i64)ctx.joiners * params.wait_per_joiner;
 	if (ctx.supply_days_x100 < comfort) score += (i64)(comfort - ctx.supply_days_x100) * params.wait_low_supply_per_day / 100;

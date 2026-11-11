@@ -36,8 +36,9 @@ Campaigns become decision-making machines: they rank the objectives available to
 - S. [DONE] Read-only survey (findings below).
 Order (user): objectives first, goals later. Experiment: campaigns ignore user-set goals and choose objectives neutrally; goals come after the core objective types work.
 
-- 1a. Objective board + type-module interface + ranking loop; conquer settlement ported as the first objective type (spawned by the generator, large spawn radius). Goals ignored: `SET_CAMPAIGN_OBJECTIVE` / the campaign `objective` field stay as they are but are unused by ranking. Campaign no longer ends on accomplishment (ends on disband / no members only). To do.
-- 2. Defend objective (friendly settlement, against an incoming / present force; higher weight for relieving a siege). To do.
+- 1a. [DONE, pending hand test] Objective board (micro entities, `world_entity_campaign_objectives.h`, `world_sim_entity_campaign_objective.*`), type table in `world_system_campaign_objectives.cpp` (range / score / logic + spawn / despawn per type), ranking loop (WAIT + objectives, stickiness, branch-and-bound path culling), `world_system_campaigns.cpp` rewritten. Types: CONQUER_SETTLEMENT, TRAVEL_TO_SETTLEMENT (scores progress toward the campaign's legacy goal; no goal = never travels). Campaign ends on disband / no members only. Params `campaign_ai_parameters` in `game_parameters.h`, all placeholders. Legacy `CAMPAIGN_OBJECTIVE_*` renamed `CAMPAIGN_GOAL_*` (field / GDO names unchanged). `CAMPAIGN_BEGIN` is a no-op, Begin button removed.
+- 2. [DONE, hand-tested] Defend = a conquer objective whose target is friendly to the campaign (no separate type / role system), decided at score / run time via `campaign_ai_is_friendly` (owner only; allies / vassals / overlords go there later). Per-objective conquer data (attacker / defender campaign + troop counts) refreshed every tick; `committed` stays the generic count for despawn. Friendly score: INVALID unless attackers > 0, else `defend_base` + per-attacker-campaign + `defend_siege_relief_bonus`, minus trip penalty; "others" penalty counts same-side only. Executor gives members DEFEND_TERRITORY once. Placeholders: defend_base 1200, defend_per_attacker_campaign 300, defend_siege_relief_bonus 800. Dropped for now: "nearby enemy campaign" scoring, strength-ratio scoring (troop totals tracked, unused).
+  - Also done: travel scores goal progress (two-pass ranking removed); trip cost = path cost with scan radius first, branch-and-bound ranking (exact); a campaign never travels where its supplies could not last even when full; WAIT comfort clamped to carry capacity. Balance params changed in `game_parameters.h` (upkeep_men_at_arms 3→2, upkeep15→6, tradepost_wagon_max_increase 2→6, all carry_* doubled): affects army_raising_cost, supply purchase cost, caravan load. Any wagon still halves army speed (stopgap).
 - 3. Engage enemy army objective (army outside any campaign). To do.
 - 4. Engage enemy campaign objective. To do.
 - 5. Goals: goal storage (8), add / remove goal commands replacing SET, force + bias in ranking, client / AI adaptation, `campaign_start`, panel. To do.
@@ -61,6 +62,11 @@ Order (user): objectives first, goals later. Experiment: campaigns ignore user-s
 - Behavior of a started campaign with no goals: acts on spontaneous objectives above a minimum score (param).
 - Score formulas, interval, spawn radius, switch margin, stickiness, goal bias values (design with the user per task).
 
+- Pathing perf rework (separate task): one bounded search from the campaign to all objectives instead of per-candidate searches.
+- Tune placeholder weights (travel_progress_weight, penalties after path-cost switch); maybe a tighter lower bound (plains cost).
+- AI still sets goals + sends CAMPAIGN_BEGIN; 80-day stuck rule behaves differently now.
+- `backend.js` stale comment (built output, regenerates).
+
 ## Next step
 
-User approves the 1a builder prompt, then dispatch.
+Task 3 (engage enemy army outside any campaign), or task 5 (goals) / AI player rework: user observed remaining supply / behavior issues are mostly the player AI ignoring goals. User picks.

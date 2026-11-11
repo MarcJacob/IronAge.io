@@ -21,6 +21,16 @@ enum class CAMPAIGN_OBJECTIVE_TYPE : ui8
 union campaign_objective_data
 {
 	ui64 _unused;
+
+	// CONQUER_SETTLEMENT: the campaigns pursuing it, by side relative to the target settlement (defenders = campaigns friendly to it, attackers = all others).
+	// Recomputed every tick from the campaigns themselves (objective_conquer_refresh), so it cannot drift. A friendly target makes the objective a defense objective.
+	struct
+	{
+		ui32 attacker_campaigns;
+		ui32 defender_campaigns;
+		ui32 attacker_troops;
+		ui32 defender_troops;
+	} conquer;
 };
 
 // Property arrays for a world's campaign objectives. One objective per type + target (see world_find_campaign_objective).

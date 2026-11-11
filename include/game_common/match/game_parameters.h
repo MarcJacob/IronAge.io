@@ -106,6 +106,12 @@ struct campaign_ai_parameters
     ui32 conquer_defender_ratio_penalty = 2;
     ui32 conquer_per_other_campaign_penalty = 200;
 
+    // CONQUER_SETTLEMENT with a target friendly to the campaign = defense. Only eligible while campaigns that are not friendly to the target are pursuing it: base, plus per such
+    // campaign, plus a bonus when the settlement is under siege, minus the trip penalties and per other defending campaign (conquer_per_other_campaign_penalty). Placeholders.
+    ui32 defend_base = 1200;
+    ui32 defend_per_attacker_campaign = 300;
+    ui32 defend_siege_relief_bonus = 800;
+
     // TRAVEL_TO_SETTLEMENT: per tile the settlement brings the campaign closer to the place of its goal (a campaign without one never travels), minus the trip penalties.
     ui32 travel_progress_weight = 15;
 };
@@ -121,7 +127,7 @@ struct game_parameters
     ui8 housing_pop_increase = 100; // How much urban population capacity increases per housing.
     ui8 barracks_maa_max_increase = 50; // How much Men At Arms max is increased per barracks in a settlement.
     ui32 wagon_training_per_day = 1; // Wagons added to a settlement's garrison pool per day, up to the max (garrison + raised), whatever its population.
-    ui8 tradepost_wagon_max_increase = 2; // How much the wagons max is increased per caravanserai (tradepost) in a settlement.
+    ui8 tradepost_wagon_max_increase = 6; // How much the wagons max is increased per caravanserai (tradepost) in a settlement.
 
     // MILITARY
     ui32 raise_min_population_left = 10; // Training pro troops never takes a settlement's peasants below this.
@@ -206,19 +212,19 @@ struct game_parameters
     // Daily army upkeep, in goods consumed from the army's supplies, per troop. Levies are in per mille (1000 = 1), computed on the army's levy total and rounded down.
     // @TODO(Marc): Move this to troop type stats.
     ui32 upkeep_levy_per_mille = 1000;
-    ui32 upkeep_men_at_arms = 3;
-    ui32 upkeep_horseman = 4;
-    ui32 upkeep_knight = 15;
+    ui32 upkeep_men_at_arms = 2;
+    ui32 upkeep_horseman = 3;
+    ui32 upkeep_knight = 6;
     ui32 upkeep_wagon = 1;
 
     // Carry capacity per man. An army's capacity is the sum over its men; the gold pool and the supplies pool each have that capacity.
     // Gold is loot only (never spent), supplies are delivered by caravans (campaign armies) or bought where the army stands, both paid by the owner's treasury, up to it.
     // @TODO(Marc): Move this to troop type stats.
-    ui32 carry_levy = 10;
-    ui32 carry_men_at_arms = 10;
-    ui32 carry_horseman = 16;
-    ui32 carry_knight = 15;
-    ui32 carry_wagon = 100;
+    ui32 carry_levy = 20;
+    ui32 carry_men_at_arms = 20;
+    ui32 carry_horseman = 32;
+    ui32 carry_knight = 30;
+    ui32 carry_wagon = 200;
 
     // RAID LOOT (temporary, until tile-based raiding). Most a settlement can lose to raiders per day, all armies together.
     ui32 raid_production_percent = 10; // Of its production.
