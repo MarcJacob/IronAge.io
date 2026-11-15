@@ -90,14 +90,11 @@ static bool campaign_ai_trip_penalty(match_world_state& world, const campaign_sc
 	}
 
 	path_params pathParams = {};
-	pathParams.passable_terrain = (ui8)(PATH_TERRAIN_LAND | (GAME_PARAMETERS.armies_workers_cross_water != 0 ? PATH_TERRAIN_WATER : 0));
-	pathParams.straight_segments = true;
+    pathParams.mode = PATH_MODE_LAND;
 
-	path_result path;
-	world_request_path(world, ctx.location, to, pathParams, path);
-	if (path.partial || (path.count == 0 && !(ctx.location == to))) return false;
+    // @TODO(Marc): Get cost from new pathfinding code.
 
-	return campaign_ai_trip_penalty_from_cost(ctx, path.cost, out_penalty);
+    return false;
 }
 
 static i32 campaign_ai_clamp_score(i64 score)

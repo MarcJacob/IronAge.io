@@ -38,6 +38,9 @@ Path optimization over long distances is secondary. Roads make it cheap.
 
 1. [DONE, build passes] Teardown to skeleton (builder, Sonnet). `PATH_MODE` enum (ANY, LAND, LAND_ROADS_ONLY, LAND_PREFER_ROADS, SEA); `path_params {start, end, mode, within_settlement_territory}`; store stubs in `world_pathing.cpp`; `world_entity_step_towards` (stepper + slide) unused; `build_road_data.path_handle` added (`WORLD_WORKER_ACTION_DATA_SIZE` 16 -> 20, `start` is written but never read: could be dropped instead); `client_query_path(..., territory_guid, path_mode)` and `backend.ts` synced.
 2. Rewrite pathfinder + store internals (user, by hand / peer).
+   - 2a. [WIP, user by hand] Acceleration structure: path areas generated on a tight grid over the world; weighted connections between areas (each with a cost); area ID assigned per tile; reachability component (land or sea) per area.
+   - 2b. Pathfinder on top of it. To do.
+   - 2c. Store interface (handles, movement, next tile), plus the internal work for the path cache. To do.
 
 ## Open questions
 
@@ -47,4 +50,4 @@ Path optimization over long distances is secondary. Roads make it cheap.
 
 ## Next step
 
-Start task 2 (user, by hand or with a peer): pathfinder first, then store internals.
+Finish 2a (user, by hand), then 2b / 2c.

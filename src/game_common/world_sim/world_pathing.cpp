@@ -38,16 +38,55 @@ struct world_path_areas
 
 // Initializes the areas in the grid cell at the provided coordinates.
 // Places the new areas in the provided memory, and sets the area id on the tile_areas collection.
-static void world_path_store_init_grid_cell_areas(const world_terrain& terrain, mem_arena& mem, path_area_id* tile_areas,
-        ui16 gridX, ui16 gridY)
+static void world_path_store_init_grid_cell_areas(const match_world_state& world, mem_arena& mem, path_area_id* tile_areas,
+        ui16 grid_x, ui16 grid_y, path_area_id& next_area_id)
 {
-    // @TODO(Marc): Pass a memory arena to the function that gets pushed with as many areas as we need.
-    // The tile_areas pointer of the world_path_areas struct can then be set to that.
+    world_location cellStart = { grid_x * 16, grid_y * 16 };
+    world_location cellEnd = cellStart + world_location { 15, 15 };
+
+    for (ui16 tileX = cellStart.x; tileX < cellEnd.x; tileX++)
+    {
+        for (ui16 tileY = cellStart.y; tileY < cellEnd.y; tileY++)
+        {
+            world_location tileLoc = { tileX, tileY };
+            
+            ui16 regionIndex, tileIndex;
+            world_get_tile(*world.terrain, tileLoc, regionIndex, tileIndex);
+
+            ui32 tileWorldIndex = regionIndex * world_terrain::REGION_TILE_COUNT + tileIndex;
+            if (tile_areas[tileWorldIndex] == 0)
+            {
+                // Create new area starting on this tile.
+                tile_areas[tileWorldIndex] = next_area_id++;
+            }
+
+            // Based on this tile's terrain, spread the area east and northward (positive on both axis) if they share a similar terrain.
+            const TERRAIN_TILE_TYPE& terrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex];
+            
+            if (tileX < cellEnd.x - 1)
+            {
+                const TERRAIN_TILE_TYPE& terrainTypeEast = world.terrain->regions[regionIndex].terrain_types[tileIndex + 1];
+                if (terrain_is_land(terrainType) == terrain_is_land(terrainTypeEast))
+                {
+                    tile_areas[tileWorldIndex + 1] = tile_areas[tileWorldIndex];
+                }
+            }
+
+            if (tileY < cellEnd.y - 1)
+            {
+                const TERRAIN_TILE_TYPE& terrainTypeNorth = world.terrain->regions[regionIndex].terrain_types[tileIndex + world_terrain::REGION_SIZE];
+                if (terrain_is_land(terrainType) == terrain_is_land(terrainTypeNorth))
+                {
+                    tile_areas[tileWorldIndex + world_terrain::REGION_SIZE] = tile_areas[tileWorldIndex];
+                }
+            }
+        }
+    }
 }
 
 // Initializes area-to-area connections across cell boundaries
 // Places the new connections in the provided memory.
-static void world_path_store_init_area_connections(world_path_areas& areas, mem_arena& mem, ui16 gridX, ui16 gridY)
+static void world_path_store_init_grid_cell_area_connections(const match_world_state& world, world_path_areas& areas, mem_arena& mem, ui16 grid_x, ui16 grix_y)
 {
     // @TODO(Marc): Pass a memory arena and fill it progressively in the same way the areas are built / filled in.
     // For each areas, scan all "edge tiles" (tiles that touch the grid cell edges) and determine if it touches a
@@ -63,12 +102,12 @@ static void world_path_store_init_area_connections(world_path_areas& areas, mem_
 // Updates the cost estimate for travelling between areas in the world.
 // Runs a full scan through. @TODO(Marc): Batch ?
 // The cost is a rough estimation based on travel cost between area "center mass" and the portal tile.
-static void world_path_store_update_connection_costs(const world_terrain& terrain, world_path_areas& areas)
+static void world_path_store_update_connection_costs(const match_world_state& world, world_path_areas& areas)
 {
 
 }
 
-world_path_store* world_path_store_init(const world_terrain& terrain, mem_arena& memory)
+world_path_store* world_path_store_init(const match_world_state& world, mem_arena& memory)
 {
     world_path_store* store = memory.alloc<world_path_store>();
     if (store == nullptr) return nullptr;
@@ -91,20 +130,24 @@ world_path_store* world_path_store_init(const world_terrain& terrain, mem_arena&
     // Build path areas, connections and determine start high-level costs.
     const ui8 GRID_SIZE_MULT = (world_terrain::REGION_SIZE / 16);
     vec2<ui16> pathGridDims = {
-        terrain.size_regions.x * GRID_SIZE_MULT,
-        terrain.size_regions.y * GRID_SIZE_MULT
+        world.terrain->size_regions.x * GRID_SIZE_MULT,
+        world.terrain->size_regions.y * GRID_SIZE_MULT
     };
 
     // Each grid cell covers 16 x 16 tiles.
     // For each tile, scan for an existing local component the tile could be part of.
     // If there are none, create a new one by picking the next component ID.
-    ui8 nextLocalCompID = 1;
+
+    path_area_id nextAreaID = 1; // Begin area IDs at 1 since 0 means none / invalid.
+
+    // Alloc tile area IDs.
+    areas->tile_areas = (path_area_id*)store->storage.alloc(world.terrain->size_tiles.x * world.terrain->size_tiles.y);
 
     for (ui16 gridX = 0; gridX < pathGridDims.x; gridX++)
     {
         for (ui16 gridY = 1; gridY < pathGridDims.y; gridY++)
         {
-            world_path_store_init_grid_cell_areas(terrain, *store->storage, gridX, gridY);
+            world_path_store_init_grid_cell_areas(world, store->storage, areas->tile_areas, gridX, gridY, nextAreaID);
         }
     }
 
@@ -112,7 +155,7 @@ world_path_store* world_path_store_init(const world_terrain& terrain, mem_arena&
     {
         for (ui16 gridY = 1; gridY < pathGridDims.y; gridY++)
         {
-            world_path_store_init_area_connections(*areas, *store->storage, gridX, gridY);
+            world_path_store_init_grid_cell_area_connections(world, *areas, store->storage, gridX, gridY);
         }
     }
 

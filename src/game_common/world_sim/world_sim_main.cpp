@@ -218,7 +218,7 @@ match_world_state* world_state_init(mem_arena& memory, const game_match_start_pa
 		ia_memzero(newWorld->player_states, sizeof(world_player_state) * newWorld->player_count); // Players start with an empty treasury.
 	}
 
-	newWorld->path_store = world_path_store_init(memory);
+	newWorld->path_store = world_path_store_init(*newWorld, memory);
 	if (newWorld->path_store == nullptr) goto WORLD_INIT_FAIL;
 
 	// Alloc entities

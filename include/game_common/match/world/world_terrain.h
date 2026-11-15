@@ -15,6 +15,11 @@ enum class TERRAIN_TILE_TYPE : ui8
 	WATER_SEA,
 };
 
+static inline bool terrain_is_land(const TERRAIN_TILE_TYPE& type)
+{
+    return type >= TERRAIN_TILE_TYPE::LAND_PLAINS && type <= TERRAIN_TILE_TYPE::LAND_MOUNTAINS;
+}
+
 // Holds the state of a world's terrain / tiles.
 struct world_terrain
 {
