@@ -78,8 +78,8 @@ bool world_entity_step_towards(const match_world_state& world, world_entity_move
 // Size of the store's search memory. Fixed, as it limits how far a search goes and so must be the same on every machine.
 static constexpr ui64 WORLD_PATH_STORE_SCRATCH_SIZE = KiB(256);
 
-// Allocates and initializes a path store from the given memory. Returns nullptr if there isn't enough.
-world_path_store* world_path_store_init(mem_arena& memory);
+// Allocates and initializes a path store from the given terrain & memory. Returns nullptr if there isn't enough.
+world_path_store* world_path_store_init(const world_terrain& terrain, mem_arena& memory);
 
 // Gets a path from start to end for the given parameters. 
 // Returns a handle to it, or INVALID_PATH_HANDLE if none can be built (target unreachable or invalid parameters).

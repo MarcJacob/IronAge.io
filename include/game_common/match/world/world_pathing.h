@@ -70,9 +70,11 @@ struct world_path_store
         };
     };
 
-    mem_arena search_scratch; // Search memory.
+    mem_arena search_scratch; // Search memory, used for local pathfinding within an area / "low level" pathfinding, or
+                              // for global pathfinding across areas / "high level" pathfinding.
+
     mem_arena storage; // Storage memory for cached paths, and the world travel acceleration structure.
-    
+
     inline bool is_valid_handle(const path_handle& handle) const { return false; } // @TODO(Marc): Lookup path storage.
 };
 

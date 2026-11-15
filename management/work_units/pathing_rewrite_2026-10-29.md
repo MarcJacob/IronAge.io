@@ -13,8 +13,26 @@ Clean slate, then user (by hand / peer) builds pathing with acceleration structu
 - One enum of path modes replaces mode + flags (LAND, LAND_ROAD, LAND_DIRECT, SEA...). Params struct keeps equivalents of the old preview args.
 - Entities keep: sub-tile location, travel speed, path handle (+ `destination`). Road crews hold the handle in `build_road_data`.
 - `require_complete` / canonical direction dropped; may return in another form.
-- Sub-tile stepper and coast-corner slide kept, de-wired.
-- Consequences until rewritten: entities stand still, no caravans / ships spawn, no roads built, empty previews.
+
+## Architecture
+
+Pathing system must optimize for speed of reachability check and travel cost estimate, not necessarily exact path finding.
+Path optimization over long distances is secondary. Roads make it cheap.
+
+- World path store initialization = create acceleration structures.
+    - Path areas. Build a grid, identify land and sea components by reachability.
+        - Construction: Each tile given a local component index. Flood fill with lowest component ID by type depending on start tile type. Keep track of which components remain. 8 bits (so grid mesh size is 16x16).
+        - Vast majority of grid tiles will have one (land / sea) or two (coast) components, sometimes three (straights, lakes...).
+        - Determine reachability graph. Each local component can link to neighbouring components of the same time if they both touch a common grid edge.
+        - Connections are double sided so only stored once per pair. Number of pairs depends on overall complexity of the graph, gets bad if there are a lot of small land / sea areas everywhere.
+            - Total size is variable. Max allowable size for world to be validated ?
+            - Total connections count for flat world (only land or only sea) of grid dimensions d x d converges to 4^log2(d).
+                - For 8 x 8 regions, d = 64 x 64, something close to 4^6 = 4096 connections.
+        - Build global land / sea reachability components areas belong to. "Continents" and "Seas".
+            - Reachability test = compare components. Extremely fast.
+        - Reserve space for caching paths & itineraries (composite paths). Paths go from area to area, path travellers go to start and end points on their own with no caching (path following functions take care of it).
+        - Updates to graph: Never in reachability (can't build bridges or canals), can be updated in terms of cost (roads) meaning paths can expire.
+        - Store average / lowest cost on area connections ? Allows computing rough travel cost over long distances for much cheaper.
 
 ## Tasks
 
