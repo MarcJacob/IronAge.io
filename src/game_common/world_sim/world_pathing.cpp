@@ -41,43 +41,133 @@ struct world_path_areas
 static void world_path_store_init_grid_cell_areas(const match_world_state& world, mem_arena& mem, path_area_id* tile_areas,
         ui16 grid_x, ui16 grid_y, path_area_id& next_area_id)
 {
-    world_location cellStart = { grid_x * 16, grid_y * 16 };
-    world_location cellEnd = cellStart + world_location { 15, 15 };
-
-    for (ui16 tileX = cellStart.x; tileX < cellEnd.x; tileX++)
+    enum FLOODFILL_TILE_STATE : ui8
     {
-        for (ui16 tileY = cellStart.y; tileY < cellEnd.y; tileY++)
+        UNEXPLORED,
+        OPEN,
+        CLOSED,
+    } floodfillBuffer[16 * 16]; // Flags buffer for determining what tiles are open / remain to be evaluated
+                                // for addition to area being built.
+
+    for (ui16 tileX = 0; tileX < 16; tileX++)
+    {
+        for (ui16 tileY = 0; tileY < 16; tileY++)
         {
-            world_location tileLoc = { tileX, tileY };
+            world_location originTileLoc = { grid_x * 16 + tileX, grid_y * 16 + tileY };
             
-            ui16 regionIndex, tileIndex;
-            world_get_tile(*world.terrain, tileLoc, regionIndex, tileIndex);
+            ui16 originRegionIndex, originTileIndex;
+            world_get_tile(*world.terrain, originTileLoc, originRegionIndex, originTileIndex);
 
-            ui32 tileWorldIndex = regionIndex * world_terrain::REGION_TILE_COUNT + tileIndex;
-            if (tile_areas[tileWorldIndex] == 0)
-            {
-                // Create new area starting on this tile.
-                tile_areas[tileWorldIndex] = next_area_id++;
-            }
-
-            // Based on this tile's terrain, spread the area east and northward (positive on both axis) if they share a similar terrain.
-            const TERRAIN_TILE_TYPE& terrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex];
+            ui32 originTileWorldIndex = originRegionIndex * world_terrain::REGION_TILE_COUNT + originTileIndex;
+            if (tile_areas[originTileWorldIndex] != 0) continue;
             
-            if (tileX < cellEnd.x - 1)
-            {
-                const TERRAIN_TILE_TYPE& terrainTypeEast = world.terrain->regions[regionIndex].terrain_types[tileIndex + 1];
-                if (terrain_is_land(terrainType) == terrain_is_land(terrainTypeEast))
-                {
-                    tile_areas[tileWorldIndex + 1] = tile_areas[tileWorldIndex];
-                }
-            }
+            // Create new area starting on this tile.
+            tile_areas[originTileWorldIndex] = next_area_id++;
 
-            if (tileY < cellEnd.y - 1)
+            // Reinit floodfill buffer. Open first tile.
+            ia_memzero(floodfillBuffer, sizeof(floodfillBuffer));
+            floodfillBuffer[0] = OPEN;
+
+            // Begin flood-filling.
+            ui16 openTileCount = 1;
+            for (;openTileCount > 0;)
             {
-                const TERRAIN_TILE_TYPE& terrainTypeNorth = world.terrain->regions[regionIndex].terrain_types[tileIndex + world_terrain::REGION_SIZE];
-                if (terrain_is_land(terrainType) == terrain_is_land(terrainTypeNorth))
+                for (ui16 floodTileIndex = 0; floodTileIndex < 256; floodTileIndex++)
                 {
-                    tile_areas[tileWorldIndex + world_terrain::REGION_SIZE] = tile_areas[tileWorldIndex];
+                    if (floodfillBuffer[floodTileIndex] != OPEN) continue;
+
+                    floodfillBuffer[floodTileIndex] = CLOSED;
+                    openTileCount--;
+
+                    world_location tileLoc = originTileLoc + world_location { floodTileIndex % 16, floodTileIndex / 16 };
+
+                    ui16 regionIndex, tileIndex;
+                    world_get_tile(*world.terrain, tileLoc, regionIndex, tileIndex);
+
+                    ui32 tileWorldIndex = regionIndex * world_terrain::REGION_TILE_COUNT + tileIndex;
+
+                    const TERRAIN_TILE_TYPE& tileTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex];
+                    // We assume the path grid to be aligned with regions, meaning we can assume region index
+                    // is the same, and that neighbours can be found directly with region size arithmetic.
+
+                    // WEST
+                    if (tileLoc.x > grid_x * 16
+                            && floodfillBuffer[floodTileIndex - 1] == UNEXPLORED)
+                    {
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex - 1];
+
+                        if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
+                        {
+                            floodfillBuffer[floodTileIndex - 1] = OPEN;
+                            openTileCount++;
+
+                            ui32 neighbourWorldIndex = tileWorldIndex - 1;
+                            tile_areas[neighbourWorldIndex] = tile_areas[tileWorldIndex];
+                        }
+                        else
+                        {
+                            floodfillBuffer[floodTileIndex - 1] = CLOSED;
+                        }
+                    }
+                    // EAST
+                    if (tileLoc.x < grid_x * 16 + 15
+                            && floodfillBuffer[floodTileIndex + 1] == UNEXPLORED)
+                    {
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex - 1];
+
+                        if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
+                        {
+                            floodfillBuffer[floodTileIndex + 1] = OPEN;
+                            openTileCount++;
+
+                            ui32 neighbourWorldIndex = tileWorldIndex + 1;
+                            tile_areas[neighbourWorldIndex] = tile_areas[tileWorldIndex];
+                        }
+                        else
+                        {
+                            floodfillBuffer[floodTileIndex + 1] = CLOSED;
+                        }
+                    }
+                    // SOUTH
+                    if (tileLoc.y > grid_y * 16
+                            && floodfillBuffer[floodTileIndex - 16] == UNEXPLORED)
+                    {
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = 
+                            world.terrain->regions[regionIndex].terrain_types[tileIndex - world_terrain::REGION_SIZE];
+
+                        if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
+                        {
+                            floodfillBuffer[floodTileIndex - 16] = OPEN;
+                            openTileCount++;
+
+                            ui32 neighbourWorldIndex = tileWorldIndex - world_terrain::REGION_SIZE;
+                            tile_areas[neighbourWorldIndex] = tile_areas[tileWorldIndex];
+                        }
+                        else
+                        {
+                            floodfillBuffer[floodTileIndex - 16] = CLOSED;
+                        }
+                    }
+                    // NORTH
+                    if (tileLoc.y < grid_y * 16 + 15
+                            && floodfillBuffer[floodTileIndex + 16] == UNEXPLORED)
+                    {
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = 
+                            world.terrain->regions[regionIndex].terrain_types[tileIndex + world_terrain::REGION_SIZE];
+
+                        if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
+                        {
+                            floodfillBuffer[floodTileIndex + 16] = OPEN;
+                            openTileCount++;
+
+                            ui32 neighbourWorldIndex = tileWorldIndex + world_terrain::REGION_SIZE;
+                            tile_areas[neighbourWorldIndex] = tile_areas[tileWorldIndex];
+                        }
+                        else
+                        {
+                            floodfillBuffer[floodTileIndex + 16] = CLOSED;
+                        }
+                    }
                 }
             }
         }

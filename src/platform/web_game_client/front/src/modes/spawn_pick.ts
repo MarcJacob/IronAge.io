@@ -74,8 +74,6 @@ export class SpawnPick extends Core.Mode
         }
         else if (message_type === Backend.MESSAGE_TYPE.SERVER_TICK)
         {
-            // The first tick ends the placement phase: the match proceeds as an ordinary one.
-            Core.replace_top_mode(new MainPlay());
         }
     }
 

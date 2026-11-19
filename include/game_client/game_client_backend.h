@@ -118,6 +118,7 @@ enum class CLIENT_STATE : ui8
 	JOINING_LOBBY,	// REQUEST_JOIN_LOBBY sent, waiting for JOIN_LOBBY_RESPONSE.
 	IN_LOBBY,		// In a lobby, receiving its state.
 	IN_MATCH,		// The lobby's match started.
+    IN_MATCH_SP,    // The client is in a locally-hosted match with no server involved.
 };
 
 // BACKEND INTERFACE DEFINITION.
@@ -206,10 +207,13 @@ ui32 game_client_get_net_msg_output_size(game_client& backend);
 
 // From CONNECTING. Names longer than PLAYER_NAME_MAX_LENGTH are cut. Empty: the server picks one.
 ui32 game_client_request_authentication(game_client& backend, const ia_string_view& name);
+
 // From LOBBY_LIST. Clears the last kick notice.
 ui32 game_client_request_join_lobby(game_client& backend, ui8 lobby_id);
+
 // From IN_LOBBY, back to LOBBY_LIST.
 ui32 game_client_signal_leave_lobby(game_client& backend);
+
 // From IN_LOBBY, in a test lobby only. Values are clamped by the server.
 ui32 game_client_lobby_admin_start_match(game_client& backend);
 ui32 game_client_lobby_admin_set_player_count(game_client& backend, ui16 player_count);

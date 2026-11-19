@@ -55,7 +55,11 @@ void game_client_rebuild_render_state(client_render_state& render_state, const g
 // BEGIN LOCAL MATCH CONTROL FUNCTIONS
 
 // Creates a local match state using the provided start parameters.
-bool game_client_begin_match_with_params(game_client& backend, game_match_start_params& params, ui32 params_size);
+bool game_client_begin_match_with_params(game_client& backend, game_match_start_params& params);
+
+// Moves the client to singleplayer mode, prompting it to immediately begin simulating the match locally without
+// relying on a server, and immediately applying queued input commands to the match.
+void game_client_begin_singleplayer(game_client& backend);
 
 // Drops the local match and everything allocated for it (match memory, render state, queued input / output).
 // Safe to call with no match running.
@@ -85,6 +89,9 @@ struct game_client
 
 	game_match* local_match; // Pointer to local match simulation if any.
 	match_player_id controlled_player_id; // ID of controlled player in active match.
+                                          
+    ui32 match_time_ms; // Locally-measured elapsed time in current match.
+    ui32 match_last_tick_time_ms; // match_time_ms value when the match was last ticked.
 
 	game_client_input_state input; // State of input on the client, impacted by input calls from the frontend.
 
@@ -104,6 +111,7 @@ struct game_client
 	struct
 	{
 		CLIENT_STATE current;
+
 		player_name own_name; // Name kept by the server, from AUTHENTICATED.
 
 		game_message_payload_server_lobby_list lobby_list; // Last lobby list received.

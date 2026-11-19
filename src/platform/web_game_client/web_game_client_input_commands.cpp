@@ -50,7 +50,7 @@ static COMMAND_CREATE_RESULT gdo_buffer_create(MATCH_COMMAND_TYPE command_type)
 	case MATCH_COMMAND_TYPE::BUILD_SETTLEMENT_BUILDING: return gdo_buffer_place<gdo_command_data_build_settlement_building>(command_type);
 	case MATCH_COMMAND_TYPE::DISBAND_ARMY: return gdo_buffer_place<gdo_command_data_disband_army>(command_type);
 	case MATCH_COMMAND_TYPE::SET_EXPORT_RATIO: return gdo_buffer_place<gdo_command_data_set_export_ratio>(command_type);
-		case MATCH_COMMAND_TYPE::SET_ALLOW_FOREIGN_EXPORT: return gdo_buffer_place<gdo_command_data_set_allow_foreign_export>(command_type);
+	case MATCH_COMMAND_TYPE::SET_ALLOW_FOREIGN_EXPORT: return gdo_buffer_place<gdo_command_data_set_allow_foreign_export>(command_type);
 	case MATCH_COMMAND_TYPE::BEGIN_ASSAULT: return gdo_buffer_place<gdo_command_data_begin_assault>(command_type);
 	case MATCH_COMMAND_TYPE::LIFT_SIEGE: return gdo_buffer_place<gdo_command_data_lift_siege>(command_type);
 	case MATCH_COMMAND_TYPE::WITHDRAW_ARMY: return gdo_buffer_place<gdo_command_data_withdraw_army>(command_type);

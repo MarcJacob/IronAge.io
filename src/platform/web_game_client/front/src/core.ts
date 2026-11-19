@@ -59,9 +59,6 @@ export class Mode
     on_key_down(event: KeyboardEvent): boolean { return false; }
     // Escape pressed. Returns to the previous mode by default (handled). The base mode overrides it to do nothing (still handled).
     on_escape(): boolean { pop_mode(); return true; }
-
-    // Server message received (see Backend.MESSAGE_TYPE). Sent to every mode of the stack, top first.
-    on_net_message(message_type: number): void {}
 }
 
 const MODE_STACK: Mode[] = [];
@@ -160,13 +157,6 @@ export function dispatch_click(event: MouseEvent): void { dispatch_input_event(m
 export function dispatch_context_menu(event: MouseEvent): void { dispatch_input_event(mode => mode.on_context_menu(event)); }
 export function dispatch_key_down(event: KeyboardEvent): void { dispatch_input_event(mode => mode.on_key_down(event)); }
 export function dispatch_escape(): void { dispatch_input_event(mode => mode.on_escape()); }
-
-// Sends a server message to every mode of the stack, top first. Iterates over a copy: modes may change the stack while handling it.
-export function dispatch_net_message(message_type: number): void
-{
-    const modes = MODE_STACK.slice().reverse();
-    for (const mode of modes) mode.on_net_message(message_type);
-}
 
 // Per-frame delegate: a requestAnimationFrame loop that calls every registered callback once per frame, with
 // the elapsed time since the last frame in seconds. Lets independent components (camera input, later

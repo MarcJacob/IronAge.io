@@ -15,6 +15,11 @@
 #include "game_client_render.cpp"
 #include "game_client_input.cpp"
 #include "game_client_query.cpp"
+#include "game_common/match/commands.h"
+#include "game_common/match/match.h"
+#include "game_common/match/start_params.h"
+#include "game_common/match/world/entities/world_entity_settlements.h"
+#include "game_common/match/world/world.h"
 
 game_client* game_client_init(mem_arena& backend_memory)
 {
@@ -52,6 +57,30 @@ void game_client_tick(game_client& backend, float delta_time)
 {
 	if (backend.local_match != nullptr)
 	{
+        backend.match_time_ms += (ui32)(delta_time / 1000.f);
+
+        // If in SP match, the client ticks it locally without relying on the server.
+        if (backend.state.current == CLIENT_STATE::IN_MATCH_SP)
+        {
+            ui32 matchTickPeriodMS = 1000 / backend.local_match->start_params->tick_rate;
+            if (backend.match_last_tick_time_ms + matchTickPeriodMS > backend.match_time_ms)
+            {
+                static_mem_arena<1024> localCommandsMem {};
+                match_tick_commands_builder tickCommandsBuilder { &localCommandsMem };
+                tickCommandsBuilder.init();
+
+                match_command_sequence& queuedSequence = *backend.input.command_queue_builder._sequence_start;
+                if (queuedSequence.command_count > 0)
+                {
+                    tickCommandsBuilder.push_validated_sequence(0, *backend.local_match, queuedSequence);
+                }
+
+                match_tick(*backend.local_match, *tickCommandsBuilder._tick_commands_start);
+
+                backend.match_last_tick_time_ms = backend.match_time_ms;
+            }
+        }
+        
 		game_client_apply_viewport_input(backend, delta_time);
 		game_client_rebuild_render_state(backend.render_state, *backend.local_match);
 	}
@@ -60,7 +89,7 @@ void game_client_tick(game_client& backend, float delta_time)
 // Starts the local match with the given start parameters. params must already live in backend.local_match_mem
 // (the caller copies it there before calling this) - this does NOT clear that arena or copy params again, since
 // that would destroy params before match_start can read it.
-bool game_client_begin_match_with_params(game_client& backend, game_match_start_params& params, ui32 params_size)
+bool game_client_begin_match_with_params(game_client& backend, game_match_start_params& params)
 {
 	game_match* localMatch = backend.local_match_mem.alloc<game_match>();
 	if (!match_start(backend.local_match_mem, 0, params, *localMatch))
@@ -106,8 +135,70 @@ bool game_client_begin_match_with_params(game_client& backend, game_match_start_
     ia_memzero(backend.render_state.tiles.owner_settlement_tiles_bitmap, tileCount * sizeof(ui16));
     ia_memzero(backend.render_state.tiles.tile_flags_bitmap, tileCount);
 
+    // Reset time measurements.
+    backend.match_time_ms = 0;
+    backend.match_last_tick_time_ms = 0;
+
     // Per-frame memory is created once in game_client_init and cleared by the render rebuild.
 	return true;
+}
+
+void game_client_begin_singleplayer(game_client& backend)
+{
+    ASSERT(backend.state.current == CLIENT_STATE::LOBBY_LIST); // @Temp(Marc): Can only begin SP play from lobby list,
+                                                               // where the user has a name and is "ready" to start playing.
+
+    // @TEMP(Marc): Always control player ID 0, with whatever is in own_name. The other names are left to whatever they were
+    // last set to, if anything.
+    backend.state.match_player_name_count = 1;
+    backend.state.match_player_names[0] = backend.state.own_name;
+    backend.controlled_player_id = 0;
+
+    // Copy test params into the match's own memory.
+    backend.local_match_mem.clear();
+
+    game_match_start_params* params = match_test_scenario_get_params(backend.local_match_mem);
+    ASSERT(game_client_begin_match_with_params(backend, *params));
+
+    // Spawn all players at random locations.
+    static_mem_arena<1024> scratch;
+    match_tick_commands_builder spawnCommandsBuilder { &scratch };
+    spawnCommandsBuilder.init();
+
+    spawnCommandsBuilder.push_new_sequence(INVALID_MATCH_PLAYER_ID); // "Server" commands are not associated to a specific player id.
+
+    // @TODO(Marc): Refactor a lot of the standard "match hosting" code and commands to common code so they can be shared
+    // by client & server, including the support of AI players.
+
+    // Pick a random location for all players to begin with, retrying a few times to find a valid one (else the last one is accepted anyway).
+    game_match& match = *backend.local_match;
+    rand_generator_32 randGen = { match.start_params->random_seed };
+    for (match_player_id playerID = 0; playerID < params->player_count; playerID++)
+    {
+        world_location randLoc;
+        for (ui8 tryIndex = 0; tryIndex < 32; tryIndex++)
+        {
+            randLoc = randGen.next_vec2({10, 10}, match.start_params->world_size_regions * world_terrain::REGION_SIZE - world_location {10, 10});
+            if (world_is_valid_settlement_location(*match.world, randLoc, playerID)) break;
+        }
+
+        
+        auto& spawnPlayer = *spawnCommandsBuilder.push_command<command_data_server_spawn_player>(
+                MATCH_COMMAND_TYPE::SERVER_SPAWN_PLAYER);
+
+        spawnPlayer.spawned_player = playerID;
+        spawnPlayer.spawn_location = randLoc;
+    }
+
+    // Perform first tick.
+    match_tick(match, *spawnCommandsBuilder._tick_commands_start);
+
+    // Refresh render state so it can take match params into account.
+    game_client_rebuild_render_state(backend.render_state, *backend.local_match);
+
+    // @TODO(Marc): Move lobby code out of server-only so the client can have its own lobby.
+    // For now we just set the IN_MATCH state immediately.
+    backend.state.current = CLIENT_STATE::IN_MATCH_SP;
 }
 
 void game_client_end_local_match(game_client& backend)

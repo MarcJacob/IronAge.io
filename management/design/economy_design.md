@@ -23,13 +23,17 @@ The game's economy is centered around Settlements. Settlements are centers of po
 
 ## Land / Territory
 
-Settlements claim tiles on the map in order to provide work for the peasant population. The effective number of peasant per tile ("Land output") depends on the tile's terrain type, and its Priximity to the settlement which is the travel cost from itself to the settlement. It can be reduced by roads, making them an essential component of increasing the output of a settlement. Peasants above the land output value still produce, but less and less per peasant, meaning they eventually consume more than they produce, capping the population growth. This is one way #Distance_Cost impacts the game by making it so building multiple settlements to exploit land is better than trying to grow one large settlement.
+Settlements claim tiles on the map in order to provide work for the peasant population. The effective number of peasant per tile ("Land output") depends on the tile's terrain type. Further, each terrain type determines the base *surplus* per peasant, which then gets influence by its Proximity to the settlement which is the travel cost from itself to the settlement. It can be reduced by roads, making them an essential component of increasing the output of a settlement.
+
+Eventually, new tiles cannot be claimed anymore, because they are already owned by another settlement with higher proximity, or the tile would have too low a proximity with the settlement altogether. This is one way #Distance_Cost impacts the game by making it so creating multiple settlements is more effective than building single large settlements with sprawling road networks, eventually filling the map with a voronoi-like pattern of settlements of various sizes.
 
 ## Population
 
 Population represents the sum of all human beings living in the settlement, its territory, or with ties to the settlement (while out on the map in an army / a worker group).
 
-Population is divided by strata: Peasants are the default and contribute to Production from land, Workers are people hired to work on construction projects, Soldiers are part of armies raised from this settlement, whether those armies are stationned in the settlement or out on the map.
+Population is divided by strata: Peasants live in the settlement's territory contribute to Production from land, Workers are people hired to work on construction projects, Soldiers are part of armies raised from this settlement, whether those armies are stationned in the settlement or out on the map.
+
+Population can also be Unemployed, its default state, in which case it takes up urban population room and does not do anything. A high unemployed population is a strict weight on the settlement and its owner. 
 
 ### Soldiers
 
@@ -43,6 +47,15 @@ The goods are pooled in the settlement, and every economic step, a portion of th
 Settlements are the only "pure" #Goods_Sources, meaning the goods produced are produced at no expense to anything. From there, the goods are accumulated into the settlement's market goods pool, from which they can be taken away by a caravan to be sold at a profit to another settlement (See [### Trade]).
 
 Production is taxable. One good -> One gold.
+
+Early on, all production is done through peasants settling the land, with no particular bonuses, giving a large advantage to settlements located on more productive tiles. Regardless, the small surplus means growth is slow, and anything beyond very low taxation means a loss of population.
+
+At this stage the main way of expanding is through colonization of empty land, as players slowly accumulate to begin their first investment, which can either be buildings, roads or early military, which each correspond to a strategy to build up a bigger surplus and start snowballing on economic growth:
+- Buildings that increase goods production or allow the first exports.
+- Roads to increase efficiency of tiles through greater proximity and get faster trade between settlements.
+- Soldiers to raid neighbours and bring back gold and goods.
+
+As players start to get more and more disposable gold, they are encouraged to begin building up one or two urban centers while setting up a road network and export facilities in their smaller settlements.
 
 ## Consumption
 
@@ -69,14 +82,21 @@ This is the main aspect where #Distance_Cost happens. At transaction time, dista
 
 Since small transactions benefit less *in absolute value* from Distance, going further for more value per good will quickly be outweighed by the unattractiveness of the time it takes to get there. Ergo, to perform longer-distance trades that are more profitable per good, the caravan / ship must be larger in volume, which can only happen from larger settlements / good pools. It also eventually becomes necessary to perform the trade by sea, where volumes can be much larger and travel times overall lower.
 
-### Trade Flow
+Further, trade is penalized when exporting towards smaller / similar-sized settlements. This means that large settlements, in order to be able to export, need trading partners that are further away and to send larger amounts.
 
-Trade does not create goods. A settlement invests goods above its reserve (a few days of local need) into a caravan, which delivers them to the destination's pool.
-Both ends of a delivery gain Trade Flow, scaled by caravan size and distance (short trades gain little, trading towards a smaller settlement is penalized).
+= This should result in hierarchical trade networks where comparatively small settlements export to the nearest regional trade center, while regional trade centers export to other similar-sized trade centers relatively far away or the nearest large trade center, and so on.
 
-Trade Flow decays quickly and is capped by a Max Trade Flow, seeded by urban population and mostly raised by buildings (Trade Depots, which also raise pool size).
+### Trade Volume
 
-Trade Flow converts into a percentage Trade Bonus (relative to population) on the settlement's production, peasants included, and makes the settlement a more attractive destination.
+Trade does not create goods. A settlement invests goods from its export pool into a caravan, which delivers them to the destination's pool local & export pool.
+Both ends of a delivery gain Trade Volume, scaled by caravan size and distance (short trades gain little, trading towards a smaller settlement is penalized).
+
+Trade Volume decays quickly and is capped. That cap is raised by urban population and by buildings.
+
+Trade Volume is used as a resource by the settlement to:
+- Increase land output.
+- Produce goods from urban production buildings.
+- Increase import profits, making the settlement more appealing for caravans.
 
 This snowballs by design: invested trade centers keep attracting trade and tend to become production centers, while small villages send caravans to nearby or regional hubs to earn a little more.
 Trade is inter-settlement AND inter-player. Embargoes, closed routes and blocking or despoiling caravans with armies come later.
@@ -89,15 +109,7 @@ The goods can be taken at any time when the system sees that a good deal is curr
 
 In order to create exportable goods, a settlement sets them aside from production and imports at a choosable rate, so some settlements can be made export-oriented and others import-oriented. The intention is for small settlements to HAVE to export to get trade volume while larger settlements can export less and maintain larger populations which allows them to have available population for industries and armies.
 
-For extra control, settlements can be allowed or disallowed from exporting abroad (meaning players that do not have a free trade agreement with the settlement's owner). 
-
-### Industries
-
-Trade Volume accumulates into a spendable resource. Cities that have strong, sustained trade volume are able to build industry buildings which create more goods without the usage of land, furthering their economic value and making them even more attractive to further trade.
-
-### Comments
-
-*This new design based on the Trade Flow property instead of generating goods from thin air works MUCH better, but we definitely have a problem with being able to accumulate resources. Two possible solutions: limit non-peasant population and make peasants more productive, or give the player a slider and allow goods to pool into an export pool that is never sold.*
+For extra control, settlements can be allowed or disallowed from exporting abroad (meaning players that do not have a free trade agreement with the settlement's owner won't be targeteable by caravans from that settlement).
 
 ## Buildings & Construction
 
@@ -106,7 +118,7 @@ Buildings are built using gold from the treasury through the construction projec
 Buildings are either on the map or inside the settlement, and modify some part of the world state, usually related to the tile they're on or the settlement they're in.
 
 Some examples include:
-- Housing to increase population capacity.
-- Trade buildings to increase pool size and number of active caravans.
+- Housing to increase urban population capacity.
+- Trade buildings to increase pool size and export volume.
 - Military buildings to increase local defense or troop training speed.
 - Roads on the map to increase movement speed and Proximity.

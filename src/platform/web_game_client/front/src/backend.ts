@@ -43,6 +43,7 @@ export enum CLIENT_STATE
     JOINING_LOBBY = 3,
     IN_LOBBY = 4,
     IN_MATCH = 5,
+    IN_MATCH_SP = 6,
 };
 
 // Mirrors JOIN_LOBBY_RESULT (include/game_common/game_messages.h). Update here if the enum changes.
@@ -154,6 +155,7 @@ interface ClientExports extends WebAssembly.Exports
     // Lifecycle
 
     web_client_start(): number;
+    web_client_start_sp_match(): number;
     web_client_tick(delta_time: number): void;
     web_client_end_match(): void;
 
@@ -262,6 +264,11 @@ export function start(): boolean
     ClientInput.init();
 
     return true;
+}
+
+export function start_sp_match()
+{
+    CLIENT_BACKEND.web_client_start_sp_match();
 }
 
 // Ticks the backend client's own logic.

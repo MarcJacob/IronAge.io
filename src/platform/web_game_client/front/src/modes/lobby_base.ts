@@ -4,7 +4,7 @@
 
 import * as Core from "../core.js"
 import * as Backend from "../backend.js"
-import { get_socket_status } from "../main.js"
+import { get_socket_status, start_sp_match } from "../main.js"
 import * as LoginUI from "../ui/ui_element_login.js"
 import * as LobbyListUI from "../ui/ui_element_lobby_list.js"
 import * as LobbyUI from "../ui/ui_element_lobby.js"
@@ -61,6 +61,7 @@ export class LobbyBase extends Core.Mode
         this.unsubscribe = [
             LoginUI.on("login", (name) => send(Backend.build_request_authentication(name))),
             LobbyListUI.on("join", (lobby_id) => { this.match_ended_notice = null; send(Backend.build_request_join_lobby(lobby_id)); }),
+            LobbyListUI.on("sp_start", () => { start_sp_match(); }),
             LobbyUI.on("leave", () => send(Backend.build_signal_leave_lobby())),
             LobbyUI.on("start", () => send(Backend.build_lobby_admin_start_match())),
             LobbyUI.on("set_player_count", (player_count) => send(Backend.build_lobby_admin_set_player_count(player_count))),
@@ -88,21 +89,6 @@ export class LobbyBase extends Core.Mode
 
     // The base mode can't be escaped out of.
     on_escape(): boolean { return true; }
-
-    on_net_message(message_type: number): void
-    {
-        if (message_type === Backend.MESSAGE_TYPE.LOBBY_JOINED)
-        {
-            this.lobby_state_received_ms = performance.now();
-        }
-        else if (message_type === Backend.MESSAGE_TYPE.MATCH_STARTED)
-        {
-            // The local player's id only reaches the frontend through the render state (main.ts updated it before dispatching).
-            if (Backend.LAST_RENDER_STATE === null) return;
-
-            Core.start_mode_stack(new GameBase(Backend.LAST_RENDER_STATE.controlled_player_id, Backend.read_match_started_placement_countdown_ms()));
-        }
-    }
 
     // Shows the screen of the current client state, hides the others.
     private refresh(): void

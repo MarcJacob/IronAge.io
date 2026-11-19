@@ -28,13 +28,4 @@ export class GameBase extends Core.Mode
 
     // The base mode can't be escaped out of.
     on_escape(): boolean { return true; }
-
-    on_net_message(message_type: number): void
-    {
-        if (message_type === Backend.MESSAGE_TYPE.MATCH_ENDED)
-        {
-            // Reads the net buffer: main.ts dispatches this before dropping the match.
-            Core.start_mode_stack(new LobbyBase({ winner_id: Backend.read_match_ended_winner() }));
-        }
-    }
 }

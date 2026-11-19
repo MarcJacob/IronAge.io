@@ -12,6 +12,7 @@ const IDS = {
     notice: "lobby_list_notice",
     error: "lobby_list_error",
     empty: "lobby_list_empty",
+    sp_start_button: "lobby_start_sp_button",
     entry_prefix: "lobby_list_entry_",
 };
 const ENTRY_CLASSES = {
@@ -44,7 +45,9 @@ export interface LobbyListState
 
 const events = new UiEvents<{
     join: (lobby_id: number) => void;
+    sp_start: () => void;
 }>();
+
 export const on = events.on.bind(events);
 
 interface EntryElements
@@ -62,6 +65,7 @@ let el: {
     notice: HTMLElement;
     error: HTMLElement;
     empty: HTMLElement;
+    sp_start_button: HTMLElement;
     entries: EntryElements[];
 } | null = null;
 
@@ -89,8 +93,16 @@ function init(): void
         notice: document.getElementById(IDS.notice) as HTMLElement,
         error: document.getElementById(IDS.error) as HTMLElement,
         empty: document.getElementById(IDS.empty) as HTMLElement,
+        sp_start_button: document.getElementById(IDS.sp_start_button) as HTMLElement,
         entries,
     };
+
+    if (el != null)
+    {
+        el.sp_start_button.addEventListener("click", () => { 
+            el?.sp_start_button.blur(); events.emit("sp_start");
+        });
+    }
 }
 
 export function submit(state: LobbyListState | null): void

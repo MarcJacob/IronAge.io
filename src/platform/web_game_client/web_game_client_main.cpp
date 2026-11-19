@@ -45,13 +45,20 @@ WASM_EXPORT bool web_client_start()
 	return WEB_CLIENT.backend != nullptr;
 }
 
+// Begins a singleplayer local match with test parameters.
+WASM_EXPORT void web_client_start_sp_match()
+{
+    ASSERT(WEB_CLIENT.backend != nullptr);
+    game_client_begin_singleplayer(*WEB_CLIENT.backend);
+}
+
 WASM_EXPORT void web_client_tick(float delta_time)
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);
 	game_client_tick(*WEB_CLIENT.backend, delta_time);
 }
 
-// Drops the local match and frees its resources. To be called by JS after it handled a MATCH_ENDED message.
+// Drops the local match and frees its resources.
 WASM_EXPORT void web_client_end_match()
 {
 	ASSERT(WEB_CLIENT.backend != nullptr);

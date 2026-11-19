@@ -4,8 +4,10 @@
 
 #include "game_client.h"
 
+#include "game_client/game_client_backend.h"
 #include "game_common/match/match.h"
 #include "game_common/game_messages.h"
+#include "game_common/match/start_params.h"
 
 ui8* game_client_get_net_msg_buffer(game_client& backend)
 {
@@ -253,12 +255,12 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 		// Copy the params (+ their trailing extra data) into the match's own memory: the net message buffer is reused for the next message.
 		backend.local_match_mem.clear();
 
-		ui32 paramsBlockSize = sizeof(game_match_start_params);
-		ui8* paramsCopy = backend.local_match_mem.alloc<ui8>(paramsBlockSize);
+		game_match_start_params* paramsCopy = backend.local_match_mem.alloc<game_match_start_params>();
 		ASSERT(paramsCopy != nullptr);
-		ia_memcpy(paramsCopy, &payload.match_start_params, paramsBlockSize);
 
-		if (!game_client_begin_match_with_params(backend, *(game_match_start_params*)paramsCopy, paramsBlockSize)) return GAME_MESSAGE_TYPE::INVALID;
+		ia_memcpy(paramsCopy, &payload.match_start_params, sizeof(game_match_start_params));
+
+		if (!game_client_begin_match_with_params(backend, *paramsCopy)) return GAME_MESSAGE_TYPE::INVALID;
 
 		// Refresh render state so it can take match params into account.
 		game_client_rebuild_render_state(backend.render_state, *backend.local_match);
@@ -280,6 +282,7 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 	case GAME_MESSAGE_TYPE::SERVER_TICK:
 	{
 		if (backend.local_match == nullptr) return GAME_MESSAGE_TYPE::INVALID;
+        ASSERT(backend.state.current == CLIENT_STATE::IN_MATCH);
 
 		game_match& localMatch = *backend.local_match;
 		auto& payload = header->get_payload_ref<game_message_payload_server_tick>();
@@ -287,6 +290,9 @@ GAME_MESSAGE_TYPE game_client_process_game_message(game_client& backend, ui32 me
 		// Tick local match on receiving server tick data.
 		match_tick(localMatch, payload.commands);
 		game_client_output_client_tick_message(backend);
+
+        backend.match_last_tick_time_ms = backend.match_time_ms;
+
 		break;
 	}
 	default:

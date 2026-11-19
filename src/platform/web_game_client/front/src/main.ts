@@ -11,6 +11,8 @@ import { init_render } from './render.js';
 import { init_input } from './input.js';
 import { init_camera_system } from './camera.js';
 import { LobbyBase } from './modes/lobby_base.js';
+import { GameBase } from './modes/game_base.js';
+import { MainPlay } from './modes/main_play.js';
 
 // Game / Client state
 
@@ -44,9 +46,67 @@ export function get_socket_status(): 'connecting' | 'open' | 'closed'
     return SOCKET_STATUS;
 }
 
+// @TODO(Marc): Find a better place for this function ?
+export function start_sp_match()
+{
+    if (IN_A_MATCH) return;
+    let canvas = document.getElementById("game_canvas_foreground") as HTMLCanvasElement
+
+    Backend.start_sp_match();
+    on_match_started(canvas);
+
+    // @TEMP(Marc): Immediately go to main play mode.
+    // @TODO(Marc): Read that we're in a SP match and do something cleaner.
+    Core.replace_top_mode(new MainPlay());
+}
+
 function websocket_url() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/ws`;
+}
+
+function on_match_started(canvas: HTMLCanvasElement)
+{
+    console.log("Joined match.");
+
+    // Perform the first render state update on the backend.
+    Backend.update_render_state();
+
+    // The local player's id only reaches the frontend through the render state.
+    if (Backend.LAST_RENDER_STATE !== null) LOCAL_PLAYER_ID = Backend.LAST_RENDER_STATE.controlled_player_id;
+
+    // Reveal game canvas
+    canvas.hidden = false;
+
+    // Automatically set focus on the foreground canvas.
+    canvas.focus();
+
+    // Broadcast to event handlers and flag app as In A Match.
+    Core.broadcast_on_match_joined();
+    IN_A_MATCH = true;
+
+    // Begin base Game mode.
+    if (Backend.LAST_RENDER_STATE != null)
+    {
+        Core.start_mode_stack(new GameBase(
+            Backend.LAST_RENDER_STATE.controlled_player_id,
+            Backend.read_match_started_placement_countdown_ms()));
+    }
+}
+
+function on_match_ended(canvas: HTMLCanvasElement)
+{
+    console.log("Match ended.");
+
+    IN_A_MATCH = false;
+    LOCAL_PLAYER_ID = null;
+    canvas.hidden = true;
+
+    Backend.end_local_match();
+    Core.broadcast_on_match_ended();
+    
+    // Reinit mode stack to Lobby mode.
+    Core.start_mode_stack(new LobbyBase({ winner_id: Backend.read_match_ended_winner() }));
 }
 
 // Handler for messages received from the Websocket.
@@ -55,47 +115,14 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
     const messageType = Backend.process_net_message(new Core.ByteBuffer(event.data));
     if (messageType === null || messageType === Backend.MESSAGE_TYPE.INVALID) return; // Message could not be processed: nothing changed.
 
-    // On joining a match, reveal the canvas and start drawing. Rendering/input were already set up at start().
     if (messageType === Backend.MESSAGE_TYPE.MATCH_STARTED)
     {
-        console.log("Joined match.");
-
-        // Perform the first render state update on the backend.
-        Backend.update_render_state();
-
-        // The local player's id only reaches the frontend through the render state.
-        if (Backend.LAST_RENDER_STATE !== null) LOCAL_PLAYER_ID = Backend.LAST_RENDER_STATE.controlled_player_id;
-
-        // Reveal game canvas
-        canvas.hidden = false;
-
-        // Automatically set focus on the foreground canvas.
-        canvas.focus();
-
-        // Broadcast to event handlers and flag app as In A Match.
-        Core.broadcast_on_match_joined();
-        IN_A_MATCH = true;
+        on_match_started(canvas);
     }
 
-    // Modes react to the message: the lobby / game base modes switch on match start / end, the placement mode on picks and the first tick.
-    // Before the match is dropped below: modes may read the net buffer.
     if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
     {
-        console.log("Match ended.");
-
-        IN_A_MATCH = false;
-        LOCAL_PLAYER_ID = null;
-        canvas.hidden = true;
-    }
-
-    Core.dispatch_net_message(messageType);
-
-    // Have the backend drop its local match and clear what the frontend holds of it.
-    if (messageType === Backend.MESSAGE_TYPE.MATCH_ENDED)
-    {
-        Backend.end_local_match();
-
-        Core.broadcast_on_match_ended();
+        on_match_ended(canvas);
     }
 
     // The backend may have built a reply (e.g. pending input) in response to the message just processed.
@@ -105,8 +132,6 @@ function on_socket_message(event: MessageEvent<Core.ByteBuffer>, canvas: HTMLCan
 }
 
 // ENTRY POINT
-
-
 function tick(dt: number)
 {
     if (IN_A_MATCH)
