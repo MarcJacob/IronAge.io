@@ -8,7 +8,7 @@
 
 // Initializes the areas in the grid cell at the provided coordinates.
 // Places the new areas in the provided memory, and sets the area id on the tile_areas collection.
-static void world_path_store_init_grid_cell_areas(const match_world_state& world, mem_arena& mem, world_path_areas* areas,
+static void world_path_store_init_grid_cell_areas(const world_terrain& terrain, world_path_areas* areas,
         ui16 grid_x, ui16 grid_y, path_area_id& next_area_id)
 {
     enum FLOODFILL_TILE_STATE : ui8
@@ -26,14 +26,14 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
             world_location originTileLoc = { grid_x * 16 + tileX, grid_y * 16 + tileY };
             
             ui16 originRegionIndex, originTileIndex;
-            world_get_tile(*world.terrain, originTileLoc, originRegionIndex, originTileIndex);
+            world_get_tile(terrain, originTileLoc, originRegionIndex, originTileIndex);
 
             ui32 originTileWorldIndex = originRegionIndex * world_terrain::REGION_TILE_COUNT + originTileIndex;
             if (areas->tile_areas[originTileWorldIndex] != 0) continue;
             
             // Create new area starting on this tile.
             areas->tile_areas[originTileWorldIndex] = next_area_id;
-            areas->types[next_area_id] = terrain_is_land(world.terrain->regions[originRegionIndex].terrain_types[originTileIndex]) ?
+            areas->types[next_area_id] = terrain_is_land(terrain.regions[originRegionIndex].terrain_types[originTileIndex]) ?
                                         PATH_AREA_TYPE::LAND : PATH_AREA_TYPE::SEA;
             next_area_id++;
 
@@ -58,11 +58,11 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
                             grid_y * 16 + floodTileIndex / 16 };
 
                     ui16 regionIndex, tileIndex;
-                    world_get_tile(*world.terrain, tileLoc, regionIndex, tileIndex);
+                    world_get_tile(terrain, tileLoc, regionIndex, tileIndex);
 
                     ui32 tileWorldIndex = regionIndex * world_terrain::REGION_TILE_COUNT + tileIndex;
 
-                    const TERRAIN_TILE_TYPE& tileTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex];
+                    const TERRAIN_TILE_TYPE& tileTerrainType = terrain.regions[regionIndex].terrain_types[tileIndex];
                     // We assume the path grid to be aligned with regions, meaning we can assume region index
                     // is the same, and that neighbours can be found directly with region size arithmetic.
 
@@ -70,7 +70,7 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
                     if (tileLoc.x > grid_x * 16
                             && floodfillBuffer[floodTileIndex - 1] == UNEXPLORED)
                     {
-                        const TERRAIN_TILE_TYPE& neighbourTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex - 1];
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = terrain.regions[regionIndex].terrain_types[tileIndex - 1];
 
                         if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
                         {
@@ -90,7 +90,7 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
                     if (tileLoc.x < grid_x * 16 + 15
                             && floodfillBuffer[floodTileIndex + 1] == UNEXPLORED)
                     {
-                        const TERRAIN_TILE_TYPE& neighbourTerrainType = world.terrain->regions[regionIndex].terrain_types[tileIndex + 1];
+                        const TERRAIN_TILE_TYPE& neighbourTerrainType = terrain.regions[regionIndex].terrain_types[tileIndex + 1];
 
                         if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
                         {
@@ -111,7 +111,7 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
                             && floodfillBuffer[floodTileIndex - 16] == UNEXPLORED)
                     {
                         const TERRAIN_TILE_TYPE& neighbourTerrainType = 
-                            world.terrain->regions[regionIndex].terrain_types[tileIndex - world_terrain::REGION_SIZE];
+                            terrain.regions[regionIndex].terrain_types[tileIndex - world_terrain::REGION_SIZE];
 
                         if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
                         {
@@ -132,7 +132,7 @@ static void world_path_store_init_grid_cell_areas(const match_world_state& world
                             && floodfillBuffer[floodTileIndex + 16] == UNEXPLORED)
                     {
                         const TERRAIN_TILE_TYPE& neighbourTerrainType = 
-                            world.terrain->regions[regionIndex].terrain_types[tileIndex + world_terrain::REGION_SIZE];
+                            terrain.regions[regionIndex].terrain_types[tileIndex + world_terrain::REGION_SIZE];
 
                         if (terrain_is_land(tileTerrainType) == terrain_is_land(neighbourTerrainType))
                         {
@@ -224,7 +224,7 @@ world_path_store* world_path_store_init(const match_world_state& world, mem_aren
     {
         for (ui16 gridY = 0; gridY < pathGridDims.y; gridY++)
         {
-            world_path_store_init_grid_cell_areas(world, store->storage, store->areas, 
+            world_path_store_init_grid_cell_areas(*world.terrain, store->areas, 
                     gridX, gridY, nextAreaID);
         }
     }
