@@ -55,6 +55,38 @@ struct path
 // Does not necessarily return the best possible path, but rather the path an entity would take.
 void world_path_find(const match_world_state& world, const path_params& params, mem_arena& scratch, path& out_path);
 
+// Possible types for a path area.
+// For now, binary. Later we may want to break it down into something more granular, in case we want to prevent
+// some entities from crossing mountains, or allow others to only navigate on coastlines, and so on.
+enum class PATH_AREA_TYPE : ui8
+{
+    LAND,
+    SEA,
+};
+
+// Uniquely identifies a single path area, which occupies up to one entire path grid cell.
+// Maps to a type and a world path component index. Its connections can be queried using it as well.
+using path_area_id = ui16;
+
+// Monodirectional connection between an origin area (infered from connections storage) and a destination area.
+// Contains the "portal tile" expressed as a world location.
+struct path_area_connection
+{
+    path_area_id dest_area;
+    world_location portal_tile;
+    ui16 travel_cost; // Travel cost used when going through this connection in high-level pathfinding.
+                      // Estimated from roughly how costly it is to reach some center-mass tile of the area to the portal tile.
+};
+
+// Stores Path Areas which are local pathing components with land or sea types, located in Path Regions
+// (init-time grid of 16x16 tiles cells covering the entire world). Areas are stored grid-width-wise, in order of local index.
+struct world_path_areas
+{
+    path_area_id* tile_areas; // X-major, region by region (uses the same world location -> region / tile index as terrain tiles).
+    PATH_AREA_TYPE* types;
+    path_area_connection* connections;
+};
+
 // Internal acceleration structure used by the world, defining a graph of pathing zones / components to quickly
 // determine reachability and facilitate the pathfinding process, and cache commonly requested paths / itineraries.
 struct world_path_store
@@ -74,6 +106,8 @@ struct world_path_store
                               // for global pathfinding across areas / "high level" pathfinding.
 
     mem_arena storage; // Storage memory for cached paths, and the world travel acceleration structure.
+
+    world_path_areas* areas; // Stored in Storage. Contains path area data over the entire covered world.
 
     inline bool is_valid_handle(const path_handle& handle) const { return false; } // @TODO(Marc): Lookup path storage.
 };

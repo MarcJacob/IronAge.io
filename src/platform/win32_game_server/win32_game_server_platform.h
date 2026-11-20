@@ -65,6 +65,7 @@ void win32_shutdown(game_server_platform& platform, int code);
 
 // Log end points: take a finished, null-terminated buffer and write it out. The type only selects the color.
 void win32_stdout(LOG_TYPE type, const char* buffer);
+void win32_stdout(LOG_TYPE type, const ia_string_view& str);
 void win32_stderr(LOG_TYPE type, const char* buffer);
 
 // Logging for the Win32 platform code itself. Prepends "WIN32 (<component>): " to the message, or just "WIN32: " if component is empty.
@@ -77,6 +78,7 @@ void win32_logf(const char* component, const char* format, ...);
 // Platform-interface versions of logging, for the game server platform structure.
 // These only reroute the message (unprefixed) to the end points.
 void win32_platform_log(game_server_platform& platform, LOG_TYPE type, const ia_string_view& msg);
+
 void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia_string_view& msg, ...);
 
 // Reads in an entire file from a resources-folder-relative path, or gets its size if read_buff is null.

@@ -7,6 +7,7 @@
 
 // Only functions marked WASM_EXPORT are exported (build uses -fvisibility=hidden).
 #include "core/assert.h"
+#include "core/logging.h"
 #include "game_common/match/world/world_state.h"
 #define WASM_EXPORT extern "C" __attribute__((visibility("default")))
 
@@ -19,6 +20,7 @@ class game_client;
 struct web_client_state
 {
     _ASSERTION_HANDLER assertion_handler;
+    _DEBUG_LOG_HANDLER debug_log_handler;
 
 	mem_arena backend_memory;
 	game_client* backend;

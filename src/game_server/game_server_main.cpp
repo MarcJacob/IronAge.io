@@ -4,6 +4,7 @@
 // Main "chaining" of game server platform and game server internals.
 
 #include "core.h"
+#include "core/logging.h"
 #include "game_server/game_server_platform.h"
 #include "game_server.h"
 
@@ -226,18 +227,27 @@ static constexpr ui64 GAME_SERVER_MIN_MEMORY = GiB(2); // Minimum memory the pla
 // Set by whoever loads the program.
 _ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR = nullptr;
 
+// Implementation of global debug logging handler declared in logging.g
+// Set by whoever loads the program.
+_DEBUG_LOG_HANDLER* _DEBUG_LOG_HANDLER_PTR = nullptr;
+
 GAME_SERVER_PROGRAM_EXPORT game_server* game_server_init(game_server_platform& platform, game_server_init_params& init_params, ui8* memory, ui64 memory_size);
 GAME_SERVER_PROGRAM_EXPORT void game_server_tick(game_server& server, time_ms platform_time_ms);
 GAME_SERVER_PROGRAM_EXPORT void game_server_stop(game_server& server);
 
-GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, _ASSERTION_HANDLER* assertion_handler);
+GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, 
+        _ASSERTION_HANDLER* assertion_handler,
+        _DEBUG_LOG_HANDLER* debug_log_handler);
 GAME_SERVER_PROGRAM_EXPORT void game_server_on_program_unloaded();
 
 // Called by platform anytime the server program is loaded, independently of whether the server
 // has been initialized before.
-GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, _ASSERTION_HANDLER* assertion_handler)
+GAME_SERVER_PROGRAM_EXPORT void game_server_load_program(game_server_program& program, 
+        _ASSERTION_HANDLER* assertion_handler,
+        _DEBUG_LOG_HANDLER* debug_log_handler)
 {
     _ASSERTION_HANDLER_PTR = assertion_handler;
+    _DEBUG_LOG_HANDLER_PTR = debug_log_handler;
 
     // Fill in program.
     program.init_func = game_server_init;

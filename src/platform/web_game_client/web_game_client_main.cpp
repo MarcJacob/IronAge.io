@@ -6,6 +6,7 @@
 #include "core.h"
 
 #include "core/assert.h"
+#include "core/logging.h"
 #include "game_client/game_client_backend.h"
 #include "game_common/match/world/world.h"
 #include "web_game_client.h"
@@ -20,7 +21,6 @@
 #include "web_game_client_state.cpp"
 
 web_client_state WEB_CLIENT;
-_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;
 
 static constexpr ui64 CLIENT_MEMORY_SIZE = MiB(256); // @TEMP(Marc): Generous amount of memory.
 ui8 CLIENT_MEMORY_BLOCK[CLIENT_MEMORY_SIZE];
@@ -28,6 +28,11 @@ ui8 CLIENT_MEMORY_BLOCK[CLIENT_MEMORY_SIZE];
 // Platform implementation of the core assertion functions: no way to report a message here, so just trap.
 void ASSERT_EXIT_FUNC() { __builtin_trap(); }
 void ASSERT_MSG_FUNC(const char* assertMsg, const char* filename, ui32 line, ...) { __builtin_trap(); }
+_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR;
+
+// Platform implementation of the debug logging service.
+void DEBUG_LOG_FUNC(const ia_string_view& msg) { } // @TODO(Marc): Figure out way to report debug messages in browser dev console.
+_DEBUG_LOG_HANDLER* _DEBUG_LOG_HANDLER_PTR;
 
 WASM_EXPORT bool web_client_start()
 {
@@ -37,6 +42,9 @@ WASM_EXPORT bool web_client_start()
     WEB_CLIENT.assertion_handler.ASSERT_EXIT_FUNC = ASSERT_EXIT_FUNC;
     WEB_CLIENT.assertion_handler.ASSERT_MSG_FUNC = ASSERT_MSG_FUNC;
     _ASSERTION_HANDLER_PTR = &WEB_CLIENT.assertion_handler;
+
+    // Define debug logging handler.
+    WEB_CLIENT.debug_log_handler.DEBUG_MSG_FUNC = DEBUG_LOG_FUNC;
 
 	// Initialize backend.
 	WEB_CLIENT.backend_memory = mem_arena_create(CLIENT_MEMORY_BLOCK, CLIENT_MEMORY_SIZE);

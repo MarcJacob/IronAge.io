@@ -8,6 +8,7 @@
 #include "core/memory.h"
 #include "core/string.h"
 #include "core/math.h"
+#include "core/logging.h"
 
 #define SET_DEFAULT_VAL(value, default) \
     (value = (value != 0 ? (value) : ((__typeof(value))default)))

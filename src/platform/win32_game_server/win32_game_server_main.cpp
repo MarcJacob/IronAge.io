@@ -2,6 +2,7 @@
 
 // Include Win32 common headers.
 #include "core/assert.h"
+#include "core/logging.h"
 #include "core/memory.h"
 #include "core/string.h"
 #include "game_server/game_server_resources.h"
@@ -26,47 +27,6 @@ static ia_string_view GAME_SERVER_RESOURCES_DIR = {};   // Filled in from first 
                                                         // @TODO(Marc): Just a temporary adaptation,
                                                         // CMake was providing a full absolute path I'd rather not put in a script,
                                                         // and it doesn't handle being a relative path very well right now.
-
-// Assertion functions.
-
-// Format the assertion message in a fixed stack buffer and go through the Win32 assert function. 
-void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
-{
-	static const ui32 ASSERT_MSG_BUFF_COUNT = 1024;
-
-	char assert_msg_buff[ASSERT_MSG_BUFF_COUNT];
-	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
-
-	va_list va;
-	va_start(va, line);
-	int charCount = vsprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
-	va_end(va);
-
-	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
-	OutputDebugString(assert_msg_buff);
-
-	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
-	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
-
-	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
-	OutputDebugString(assert_msg_buff);
-
-    _assert_break();
-	raise(SIGABRT);
-}
-
-// Break into the debugger right here if one is attached, then raise SIGABRT.
-void ASSERT_EXIT_FUNC()
-{
-    win32_log("ASSERT", LOG_ERROR, "Assertion triggered. Ending program...");
-    OutputDebugString("Assertion triggered. Ending program...");
-
-    _assert_break();
-	raise(SIGABRT);
-}
-
-// Implementation of global assertion handler symbol declared in assert.h.
-_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR = nullptr;
 
 void win32_shutdown(game_server_platform& platform, int code)
 {
@@ -146,6 +106,25 @@ void win32_stdout(LOG_TYPE type, const ia_string_view& string)
 		printScratch[copySize] = '\0';
 		win32_print_colored(stdout, GetStdHandle(STD_OUTPUT_HANDLE), type, printScratch);
 	}
+
+	LeaveCriticalSection(&CS_WIN32_STDOUT);
+}
+
+void win32_stdoutf(LOG_TYPE type, const ia_string_view& format, va_list va)
+{
+	EnterCriticalSection(&CS_WIN32_STDOUT);
+
+	char fmtScratch[256] = {};
+    char printScratch[1024];
+
+    ASSERT(format.length < 256); // @TODO(Marc): This entire crappy logging code needs to be re-designed. I'm tired of this.
+
+    memcpy(fmtScratch, format.view_str, format.length);
+    fmtScratch[format.length] = '\0';
+
+    vsnprintf_s(printScratch, sizeof(printScratch), format.length, fmtScratch, va);
+
+    win32_print_colored(stdout, GetStdHandle(STD_OUTPUT_HANDLE), type, printScratch);
 
 	LeaveCriticalSection(&CS_WIN32_STDOUT);
 }
@@ -249,6 +228,64 @@ void win32_platform_logf(game_server_platform& platform, LOG_TYPE type, const ia
 	win32_route_log(type, msg);
 }
 
+// Assertion functions.
+
+// Format the assertion message in a fixed stack buffer and go through the Win32 assert function. 
+void ASSERT_MSG_FUNC(const char* msg, const char* filename, ui32 line, ...)
+{
+	static const ui32 ASSERT_MSG_BUFF_COUNT = 1024;
+
+	char assert_msg_buff[ASSERT_MSG_BUFF_COUNT];
+	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
+
+	va_list va;
+	va_start(va, line);
+	int charCount = vsprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, msg, va);
+	va_end(va);
+
+	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
+	OutputDebugString(assert_msg_buff);
+
+	ia_memset(assert_msg_buff, 0, sizeof(assert_msg_buff));
+	sprintf_s(assert_msg_buff, ASSERT_MSG_BUFF_COUNT, "FILE: %s, LINE %d", filename, line);
+
+	win32_log("ASSERT", LOG_ERROR, assert_msg_buff);
+	OutputDebugString(assert_msg_buff);
+
+    _assert_break();
+	raise(SIGABRT);
+}
+
+// Break into the debugger right here if one is attached, then raise SIGABRT.
+void ASSERT_EXIT_FUNC()
+{
+    win32_log("ASSERT", LOG_ERROR, "Assertion triggered. Ending program...");
+    OutputDebugString("Assertion triggered. Ending program...");
+
+    _assert_break();
+	raise(SIGABRT);
+}
+
+// Implementation of global assertion handler symbol declared in assert.h.
+_ASSERTION_HANDLER* _ASSERTION_HANDLER_PTR = nullptr;
+
+// Debug logging service
+
+void DEBUG_MSG_FUNC(const ia_string_view& msg)
+{
+    win32_stdout(LOG_TYPE::LOG_NORMAL, msg);
+}
+
+void DEBUG_MSGF_FUNC(const ia_string_view& format, ...)
+{
+    va_list va;
+    va_start(va, format);
+    win32_stdoutf(LOG_TYPE::LOG_NORMAL, format, va);
+    va_end(va);
+}
+
+// Implementation of global logging handler symbol declared in logging.h
+_DEBUG_LOG_HANDLER* _DEBUG_LOG_HANDLER_PTR = nullptr;
 // The "server resources" folder is GAME_SERVER_RESOURCES_DIR, defined by the build (see CMakeLists.txt).
 // Builds <resources dir>/<rel_path> into write_mem, followed by a null terminator right after the string's last character (not counted in its length),
 // so the result can be handed to platform calls as a C string through its _str.
@@ -637,7 +674,7 @@ void win32_reload_game_server_program()
     game_server_program::load_program_fn load_program_func = (game_server_program::load_program_fn)GetProcAddress(SERVER_PROGRAM_MODULE, "game_server_load_program");
     ASSERT_MSG(load_program_func != nullptr, "Failed to load function from Game Server DLL.");
 
-    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR, load_program_func);
+    SERVER_PROGRAM.load(_ASSERTION_HANDLER_PTR, _DEBUG_LOG_HANDLER_PTR, load_program_func);
     win32_log("", LOG_SUCCESS, "Game Server Program loaded successfully.");
 }
 
@@ -742,12 +779,18 @@ void win32_parse_startup_args(int argc, char** argv, win32_startup_args& out_arg
 // Main entry point.
 int main(int argc, char** argv)
 {	
-    // Declare & Build the Assertions Handler.
+    // Declare & Build the Assertion & Debug logging Handlers.
     _ASSERTION_HANDLER WIN32_ASSERTION_HANDLER = {
         ASSERT_EXIT_FUNC,
         ASSERT_MSG_FUNC,
     };
     _ASSERTION_HANDLER_PTR = &WIN32_ASSERTION_HANDLER;
+
+    _DEBUG_LOG_HANDLER WIN32_DEBUG_LOG_HANDLER = {
+        DEBUG_MSG_FUNC,
+        DEBUG_MSGF_FUNC
+    };
+    _DEBUG_LOG_HANDLER_PTR = &WIN32_DEBUG_LOG_HANDLER;
 
     // Register console signal handling.
 	if (!SetConsoleCtrlHandler(win32_console_ctrl_handler, TRUE))

@@ -7,6 +7,7 @@
 
 #include "core.h"
 #include "core/assert.h"
+#include "core/logging.h"
 #include "game_server_init_params.h"
 #include "game_server_resources.h"
 
@@ -176,11 +177,16 @@ struct game_server_program
      * General-purpose event func loaded from and called on the server module immediately after it gets (re)loaded.
      * Must be called for the Game Server code to function properly, and to load the rest of the program's functions.
      */
-    using load_program_fn = void (*)(game_server_program& program, _ASSERTION_HANDLER* assertion_handler);
-    inline void load(_ASSERTION_HANDLER* assertion_handler, load_program_fn load_func) 
+    using load_program_fn = void (*)(game_server_program& program, 
+            _ASSERTION_HANDLER* assertion_handler,
+            _DEBUG_LOG_HANDLER* debug_log_handler);
+
+    inline void load(_ASSERTION_HANDLER* assertion_handler,
+            _DEBUG_LOG_HANDLER* debug_log_handler,
+            load_program_fn load_func) 
     {
         ASSERT(load_func != nullptr && assertion_handler != nullptr);
-        load_func(*this, assertion_handler);
+        load_func(*this, assertion_handler, debug_log_handler);
 
         // Check that the Game Server program has filled in all the other functions of the program.
         ASSERT(    on_unload_func != nullptr
