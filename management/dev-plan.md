@@ -8,41 +8,6 @@ Approach: build a thin, working, end-to-end slice through every component first 
 "architecture skeleton") before building any one component out fully, so there's a real
 cross-component testing loop from early on.
 
-## Active Work Units
-
-Detailed design / progress for in-flight, coherent task groups lives in
-`management/work_units/<name>_<start-date>.md`, keeping this file a high-level
-index. Add an entry here when a unit starts, flag it `[DONE]` at the end of the line
-when it finishes.
-
-- `work_units/web_server_file_auto_reload_2026-09-20.md`
-- `work_units/server_dev_mode_2026-10-03.md`
-- `work_units/dev_iteration_loop_2026-10-03.md`
-- `work_units/lobby_system_2026-09-27.md`
-- `work_units/straight_line_movement_2026-10-15.md`
-- `work_units/road_system_2026-10-21.md`
-- `work_units/world_sim_simplification_2026-10-19.md`
-- `work_units/alpha_troops_recruitment_2026-10-18.md`
-- `work_units/alpha_war_extensions_2026-10-18.md`
-- `work_units/alpha_diplomacy_chat_2026-10-18.md`
-- `work_units/alpha_vassalization_2026-10-18.md`
-- `work_units/alpha_victory_score_2026-10-18.md`
-- `work_units/match_ai_2026-10-22.md`
-- `work_units/army_supplies_2026-10-23.md`
-- `work_units/trade_market_goods_2026-10-24.md`
-- `work_units/path_commitment_rewrite_2026-10-22.md`
-- `work_units/territory_economy_redesign_2026-10-27.md`
-- `work_units/trade_network_redesign_2026-10-28.md`
-- `work_units/trade_ships_2026-10-29.md`
-- `work_units/entity_zoom_visibility_2026-10-29.md`
-- `work_units/territory_rendering_2026-11-06.md`
-- `work_units/army_supply_redesign_2026-11-07.md`
-- `work_units/army_autonomy_2026-11-08.md`
-- `work_units/pathing_rewrite_2026-10-29.md`
-- `work_units/campaign_objectives_2026-11-09.md`
-
-Finished units are moved to `management/archive/` after a time.
-
 ## Development Phases
 
 High-level sequencing, not a scope commitment. Mark `[WIP]`/`[DONE]`; keep finished

@@ -9,9 +9,10 @@ architecture for the project. It should be kept up to date as architecture decis
 made or phases of work complete, and consulted whenever the shape of upcoming work is
 unclear.
 
-The /backlog/ folder holds one file per backlog item.
+The /backlog/ folder holds one file per backlog item: unstructured future work to be done at some point.
 
-The /work_units/ folder contains all current work unit files, indexed from dev-plan.md's Active Work Units section.
+The /work_units/ folder contains the work units currently being worked on or about to be. dev-plan.md does not index
+them: it stays feature / action based, and work units break that work down further.
 
 The /archive/ folder holds finished work units.
 
@@ -21,13 +22,17 @@ to derive new content (e.g. a new command) from existing precedents.
 ## Work unit lifecycle
 
 1. Backlog: the item is a file in /backlog/.
-2. Start: when work begins on it, move the file to /work_units/ and reference it in dev-plan.md's Active Work Units.
+2. Start: when work begins on it (or is about to), move the file to /work_units/.
    New work units that did not come from the backlog start here directly.
 3. Ongoing: progress and decisions are recorded in the file.
-4. Complete: record the outcome in the file and flag its plan entry [DONE] (flag at the end of the line).
-   It stays in /work_units/.
-5. It stays [DONE] until someone decides it can be archived, then move it to /archive/ and update the plan's reference.
-Backlog items are moved, never deleted.
+4. Complete: record the outcome in the file. If it completes a dev-plan.md item, flag that item [DONE].
+   It stays in /work_units/ until someone decides it can be archived, then move it to /archive/.
+5. Parked: a work unit that is no longer imminent goes back to /backlog/.
+Backlog items are moved, never deleted without the user's say-so.
+
+Work units stay condensed and targeted: scope, a task list with status, decisions that matter, the next step.
+They are not dev diaries and never hold a pile of undecided items: anything undecided or not imminent goes to
+/backlog/ or is dropped. A superseded unit is deleted (with the user's confirmation), a finished one archived.
 
 ## AI Agent use
 

@@ -7,17 +7,14 @@ A rough description of my ideas can be found in the design document in the *mana
 
 In short, IronAge is an online browser game (with loose plans for a future native client) where players exist as feudal rulers in competition for power and wealth, through conquest and economic development.
 
-What makes IronAge stand out beyond its specific mechanics is one central design idea: *there are multiple ways to win*, and being the "sovereign" victor (which is equivalent to Openfront's sole victory condition of owning 80% of the map) is only one of them, and the riskiest as well. "Winning" means being *the first among the winners* and triggering the game's end, at which point the game's *winners* are decided from how close they were to each victory condition, and by overall score.
+A major derivation from similar games is that you are encouraged to work with other players, even towards winning. Although each game has a main victor that ends the game, a leaderboard with scores acknowledges who did the best, sometimes even outranking the main winner itself. When meta-progression comes, this will matter a lot. Further, the game tries to make the way to reach victory relatively open-handed, based on arbitrary goals / limitations, and personal capabilities / preferences.
 
-This is the first half of the idea: the game acknowledges that different players can have different "game vibes" they're going for, like "trader" or "mitochondria" players on OF.
+This means this project is half a technical challenge, trying to gain experience on relatively high-performance networked / web development while refining my own way of using AI I consider "healthy", and the other half is a rough game design experiment inspired by similar games and the various unexpected behaviors of players I have witnessed over time.
 
-The other half is a diplomacy system that is more advanced than other similar games. Beyond the simple alliance, players can also differentiate between War and Neutral status, exercise "soft" forms of warfare through the economy and through other offensive actions than conquest like raiding / banditry, and finally form *vassalization* relationships where a player explicitly acknowledges that they are now tied to another player's sovereignty, in exchange for protection. That way, a conquering player has a choice between *annexing* territory or having the other player bend the knee.
+# AI capabilities / usage
 
-Those two game aspects taken together form interesting combinations: you may get vassalized quite early on, but it doesn't stop you from trying to win by ruling over the greatest share of the population (in which case you will win before your liege does), or through pure economic might (in which case finding a good liege that can cover you militarily can actually be *good* news !).
-
-# AI capabilities
-
-*To learn more about AI usage on this project, look further below*.
+*To learn more about AI usage on this project, look further below.*
+*TL:DR: I use AI quite a bit but more as a guide and middle manager than actual developer. You may assume that commits that only feature me as contributor were written mostly by hand with AI assistance, or by a very closely watched AI-driven writing process for more annoying refactors. Those commits with Claude as an explicit extra contributor were mostly made by it directly with me only reviewing the work, ususally for placeholder code or features that purely follow an existing shape where the AI's output isn't that different from what I would do. Regardless, every line of code is reviewed by me at the minimum, and either extensively changed by hand as needed or left as pure placeholder I will eventually delete and rebuild from scratch (main examples of that include the World Generation and Player AI systems).*
 
 This project is set up to facilitate the usage of agentic AI using a system I've coined the *Imprint files system*. If you clone this repository, set up an agentic workspace over it and ask your agent to read the root.imprint.md file at the start of a session, it will be ready to answer any of your questions efficiently should the rest of this document prove insufficient.
 
@@ -39,7 +36,6 @@ The project's code is currently split into 3:
 - The Game Server, implemented through a Win32 app + a platform-independent hot-reloadable layer.
 - The Game Client, implemented through a Web app + a platform-independent layer.
 - The Game Common code, present on both sides.
-
 
 The Server accepts connections through whatever protocol is supported (currently HTTP -> WebSocket) and manages a set of Match Slots within which players are placed in order to play together over the same map and share all inputs into the game simulation.
 

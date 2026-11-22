@@ -240,6 +240,8 @@ world_path_store* world_path_store_init(const match_world_state& world, mem_aren
         }
     }
 
+    world_path_store_update_connection_costs(world, *store->areas);
+
     return store;
 }
 

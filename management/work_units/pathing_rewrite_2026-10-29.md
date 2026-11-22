@@ -1,6 +1,6 @@
 # Pathing rewrite
 
-Started: 2026-10-29. Supersedes the pathing tasks of `straight_line_movement_2026-10-15.md` (2, 3, 5-5d, 6), and `path_commitment_rewrite_2026-10-22.md`; absorbs `backlog/path_store_cache_2026-10-15.md` (to move here when store work starts). Plan: `src/game_common/world_sim/.ai_imprint/pathing_cleanup_plan.md`.
+Started: 2026-10-29. Absorbs `backlog/path_store_cache_2026-10-15.md` (to move here when store work starts). Straight-line movement (speed x50 on roads vs today) is re-created on top of this system. Plan: `src/game_common/world_sim/.ai_imprint/pathing_cleanup_plan.md`.
 
 ## Goal
 
@@ -10,7 +10,7 @@ Clean slate, then user (by hand / peer) builds pathing with acceleration structu
 
 - Generalist pathfinder `world_path_find(terrain, params, scratch, out_path)`: used by the client preview. Stub for now.
 - Path store (world-owned), only these used across the sim: (a) get path A to B -> handle; (b) entity movement: takes the entity movement struct, returns bool (false = movement over / impossible); (c) next tile on path (handle, current tile, destination), used by road crews.
-- One enum of path modes replaces mode + flags (LAND, LAND_ROAD, LAND_DIRECT, SEA...). Params struct keeps equivalents of the old preview args.
+- One enum of path modes replaces mode + flags (`PATH_MODE`: ANY, LAND, LAND_ROADS_ONLY, LAND_PREFER_ROADS, SEA). `path_params {start, end, mode, within_settlement_territory}`.
 - Entities keep: sub-tile location, travel speed, path handle (+ `destination`). Road crews hold the handle in `build_road_data`.
 - `require_complete` / canonical direction dropped; may return in another form.
 
@@ -36,17 +36,11 @@ Path optimization over long distances is secondary. Roads make it cheap.
 
 ## Tasks
 
-1. [DONE, build passes] Teardown to skeleton (builder, Sonnet). `PATH_MODE` enum (ANY, LAND, LAND_ROADS_ONLY, LAND_PREFER_ROADS, SEA); `path_params {start, end, mode, within_settlement_territory}`; store stubs in `world_pathing.cpp`; `world_entity_step_towards` (stepper + slide) unused; `build_road_data.path_handle` added (`WORLD_WORKER_ACTION_DATA_SIZE` 16 -> 20, `start` is written but never read: could be dropped instead); `client_query_path(..., territory_guid, path_mode)` and `backend.ts` synced.
+1. [DONE] Teardown to skeleton: stubs in `world_pathing.cpp`, `build_road_data.path_handle` added, client query path synced.
 2. Rewrite pathfinder + store internals (user, by hand / peer).
-   - 2a. [WIP, user by hand] Acceleration structure: path areas generated on a tight grid over the world; weighted connections between areas (each with a cost); area ID assigned per tile; reachability component (land or sea) per area.
-   - 2b. Pathfinder on top of it. To do.
-   - 2c. Store interface (handles, movement, next tile), plus the internal work for the path cache. To do.
-
-## Open questions
-
-- `armies_workers_cross_water` game parameter now unused.
-- `ai_roads_survey.md`, `workers_system_overview.md` notes still describe old road logic.
-- `fractional_loc` GDO type `VEC2_UI16` vs `vec2<i16>` mismatch in caravans (pre-existing).
+   - 2a. [WIP, user by hand] Acceleration structure: path areas on a tight grid over the world; weighted connections between areas (each with a cost); area ID per tile; reachability component (land or sea) per area.
+   - 2b. Pathfinder on top of it.
+   - 2c. Store interface (handles, movement, next tile), plus the internal work for the path cache.
 
 ## Next step
 
